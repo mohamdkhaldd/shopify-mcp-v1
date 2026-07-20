@@ -43,8 +43,11 @@ function invoke(channel: string, payload?: unknown): Promise<any> {
 
 export const partnersApi = {
   list: (): Promise<Partner[]> => invoke("partners:list"),
-  create: (name: string): Promise<Partner> => invoke("partners:create", { name }),
+  create: (name: string, opening_balance = 0): Promise<Partner> =>
+    invoke("partners:create", { name, opening_balance }),
   remove: (id: number): Promise<void> => invoke("partners:delete", { id }),
+  updateOpeningBalance: (id: number, opening_balance: number): Promise<Partner> =>
+    invoke("partners:updateOpeningBalance", { id, opening_balance }),
 };
 
 export const employeesApi = {
@@ -55,8 +58,11 @@ export const employeesApi = {
 
 export const contractorsApi = {
   list: (): Promise<Contractor[]> => invoke("contractors:list"),
-  create: (name: string): Promise<Contractor> => invoke("contractors:create", { name }),
+  create: (name: string, opening_balance = 0): Promise<Contractor> =>
+    invoke("contractors:create", { name, opening_balance }),
   remove: (id: number): Promise<void> => invoke("contractors:delete", { id }),
+  updateOpeningBalance: (id: number, opening_balance: number): Promise<Contractor> =>
+    invoke("contractors:updateOpeningBalance", { id, opening_balance }),
 };
 
 export const expenseCategoriesApi = {

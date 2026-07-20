@@ -5,6 +5,13 @@ const { registerIpcHandlers } = require("./ipc");
 
 const isDev = !app.isPackaged;
 
+// vite copies public/* into dist/ on build, so the logo lands at dist/logo.png
+// once packaged; in dev mode dist/ doesn't exist yet, so fall back to the
+// source public/ folder.
+const iconPath = isDev
+  ? path.join(__dirname, "..", "public", "logo.png")
+  : path.join(__dirname, "..", "dist", "logo.png");
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -12,6 +19,7 @@ function createWindow() {
     minWidth: 1100,
     minHeight: 700,
     autoHideMenuBar: true,
+    icon: iconPath,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

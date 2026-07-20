@@ -1,6 +1,7 @@
 export interface Partner {
   id: number;
   name: string;
+  opening_balance: number;
 }
 
 export type WageType = "daily" | "monthly";
@@ -26,6 +27,7 @@ export interface Equipment {
 export interface Contractor {
   id: number;
   name: string;
+  opening_balance: number;
 }
 
 export interface ExpenseCategory {
@@ -163,6 +165,7 @@ export interface ContractorPayment {
 export interface ContractorSummary {
   id: number;
   name: string;
+  opening_balance: number;
   totalWork: number;
   totalPaid: number;
   remaining: number;
@@ -195,6 +198,7 @@ export interface PartnerPayment {
 export interface PartnerSummary {
   id: number;
   name: string;
+  opening_balance: number;
   totalDue: number;
   totalPaid: number;
   remaining: number;

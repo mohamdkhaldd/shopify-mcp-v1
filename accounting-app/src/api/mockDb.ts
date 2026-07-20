@@ -95,9 +95,9 @@ interface SupplierPaymentRow {
 }
 
 interface MockState {
-  partners: { id: number; name: string }[];
+  partners: { id: number; name: string; opening_balance: number }[];
   employees: { id: number; name: string; wage_type: "daily" | "monthly"; rate: number }[];
-  contractors: { id: number; name: string }[];
+  contractors: { id: number; name: string; opening_balance: number }[];
   expense_categories: { id: number; name: string }[];
   equipment: { id: number; name: string; shares: { partner_id: number; percentage: number }[] }[];
   daily_logs: DailyLogRow[];
@@ -180,7 +180,7 @@ function buildSeedState(): MockState {
   const partners = SEED_PARTNERS.map((name) => {
     const id = nextId++;
     partnerIds[name] = id;
-    return { id, name };
+    return { id, name, opening_balance: 0 };
   });
 
   const equipment = SEED_EQUIPMENT.map((eq) => ({
@@ -199,7 +199,7 @@ function buildSeedState(): MockState {
     rate,
   }));
 
-  const contractors = SEED_CONTRACTORS.map((name) => ({ id: nextId++, name }));
+  const contractors = SEED_CONTRACTORS.map((name) => ({ id: nextId++, name, opening_balance: 0 }));
   const expense_categories = SEED_EXPENSE_CATEGORIES.map((name) => ({ id: nextId++, name }));
 
   return {
@@ -230,6 +230,8 @@ function loadState(): MockState {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {
     const state = JSON.parse(raw) as MockState;
+    for (const p of state.partners) if (p.opening_balance == null) p.opening_balance = 0;
+    for (const c of state.contractors) if (c.opening_balance == null) c.opening_balance = 0;
     if (!state.employee_advances) state.employee_advances = [];
     if (!state.hassan_ledger) state.hassan_ledger = [];
     if (!state.contractor_payments) state.contractor_payments = [];
@@ -533,15 +535,31 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { ok: true };
   }
 
+  if (channel === "contractors:updateOpeningBalance") {
+    const contractor = state.contractors.find((c) => c.id === payload.id)!;
+    contractor.opening_balance = payload.opening_balance;
+    saveState(state);
+    return contractor;
+  }
+
   if (channel === "contractors:summary") {
     return state.contractors.map((c) => {
-      const totalWork = state.daily_logs
-        .filter((l) => l.role === "contractor" && l.person_name === c.name)
-        .reduce((sum, l) => sum + computeDayValue(l), 0);
+      const totalWork =
+        c.opening_balance +
+        state.daily_logs
+          .filter((l) => l.role === "contractor" && l.person_name === c.name)
+          .reduce((sum, l) => sum + computeDayValue(l), 0);
       const totalPaid = state.contractor_payments
         .filter((p) => p.contractor_id === c.id)
         .reduce((sum, p) => sum + p.amount, 0);
-      return { id: c.id, name: c.name, totalWork, totalPaid, remaining: totalWork - totalPaid };
+      return {
+        id: c.id,
+        name: c.name,
+        opening_balance: c.opening_balance,
+        totalWork,
+        totalPaid,
+        remaining: totalWork - totalPaid,
+      };
     });
   }
 
@@ -561,7 +579,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     const payments = state.contractor_payments
       .filter((p) => p.contractor_id === payload.contractor_id)
       .sort((a, b) => b.date.localeCompare(a.date));
-    const totalWork = logs.reduce((sum, l) => sum + computeDayValue(l), 0);
+    const totalWork = contractor.opening_balance + logs.reduce((sum, l) => sum + computeDayValue(l), 0);
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
     return {
@@ -606,17 +624,33 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return income - expense;
   }
 
+  if (channel === "partners:updateOpeningBalance") {
+    const partner = state.partners.find((p) => p.id === payload.id)!;
+    partner.opening_balance = payload.opening_balance;
+    saveState(state);
+    return partner;
+  }
+
   if (channel === "partners:summary") {
     return state.partners.map((p) => {
       const equipmentList = state.equipment.filter((e) => e.shares.some((s) => s.partner_id === p.id));
-      const totalDue = equipmentList.reduce((sum, e) => {
-        const share = e.shares.find((s) => s.partner_id === p.id)!;
-        return sum + (equipmentAllTimeProfit(e.id) * share.percentage) / 100;
-      }, 0);
+      const totalDue =
+        p.opening_balance +
+        equipmentList.reduce((sum, e) => {
+          const share = e.shares.find((s) => s.partner_id === p.id)!;
+          return sum + (equipmentAllTimeProfit(e.id) * share.percentage) / 100;
+        }, 0);
       const totalPaid = state.partner_payments
         .filter((pp) => pp.partner_id === p.id)
         .reduce((sum, pp) => sum + pp.amount, 0);
-      return { id: p.id, name: p.name, totalDue, totalPaid, remaining: totalDue - totalPaid };
+      return {
+        id: p.id,
+        name: p.name,
+        opening_balance: p.opening_balance,
+        totalDue,
+        totalPaid,
+        remaining: totalDue - totalPaid,
+      };
     });
   }
 
@@ -641,10 +675,12 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     });
 
     const monthDue = equipmentBreakdown.reduce((sum, e) => sum + e.monthAmount, 0);
-    const totalDue = equipmentList.reduce((sum, e) => {
-      const share = e.shares.find((s) => s.partner_id === partner_id)!;
-      return sum + (equipmentAllTimeProfit(e.id) * share.percentage) / 100;
-    }, 0);
+    const totalDue =
+      partner.opening_balance +
+      equipmentList.reduce((sum, e) => {
+        const share = e.shares.find((s) => s.partner_id === partner_id)!;
+        return sum + (equipmentAllTimeProfit(e.id) * share.percentage) / 100;
+      }, 0);
     const payments = state.partner_payments
       .filter((p) => p.partner_id === partner_id)
       .sort((a, b) => b.date.localeCompare(a.date));

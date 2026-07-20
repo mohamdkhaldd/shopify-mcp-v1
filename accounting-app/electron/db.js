@@ -10,7 +10,8 @@ const Database = require("better-sqlite3");
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS partners (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE
+  name TEXT NOT NULL UNIQUE,
+  opening_balance REAL NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS equipment (
@@ -43,7 +44,8 @@ CREATE TABLE IF NOT EXISTS employee_advances (
 
 CREATE TABLE IF NOT EXISTS contractors (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE
+  name TEXT NOT NULL UNIQUE,
+  opening_balance REAL NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS contractor_payments (
@@ -222,6 +224,18 @@ function initDatabase() {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
+
+  // Databases created before opening_balance existed need it added on top —
+  // CREATE TABLE IF NOT EXISTS above only applies to brand-new databases.
+  for (const table of ["contractors", "partners"]) {
+    const hasColumn = db
+      .prepare(`PRAGMA table_info(${table})`)
+      .all()
+      .some((col) => col.name === "opening_balance");
+    if (!hasColumn) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN opening_balance REAL NOT NULL DEFAULT 0`);
+    }
+  }
 
   const accountCount = db.prepare("SELECT COUNT(*) AS c FROM treasury_accounts").get().c;
   if (accountCount === 0) {

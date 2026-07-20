@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { contractorsApi, expenseCategoriesApi, partnersApi } from "../api/client";
+import { expenseCategoriesApi } from "../api/client";
 import SimpleEntityManager from "../components/settings/SimpleEntityManager";
 import Icon from "../components/Icon";
 import DriversTab from "./settings/DriversTab";
 import EquipmentTab from "./settings/EquipmentTab";
+import ContractorsTab from "./settings/ContractorsTab";
+import PartnersTab from "./settings/PartnersTab";
 
 type TabId = "partners" | "drivers" | "equipment" | "contractors" | "expenseCategories";
 
@@ -48,31 +50,13 @@ export default function Settings() {
         })}
       </div>
 
-      {active === "partners" && (
-        <SimpleEntityManager
-          title="الشركاء"
-          addLabel="إضافة شريك"
-          namePlaceholder="اسم الشريك"
-          emptyMessage="لسه مفيش شركاء مسجلين."
-          icon="partners"
-          api={partnersApi}
-        />
-      )}
+      {active === "partners" && <PartnersTab />}
 
       {active === "drivers" && <DriversTab />}
 
       {active === "equipment" && <EquipmentTab />}
 
-      {active === "contractors" && (
-        <SimpleEntityManager
-          title="المقاولين"
-          addLabel="إضافة مقاول"
-          namePlaceholder="اسم المقاول"
-          emptyMessage="لسه مفيش مقاولين مسجلين."
-          icon="contractors"
-          api={contractorsApi}
-        />
-      )}
+      {active === "contractors" && <ContractorsTab />}
 
       {active === "expenseCategories" && (
         <SimpleEntityManager

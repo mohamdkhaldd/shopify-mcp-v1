@@ -15,13 +15,19 @@ function computeDayValue(log) {
 function registerIpcHandlers(db) {
   // --- Partners ---
   ipcMain.handle("partners:list", () => db.prepare("SELECT * FROM partners ORDER BY name").all());
-  ipcMain.handle("partners:create", (_e, { name }) => {
-    const info = db.prepare("INSERT INTO partners (name) VALUES (?)").run(name.trim());
-    return { id: info.lastInsertRowid, name: name.trim() };
+  ipcMain.handle("partners:create", (_e, { name, opening_balance }) => {
+    const info = db
+      .prepare("INSERT INTO partners (name, opening_balance) VALUES (?, ?)")
+      .run(name.trim(), opening_balance ?? 0);
+    return { id: info.lastInsertRowid, name: name.trim(), opening_balance: opening_balance ?? 0 };
   });
   ipcMain.handle("partners:delete", (_e, { id }) => {
     db.prepare("DELETE FROM partners WHERE id = ?").run(id);
     return { ok: true };
+  });
+  ipcMain.handle("partners:updateOpeningBalance", (_e, { id, opening_balance }) => {
+    db.prepare("UPDATE partners SET opening_balance = ? WHERE id = ?").run(opening_balance, id);
+    return db.prepare("SELECT * FROM partners WHERE id = ?").get(id);
   });
 
   // --- Employees (drivers / salaried workers) ---
@@ -39,13 +45,19 @@ function registerIpcHandlers(db) {
 
   // --- Contractors ---
   ipcMain.handle("contractors:list", () => db.prepare("SELECT * FROM contractors ORDER BY name").all());
-  ipcMain.handle("contractors:create", (_e, { name }) => {
-    const info = db.prepare("INSERT INTO contractors (name) VALUES (?)").run(name.trim());
-    return { id: info.lastInsertRowid, name: name.trim() };
+  ipcMain.handle("contractors:create", (_e, { name, opening_balance }) => {
+    const info = db
+      .prepare("INSERT INTO contractors (name, opening_balance) VALUES (?, ?)")
+      .run(name.trim(), opening_balance ?? 0);
+    return { id: info.lastInsertRowid, name: name.trim(), opening_balance: opening_balance ?? 0 };
   });
   ipcMain.handle("contractors:delete", (_e, { id }) => {
     db.prepare("DELETE FROM contractors WHERE id = ?").run(id);
     return { ok: true };
+  });
+  ipcMain.handle("contractors:updateOpeningBalance", (_e, { id, opening_balance }) => {
+    db.prepare("UPDATE contractors SET opening_balance = ? WHERE id = ?").run(opening_balance, id);
+    return db.prepare("SELECT * FROM contractors WHERE id = ?").get(id);
   });
 
   // --- Expense categories ---
@@ -460,9 +472,16 @@ function registerIpcHandlers(db) {
       "SELECT COALESCE(SUM(amount), 0) AS total FROM contractor_payments WHERE contractor_id = ?"
     );
     return contractors.map((c) => {
-      const totalWork = workStmt.all(c.name).reduce((sum, l) => sum + computeDayValue(l), 0);
+      const totalWork = c.opening_balance + workStmt.all(c.name).reduce((sum, l) => sum + computeDayValue(l), 0);
       const totalPaid = paidStmt.get(c.id).total;
-      return { id: c.id, name: c.name, totalWork, totalPaid, remaining: totalWork - totalPaid };
+      return {
+        id: c.id,
+        name: c.name,
+        opening_balance: c.opening_balance,
+        totalWork,
+        totalPaid,
+        remaining: totalWork - totalPaid,
+      };
     });
   });
 
@@ -490,7 +509,7 @@ function registerIpcHandlers(db) {
       .prepare("SELECT * FROM contractor_payments WHERE contractor_id = ? ORDER BY date DESC")
       .all(contractor_id);
 
-    const totalWork = logs.reduce((sum, l) => sum + computeDayValue(l), 0);
+    const totalWork = contractor.opening_balance + logs.reduce((sum, l) => sum + computeDayValue(l), 0);
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
     return {
@@ -549,12 +568,18 @@ function registerIpcHandlers(db) {
 
     return partners.map((p) => {
       const shares = sharesStmt.all(p.id);
-      const totalDue = shares.reduce(
-        (sum, s) => sum + (equipmentAllTimeProfit(s.equipment_id) * s.percentage) / 100,
-        0
-      );
+      const totalDue =
+        p.opening_balance +
+        shares.reduce((sum, s) => sum + (equipmentAllTimeProfit(s.equipment_id) * s.percentage) / 100, 0);
       const totalPaid = paidStmt.get(p.id).total;
-      return { id: p.id, name: p.name, totalDue, totalPaid, remaining: totalDue - totalPaid };
+      return {
+        id: p.id,
+        name: p.name,
+        opening_balance: p.opening_balance,
+        totalDue,
+        totalPaid,
+        remaining: totalDue - totalPaid,
+      };
     });
   });
 
@@ -589,10 +614,9 @@ function registerIpcHandlers(db) {
     });
 
     const monthDue = equipmentBreakdown.reduce((sum, e) => sum + e.monthAmount, 0);
-    const totalDue = shares.reduce(
-      (sum, s) => sum + (equipmentAllTimeProfit(s.equipment_id) * s.percentage) / 100,
-      0
-    );
+    const totalDue =
+      partner.opening_balance +
+      shares.reduce((sum, s) => sum + (equipmentAllTimeProfit(s.equipment_id) * s.percentage) / 100, 0);
     const payments = db
       .prepare("SELECT * FROM partner_payments WHERE partner_id = ? ORDER BY date DESC")
       .all(partner_id);
