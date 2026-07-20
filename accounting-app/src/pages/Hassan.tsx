@@ -1,13 +1,14 @@
 import { FormEvent, useEffect, useState } from "react";
 import MonthPicker from "../components/equipment/MonthPicker";
 import Icon from "../components/Icon";
-import { hassanApi } from "../api/client";
+import { dailyLogsApi, hassanApi } from "../api/client";
 import {
   HassanBalance,
   HassanCommissionSummary,
   HassanLedgerEntry,
   HassanLedgerType,
   HassanPartyBalance,
+  MarketLogRow,
 } from "../api/types";
 import { currentMonthKey } from "../utils/months";
 import { formatEGP } from "../utils/format";
@@ -23,11 +24,107 @@ function typeLabel(type: HassanLedgerType) {
   return LEDGER_TYPES.find((t) => t.value === type)?.label ?? type;
 }
 
+// كوميشن حسن للسركي سوق بيتدخل من هنا، مش من شيت المعدة — الشيت ده بيتطبع
+// ويتبعت للشركاء، فمينفعش يبان فيه كوميشن حسن.
+function MarketCommissionEntry({ month, onChanged }: { month: string; onChanged: () => void }) {
+  const [rows, setRows] = useState<MarketLogRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [value, setValue] = useState("");
+
+  const refresh = () => dailyLogsApi.marketForMonth(month).then(setRows);
+
+  useEffect(() => {
+    setLoading(true);
+    refresh().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month]);
+
+  function startEdit(row: MarketLogRow) {
+    setEditingId(row.id);
+    setValue(row.hassan_commission?.toString() ?? "");
+  }
+
+  async function save(row: MarketLogRow) {
+    await dailyLogsApi.upsert({
+      equipment_id: row.equipment_id,
+      date: row.date,
+      role: row.role,
+      person_name: row.person_name,
+      actual_hours: row.actual_hours,
+      base_hours: row.base_hours,
+      day_rate: row.day_rate,
+      fixed_value: row.fixed_value,
+      hassan_commission: value ? Number(value) : null,
+    });
+    setEditingId(null);
+    await refresh();
+    onChanged();
+  }
+
+  return (
+    <div className="bg-white rounded-card shadow-card p-5">
+      <h2 className="font-bold text-slate-800 mb-1">إدخال كوميشن سركي السوق — {month}</h2>
+      <p className="text-xs text-slate-400 mb-4">كوميشن حسن هنا بيتحسب لوحده، ومش بيظهر في شيت المعدة اللي بيتبعت للشركاء.</p>
+
+      {loading ? (
+        <div className="text-sm text-slate-400">جاري التحميل...</div>
+      ) : rows.length === 0 ? (
+        <div className="text-sm text-slate-400">مفيش أيام سركي سوق مسجلة الشهر ده.</div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-slate-400 border-b border-slate-100">
+              <th className="text-start font-semibold py-2">المعدة</th>
+              <th className="text-start font-semibold py-2">التاريخ</th>
+              <th className="text-start font-semibold py-2">قيمة اليوم</th>
+              <th className="text-start font-semibold py-2">كوميشن حسن</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-b border-slate-50 last:border-0">
+                <td className="py-2 font-semibold text-slate-700">{row.equipment_name}</td>
+                <td className="py-2 text-slate-500">{row.date}</td>
+                <td className="py-2 text-slate-600">{formatEGP(row.fixed_value ?? 0)}</td>
+                <td className="py-2">
+                  {editingId === row.id ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        value={value}
+                        onChange={(e) => setValue(e.target.value)}
+                        className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                        autoFocus
+                      />
+                      <button onClick={() => save(row)} className="text-xs font-semibold text-primary hover:text-primary-dark">
+                        حفظ
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => startEdit(row)} className="font-semibold text-slate-700 hover:text-primary">
+                      {formatEGP(row.hassan_commission ?? 0)}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 function CommissionTab({ month }: { month: string }) {
   const [summary, setSummary] = useState<HassanCommissionSummary | null>(null);
 
+  const refreshSummary = () => hassanApi.commissionSummary(month).then(setSummary);
+
   useEffect(() => {
-    hassanApi.commissionSummary(month).then(setSummary);
+    refreshSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month]);
 
   if (!summary) return <div className="text-sm text-slate-400">جاري التحميل...</div>;
@@ -42,6 +139,8 @@ function CommissionTab({ month }: { month: string }) {
 
   return (
     <div className="space-y-4">
+      <MarketCommissionEntry month={month} onChanged={refreshSummary} />
+
       <div className="bg-white rounded-card shadow-card p-5">
         <div className="text-sm text-slate-500 font-semibold">إجمالي كوميشن حسن — {month}</div>
         <div className="mt-2 text-2xl font-extrabold text-primary">{formatEGP(summary.total)}</div>

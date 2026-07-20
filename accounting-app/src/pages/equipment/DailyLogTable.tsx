@@ -59,8 +59,14 @@ export default function DailyLogTable({
   const [rows, setRows] = useState<Record<string, RowDraft>>({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setLoading(true);
+  const [bulkFrom, setBulkFrom] = useState("1");
+  const [bulkTo, setBulkTo] = useState(String(dates.length));
+  const [bulkPerson, setBulkPerson] = useState("");
+  const [bulkRate, setBulkRate] = useState("");
+  const [bulkBaseHours, setBulkBaseHours] = useState("8");
+  const [bulkApplying, setBulkApplying] = useState(false);
+
+  const refresh = () =>
     dailyLogsApi.list(equipmentId, month, role).then((logs) => {
       const byDate = new Map(logs.map((l) => [l.date, l]));
       const next: Record<string, RowDraft> = {};
@@ -69,10 +75,18 @@ export default function DailyLogTable({
         next[date] = log ? draftFromLog(log) : emptyRow();
       }
       setRows(next);
-      setLoading(false);
     });
+
+  useEffect(() => {
+    setLoading(true);
+    refresh().finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [equipmentId, month, role]);
+
+  useEffect(() => {
+    setBulkFrom("1");
+    setBulkTo(String(dates.length));
+  }, [dates]);
 
   function draftFromLog(log: DailyLog): RowDraft {
     return {
@@ -130,11 +144,46 @@ export default function DailyLogTable({
     onChanged?.();
   }
 
+  function handleBulkPersonChange(name: string) {
+    setBulkPerson(name);
+    const match = people.find((p) => p.name === name);
+    if (match?.rate) setBulkRate(String(match.rate));
+  }
+
+  // Fills a whole date range with the same name/rate/base-hours in one go —
+  // most days in a month share the same driver and rate, only the actual
+  // hours change on the odd overtime day, so that's left per-day as usual.
+  async function applyBulkFill() {
+    const from = Number(bulkFrom);
+    const to = Number(bulkTo);
+    if (!bulkPerson || !bulkRate || !from || !to || from > to) return;
+
+    setBulkApplying(true);
+    const targetDates = dates.filter((date) => {
+      const day = Number(date.slice(-2));
+      return day >= from && day <= to;
+    });
+
+    for (const date of targetDates) {
+      await dailyLogsApi.upsert({
+        equipment_id: equipmentId,
+        date,
+        role,
+        person_name: bulkPerson,
+        actual_hours: Number(bulkBaseHours) || 0,
+        base_hours: Number(bulkBaseHours) || 0,
+        day_rate: Number(bulkRate) || 0,
+        fixed_value: null,
+        hassan_commission: null,
+      });
+    }
+
+    await refresh();
+    setBulkApplying(false);
+    onChanged?.();
+  }
+
   const monthTotal = Object.values(rows).reduce((sum, r) => sum + (r.id ? r.day_value : 0), 0);
-  const commissionTotal = Object.values(rows).reduce(
-    (sum, r) => sum + (r.id && r.hassan_commission ? Number(r.hassan_commission) : 0),
-    0
-  );
 
   if (loading) {
     return <div className="bg-white rounded-card shadow-card p-5 text-sm text-slate-400">جاري التحميل...</div>;
@@ -142,6 +191,88 @@ export default function DailyLogTable({
 
   return (
     <div className="bg-white rounded-card shadow-card p-5">
+      {mode === "hours" && (
+        <div className="no-print bg-slate-50 rounded-xl p-3 mb-4">
+          <div className="text-xs font-bold text-slate-500 mb-2">تعبئة سريعة لمجموعة أيام دفعة واحدة</div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1">من يوم</label>
+              <select
+                value={bulkFrom}
+                onChange={(e) => setBulkFrom(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white"
+              >
+                {dates.map((d) => (
+                  <option key={d} value={Number(d.slice(-2))}>
+                    {d.slice(-2)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1">إلى يوم</label>
+              <select
+                value={bulkTo}
+                onChange={(e) => setBulkTo(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white"
+              >
+                {dates.map((d) => (
+                  <option key={d} value={Number(d.slice(-2))}>
+                    {d.slice(-2)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1">الاسم</label>
+              <select
+                value={bulkPerson}
+                onChange={(e) => handleBulkPersonChange(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white"
+              >
+                <option value=""></option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1">سعر اليوم</label>
+              <input
+                type="number"
+                min="0"
+                value={bulkRate}
+                onChange={(e) => setBulkRate(e.target.value)}
+                className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1">الساعات الأساسية</label>
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={bulkBaseHours}
+                onChange={(e) => setBulkBaseHours(e.target.value)}
+                className="w-20 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+            </div>
+            <button
+              onClick={applyBulkFill}
+              disabled={bulkApplying || !bulkPerson || !bulkRate}
+              className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
+            >
+              {bulkApplying ? "جاري التعبئة..." : "تطبيق على الأيام"}
+            </button>
+          </div>
+          <div className="text-[11px] text-slate-400 mt-2">
+            بيملأ الاسم وسعر اليوم والساعات الأساسية لكل الأيام في المدى ده، وبيفترض إن الساعات الفعلية زي الأساسية (من غير أوفر تايم) — لو يوم فيه أوفر تايم عدّل الساعات الفعلية بتاعته لوحده بعد التعبئة.
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -155,10 +286,11 @@ export default function DailyLogTable({
                   <th className="text-start font-semibold py-2">اليومية</th>
                 </>
               ) : (
-                <>
-                  <th className="text-start font-semibold py-2">قيمة اليوم</th>
-                  <th className="text-start font-semibold py-2">كوميشن حسن</th>
-                </>
+                // القيمة قبل خصم كوميشن حسن تفضل مخفية وقت الطباعة — الشيت
+                // ده بيتبعت للشركاء، والقيمة النهائية بس اللي المفروض تبان.
+                <th className="text-start font-semibold py-2">
+                  <span className="no-print">قيمة اليوم</span>
+                </th>
               )}
               <th className="text-start font-semibold py-2 whitespace-nowrap">الإجمالي</th>
             </tr>
@@ -234,28 +366,16 @@ export default function DailyLogTable({
                       </td>
                     </>
                   ) : (
-                    <>
-                      <td className="py-1.5">
-                        <input
-                          type="number"
-                          min="0"
-                          value={row.fixed_value}
-                          onChange={(e) => updateRow(date, { fixed_value: e.target.value })}
-                          onBlur={() => saveRow(date)}
-                          className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                        />
-                      </td>
-                      <td className="py-1.5">
-                        <input
-                          type="number"
-                          min="0"
-                          value={row.hassan_commission}
-                          onChange={(e) => updateRow(date, { hassan_commission: e.target.value })}
-                          onBlur={() => saveRow(date)}
-                          className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                        />
-                      </td>
-                    </>
+                    <td className="py-1.5">
+                      <input
+                        type="number"
+                        min="0"
+                        value={row.fixed_value}
+                        onChange={(e) => updateRow(date, { fixed_value: e.target.value })}
+                        onBlur={() => saveRow(date)}
+                        className="no-print w-28 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                    </td>
                   )}
                   <td className="py-1.5 font-semibold text-primary-dark whitespace-nowrap">
                     {row.id ? formatEGP(row.day_value) : ""}
@@ -266,15 +386,10 @@ export default function DailyLogTable({
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={mode === "hours" ? 5 : 4} className="pt-3 text-sm font-bold text-slate-700">
-                إجمالي الشهر{mode === "fixed" && commissionTotal > 0 && " (وكوميشن حسن)"}
+              <td colSpan={mode === "hours" ? 5 : 3} className="pt-3 text-sm font-bold text-slate-700">
+                إجمالي الشهر
               </td>
-              <td className="pt-3 text-sm font-bold text-primary-dark whitespace-nowrap">
-                {formatEGP(monthTotal)}
-                {mode === "fixed" && commissionTotal > 0 && (
-                  <div className="text-xs font-semibold text-slate-500">كوميشن: {formatEGP(commissionTotal)}</div>
-                )}
-              </td>
+              <td className="pt-3 text-sm font-bold text-primary-dark whitespace-nowrap">{formatEGP(monthTotal)}</td>
             </tr>
           </tfoot>
         </table>

@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import KpiCard from "../components/KpiCard";
+import { useTheme } from "../theme";
 import {
   currentMonthLabel,
   currentMonthProfit,
@@ -24,6 +25,15 @@ import {
 import { formatEGP } from "../utils/format";
 
 export default function Dashboard() {
+  const { theme } = useTheme();
+  const gridStroke = theme === "dark" ? "#243057" : "#EEF2F0";
+  const tickFill = theme === "dark" ? "#94A0C9" : "#64748B";
+  const categoryTickFill = theme === "dark" ? "#D7DDF3" : "#334155";
+  const tooltipStyle =
+    theme === "dark"
+      ? { direction: "rtl" as const, fontFamily: "Cairo", borderRadius: 12, border: "1px solid #2B3A63", background: "#121B3A", color: "#E7ECFB" }
+      : { direction: "rtl" as const, fontFamily: "Cairo", borderRadius: 12, border: "1px solid #E2E8F0" };
+
   return (
     <div className="space-y-6">
       <div>
@@ -92,13 +102,10 @@ export default function Dashboard() {
                   <stop offset="100%" stopColor="#2F8F63" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEF2F0" />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#64748B" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: "#64748B" }} axisLine={false} tickLine={false} width={70} />
-              <Tooltip
-                formatter={(value: number) => formatEGP(value)}
-                contentStyle={{ direction: "rtl", fontFamily: "Cairo", borderRadius: 12, border: "1px solid #E2E8F0" }}
-              />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} />
+              <XAxis dataKey="month" tick={{ fontSize: 12, fill: tickFill }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: tickFill }} axisLine={false} tickLine={false} width={70} />
+              <Tooltip formatter={(value: number) => formatEGP(value)} contentStyle={tooltipStyle} />
               <Area
                 type="monotone"
                 dataKey="profit"
@@ -121,21 +128,18 @@ export default function Dashboard() {
               margin={{ top: 0, right: 10, left: 0, bottom: 0 }}
               barCategoryGap={10}
             >
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#EEF2F0" />
-              <XAxis type="number" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridStroke} />
+              <XAxis type="number" tick={{ fontSize: 11, fill: tickFill }} axisLine={false} tickLine={false} />
               <YAxis
                 type="category"
                 dataKey="name"
-                tick={{ fontSize: 10, fill: "#334155" }}
+                tick={{ fontSize: 10, fill: categoryTickFill }}
                 axisLine={false}
                 tickLine={false}
                 width={110}
                 interval={0}
               />
-              <Tooltip
-                formatter={(value: number) => formatEGP(value)}
-                contentStyle={{ direction: "rtl", fontFamily: "Cairo", borderRadius: 12, border: "1px solid #E2E8F0" }}
-              />
+              <Tooltip formatter={(value: number) => formatEGP(value)} contentStyle={tooltipStyle} />
               <Bar dataKey="annualExpense" fill="#2F8F63" radius={[0, 6, 6, 0]} barSize={14} />
             </BarChart>
           </ResponsiveContainer>

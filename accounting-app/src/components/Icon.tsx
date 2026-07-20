@@ -37,6 +37,10 @@ const paths: Record<string, JSX.Element> = {
   ),
   trendUp: <path d="M4 15l5-5 4 4 7-7M14 6h6v6" />,
   trendDown: <path d="M4 8l5 5 4-4 7 7M14 17h6v-6" />,
+  sun: (
+    <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
+  ),
+  moon: <path d="M20.5 14.5a8.5 8.5 0 1 1-9-11 7 7 0 0 0 9 11Z" />,
 };
 
 export default function Icon({ name, className = "w-5 h-5" }: IconProps) {

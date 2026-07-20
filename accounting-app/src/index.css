@@ -36,4 +36,127 @@ body {
     padding: 0 !important;
     margin: 0 !important;
   }
+  @page {
+    size: A4;
+    margin: 8mm;
+  }
+  /* Tailwind's spacing/type scale is rem-based, so shrinking the root
+     size compresses paddings and fonts together — enough to fit a full
+     31-row daily-log sheet on one printed page instead of three. */
+  html {
+    font-size: 7px;
+  }
+  table {
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
+  }
+}
+
+/* Dark mode ("الوضع الليلي") — a navy palette applied by overriding the
+   Tailwind utility classes the app already uses everywhere, instead of
+   adding dark: variants to every component. Wrapped in @media screen so
+   printed sheets always stay plain black-on-white regardless of theme. */
+@media screen {
+  .dark body {
+    background: #0b1224;
+    color: #e7ecfb;
+  }
+
+  .dark .bg-white {
+    background-color: #121b3a;
+  }
+
+  .dark .bg-slate-50,
+  .dark .bg-slate-100 {
+    background-color: #18213f;
+  }
+
+  .dark .bg-slate-50\/40 {
+    background-color: rgba(24, 33, 63, 0.55);
+  }
+
+  .dark .shadow-card {
+    box-shadow: 0 2px 10px 0 rgba(0, 0, 0, 0.35);
+  }
+
+  .dark .border-slate-50,
+  .dark .border-slate-100 {
+    border-color: #212c4f;
+  }
+
+  .dark .border-slate-200,
+  .dark .border-slate-400 {
+    border-color: #2b3a63;
+  }
+
+  .dark input,
+  .dark select,
+  .dark textarea {
+    background-color: #121b3a;
+    color: #e7ecfb;
+    border-color: #2b3a63;
+  }
+
+  .dark .text-slate-900,
+  .dark .text-slate-800 {
+    color: #eef1fb;
+  }
+
+  .dark .text-slate-700 {
+    color: #d7ddf3;
+  }
+
+  .dark .text-slate-600 {
+    color: #b4bede;
+  }
+
+  .dark .text-slate-500 {
+    color: #94a0c9;
+  }
+
+  .dark .text-slate-400 {
+    color: #7683ac;
+  }
+
+  .dark .bg-rose-50 {
+    background-color: #3a1620;
+  }
+
+  .dark .text-rose-500 {
+    color: #fda4af;
+  }
+
+  .dark .text-rose-600 {
+    color: #fb7185;
+  }
+
+  .dark .text-rose-700 {
+    color: #f43f5e;
+  }
+
+  .dark .bg-amber-50 {
+    background-color: #3a2a10;
+  }
+
+  .dark .text-amber-700 {
+    color: #fbbf24;
+  }
+
+  .dark .bg-primary-light {
+    background-color: rgba(47, 143, 99, 0.18);
+  }
+
+  .dark .text-primary-dark {
+    color: #6ee7b7;
+  }
+
+  .dark .hover\:bg-primary-light:hover {
+    background-color: rgba(47, 143, 99, 0.22);
+  }
+
+  .dark .hover\:text-primary-dark:hover {
+    color: #6ee7b7;
+  }
 }

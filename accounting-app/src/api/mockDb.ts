@@ -116,7 +116,7 @@ interface MockState {
 const ACCOUNT_NAME_AR: Record<string, string> = { wallet: "محفظة", instapay: "انستا باي", cash: "كاش" };
 
 function computeDayValue(log: DailyLogRow): number {
-  if (log.role === "market") return log.fixed_value ?? 0;
+  if (log.role === "market") return (log.fixed_value ?? 0) - (log.hassan_commission ?? 0);
   const dayRate = log.day_rate ?? 0;
   const hourlyRate = dayRate / 8;
   const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - (log.base_hours ?? 0));
@@ -285,6 +285,17 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     state.daily_logs = state.daily_logs.filter((l) => l.id !== payload.id);
     saveState(state);
     return { ok: true };
+  }
+
+  if (channel === "dailyLogs:marketForMonth") {
+    return state.daily_logs
+      .filter((l) => l.role === "market" && l.date.startsWith(payload.month))
+      .map((l) => ({
+        ...l,
+        equipment_name: state.equipment.find((e) => e.id === l.equipment_id)?.name ?? "—",
+        day_value: computeDayValue(l),
+      }))
+      .sort((a, b) => a.equipment_name.localeCompare(b.equipment_name) || a.date.localeCompare(b.date));
   }
 
   if (channel === "monthlyExpenses:list") {

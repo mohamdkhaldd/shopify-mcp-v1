@@ -15,6 +15,7 @@ import {
   HassanCommissionSummary,
   HassanLedgerEntry,
   HassanPartyBalance,
+  MarketLogRow,
   MonthlyExpense,
   MonthlyReport,
   Partner,
@@ -85,6 +86,7 @@ export const dailyLogsApi = {
     invoke("dailyLogs:list", { equipment_id, month, role }),
   upsert: (log: Omit<DailyLog, "id" | "day_value">): Promise<DailyLog> => invoke("dailyLogs:upsert", log),
   remove: (id: number): Promise<void> => invoke("dailyLogs:delete", { id }),
+  marketForMonth: (month: string): Promise<MarketLogRow[]> => invoke("dailyLogs:marketForMonth", { month }),
 };
 
 export const monthlyExpensesApi = {

@@ -51,6 +51,10 @@ export interface DailyLog {
   day_value: number;
 }
 
+export interface MarketLogRow extends DailyLog {
+  equipment_name: string;
+}
+
 export interface MonthlyExpense {
   id: number;
   equipment_id: number;

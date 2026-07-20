@@ -5,7 +5,7 @@ const { ipcMain } = require("electron");
 // day value = day_rate + overtime_hours * hourly_rate. سركي سوق has no
 // hours at all — the day value is just whatever fixed amount was entered.
 function computeDayValue(log) {
-  if (log.role === "market") return log.fixed_value ?? 0;
+  if (log.role === "market") return (log.fixed_value ?? 0) - (log.hassan_commission ?? 0);
   const dayRate = log.day_rate ?? 0;
   const hourlyRate = dayRate / 8;
   const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - (log.base_hours ?? 0));
@@ -151,6 +151,21 @@ function registerIpcHandlers(db) {
   ipcMain.handle("dailyLogs:delete", (_e, { id }) => {
     db.prepare("DELETE FROM daily_logs WHERE id = ?").run(id);
     return { ok: true };
+  });
+
+  // Every سركي سوق (market) row across all equipment for one month — lets
+  // Hassan enter his commission from a dedicated screen instead of the
+  // equipment's daily-log sheet, which gets printed and sent to partners.
+  ipcMain.handle("dailyLogs:marketForMonth", (_e, { month }) => {
+    const rows = db
+      .prepare(
+        `SELECT dl.*, e.name AS equipment_name FROM daily_logs dl
+         JOIN equipment e ON e.id = dl.equipment_id
+         WHERE dl.role = 'market' AND dl.date LIKE ?
+         ORDER BY e.name, dl.date`
+      )
+      .all(`${month}%`);
+    return rows.map((row) => ({ ...row, day_value: computeDayValue(row) }));
   });
 
   // --- Monthly expenses ---
