@@ -1,4 +1,5 @@
 import { navItems, SectionId } from "../nav";
+import CompanyLogo from "./CompanyLogo";
 import Icon from "./Icon";
 
 interface SidebarProps {
@@ -11,9 +12,7 @@ export default function Sidebar({ active, onSelect }: SidebarProps) {
     <aside className="w-64 shrink-0 h-screen sticky top-0 bg-white border-s border-slate-200 flex flex-col">
       <div className="px-5 py-6 border-b border-slate-100">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-extrabold text-lg">
-            ب
-          </div>
+          <CompanyLogo />
           <div>
             <div className="font-bold text-slate-900 leading-tight">شركة البنيان</div>
             <div className="text-xs text-slate-400 leading-tight">تأجير المعدات الثقيلة</div>

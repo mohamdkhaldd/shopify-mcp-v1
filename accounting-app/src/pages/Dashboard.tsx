@@ -11,12 +11,15 @@ import {
 } from "recharts";
 import KpiCard from "../components/KpiCard";
 import {
+  currentMonthLabel,
+  currentMonthProfit,
   equipmentCount,
   equipmentExpenses,
-  highestExpenseEquipment,
   monthlyProfitTrend,
   totalAnnualExpense,
   totalAnnualProfit,
+  totalPayables,
+  totalReceivables,
 } from "../data/dashboardData";
 
 function formatEGP(value: number) {
@@ -37,7 +40,7 @@ export default function Dashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <KpiCard
           label="صافي الربح السنوي"
           value={formatEGP(totalAnnualProfit)}
@@ -60,11 +63,25 @@ export default function Dashboard() {
           sub="كل بنود مصاريف المعدات"
         />
         <KpiCard
-          label="أعلى معدة مصروفًا"
-          value={highestExpenseEquipment.name}
-          icon="reports"
+          label={`صافي ربح شهر ${currentMonthLabel}`}
+          value={formatEGP(currentMonthProfit)}
+          icon={currentMonthProfit >= 0 ? "trendUp" : "trendDown"}
+          tone={currentMonthProfit >= 0 ? "positive" : "negative"}
+          sub="أحدث شهر مسجّل"
+        />
+        <KpiCard
+          label="مستحق للشركة"
+          value={formatEGP(totalReceivables)}
+          icon="partners"
           tone="neutral"
-          sub={formatEGP(highestExpenseEquipment.annualExpense)}
+          sub="فلوس على المقاولين وغيرهم لحد النهاردة"
+        />
+        <KpiCard
+          label="مستحق على الشركة"
+          value={formatEGP(totalPayables)}
+          icon="suppliers"
+          tone="neutral"
+          sub="فلوس للشركاء والموردين وغيرهم لحد النهاردة"
         />
       </div>
 

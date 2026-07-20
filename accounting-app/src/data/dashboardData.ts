@@ -43,6 +43,16 @@ export const equipmentExpenses: EquipmentExpense[] = [
 export const totalAnnualProfit = monthlyProfitTrend.reduce((sum, m) => sum + m.profit, 0);
 export const totalAnnualExpense = equipmentExpenses.reduce((sum, e) => sum + e.annualExpense, 0);
 export const equipmentCount = equipmentExpenses.length;
-export const highestExpenseEquipment = equipmentExpenses.reduce((max, e) =>
-  e.annualExpense > max.annualExpense ? e : max
-);
+
+// The current month's figure — more actionable on a live dashboard than a
+// static "highest expense equipment" fact that's already visible in the table below.
+export const currentMonthLabel = "يوليو";
+export const currentMonthProfit =
+  monthlyProfitTrend.find((m) => m.month === currentMonthLabel)?.profit ?? 0;
+
+// Receivables / payables: not tracked anywhere yet in the Excel snapshot —
+// these become live totals once the partner/contractor/supplier ledgers
+// exist (Phase 2 onward). Zero here is a real "nothing recorded yet" value,
+// not a placeholder bug.
+export const totalReceivables = 0; // مستحق للشركة (من مقاولين، وغيره)
+export const totalPayables = 0; // مستحق على الشركة (لشركاء، موردين، وغيره)
