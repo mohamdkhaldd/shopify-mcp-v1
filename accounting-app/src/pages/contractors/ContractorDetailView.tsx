@@ -60,16 +60,16 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-card shadow-card p-5">
-          <div className="text-sm text-slate-500 font-semibold">إجمالي شغله</div>
+          <div className="text-sm text-slate-500 font-semibold">إجمالي المستحق عليه</div>
           <div className="mt-2 text-xl font-extrabold text-slate-900">{formatEGP(detail.totalWork)}</div>
         </div>
         <div className="bg-white rounded-card shadow-card p-5">
-          <div className="text-sm text-slate-500 font-semibold">إجمالي المدفوع</div>
-          <div className="mt-2 text-xl font-extrabold text-rose-600">{formatEGP(detail.totalPaid)}</div>
+          <div className="text-sm text-slate-500 font-semibold">إجمالي المدفوع منه</div>
+          <div className="mt-2 text-xl font-extrabold text-primary">{formatEGP(detail.totalPaid)}</div>
         </div>
         <div className="bg-white rounded-card shadow-card p-5">
-          <div className="text-sm text-slate-500 font-semibold">الباقي له</div>
-          <div className="mt-2 text-xl font-extrabold text-primary">{formatEGP(detail.remaining)}</div>
+          <div className="text-sm text-slate-500 font-semibold">الباقي عليه</div>
+          <div className="mt-2 text-xl font-extrabold text-rose-600">{formatEGP(detail.remaining)}</div>
         </div>
       </div>
 

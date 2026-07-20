@@ -23,7 +23,7 @@ export default function Contractors() {
       <div>
         <h1 className="text-2xl font-extrabold text-slate-900">المقاولين</h1>
         <p className="text-sm text-slate-500 mt-1">
-          كل مقاول شغله بيتحسب تلقائيًا من سجلات المقاول في كل المعدات، والباقي له بينقص لما تسجل دفعة.
+          كل مقاول المستحق عليه بيتحسب تلقائيًا من سجلات المقاول في كل المعدات، وبينقص لما يدفع.
         </p>
       </div>
 
@@ -47,13 +47,13 @@ export default function Contractors() {
                 </div>
                 {c.remaining !== 0 && (
                   <span className={`text-xs font-bold px-2 py-1 rounded-lg ${c.remaining > 0 ? "bg-primary-light text-primary-dark" : "bg-rose-50 text-rose-600"}`}>
-                    {c.remaining > 0 ? "له" : "عليه"} {formatEGP(Math.abs(c.remaining))}
+                    {c.remaining > 0 ? "عليه" : "دفع زيادة"} {formatEGP(Math.abs(c.remaining))}
                   </span>
                 )}
               </div>
               <div className="mt-3 font-bold text-slate-800">{c.name}</div>
               <div className="mt-1 text-xs text-slate-400">
-                إجمالي شغله {formatEGP(c.totalWork)} — مدفوع {formatEGP(c.totalPaid)}
+                المستحق عليه {formatEGP(c.totalWork)} — دفع {formatEGP(c.totalPaid)}
               </div>
             </button>
           ))}

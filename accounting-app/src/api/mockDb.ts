@@ -65,6 +65,35 @@ interface PartnerPaymentRow {
   note: string | null;
 }
 
+interface TreasuryAccountRow {
+  id: number;
+  name: "wallet" | "instapay" | "cash";
+  current_balance: number;
+}
+
+interface SupplierRow {
+  id: number;
+  name: string;
+}
+
+interface SupplierPurchaseRow {
+  id: number;
+  supplier_id: number;
+  date: string;
+  description: string | null;
+  amount: number;
+  note: string | null;
+}
+
+interface SupplierPaymentRow {
+  id: number;
+  supplier_id: number;
+  date: string;
+  amount: number;
+  method: string;
+  note: string | null;
+}
+
 interface MockState {
   partners: { id: number; name: string }[];
   employees: { id: number; name: string; wage_type: "daily" | "monthly"; rate: number }[];
@@ -77,8 +106,14 @@ interface MockState {
   hassan_ledger: HassanLedgerRow[];
   contractor_payments: ContractorPaymentRow[];
   partner_payments: PartnerPaymentRow[];
+  treasury_accounts: TreasuryAccountRow[];
+  suppliers: SupplierRow[];
+  supplier_purchases: SupplierPurchaseRow[];
+  supplier_payments: SupplierPaymentRow[];
   nextId: number;
 }
+
+const ACCOUNT_NAME_AR: Record<string, string> = { wallet: "محفظة", instapay: "انستا باي", cash: "كاش" };
 
 function computeDayValue(log: DailyLogRow): number {
   if (log.role === "market") return log.fixed_value ?? 0;
@@ -179,6 +214,14 @@ function buildSeedState(): MockState {
     hassan_ledger: [],
     contractor_payments: [],
     partner_payments: [],
+    treasury_accounts: [
+      { id: nextId++, name: "wallet", current_balance: 0 },
+      { id: nextId++, name: "instapay", current_balance: 0 },
+      { id: nextId++, name: "cash", current_balance: 0 },
+    ],
+    suppliers: [],
+    supplier_purchases: [],
+    supplier_payments: [],
     nextId,
   };
 }
@@ -191,6 +234,16 @@ function loadState(): MockState {
     if (!state.hassan_ledger) state.hassan_ledger = [];
     if (!state.contractor_payments) state.contractor_payments = [];
     if (!state.partner_payments) state.partner_payments = [];
+    if (!state.treasury_accounts) {
+      state.treasury_accounts = [
+        { id: state.nextId++, name: "wallet", current_balance: 0 },
+        { id: state.nextId++, name: "instapay", current_balance: 0 },
+        { id: state.nextId++, name: "cash", current_balance: 0 },
+      ];
+    }
+    if (!state.suppliers) state.suppliers = [];
+    if (!state.supplier_purchases) state.supplier_purchases = [];
+    if (!state.supplier_payments) state.supplier_payments = [];
     return state;
   }
   const seeded = buildSeedState();
@@ -598,6 +651,197 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
     return { partner, monthDue, equipmentBreakdown, totalDue, totalPaid, remaining: totalDue - totalPaid, payments };
+  }
+
+  if (channel === "treasury:list") {
+    return state.treasury_accounts.map((a) => ({ ...a, name_ar: ACCOUNT_NAME_AR[a.name] ?? a.name }));
+  }
+  if (channel === "treasury:updateBalance") {
+    const account = state.treasury_accounts.find((a) => a.id === payload.id)!;
+    account.current_balance = payload.current_balance;
+    saveState(state);
+    return account;
+  }
+  if (channel === "treasury:summary") {
+    const { month } = payload;
+    const sumByMethod = (
+      rows: { amount: number; method?: string | null; payment_method?: string | null }[],
+      dateOk: boolean[]
+    ) => {
+      const acc: Record<string, number> = {};
+      rows.forEach((r, i) => {
+        if (!dateOk[i]) return;
+        const method = r.method ?? r.payment_method ?? "cash";
+        acc[method] = (acc[method] ?? 0) + r.amount;
+      });
+      return acc;
+    };
+    const incoming = sumByMethod(
+      state.contractor_payments,
+      state.contractor_payments.map((p) => p.date.startsWith(month))
+    );
+    const outPartners = sumByMethod(
+      state.partner_payments,
+      state.partner_payments.map((p) => p.date.startsWith(month))
+    );
+    const outExpenses = sumByMethod(
+      state.monthly_expenses,
+      state.monthly_expenses.map((e) => e.month === month)
+    );
+    const outSuppliers = sumByMethod(
+      state.supplier_payments,
+      state.supplier_payments.map((p) => p.date.startsWith(month))
+    );
+    const outAdvances = sumByMethod(
+      state.employee_advances,
+      state.employee_advances.map((a) => a.date.startsWith(month))
+    );
+
+    return state.treasury_accounts.map((acc) => {
+      const monthIncoming = incoming[acc.name] ?? 0;
+      const monthOutgoing =
+        (outPartners[acc.name] ?? 0) + (outExpenses[acc.name] ?? 0) + (outSuppliers[acc.name] ?? 0) + (outAdvances[acc.name] ?? 0);
+      const netMovement = monthIncoming - monthOutgoing;
+      return {
+        id: acc.id,
+        name: acc.name,
+        name_ar: ACCOUNT_NAME_AR[acc.name] ?? acc.name,
+        currentBalance: acc.current_balance,
+        monthIncoming,
+        monthOutgoing,
+        netMovement,
+        projectedBalance: acc.current_balance + netMovement,
+      };
+    });
+  }
+
+  function findOrCreateSupplier(name: string): SupplierRow {
+    const trimmed = name.trim();
+    const existing = state.suppliers.find((s) => s.name === trimmed);
+    if (existing) return existing;
+    const record = { id: state.nextId++, name: trimmed };
+    state.suppliers.push(record);
+    return record;
+  }
+
+  if (channel === "suppliers:names") {
+    return state.suppliers.map((s) => s.name).sort();
+  }
+  if (channel === "supplierPurchases:create") {
+    const supplier = findOrCreateSupplier(payload.supplier_name);
+    const record: SupplierPurchaseRow = {
+      id: state.nextId++,
+      supplier_id: supplier.id,
+      date: payload.date,
+      description: payload.description ?? null,
+      amount: payload.amount,
+      note: payload.note ?? null,
+    };
+    state.supplier_purchases.push(record);
+    saveState(state);
+    return { ...record, supplier_name: supplier.name };
+  }
+  if (channel === "supplierPayments:create") {
+    const supplier = findOrCreateSupplier(payload.supplier_name);
+    const record: SupplierPaymentRow = {
+      id: state.nextId++,
+      supplier_id: supplier.id,
+      date: payload.date,
+      amount: payload.amount,
+      method: payload.method || "cash",
+      note: payload.note ?? null,
+    };
+    state.supplier_payments.push(record);
+    saveState(state);
+    return { ...record, supplier_name: supplier.name };
+  }
+  if (channel === "supplierPurchases:delete") {
+    state.supplier_purchases = state.supplier_purchases.filter((p) => p.id !== payload.id);
+    saveState(state);
+    return { ok: true };
+  }
+  if (channel === "supplierPayments:delete") {
+    state.supplier_payments = state.supplier_payments.filter((p) => p.id !== payload.id);
+    saveState(state);
+    return { ok: true };
+  }
+  if (channel === "suppliers:dashboard") {
+    return state.suppliers.map((s) => {
+      const purchases = state.supplier_purchases.filter((p) => p.supplier_id === s.id).sort((a, b) => b.date.localeCompare(a.date));
+      const payments = state.supplier_payments.filter((p) => p.supplier_id === s.id).sort((a, b) => b.date.localeCompare(a.date));
+      const totalPurchases = purchases.reduce((sum, p) => sum + p.amount, 0);
+      const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+      return {
+        id: s.id,
+        name: s.name,
+        purchaseCount: purchases.length,
+        totalPurchases,
+        totalPaid,
+        remaining: totalPurchases - totalPaid,
+        purchases,
+        payments,
+      };
+    });
+  }
+
+  if (channel === "reports:monthly") {
+    const { month } = payload;
+    let totalIncome = 0;
+    let totalExpense = 0;
+    const equipmentRows = state.equipment.map((eq) => {
+      const income = state.daily_logs
+        .filter((l) => l.equipment_id === eq.id && (l.role === "driver" || l.role === "market") && l.date.startsWith(month))
+        .reduce((sum, l) => sum + computeDayValue(l), 0);
+      const expense = state.monthly_expenses
+        .filter((e) => e.equipment_id === eq.id && e.month === month)
+        .reduce((sum, e) => sum + e.amount, 0);
+      totalIncome += income;
+      totalExpense += expense;
+      return { equipment_name: eq.name, income, expense, netProfit: income - expense };
+    });
+
+    let payrollTotal = 0;
+    for (const emp of state.employees) {
+      const advances = state.employee_advances
+        .filter((a) => a.employee_id === emp.id && a.date.startsWith(month))
+        .reduce((sum, a) => sum + a.amount, 0);
+      if (emp.wage_type === "monthly") {
+        payrollTotal += emp.rate - advances;
+      } else {
+        const gross = state.daily_logs
+          .filter((l) => l.role === "driver" && l.person_name === emp.name && l.date.startsWith(month))
+          .reduce((sum, l) => sum + computeDayValue(l), 0);
+        payrollTotal += gross - advances;
+      }
+    }
+
+    const commissionRows: number[] = [];
+    for (const eq of state.equipment) {
+      const driverLogs = state.daily_logs.filter((l) => l.equipment_id === eq.id && l.role === "driver" && l.date.startsWith(month));
+      const contractorLogs = state.daily_logs.filter((l) => l.equipment_id === eq.id && l.role === "contractor" && l.date.startsWith(month));
+      const marketLogs = state.daily_logs.filter(
+        (l) => l.equipment_id === eq.id && l.role === "market" && l.date.startsWith(month) && l.hassan_commission != null
+      );
+      const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
+      for (const cl of contractorLogs) {
+        const dl = driverByDate.get(cl.date);
+        if (!dl) continue;
+        commissionRows.push(computePairedCommission(eq.name, dl, cl));
+      }
+      for (const ml of marketLogs) commissionRows.push(ml.hassan_commission ?? 0);
+    }
+    const hassanCommissionTotal = commissionRows.reduce((sum, c) => sum + c, 0);
+
+    return {
+      month,
+      equipmentRows,
+      totalIncome,
+      totalExpense,
+      netProfit: totalIncome - totalExpense,
+      payrollTotal,
+      hassanCommissionTotal,
+      treasuryBalances: state.treasury_accounts.map((a) => ({ name: a.name, name_ar: ACCOUNT_NAME_AR[a.name] ?? a.name, balance: a.current_balance })),
+    };
   }
 
   const [entity, action] = channel.split(":");

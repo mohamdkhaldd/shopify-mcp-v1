@@ -7,25 +7,13 @@ import Salaries from "./pages/Salaries";
 import Hassan from "./pages/Hassan";
 import Contractors from "./pages/Contractors";
 import Partners from "./pages/Partners";
-import ComingSoon from "./pages/ComingSoon";
-import { navItems, SectionId } from "./nav";
-
-type ComingSoonSection = Exclude<
-  SectionId,
-  "home" | "settings" | "equipment" | "salaries" | "hassan" | "contractors" | "partners"
->;
-
-const comingSoonNotes: Record<ComingSoonSection, string> = {
-  treasury: "حسابات الخزنة الثلاثة (محفظة، انستا باي، كاش) — في المرحلة السادسة.",
-  suppliers: "سجل المشتريات والدفعات لكل مورد — في المرحلة السادسة.",
-  reports: "التقارير النهائية الشاملة — في المرحلة السادسة.",
-};
-
-const builtSections: SectionId[] = ["home", "settings", "equipment", "salaries", "hassan", "contractors", "partners"];
+import Treasury from "./pages/Treasury";
+import Suppliers from "./pages/Suppliers";
+import Reports from "./pages/Reports";
+import { SectionId } from "./nav";
 
 export default function App() {
   const [active, setActive] = useState<SectionId>("home");
-  const activeItem = navItems.find((i) => i.id === active)!;
 
   return (
     <div className="flex min-h-screen" dir="rtl">
@@ -38,13 +26,9 @@ export default function App() {
         {active === "hassan" && <Hassan />}
         {active === "contractors" && <Contractors />}
         {active === "partners" && <Partners />}
-        {!builtSections.includes(active) && (
-          <ComingSoon
-            title={activeItem.label}
-            icon={activeItem.icon}
-            note={comingSoonNotes[active as ComingSoonSection]}
-          />
-        )}
+        {active === "treasury" && <Treasury />}
+        {active === "suppliers" && <Suppliers />}
+        {active === "reports" && <Reports />}
       </main>
     </div>
   );

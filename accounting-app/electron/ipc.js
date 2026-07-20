@@ -600,6 +600,218 @@ function registerIpcHandlers(db) {
 
     return { partner, monthDue, equipmentBreakdown, totalDue, totalPaid, remaining: totalDue - totalPaid, payments };
   });
+
+  // --- Treasury (doc section 9) ---
+  // Money in: contractor payments (they pay the company). Money out:
+  // partner payments, equipment expenses, supplier payments, employee
+  // advances — each already carries a payment_method/method tying it to
+  // one of the three accounts.
+  const ACCOUNT_NAME_AR = { wallet: "محفظة", instapay: "انستا باي", cash: "كاش" };
+
+  ipcMain.handle("treasury:list", () => {
+    const rows = db.prepare("SELECT * FROM treasury_accounts ORDER BY id").all();
+    return rows.map((r) => ({ ...r, name_ar: ACCOUNT_NAME_AR[r.name] ?? r.name }));
+  });
+
+  ipcMain.handle("treasury:updateBalance", (_e, { id, current_balance }) => {
+    db.prepare("UPDATE treasury_accounts SET current_balance = ? WHERE id = ?").run(current_balance, id);
+    return db.prepare("SELECT * FROM treasury_accounts WHERE id = ?").get(id);
+  });
+
+  ipcMain.handle("treasury:summary", (_e, { month }) => {
+    const accounts = db.prepare("SELECT * FROM treasury_accounts ORDER BY id").all();
+    const sumByMethod = (table, methodCol, dateCol, dateLike) =>
+      db
+        .prepare(`SELECT ${methodCol} AS method, COALESCE(SUM(amount), 0) AS total FROM ${table} WHERE ${dateCol} LIKE ? GROUP BY ${methodCol}`)
+        .all(dateLike)
+        .reduce((acc, r) => ({ ...acc, [r.method]: r.total }), {});
+
+    const incoming = sumByMethod("contractor_payments", "method", "date", `${month}%`);
+    const outgoingPartners = sumByMethod("partner_payments", "method", "date", `${month}%`);
+    const outgoingExpenses = sumByMethod("monthly_expenses", "payment_method", "month", month);
+    const outgoingSuppliers = sumByMethod("supplier_payments", "method", "date", `${month}%`);
+    const outgoingAdvances = sumByMethod("employee_advances", "payment_method", "date", `${month}%`);
+
+    return accounts.map((acc) => {
+      const monthIncoming = incoming[acc.name] ?? 0;
+      const monthOutgoing =
+        (outgoingPartners[acc.name] ?? 0) +
+        (outgoingExpenses[acc.name] ?? 0) +
+        (outgoingSuppliers[acc.name] ?? 0) +
+        (outgoingAdvances[acc.name] ?? 0);
+      const netMovement = monthIncoming - monthOutgoing;
+      return {
+        id: acc.id,
+        name: acc.name,
+        name_ar: ACCOUNT_NAME_AR[acc.name] ?? acc.name,
+        currentBalance: acc.current_balance,
+        monthIncoming,
+        monthOutgoing,
+        netMovement,
+        projectedBalance: acc.current_balance + netMovement,
+      };
+    });
+  });
+
+  // --- Suppliers (doc section 10) — no fixed list, created on first purchase/payment ---
+  function findOrCreateSupplier(name) {
+    const trimmed = name.trim();
+    const existing = db.prepare("SELECT * FROM suppliers WHERE name = ?").get(trimmed);
+    if (existing) return existing;
+    const info = db.prepare("INSERT INTO suppliers (name) VALUES (?)").run(trimmed);
+    return { id: info.lastInsertRowid, name: trimmed };
+  }
+
+  ipcMain.handle("suppliers:names", () => db.prepare("SELECT name FROM suppliers ORDER BY name").all().map((r) => r.name));
+
+  ipcMain.handle("supplierPurchases:create", (_e, purchase) => {
+    const supplier = findOrCreateSupplier(purchase.supplier_name);
+    const info = db
+      .prepare(
+        `INSERT INTO supplier_purchases (supplier_id, date, description, amount, note)
+         VALUES (@supplier_id, @date, @description, @amount, @note)`
+      )
+      .run({
+        supplier_id: supplier.id,
+        date: purchase.date,
+        description: purchase.description ?? null,
+        amount: purchase.amount,
+        note: purchase.note ?? null,
+      });
+    return { ...db.prepare("SELECT * FROM supplier_purchases WHERE id = ?").get(info.lastInsertRowid), supplier_name: supplier.name };
+  });
+
+  ipcMain.handle("supplierPayments:create", (_e, payment) => {
+    const supplier = findOrCreateSupplier(payment.supplier_name);
+    const info = db
+      .prepare(
+        `INSERT INTO supplier_payments (supplier_id, date, amount, method, note)
+         VALUES (@supplier_id, @date, @amount, @method, @note)`
+      )
+      .run({
+        supplier_id: supplier.id,
+        date: payment.date,
+        amount: payment.amount,
+        method: payment.method || "cash",
+        note: payment.note ?? null,
+      });
+    return { ...db.prepare("SELECT * FROM supplier_payments WHERE id = ?").get(info.lastInsertRowid), supplier_name: supplier.name };
+  });
+
+  ipcMain.handle("supplierPurchases:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM supplier_purchases WHERE id = ?").run(id);
+    return { ok: true };
+  });
+  ipcMain.handle("supplierPayments:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM supplier_payments WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
+  // Dynamic dashboard: any supplier named on a purchase/payment shows up
+  // here automatically, no setup step.
+  ipcMain.handle("suppliers:dashboard", () => {
+    const suppliers = db.prepare("SELECT * FROM suppliers ORDER BY name").all();
+    const purchasesStmt = db.prepare("SELECT * FROM supplier_purchases WHERE supplier_id = ? ORDER BY date DESC");
+    const paymentsStmt = db.prepare("SELECT * FROM supplier_payments WHERE supplier_id = ? ORDER BY date DESC");
+
+    return suppliers.map((s) => {
+      const purchases = purchasesStmt.all(s.id);
+      const payments = paymentsStmt.all(s.id);
+      const totalPurchases = purchases.reduce((sum, p) => sum + p.amount, 0);
+      const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+      return {
+        id: s.id,
+        name: s.name,
+        purchaseCount: purchases.length,
+        totalPurchases,
+        totalPaid,
+        remaining: totalPurchases - totalPaid,
+        purchases,
+        payments,
+      };
+    });
+  });
+
+  // --- Reports: pulls the headline numbers from every module together for
+  // one month, so there's a single printable summary. ---
+  ipcMain.handle("reports:monthly", (_e, { month }) => {
+    const equipmentList = db.prepare("SELECT * FROM equipment ORDER BY name").all();
+    let totalIncome = 0;
+    let totalExpense = 0;
+    const equipmentRows = equipmentList.map((eq) => {
+      const income = db
+        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role IN ('driver','market') AND date LIKE ?")
+        .all(eq.id, `${month}%`)
+        .reduce((sum, l) => sum + computeDayValue(l), 0);
+      const expense = db
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM monthly_expenses WHERE equipment_id = ? AND month = ?")
+        .get(eq.id, month).total;
+      totalIncome += income;
+      totalExpense += expense;
+      return { equipment_name: eq.name, income, expense, netProfit: income - expense };
+    });
+
+    const employees = db.prepare("SELECT * FROM employees").all();
+    let payrollTotal = 0;
+    for (const emp of employees) {
+      const advances = db
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_advances WHERE employee_id = ? AND date LIKE ?")
+        .get(emp.id, `${month}%`).total;
+      if (emp.wage_type === "monthly") {
+        payrollTotal += emp.rate - advances;
+      } else {
+        const gross = db
+          .prepare("SELECT * FROM daily_logs WHERE role = 'driver' AND person_name = ? AND date LIKE ?")
+          .all(emp.name, `${month}%`)
+          .reduce((sum, l) => sum + computeDayValue(l), 0);
+        payrollTotal += gross - advances;
+      }
+    }
+    const commissionRows = [];
+    const winchList = ["ونش 5 طن دبوسة", "ونش 3 وصلة"];
+    for (const eq of equipmentList) {
+      const driverLogs = db
+        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
+        .all(eq.id, `${month}%`);
+      const contractorLogs = db
+        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'contractor' AND date LIKE ?")
+        .all(eq.id, `${month}%`);
+      const marketLogs = db
+        .prepare(
+          "SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND date LIKE ? AND hassan_commission IS NOT NULL"
+        )
+        .all(eq.id, `${month}%`);
+      const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
+      for (const cl of contractorLogs) {
+        const dl = driverByDate.get(cl.date);
+        if (!dl) continue;
+        const isWinch = winchList.includes(eq.name);
+        const k = cl.day_rate ?? 0;
+        const h = dl.day_rate ?? 0;
+        const commission = isWinch
+          ? k <= 2500
+            ? k * 0.2
+            : k * 0.175
+          : k - h + Math.max(0, (cl.actual_hours ?? 0) - (cl.base_hours ?? 0)) * (k / 8 - h / 8);
+        commissionRows.push(commission);
+      }
+      for (const ml of marketLogs) commissionRows.push(ml.hassan_commission ?? 0);
+    }
+    const hassanCommissionTotal = commissionRows.reduce((sum, c) => sum + c, 0);
+
+    const treasuryAccounts = db.prepare("SELECT * FROM treasury_accounts ORDER BY id").all();
+
+    return {
+      month,
+      equipmentRows,
+      totalIncome,
+      totalExpense,
+      netProfit: totalIncome - totalExpense,
+      payrollTotal,
+      hassanCommissionTotal,
+      treasuryBalances: treasuryAccounts.map((a) => ({ name: a.name, name_ar: ACCOUNT_NAME_AR[a.name] ?? a.name, balance: a.current_balance })),
+    };
+  });
 }
 
 module.exports = { registerIpcHandlers };

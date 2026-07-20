@@ -215,3 +215,72 @@ export interface PartnerDetail {
   remaining: number;
   payments: PartnerPayment[];
 }
+
+export type TreasuryAccountName = "wallet" | "instapay" | "cash";
+
+export interface TreasuryAccount {
+  id: number;
+  name: TreasuryAccountName;
+  name_ar: string;
+  current_balance: number;
+}
+
+export interface TreasurySummaryRow {
+  id: number;
+  name: TreasuryAccountName;
+  name_ar: string;
+  currentBalance: number;
+  monthIncoming: number;
+  monthOutgoing: number;
+  netMovement: number;
+  projectedBalance: number;
+}
+
+export interface SupplierPurchase {
+  id: number;
+  supplier_id: number;
+  date: string;
+  description: string | null;
+  amount: number;
+  note: string | null;
+  supplier_name?: string;
+}
+
+export interface SupplierPayment {
+  id: number;
+  supplier_id: number;
+  date: string;
+  amount: number;
+  method: string;
+  note: string | null;
+  supplier_name?: string;
+}
+
+export interface SupplierDashboardRow {
+  id: number;
+  name: string;
+  purchaseCount: number;
+  totalPurchases: number;
+  totalPaid: number;
+  remaining: number;
+  purchases: SupplierPurchase[];
+  payments: SupplierPayment[];
+}
+
+export interface ReportEquipmentRow {
+  equipment_name: string;
+  income: number;
+  expense: number;
+  netProfit: number;
+}
+
+export interface MonthlyReport {
+  month: string;
+  equipmentRows: ReportEquipmentRow[];
+  totalIncome: number;
+  totalExpense: number;
+  netProfit: number;
+  payrollTotal: number;
+  hassanCommissionTotal: number;
+  treasuryBalances: { name: TreasuryAccountName; name_ar: string; balance: number }[];
+}

@@ -16,12 +16,18 @@ import {
   HassanLedgerEntry,
   HassanPartyBalance,
   MonthlyExpense,
+  MonthlyReport,
   Partner,
   PartnerDetail,
   PartnerPayment,
   PartnerSummary,
   PayrollDetail,
   PayrollRow,
+  SupplierDashboardRow,
+  SupplierPayment,
+  SupplierPurchase,
+  TreasuryAccount,
+  TreasurySummaryRow,
 } from "./types";
 
 declare global {
@@ -132,4 +138,36 @@ export const partnersDashboardApi = {
   summary: (): Promise<PartnerSummary[]> => invoke("partners:summary"),
   detail: (partner_id: number, month: string): Promise<PartnerDetail> =>
     invoke("partners:detail", { partner_id, month }),
+};
+
+export const treasuryApi = {
+  list: (): Promise<TreasuryAccount[]> => invoke("treasury:list"),
+  updateBalance: (id: number, current_balance: number): Promise<TreasuryAccount> =>
+    invoke("treasury:updateBalance", { id, current_balance }),
+  summary: (month: string): Promise<TreasurySummaryRow[]> => invoke("treasury:summary", { month }),
+};
+
+export const suppliersApi = {
+  names: (): Promise<string[]> => invoke("suppliers:names"),
+  dashboard: (): Promise<SupplierDashboardRow[]> => invoke("suppliers:dashboard"),
+  createPurchase: (purchase: {
+    supplier_name: string;
+    date: string;
+    description: string | null;
+    amount: number;
+    note: string | null;
+  }): Promise<SupplierPurchase> => invoke("supplierPurchases:create", purchase),
+  removePurchase: (id: number): Promise<void> => invoke("supplierPurchases:delete", { id }),
+  createPayment: (payment: {
+    supplier_name: string;
+    date: string;
+    amount: number;
+    method: string;
+    note: string | null;
+  }): Promise<SupplierPayment> => invoke("supplierPayments:create", payment),
+  removePayment: (id: number): Promise<void> => invoke("supplierPayments:delete", { id }),
+};
+
+export const reportsApi = {
+  monthly: (month: string): Promise<MonthlyReport> => invoke("reports:monthly", { month }),
 };
