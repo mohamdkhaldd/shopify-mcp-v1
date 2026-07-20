@@ -1,6 +1,7 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
 const { initDatabase } = require("./db");
+const { registerIpcHandlers } = require("./ipc");
 
 const isDev = !app.isPackaged;
 
@@ -14,6 +15,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, "preload.js"),
     },
   });
 
@@ -25,7 +27,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  initDatabase();
+  const db = initDatabase();
+  registerIpcHandlers(db);
   createWindow();
 
   app.on("activate", () => {
