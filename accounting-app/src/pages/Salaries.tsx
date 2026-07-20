@@ -2,14 +2,16 @@ import { Fragment, FormEvent, useEffect, useState } from "react";
 import MonthPicker from "../components/equipment/MonthPicker";
 import Icon from "../components/Icon";
 import { employeeAdvancesApi, payrollApi } from "../api/client";
-import { PayrollDetail, PayrollRow } from "../api/types";
+import { PaymentMethod, PayrollDetail, PayrollRow } from "../api/types";
 import { currentMonthKey, monthLabel } from "../utils/months";
 import { formatEGP } from "../utils/format";
+import { PAYMENT_METHODS, paymentMethodLabel } from "../utils/paymentMethods";
 
 function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: string; onChanged: () => void }) {
   const [detail, setDetail] = useState<PayrollDetail | null>(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [note, setNote] = useState("");
 
   const refresh = () => payrollApi.detail(row.id, month).then(setDetail);
@@ -22,7 +24,13 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
   async function handleAddAdvance(e: FormEvent) {
     e.preventDefault();
     if (!amount) return;
-    await employeeAdvancesApi.create({ employee_id: row.id, date, amount: Number(amount), note: note || null });
+    await employeeAdvancesApi.create({
+      employee_id: row.id,
+      date,
+      amount: Number(amount),
+      payment_method: paymentMethod,
+      note: note || null,
+    });
     setAmount("");
     setNote("");
     await refresh();
@@ -111,7 +119,8 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
                 {detail.advances.map((a) => (
                   <li key={a.id} className="flex items-center justify-between text-sm">
                     <span className="text-slate-600">
-                      {a.date} — {formatEGP(a.amount)} {a.note && <span className="text-slate-400">({a.note})</span>}
+                      {a.date} — {formatEGP(a.amount)} — {paymentMethodLabel(a.payment_method)}{" "}
+                      {a.note && <span className="text-slate-400">({a.note})</span>}
                     </span>
                     <button onClick={() => handleDeleteAdvance(a.id)} className="text-xs text-rose-500 hover:text-rose-700 font-semibold">
                       حذف
@@ -135,6 +144,17 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
                 onChange={(e) => setAmount(e.target.value)}
                 className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
               />
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              >
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
               <input
                 type="text"
                 placeholder="ملاحظة (اختياري)"

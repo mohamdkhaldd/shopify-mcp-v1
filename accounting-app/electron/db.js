@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS employee_advances (
   employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
   date TEXT NOT NULL,
   amount REAL NOT NULL,
+  payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('wallet', 'instapay', 'cash')),
   note TEXT
 );
 

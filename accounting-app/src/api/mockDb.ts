@@ -33,6 +33,7 @@ interface EmployeeAdvanceRow {
   employee_id: number;
   date: string;
   amount: number;
+  payment_method: "wallet" | "instapay" | "cash";
   note: string | null;
 }
 
@@ -264,7 +265,12 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       .sort((a, b) => a.date.localeCompare(b.date));
   }
   if (channel === "employeeAdvances:create") {
-    const record: EmployeeAdvanceRow = { id: state.nextId++, ...payload, note: payload.note ?? null };
+    const record: EmployeeAdvanceRow = {
+      id: state.nextId++,
+      ...payload,
+      payment_method: payload.payment_method || "cash",
+      note: payload.note ?? null,
+    };
     state.employee_advances.push(record);
     saveState(state);
     return record;
@@ -414,6 +420,18 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
   if (channel === "hassanLedger:balance") {
     const sum = (type: string) => state.hassan_ledger.filter((e) => e.type === type).reduce((s, e) => s + e.amount, 0);
     return { netDebt: sum("loan") - sum("repayment"), netDue: sum("due") - sum("collection") };
+  }
+  if (channel === "hassanLedger:balanceByParty") {
+    const byParty = new Map<string, { loan: number; repayment: number; due: number; collection: number }>();
+    for (const row of state.hassan_ledger) {
+      const party = row.party_name?.trim() || "بدون تحديد";
+      if (!byParty.has(party)) byParty.set(party, { loan: 0, repayment: 0, due: 0, collection: 0 });
+      byParty.get(party)![row.type] += row.amount;
+    }
+    return [...byParty.entries()]
+      .map(([party_name, p]) => ({ party_name, netDebt: p.loan - p.repayment, netDue: p.due - p.collection }))
+      .filter((p) => p.netDebt !== 0 || p.netDue !== 0)
+      .sort((a, b) => a.party_name.localeCompare(b.party_name));
   }
 
   const [entity, action] = channel.split(":");

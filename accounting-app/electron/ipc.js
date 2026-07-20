@@ -216,8 +216,11 @@ function registerIpcHandlers(db) {
   );
   ipcMain.handle("employeeAdvances:create", (_e, advance) => {
     const info = db
-      .prepare("INSERT INTO employee_advances (employee_id, date, amount, note) VALUES (@employee_id, @date, @amount, @note)")
-      .run({ ...advance, note: advance.note ?? null });
+      .prepare(
+        `INSERT INTO employee_advances (employee_id, date, amount, payment_method, note)
+         VALUES (@employee_id, @date, @amount, @payment_method, @note)`
+      )
+      .run({ ...advance, payment_method: advance.payment_method || "cash", note: advance.note ?? null });
     return db.prepare("SELECT * FROM employee_advances WHERE id = ?").get(info.lastInsertRowid);
   });
   ipcMain.handle("employeeAdvances:delete", (_e, { id }) => {
@@ -404,6 +407,28 @@ function registerIpcHandlers(db) {
     const netDebt = (byType.loan ?? 0) - (byType.repayment ?? 0);
     const netDue = (byType.due ?? 0) - (byType.collection ?? 0);
     return { netDebt, netDue };
+  });
+
+  // Per-party breakdown: doc asks "who does Hassan owe, how much is left,
+  // who owes Hassan, how much is left" by name, not just one lump total.
+  ipcMain.handle("hassanLedger:balanceByParty", () => {
+    const rows = db.prepare("SELECT * FROM hassan_ledger").all();
+    const byParty = new Map();
+    for (const row of rows) {
+      const party = row.party_name?.trim() || "بدون تحديد";
+      if (!byParty.has(party)) {
+        byParty.set(party, { party_name: party, loan: 0, repayment: 0, due: 0, collection: 0 });
+      }
+      byParty.get(party)[row.type] += row.amount;
+    }
+    return [...byParty.values()]
+      .map((p) => ({
+        party_name: p.party_name,
+        netDebt: p.loan - p.repayment,
+        netDue: p.due - p.collection,
+      }))
+      .filter((p) => p.netDebt !== 0 || p.netDue !== 0)
+      .sort((a, b) => a.party_name.localeCompare(b.party_name));
   });
 }
 

@@ -11,6 +11,7 @@ import {
   HassanBalance,
   HassanCommissionSummary,
   HassanLedgerEntry,
+  HassanPartyBalance,
   MonthlyExpense,
   Partner,
   PayrollDetail,
@@ -98,4 +99,5 @@ export const hassanApi = {
     invoke("hassanLedger:create", entry),
   ledgerRemove: (id: number): Promise<void> => invoke("hassanLedger:delete", { id }),
   balance: (): Promise<HassanBalance> => invoke("hassanLedger:balance"),
+  balanceByParty: (): Promise<HassanPartyBalance[]> => invoke("hassanLedger:balanceByParty"),
 };

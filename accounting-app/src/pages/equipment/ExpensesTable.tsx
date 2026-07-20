@@ -2,16 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { expenseCategoriesApi, monthlyExpensesApi } from "../../api/client";
 import { ExpenseCategory, MonthlyExpense } from "../../api/types";
 import { formatEGP } from "../../utils/format";
-
-const PAYMENT_METHODS: { value: string; label: string }[] = [
-  { value: "wallet", label: "محفظة" },
-  { value: "instapay", label: "انستا باي" },
-  { value: "cash", label: "كاش" },
-];
-
-function paymentLabel(value: string | null) {
-  return PAYMENT_METHODS.find((m) => m.value === value)?.label ?? value ?? "—";
-}
+import { PAYMENT_METHODS, paymentMethodLabel } from "../../utils/paymentMethods";
 
 interface ExpensesTableProps {
   equipmentId: number;
@@ -127,7 +118,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
                 <tr key={exp.id} className="border-b border-slate-50 last:border-0">
                   <td className="py-2 font-semibold text-slate-700">{exp.category_name ?? "—"}</td>
                   <td className="py-2 text-slate-600">{formatEGP(exp.amount)}</td>
-                  <td className="py-2 text-slate-500">{paymentLabel(exp.payment_method)}</td>
+                  <td className="py-2 text-slate-500">{paymentMethodLabel(exp.payment_method)}</td>
                   <td className="py-2">
                     <button
                       onClick={() => handleDelete(exp.id)}

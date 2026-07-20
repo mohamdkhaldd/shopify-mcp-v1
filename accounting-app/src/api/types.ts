@@ -75,11 +75,14 @@ export interface EquipmentSummary {
   distribution: PartnerDistributionRow[];
 }
 
+export type PaymentMethod = "wallet" | "instapay" | "cash";
+
 export interface EmployeeAdvance {
   id: number;
   employee_id: number;
   date: string;
   amount: number;
+  payment_method: PaymentMethod;
   note: string | null;
 }
 
@@ -138,6 +141,12 @@ export interface HassanLedgerEntry {
 }
 
 export interface HassanBalance {
+  netDebt: number;
+  netDue: number;
+}
+
+export interface HassanPartyBalance {
+  party_name: string;
   netDebt: number;
   netDue: number;
 }

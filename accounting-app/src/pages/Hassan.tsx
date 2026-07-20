@@ -2,7 +2,13 @@ import { FormEvent, useEffect, useState } from "react";
 import MonthPicker from "../components/equipment/MonthPicker";
 import Icon from "../components/Icon";
 import { hassanApi } from "../api/client";
-import { HassanBalance, HassanCommissionSummary, HassanLedgerEntry, HassanLedgerType } from "../api/types";
+import {
+  HassanBalance,
+  HassanCommissionSummary,
+  HassanLedgerEntry,
+  HassanLedgerType,
+  HassanPartyBalance,
+} from "../api/types";
 import { currentMonthKey } from "../utils/months";
 import { formatEGP } from "../utils/format";
 
@@ -69,6 +75,7 @@ function CommissionTab({ month }: { month: string }) {
 function LedgerTab({ month }: { month: string }) {
   const [entries, setEntries] = useState<HassanLedgerEntry[]>([]);
   const [balance, setBalance] = useState<HassanBalance | null>(null);
+  const [partyBalances, setPartyBalances] = useState<HassanPartyBalance[]>([]);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [type, setType] = useState<HassanLedgerType>("loan");
   const [amount, setAmount] = useState("");
@@ -78,6 +85,7 @@ function LedgerTab({ month }: { month: string }) {
   const refresh = () => {
     hassanApi.ledgerList(month).then(setEntries);
     hassanApi.balance().then(setBalance);
+    hassanApi.balanceByParty().then(setPartyBalances);
   };
 
   useEffect(refresh, [month]);
@@ -115,6 +123,32 @@ function LedgerTab({ month }: { month: string }) {
           <div className="text-sm text-slate-500 font-semibold">صافي المستحق لحسن (كل الوقت)</div>
           <div className="mt-2 text-xl font-extrabold text-primary">{formatEGP(balance?.netDue ?? 0)}</div>
         </div>
+      </div>
+
+      <div className="bg-white rounded-card shadow-card p-5">
+        <h2 className="font-bold text-slate-800 mb-4">الرصيد بالتفصيل — لكل شخص/جهة</h2>
+        {partyBalances.length === 0 ? (
+          <div className="text-sm text-slate-400">مفيش أرصدة مفتوحة دلوقتي — كل الحركات المسجلة اتقفلت.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-slate-400 border-b border-slate-100">
+                <th className="text-start font-semibold py-2">الجهة/الشخص</th>
+                <th className="text-start font-semibold py-2">حسن مديون له بـ</th>
+                <th className="text-start font-semibold py-2">مستحق لحسن منه</th>
+              </tr>
+            </thead>
+            <tbody>
+              {partyBalances.map((p) => (
+                <tr key={p.party_name} className="border-b border-slate-50 last:border-0">
+                  <td className="py-2 font-semibold text-slate-700">{p.party_name}</td>
+                  <td className="py-2 text-rose-600 font-semibold">{p.netDebt > 0 ? formatEGP(p.netDebt) : "—"}</td>
+                  <td className="py-2 text-primary font-semibold">{p.netDue > 0 ? formatEGP(p.netDue) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">
