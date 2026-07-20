@@ -150,3 +150,68 @@ export interface HassanPartyBalance {
   netDebt: number;
   netDue: number;
 }
+
+export interface ContractorPayment {
+  id: number;
+  contractor_id: number;
+  date: string;
+  amount: number;
+  method: string;
+  note: string | null;
+}
+
+export interface ContractorSummary {
+  id: number;
+  name: string;
+  totalWork: number;
+  totalPaid: number;
+  remaining: number;
+}
+
+export interface ContractorWorkByEquipment {
+  equipment_name: string;
+  days: number;
+  totalValue: number;
+}
+
+export interface ContractorDetail {
+  contractor: Contractor;
+  workByEquipment: ContractorWorkByEquipment[];
+  payments: ContractorPayment[];
+  totalWork: number;
+  totalPaid: number;
+  remaining: number;
+}
+
+export interface PartnerPayment {
+  id: number;
+  partner_id: number;
+  date: string;
+  amount: number;
+  method: string;
+  note: string | null;
+}
+
+export interface PartnerSummary {
+  id: number;
+  name: string;
+  totalDue: number;
+  totalPaid: number;
+  remaining: number;
+}
+
+export interface PartnerEquipmentBreakdown {
+  equipment_name: string;
+  percentage: number;
+  monthAmount: number;
+}
+
+export interface PartnerDetail {
+  partner: Partner;
+  monthDue: number;
+  equipmentBreakdown: PartnerEquipmentBreakdown[];
+  totalDue: number;
+  totalPaid: number;
+  remaining: number;
+  payments: PartnerPayment[];
+}

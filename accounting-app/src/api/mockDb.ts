@@ -47,6 +47,24 @@ interface HassanLedgerRow {
   note: string | null;
 }
 
+interface ContractorPaymentRow {
+  id: number;
+  contractor_id: number;
+  date: string;
+  amount: number;
+  method: string;
+  note: string | null;
+}
+
+interface PartnerPaymentRow {
+  id: number;
+  partner_id: number;
+  date: string;
+  amount: number;
+  method: string;
+  note: string | null;
+}
+
 interface MockState {
   partners: { id: number; name: string }[];
   employees: { id: number; name: string; wage_type: "daily" | "monthly"; rate: number }[];
@@ -57,6 +75,8 @@ interface MockState {
   monthly_expenses: MonthlyExpenseRow[];
   employee_advances: EmployeeAdvanceRow[];
   hassan_ledger: HassanLedgerRow[];
+  contractor_payments: ContractorPaymentRow[];
+  partner_payments: PartnerPaymentRow[];
   nextId: number;
 }
 
@@ -157,6 +177,8 @@ function buildSeedState(): MockState {
     monthly_expenses: [],
     employee_advances: [],
     hassan_ledger: [],
+    contractor_payments: [],
+    partner_payments: [],
     nextId,
   };
 }
@@ -167,6 +189,8 @@ function loadState(): MockState {
     const state = JSON.parse(raw) as MockState;
     if (!state.employee_advances) state.employee_advances = [];
     if (!state.hassan_ledger) state.hassan_ledger = [];
+    if (!state.contractor_payments) state.contractor_payments = [];
+    if (!state.partner_payments) state.partner_payments = [];
     return state;
   }
   const seeded = buildSeedState();
@@ -432,6 +456,148 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       .map(([party_name, p]) => ({ party_name, netDebt: p.loan - p.repayment, netDue: p.due - p.collection }))
       .filter((p) => p.netDebt !== 0 || p.netDue !== 0)
       .sort((a, b) => a.party_name.localeCompare(b.party_name));
+  }
+
+  if (channel === "contractorPayments:list") {
+    return state.contractor_payments
+      .filter((p) => p.contractor_id === payload.contractor_id)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+  if (channel === "contractorPayments:create") {
+    const record: ContractorPaymentRow = {
+      id: state.nextId++,
+      ...payload,
+      method: payload.method || "cash",
+      note: payload.note ?? null,
+    };
+    state.contractor_payments.push(record);
+    saveState(state);
+    return record;
+  }
+  if (channel === "contractorPayments:delete") {
+    state.contractor_payments = state.contractor_payments.filter((p) => p.id !== payload.id);
+    saveState(state);
+    return { ok: true };
+  }
+
+  if (channel === "contractors:summary") {
+    return state.contractors.map((c) => {
+      const totalWork = state.daily_logs
+        .filter((l) => l.role === "contractor" && l.person_name === c.name)
+        .reduce((sum, l) => sum + computeDayValue(l), 0);
+      const totalPaid = state.contractor_payments
+        .filter((p) => p.contractor_id === c.id)
+        .reduce((sum, p) => sum + p.amount, 0);
+      return { id: c.id, name: c.name, totalWork, totalPaid, remaining: totalWork - totalPaid };
+    });
+  }
+
+  if (channel === "contractors:detail") {
+    const contractor = state.contractors.find((c) => c.id === payload.contractor_id)!;
+    const logs = state.daily_logs.filter((l) => l.role === "contractor" && l.person_name === contractor.name);
+
+    const byEquipment = new Map<string, { equipment_name: string; days: number; totalValue: number }>();
+    for (const log of logs) {
+      const equipmentName = state.equipment.find((e) => e.id === log.equipment_id)?.name ?? "—";
+      const entry = byEquipment.get(equipmentName) ?? { equipment_name: equipmentName, days: 0, totalValue: 0 };
+      entry.days += 1;
+      entry.totalValue += computeDayValue(log);
+      byEquipment.set(equipmentName, entry);
+    }
+
+    const payments = state.contractor_payments
+      .filter((p) => p.contractor_id === payload.contractor_id)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const totalWork = logs.reduce((sum, l) => sum + computeDayValue(l), 0);
+    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+
+    return {
+      contractor,
+      workByEquipment: [...byEquipment.values()],
+      payments,
+      totalWork,
+      totalPaid,
+      remaining: totalWork - totalPaid,
+    };
+  }
+
+  if (channel === "partnerPayments:list") {
+    return state.partner_payments
+      .filter((p) => p.partner_id === payload.partner_id)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+  if (channel === "partnerPayments:create") {
+    const record: PartnerPaymentRow = {
+      id: state.nextId++,
+      ...payload,
+      method: payload.method || "cash",
+      note: payload.note ?? null,
+    };
+    state.partner_payments.push(record);
+    saveState(state);
+    return record;
+  }
+  if (channel === "partnerPayments:delete") {
+    state.partner_payments = state.partner_payments.filter((p) => p.id !== payload.id);
+    saveState(state);
+    return { ok: true };
+  }
+
+  function equipmentAllTimeProfit(equipmentId: number): number {
+    const income = state.daily_logs
+      .filter((l) => l.equipment_id === equipmentId && (l.role === "driver" || l.role === "market"))
+      .reduce((sum, l) => sum + computeDayValue(l), 0);
+    const expense = state.monthly_expenses
+      .filter((e) => e.equipment_id === equipmentId)
+      .reduce((sum, e) => sum + e.amount, 0);
+    return income - expense;
+  }
+
+  if (channel === "partners:summary") {
+    return state.partners.map((p) => {
+      const equipmentList = state.equipment.filter((e) => e.shares.some((s) => s.partner_id === p.id));
+      const totalDue = equipmentList.reduce((sum, e) => {
+        const share = e.shares.find((s) => s.partner_id === p.id)!;
+        return sum + (equipmentAllTimeProfit(e.id) * share.percentage) / 100;
+      }, 0);
+      const totalPaid = state.partner_payments
+        .filter((pp) => pp.partner_id === p.id)
+        .reduce((sum, pp) => sum + pp.amount, 0);
+      return { id: p.id, name: p.name, totalDue, totalPaid, remaining: totalDue - totalPaid };
+    });
+  }
+
+  if (channel === "partners:detail") {
+    const { partner_id, month } = payload;
+    const partner = state.partners.find((p) => p.id === partner_id)!;
+    const equipmentList = state.equipment.filter((e) => e.shares.some((s) => s.partner_id === partner_id));
+
+    const equipmentBreakdown = equipmentList.map((e) => {
+      const share = e.shares.find((s) => s.partner_id === partner_id)!;
+      const driverIncome = state.daily_logs
+        .filter((l) => l.equipment_id === e.id && l.role === "driver" && l.date.startsWith(month))
+        .reduce((sum, l) => sum + computeDayValue(l), 0);
+      const marketIncome = state.daily_logs
+        .filter((l) => l.equipment_id === e.id && l.role === "market" && l.date.startsWith(month))
+        .reduce((sum, l) => sum + computeDayValue(l), 0);
+      const expense = state.monthly_expenses
+        .filter((exp) => exp.equipment_id === e.id && exp.month === month)
+        .reduce((sum, exp) => sum + exp.amount, 0);
+      const netProfit = driverIncome + marketIncome - expense;
+      return { equipment_name: e.name, percentage: share.percentage, monthAmount: (netProfit * share.percentage) / 100 };
+    });
+
+    const monthDue = equipmentBreakdown.reduce((sum, e) => sum + e.monthAmount, 0);
+    const totalDue = equipmentList.reduce((sum, e) => {
+      const share = e.shares.find((s) => s.partner_id === partner_id)!;
+      return sum + (equipmentAllTimeProfit(e.id) * share.percentage) / 100;
+    }, 0);
+    const payments = state.partner_payments
+      .filter((p) => p.partner_id === partner_id)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+
+    return { partner, monthDue, equipmentBreakdown, totalDue, totalPaid, remaining: totalDue - totalPaid, payments };
   }
 
   const [entity, action] = channel.split(":");

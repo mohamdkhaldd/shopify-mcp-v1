@@ -1,6 +1,9 @@
 import { mockInvoke } from "./mockDb";
 import {
   Contractor,
+  ContractorDetail,
+  ContractorPayment,
+  ContractorSummary,
   DailyLog,
   DailyLogRole,
   Driver,
@@ -14,6 +17,9 @@ import {
   HassanPartyBalance,
   MonthlyExpense,
   Partner,
+  PartnerDetail,
+  PartnerPayment,
+  PartnerSummary,
   PayrollDetail,
   PayrollRow,
 } from "./types";
@@ -100,4 +106,30 @@ export const hassanApi = {
   ledgerRemove: (id: number): Promise<void> => invoke("hassanLedger:delete", { id }),
   balance: (): Promise<HassanBalance> => invoke("hassanLedger:balance"),
   balanceByParty: (): Promise<HassanPartyBalance[]> => invoke("hassanLedger:balanceByParty"),
+};
+
+export const contractorPaymentsApi = {
+  list: (contractor_id: number): Promise<ContractorPayment[]> =>
+    invoke("contractorPayments:list", { contractor_id }),
+  create: (payment: Omit<ContractorPayment, "id">): Promise<ContractorPayment> =>
+    invoke("contractorPayments:create", payment),
+  remove: (id: number): Promise<void> => invoke("contractorPayments:delete", { id }),
+};
+
+export const contractorsDashboardApi = {
+  summary: (): Promise<ContractorSummary[]> => invoke("contractors:summary"),
+  detail: (contractor_id: number): Promise<ContractorDetail> => invoke("contractors:detail", { contractor_id }),
+};
+
+export const partnerPaymentsApi = {
+  list: (partner_id: number): Promise<PartnerPayment[]> => invoke("partnerPayments:list", { partner_id }),
+  create: (payment: Omit<PartnerPayment, "id">): Promise<PartnerPayment> =>
+    invoke("partnerPayments:create", payment),
+  remove: (id: number): Promise<void> => invoke("partnerPayments:delete", { id }),
+};
+
+export const partnersDashboardApi = {
+  summary: (): Promise<PartnerSummary[]> => invoke("partners:summary"),
+  detail: (partner_id: number, month: string): Promise<PartnerDetail> =>
+    invoke("partners:detail", { partner_id, month }),
 };

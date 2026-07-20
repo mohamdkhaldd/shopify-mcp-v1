@@ -430,6 +430,176 @@ function registerIpcHandlers(db) {
       .filter((p) => p.netDebt !== 0 || p.netDue !== 0)
       .sort((a, b) => a.party_name.localeCompare(b.party_name));
   });
+
+  // --- Contractor payments ---
+  ipcMain.handle("contractorPayments:list", (_e, { contractor_id }) =>
+    db.prepare("SELECT * FROM contractor_payments WHERE contractor_id = ? ORDER BY date DESC").all(contractor_id)
+  );
+  ipcMain.handle("contractorPayments:create", (_e, payment) => {
+    const info = db
+      .prepare(
+        `INSERT INTO contractor_payments (contractor_id, date, amount, method, note)
+         VALUES (@contractor_id, @date, @amount, @method, @note)`
+      )
+      .run({ ...payment, method: payment.method || "cash", note: payment.note ?? null });
+    return db.prepare("SELECT * FROM contractor_payments WHERE id = ?").get(info.lastInsertRowid);
+  });
+  ipcMain.handle("contractorPayments:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM contractor_payments WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
+  // Contractors dashboard (doc section 6): total work value is computed
+  // automatically from every المقاول daily-log entry across all equipment
+  // (all time, not just one month — this is a running balance), minus what
+  // has actually been paid out.
+  ipcMain.handle("contractors:summary", () => {
+    const contractors = db.prepare("SELECT * FROM contractors ORDER BY name").all();
+    const workStmt = db.prepare("SELECT * FROM daily_logs WHERE role = 'contractor' AND person_name = ?");
+    const paidStmt = db.prepare(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM contractor_payments WHERE contractor_id = ?"
+    );
+    return contractors.map((c) => {
+      const totalWork = workStmt.all(c.name).reduce((sum, l) => sum + computeDayValue(l), 0);
+      const totalPaid = paidStmt.get(c.id).total;
+      return { id: c.id, name: c.name, totalWork, totalPaid, remaining: totalWork - totalPaid };
+    });
+  });
+
+  ipcMain.handle("contractors:detail", (_e, { contractor_id }) => {
+    const contractor = db.prepare("SELECT * FROM contractors WHERE id = ?").get(contractor_id);
+    const logs = db
+      .prepare(
+        `SELECT dl.*, e.name AS equipment_name FROM daily_logs dl
+         JOIN equipment e ON e.id = dl.equipment_id
+         WHERE dl.role = 'contractor' AND dl.person_name = ?
+         ORDER BY dl.date`
+      )
+      .all(contractor.name);
+
+    const byEquipment = new Map();
+    for (const log of logs) {
+      const value = computeDayValue(log);
+      const entry = byEquipment.get(log.equipment_name) ?? { equipment_name: log.equipment_name, days: 0, totalValue: 0 };
+      entry.days += 1;
+      entry.totalValue += value;
+      byEquipment.set(log.equipment_name, entry);
+    }
+
+    const payments = db
+      .prepare("SELECT * FROM contractor_payments WHERE contractor_id = ? ORDER BY date DESC")
+      .all(contractor_id);
+
+    const totalWork = logs.reduce((sum, l) => sum + computeDayValue(l), 0);
+    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+
+    return {
+      contractor,
+      workByEquipment: [...byEquipment.values()],
+      payments,
+      totalWork,
+      totalPaid,
+      remaining: totalWork - totalPaid,
+    };
+  });
+
+  // --- Partner payments ---
+  ipcMain.handle("partnerPayments:list", (_e, { partner_id }) =>
+    db.prepare("SELECT * FROM partner_payments WHERE partner_id = ? ORDER BY date DESC").all(partner_id)
+  );
+  ipcMain.handle("partnerPayments:create", (_e, payment) => {
+    const info = db
+      .prepare(
+        `INSERT INTO partner_payments (partner_id, date, amount, method, note)
+         VALUES (@partner_id, @date, @amount, @method, @note)`
+      )
+      .run({ ...payment, method: payment.method || "cash", note: payment.note ?? null });
+    return db.prepare("SELECT * FROM partner_payments WHERE id = ?").get(info.lastInsertRowid);
+  });
+  ipcMain.handle("partnerPayments:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM partner_payments WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
+  // Partners dashboard (doc section 8): total due is each partner's share %
+  // applied to every equipment's all-time net profit (income - expenses),
+  // summed across every equipment they hold a share in — a running balance,
+  // same idea as the contractors' remaining balance.
+  function equipmentAllTimeProfit(equipmentId) {
+    const income = db
+      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role IN ('driver', 'market')")
+      .all(equipmentId)
+      .reduce((sum, l) => sum + computeDayValue(l), 0);
+    const expense = db
+      .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM monthly_expenses WHERE equipment_id = ?")
+      .get(equipmentId).total;
+    return income - expense;
+  }
+
+  ipcMain.handle("partners:summary", () => {
+    const partners = db.prepare("SELECT * FROM partners ORDER BY name").all();
+    const sharesStmt = db.prepare(
+      `SELECT eps.equipment_id, eps.percentage, e.name AS equipment_name
+       FROM equipment_partner_shares eps JOIN equipment e ON e.id = eps.equipment_id
+       WHERE eps.partner_id = ?`
+    );
+    const paidStmt = db.prepare(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM partner_payments WHERE partner_id = ?"
+    );
+
+    return partners.map((p) => {
+      const shares = sharesStmt.all(p.id);
+      const totalDue = shares.reduce(
+        (sum, s) => sum + (equipmentAllTimeProfit(s.equipment_id) * s.percentage) / 100,
+        0
+      );
+      const totalPaid = paidStmt.get(p.id).total;
+      return { id: p.id, name: p.name, totalDue, totalPaid, remaining: totalDue - totalPaid };
+    });
+  });
+
+  ipcMain.handle("partners:detail", (_e, { partner_id, month }) => {
+    const partner = db.prepare("SELECT * FROM partners WHERE id = ?").get(partner_id);
+    const shares = db
+      .prepare(
+        `SELECT eps.equipment_id, eps.percentage, e.name AS equipment_name
+         FROM equipment_partner_shares eps JOIN equipment e ON e.id = eps.equipment_id
+         WHERE eps.partner_id = ?`
+      )
+      .all(partner_id);
+
+    const equipmentBreakdown = shares.map((s) => {
+      const driverIncome = db
+        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
+        .all(s.equipment_id, `${month}%`)
+        .reduce((sum, l) => sum + computeDayValue(l), 0);
+      const marketIncome = db
+        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND date LIKE ?")
+        .all(s.equipment_id, `${month}%`)
+        .reduce((sum, l) => sum + computeDayValue(l), 0);
+      const expense = db
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM monthly_expenses WHERE equipment_id = ? AND month = ?")
+        .get(s.equipment_id, month).total;
+      const netProfit = driverIncome + marketIncome - expense;
+      return {
+        equipment_name: s.equipment_name,
+        percentage: s.percentage,
+        monthAmount: (netProfit * s.percentage) / 100,
+      };
+    });
+
+    const monthDue = equipmentBreakdown.reduce((sum, e) => sum + e.monthAmount, 0);
+    const totalDue = shares.reduce(
+      (sum, s) => sum + (equipmentAllTimeProfit(s.equipment_id) * s.percentage) / 100,
+      0
+    );
+    const payments = db
+      .prepare("SELECT * FROM partner_payments WHERE partner_id = ? ORDER BY date DESC")
+      .all(partner_id);
+    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+
+    return { partner, monthDue, equipmentBreakdown, totalDue, totalPaid, remaining: totalDue - totalPaid, payments };
+  });
 }
 
 module.exports = { registerIpcHandlers };
