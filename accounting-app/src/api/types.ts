@@ -94,6 +94,24 @@ export interface PayrollRow {
   net_pay: number;
 }
 
+export interface PayrollDayEntry {
+  date: string;
+  equipment_name: string;
+  actual_hours: number | null;
+  base_hours: number | null;
+  day_rate: number | null;
+  day_value: number;
+}
+
+export interface PayrollDetail {
+  employee: Driver;
+  days: PayrollDayEntry[];
+  advances: EmployeeAdvance[];
+  grossPay: number;
+  advancesTotal: number;
+  netPay: number;
+}
+
 export interface HassanCommissionRow {
   equipment_id: number;
   equipment_name: string;

@@ -314,6 +314,34 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       });
   }
 
+  if (channel === "payroll:detail") {
+    const { employee_id, month } = payload;
+    const employee = state.employees.find((e) => e.id === employee_id)!;
+    const advances = state.employee_advances
+      .filter((a) => a.employee_id === employee_id && a.date.startsWith(month))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const advancesTotal = advances.reduce((sum, a) => sum + a.amount, 0);
+
+    if (employee.wage_type === "monthly") {
+      return { employee, days: [], advances, grossPay: employee.rate, advancesTotal, netPay: employee.rate - advancesTotal };
+    }
+
+    const logs = state.daily_logs
+      .filter((l) => l.role === "driver" && l.person_name === employee.name && l.date.startsWith(month))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const days = logs.map((l) => ({
+      date: l.date,
+      equipment_name: state.equipment.find((e) => e.id === l.equipment_id)?.name ?? "—",
+      actual_hours: l.actual_hours,
+      base_hours: l.base_hours,
+      day_rate: l.day_rate,
+      day_value: computeDayValue(l),
+    }));
+    const grossPay = days.reduce((sum, d) => sum + d.day_value, 0);
+
+    return { employee, days, advances, grossPay, advancesTotal, netPay: grossPay - advancesTotal };
+  }
+
   if (channel === "hassan:commissionSummary") {
     const { month } = payload;
     const rows: { equipment_id: number; equipment_name: string; date: string; source: string; commission: number }[] = [];

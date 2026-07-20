@@ -2,85 +2,152 @@ import { Fragment, FormEvent, useEffect, useState } from "react";
 import MonthPicker from "../components/equipment/MonthPicker";
 import Icon from "../components/Icon";
 import { employeeAdvancesApi, payrollApi } from "../api/client";
-import { EmployeeAdvance, PayrollRow } from "../api/types";
-import { currentMonthKey } from "../utils/months";
+import { PayrollDetail, PayrollRow } from "../api/types";
+import { currentMonthKey, monthLabel } from "../utils/months";
 import { formatEGP } from "../utils/format";
 
-function AdvancesPanel({ employeeId, month, onChanged }: { employeeId: number; month: string; onChanged: () => void }) {
-  const [advances, setAdvances] = useState<EmployeeAdvance[]>([]);
+function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: string; onChanged: () => void }) {
+  const [detail, setDetail] = useState<PayrollDetail | null>(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
 
-  const refresh = () => employeeAdvancesApi.list(employeeId, month).then(setAdvances);
+  const refresh = () => payrollApi.detail(row.id, month).then(setDetail);
 
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employeeId, month]);
+  }, [row.id, month]);
 
-  async function handleAdd(e: FormEvent) {
+  async function handleAddAdvance(e: FormEvent) {
     e.preventDefault();
     if (!amount) return;
-    await employeeAdvancesApi.create({ employee_id: employeeId, date, amount: Number(amount), note: note || null });
+    await employeeAdvancesApi.create({ employee_id: row.id, date, amount: Number(amount), note: note || null });
     setAmount("");
     setNote("");
     await refresh();
     onChanged();
   }
 
-  async function handleDelete(id: number) {
+  async function handleDeleteAdvance(id: number) {
     await employeeAdvancesApi.remove(id);
     await refresh();
     onChanged();
   }
 
+  if (!detail) {
+    return (
+      <tr>
+        <td colSpan={6} className="px-4 py-4 text-sm text-slate-400">
+          جاري التحميل...
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <tr>
-      <td colSpan={6} className="bg-slate-50 px-4 py-4 rounded-xl">
-        <div className="text-xs font-bold text-slate-500 mb-2">سلف {month}</div>
-        <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-2 mb-3">
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-          />
-          <input
-            type="number"
-            min="0"
-            placeholder="القيمة"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-          />
-          <input
-            type="text"
-            placeholder="ملاحظة (اختياري)"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-          />
-          <button type="submit" className="bg-primary text-white rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-primary-dark">
-            إضافة سلفة
-          </button>
-        </form>
-        {advances.length === 0 ? (
-          <div className="text-xs text-slate-400">مفيش سلف مسجلة الشهر ده.</div>
-        ) : (
-          <ul className="space-y-1">
-            {advances.map((a) => (
-              <li key={a.id} className="flex items-center justify-between text-sm">
-                <span className="text-slate-600">
-                  {a.date} — {formatEGP(a.amount)} {a.note && <span className="text-slate-400">({a.note})</span>}
-                </span>
-                <button onClick={() => handleDelete(a.id)} className="text-xs text-rose-500 hover:text-rose-700 font-semibold">
-                  حذف
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+      <td colSpan={6} className="bg-slate-50 px-4 py-5 rounded-xl">
+        <div className="bg-white rounded-card shadow-card p-5 max-w-2xl">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+            <div>
+              <div className="font-extrabold text-slate-900">{row.name}</div>
+              <div className="text-xs text-slate-400">
+                شيت مرتب {monthLabel(month)} {month.split("-")[0]} — شركة البنيان لتأجير المعدات الثقيلة
+              </div>
+            </div>
+            <Icon name="salaries" className="w-6 h-6 text-primary" />
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="text-center bg-primary-light rounded-xl py-2.5">
+              <div className="text-xs text-slate-500">الإجمالي</div>
+              <div className="font-bold text-slate-800">{formatEGP(detail.grossPay)}</div>
+            </div>
+            <div className="text-center bg-rose-50 rounded-xl py-2.5">
+              <div className="text-xs text-slate-500">السلف</div>
+              <div className="font-bold text-rose-600">{formatEGP(detail.advancesTotal)}</div>
+            </div>
+            <div className="text-center bg-primary rounded-xl py-2.5">
+              <div className="text-xs text-white/80">الصافي المستحق</div>
+              <div className="font-extrabold text-white">{formatEGP(detail.netPay)}</div>
+            </div>
+          </div>
+
+          {row.wage_type === "daily" && (
+            <div className="mb-4">
+              <div className="text-xs font-bold text-slate-500 mb-1.5">أيام العمل ({detail.days.length})</div>
+              {detail.days.length === 0 ? (
+                <div className="text-xs text-slate-400">لسه ملوش أيام مسجلة الشهر ده.</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-slate-400 border-b border-slate-100">
+                      <th className="text-start font-semibold py-1.5">التاريخ</th>
+                      <th className="text-start font-semibold py-1.5">المعدة</th>
+                      <th className="text-start font-semibold py-1.5">الساعات</th>
+                      <th className="text-start font-semibold py-1.5">القيمة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.days.map((d, i) => (
+                      <tr key={i} className="border-b border-slate-50 last:border-0">
+                        <td className="py-1.5 text-slate-600">{d.date}</td>
+                        <td className="py-1.5 text-slate-600">{d.equipment_name}</td>
+                        <td className="py-1.5 text-slate-500">{d.actual_hours ?? "—"}</td>
+                        <td className="py-1.5 font-semibold text-slate-700">{formatEGP(d.day_value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          <div>
+            <div className="text-xs font-bold text-slate-500 mb-1.5">السلف</div>
+            {detail.advances.length > 0 && (
+              <ul className="space-y-1 mb-2">
+                {detail.advances.map((a) => (
+                  <li key={a.id} className="flex items-center justify-between text-sm">
+                    <span className="text-slate-600">
+                      {a.date} — {formatEGP(a.amount)} {a.note && <span className="text-slate-400">({a.note})</span>}
+                    </span>
+                    <button onClick={() => handleDeleteAdvance(a.id)} className="text-xs text-rose-500 hover:text-rose-700 font-semibold">
+                      حذف
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form onSubmit={handleAddAdvance} className="flex flex-wrap items-end gap-2">
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <input
+                type="number"
+                min="0"
+                placeholder="القيمة"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <input
+                type="text"
+                placeholder="ملاحظة (اختياري)"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <button type="submit" className="bg-primary text-white rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-primary-dark">
+                إضافة سلفة
+              </button>
+            </form>
+          </div>
+        </div>
       </td>
     </tr>
   );
@@ -108,7 +175,7 @@ export default function Salaries() {
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">الرواتب</h1>
           <p className="text-sm text-slate-500 mt-1">
-            الأجر اليومي بيتحسب تلقائيًا من سركي كل المعدات اللي اشتغل فيها السائق الشهر ده.
+            دوس على اسم أي سائق تشوف شيت مرتبه بالتفصيل — الأيام والمعدات والسلف — وتقدر تصوره وتبعتهوله.
           </p>
         </div>
         <MonthPicker month={month} onChange={setMonth} />
@@ -152,9 +219,7 @@ export default function Salaries() {
                     </td>
                     <td className="py-2.5 font-bold text-primary-dark">{formatEGP(row.net_pay)}</td>
                   </tr>
-                  {expandedId === row.id && (
-                    <AdvancesPanel employeeId={row.id} month={month} onChanged={refresh} />
-                  )}
+                  {expandedId === row.id && <PayslipPanel row={row} month={month} onChanged={refresh} />}
                 </Fragment>
               ))}
             </tbody>

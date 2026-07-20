@@ -13,6 +13,7 @@ import {
   HassanLedgerEntry,
   MonthlyExpense,
   Partner,
+  PayrollDetail,
   PayrollRow,
 } from "./types";
 
@@ -85,6 +86,8 @@ export const employeeAdvancesApi = {
 
 export const payrollApi = {
   summary: (month: string): Promise<PayrollRow[]> => invoke("payroll:summary", { month }),
+  detail: (employee_id: number, month: string): Promise<PayrollDetail> =>
+    invoke("payroll:detail", { employee_id, month }),
 };
 
 export const hassanApi = {

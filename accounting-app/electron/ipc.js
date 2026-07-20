@@ -267,6 +267,48 @@ function registerIpcHandlers(db) {
     });
   });
 
+  // --- Payroll detail: the per-driver "payslip" — every day worked this
+  // month, which equipment, and what it paid, plus the advances list. This
+  // is what gets screenshotted and sent to the driver. ---
+  ipcMain.handle("payroll:detail", (_e, { employee_id, month }) => {
+    const employee = db.prepare("SELECT * FROM employees WHERE id = ?").get(employee_id);
+    const advances = db
+      .prepare("SELECT * FROM employee_advances WHERE employee_id = ? AND date LIKE ? ORDER BY date")
+      .all(employee_id, `${month}%`);
+    const advancesTotal = advances.reduce((sum, a) => sum + a.amount, 0);
+
+    if (employee.wage_type === "monthly") {
+      return {
+        employee,
+        days: [],
+        advances,
+        grossPay: employee.rate,
+        advancesTotal,
+        netPay: employee.rate - advancesTotal,
+      };
+    }
+
+    const logs = db
+      .prepare(
+        `SELECT dl.*, e.name AS equipment_name FROM daily_logs dl
+         JOIN equipment e ON e.id = dl.equipment_id
+         WHERE dl.role = 'driver' AND dl.person_name = ? AND dl.date LIKE ?
+         ORDER BY dl.date`
+      )
+      .all(employee.name, `${month}%`);
+    const days = logs.map((l) => ({
+      date: l.date,
+      equipment_name: l.equipment_name,
+      actual_hours: l.actual_hours,
+      base_hours: l.base_hours,
+      day_rate: l.day_rate,
+      day_value: computeDayValue(l),
+    }));
+    const grossPay = days.reduce((sum, d) => sum + d.day_value, 0);
+
+    return { employee, days, advances, grossPay, advancesTotal, netPay: grossPay - advancesTotal };
+  });
+
   // --- Hassan: commission (doc section 4) ---
   // Regular equipment: commission = (contractor day_rate - driver day_rate)
   // + overtime_hours * (contractor_rate/8 - driver_rate/8), paired by date.
