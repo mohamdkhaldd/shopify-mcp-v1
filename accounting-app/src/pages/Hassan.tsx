@@ -32,6 +32,14 @@ function CommissionTab({ month }: { month: string }) {
 
   if (!summary) return <div className="text-sm text-slate-400">جاري التحميل...</div>;
 
+  const byEquipment = new Map<string, number>();
+  for (const row of summary.rows) {
+    byEquipment.set(row.equipment_name, (byEquipment.get(row.equipment_name) ?? 0) + row.commission);
+  }
+  const equipmentTotals = [...byEquipment.entries()]
+    .map(([equipment_name, commission]) => ({ equipment_name, commission }))
+    .sort((a, b) => b.commission - a.commission);
+
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-card shadow-card p-5">
@@ -40,6 +48,37 @@ function CommissionTab({ month }: { month: string }) {
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">
+        <h2 className="font-bold text-slate-800 mb-4">الكوميشن حسب المعدة — {month}</h2>
+        {equipmentTotals.length === 0 ? (
+          <div className="text-sm text-slate-400">مفيش كوميشن محسوب الشهر ده.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-slate-400 border-b border-slate-100">
+                <th className="text-start font-semibold py-2">المعدة</th>
+                <th className="text-start font-semibold py-2">كوميشن الشهر</th>
+              </tr>
+            </thead>
+            <tbody>
+              {equipmentTotals.map((e) => (
+                <tr key={e.equipment_name} className="border-b border-slate-50 last:border-0">
+                  <td className="py-2 font-semibold text-slate-700">{e.equipment_name}</td>
+                  <td className="py-2 font-semibold text-primary-dark">{formatEGP(e.commission)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td className="pt-2 text-sm font-bold text-slate-700">الإجمالي</td>
+                <td className="pt-2 text-sm font-bold text-primary-dark">{formatEGP(summary.total)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+
+      <div className="bg-white rounded-card shadow-card p-5">
+        <h2 className="font-bold text-slate-800 mb-4">التفاصيل اليومية</h2>
         {summary.rows.length === 0 ? (
           <div className="text-sm text-slate-400">
             مفيش كوميشن محسوب الشهر ده — الكوميشن بيتحسب تلقائيًا لما يبقى فيه سركي ومقاول لنفس المعدة ونفس اليوم، أو

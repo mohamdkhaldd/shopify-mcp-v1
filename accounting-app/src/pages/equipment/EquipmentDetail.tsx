@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import Icon from "../../components/Icon";
 import MonthPicker from "../../components/equipment/MonthPicker";
+import PrintButton from "../../components/PrintButton";
+import { PrintHeader, PrintSignoff } from "../../components/PrintSignoff";
 import { contractorsApi, dailyLogsApi, employeesApi } from "../../api/client";
 import { Equipment } from "../../api/types";
-import { currentMonthKey } from "../../utils/months";
+import { currentMonthKey, monthLabel } from "../../utils/months";
 import DailyLogTable from "./DailyLogTable";
 import ExpensesTable from "./ExpensesTable";
 import ProfitSummary from "./ProfitSummary";
@@ -54,9 +56,13 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
     });
   }, [equipment.id, month, refreshKey]);
 
+  const activeTabLabel = tabs.find((t) => t.id === tab)!.label;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <PrintHeader title={`${equipment.name} — ${activeTabLabel}`} subtitle={`${monthLabel(month)} ${month.split("-")[0]}`} />
+
+      <div className="no-print flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
@@ -71,18 +77,21 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
             </p>
           </div>
         </div>
-        <MonthPicker month={month} onChange={setMonth} />
+        <div className="flex items-center gap-2">
+          <PrintButton />
+          <MonthPicker month={month} onChange={setMonth} />
+        </div>
       </div>
 
       {mismatchedDates.size > 0 && (tab === "driver" || tab === "contractor") && (
-        <div className="flex items-center gap-2 bg-rose-50 text-rose-700 text-sm rounded-xl px-4 py-2.5">
+        <div className="no-print flex items-center gap-2 bg-rose-50 text-rose-700 text-sm rounded-xl px-4 py-2.5">
           <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
           فيه {mismatchedDates.size} يوم الساعات فيه مش متطابقة بين السركي والمقاول — محتاجة مراجعة (متعلّمة بنقطة حمرا
           في الجدول).
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="no-print flex flex-wrap gap-2">
         {tabs.map((t) => {
           const isActive = t.id === tab;
           return (
@@ -143,6 +152,8 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
       {tab === "expenses" && (
         <ExpensesTable equipmentId={equipment.id} month={month} onChanged={() => setRefreshKey((k) => k + 1)} />
       )}
+
+      <PrintSignoff />
     </div>
   );
 }

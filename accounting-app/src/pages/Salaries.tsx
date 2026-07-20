@@ -1,6 +1,8 @@
 import { Fragment, FormEvent, useEffect, useState } from "react";
 import MonthPicker from "../components/equipment/MonthPicker";
 import Icon from "../components/Icon";
+import PrintButton from "../components/PrintButton";
+import { PrintSignoff } from "../components/PrintSignoff";
 import { employeeAdvancesApi, payrollApi } from "../api/client";
 import { PaymentMethod, PayrollDetail, PayrollRow } from "../api/types";
 import { currentMonthKey, monthLabel } from "../utils/months";
@@ -64,7 +66,10 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
                 شيت مرتب {monthLabel(month)} {month.split("-")[0]} — شركة البنيان لتأجير المعدات الثقيلة
               </div>
             </div>
-            <Icon name="salaries" className="w-6 h-6 text-primary" />
+            <div className="flex items-center gap-2">
+              <PrintButton />
+              <Icon name="salaries" className="w-6 h-6 text-primary no-print" />
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3 mb-4">
@@ -122,14 +127,14 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
                       {a.date} — {formatEGP(a.amount)} — {paymentMethodLabel(a.payment_method)}{" "}
                       {a.note && <span className="text-slate-400">({a.note})</span>}
                     </span>
-                    <button onClick={() => handleDeleteAdvance(a.id)} className="text-xs text-rose-500 hover:text-rose-700 font-semibold">
+                    <button onClick={() => handleDeleteAdvance(a.id)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
                       حذف
                     </button>
                   </li>
                 ))}
               </ul>
             )}
-            <form onSubmit={handleAddAdvance} className="flex flex-wrap items-end gap-2">
+            <form onSubmit={handleAddAdvance} className="no-print flex flex-wrap items-end gap-2">
               <input
                 type="date"
                 value={date}
@@ -167,6 +172,8 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
               </button>
             </form>
           </div>
+
+          <PrintSignoff />
         </div>
       </td>
     </tr>
@@ -191,7 +198,7 @@ export default function Salaries() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="no-print flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">الرواتب</h1>
           <p className="text-sm text-slate-500 mt-1">
@@ -208,7 +215,7 @@ export default function Salaries() {
           <div className="text-sm text-slate-400">لسه مفيش سائقين أو موظفين مسجلين — ضيفهم من الإعدادات.</div>
         ) : (
           <table className="w-full text-sm">
-            <thead>
+            <thead className="no-print">
               <tr className="text-slate-400 border-b border-slate-100">
                 <th className="text-start font-semibold py-2">الاسم</th>
                 <th className="text-start font-semibold py-2">نوع الأجر</th>
@@ -221,7 +228,7 @@ export default function Salaries() {
             <tbody>
               {rows.map((row) => (
                 <Fragment key={row.id}>
-                  <tr className="border-b border-slate-50 last:border-0">
+                  <tr className="no-print border-b border-slate-50 last:border-0">
                     <td className="py-2.5">
                       <button
                         onClick={() => setExpandedId(expandedId === row.id ? null : row.id)}
@@ -243,7 +250,7 @@ export default function Salaries() {
                 </Fragment>
               ))}
             </tbody>
-            <tfoot>
+            <tfoot className="no-print">
               <tr>
                 <td colSpan={5} className="pt-3 text-sm font-bold text-slate-700">
                   إجمالي صافي الرواتب

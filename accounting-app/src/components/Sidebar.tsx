@@ -9,7 +9,7 @@ interface SidebarProps {
 
 export default function Sidebar({ active, onSelect }: SidebarProps) {
   return (
-    <aside className="w-64 shrink-0 h-screen sticky top-0 bg-white border-s border-slate-200 flex flex-col">
+    <aside className="no-print w-64 shrink-0 h-screen sticky top-0 bg-white border-s border-slate-200 flex flex-col">
       <div className="px-5 py-6 border-b border-slate-100">
         <div className="flex items-center gap-3">
           <CompanyLogo />

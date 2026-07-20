@@ -50,7 +50,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
 
   return (
     <div className="bg-white rounded-card shadow-card p-5">
-      <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
+      <form onSubmit={handleAdd} className="no-print flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
         <div>
           <label className="block text-xs text-slate-400 mb-1">نوع المصروف</label>
           <select
@@ -122,7 +122,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
                   <td className="py-2">
                     <button
                       onClick={() => handleDelete(exp.id)}
-                      className="text-xs text-rose-500 hover:text-rose-700 font-semibold"
+                      className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold"
                     >
                       حذف
                     </button>
