@@ -45,6 +45,7 @@ export interface DailyLog {
   base_hours: number | null;
   day_rate: number | null;
   fixed_value: number | null;
+  hassan_commission: number | null;
   day_value: number;
 }
 
@@ -72,4 +73,53 @@ export interface EquipmentSummary {
   expenseTotal: number;
   netProfit: number;
   distribution: PartnerDistributionRow[];
+}
+
+export interface EmployeeAdvance {
+  id: number;
+  employee_id: number;
+  date: string;
+  amount: number;
+  note: string | null;
+}
+
+export interface PayrollRow {
+  id: number;
+  name: string;
+  wage_type: WageType;
+  rate: number;
+  days_worked: number | null;
+  gross_pay: number;
+  advances_total: number;
+  net_pay: number;
+}
+
+export interface HassanCommissionRow {
+  equipment_id: number;
+  equipment_name: string;
+  date: string;
+  source: "paired" | "market";
+  commission: number;
+}
+
+export interface HassanCommissionSummary {
+  rows: HassanCommissionRow[];
+  total: number;
+}
+
+export type HassanLedgerType = "loan" | "repayment" | "due" | "collection";
+
+export interface HassanLedgerEntry {
+  id: number;
+  date: string;
+  type: HassanLedgerType;
+  amount: number;
+  party_name: string | null;
+  description: string | null;
+  note: string | null;
+}
+
+export interface HassanBalance {
+  netDebt: number;
+  netDue: number;
 }

@@ -68,7 +68,9 @@ CREATE TABLE IF NOT EXISTS daily_logs (
   actual_hours REAL,
   base_hours REAL,
   day_rate REAL,
-  fixed_value REAL
+  fixed_value REAL,
+  hassan_commission REAL,
+  UNIQUE (equipment_id, date, role)
 );
 
 CREATE TABLE IF NOT EXISTS hassan_ledger (

@@ -3,20 +3,22 @@ import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
 import Equipment from "./pages/Equipment";
+import Salaries from "./pages/Salaries";
+import Hassan from "./pages/Hassan";
 import ComingSoon from "./pages/ComingSoon";
 import { navItems, SectionId } from "./nav";
 
-type ComingSoonSection = Exclude<SectionId, "home" | "settings" | "equipment">;
+type ComingSoonSection = Exclude<SectionId, "home" | "settings" | "equipment" | "salaries" | "hassan">;
 
 const comingSoonNotes: Record<ComingSoonSection, string> = {
-  salaries: "تسجيل حضور الموظفين وحساب المرتبات والأوفر تايم — في المرحلة الرابعة.",
-  hassan: "كوميشن حسن والحسابات الشخصية المنفصلة — في المرحلة الرابعة.",
   contractors: "لوحة المقاولين وسجلات الدفعات — في المرحلة الخامسة.",
   partners: "توزيع الأرباح على الشركاء وسجلات دفعاتهم — في المرحلة الخامسة.",
   treasury: "حسابات الخزنة الثلاثة (محفظة، انستا باي، كاش) — في المرحلة السادسة.",
   suppliers: "سجل المشتريات والدفعات لكل مورد — في المرحلة السادسة.",
   reports: "التقارير النهائية الشاملة — في المرحلة السادسة.",
 };
+
+const builtSections: SectionId[] = ["home", "settings", "equipment", "salaries", "hassan"];
 
 export default function App() {
   const [active, setActive] = useState<SectionId>("home");
@@ -29,7 +31,9 @@ export default function App() {
         {active === "home" && <Dashboard />}
         {active === "settings" && <Settings />}
         {active === "equipment" && <Equipment />}
-        {active !== "home" && active !== "settings" && active !== "equipment" && (
+        {active === "salaries" && <Salaries />}
+        {active === "hassan" && <Hassan />}
+        {!builtSections.includes(active) && (
           <ComingSoon
             title={activeItem.label}
             icon={activeItem.icon}

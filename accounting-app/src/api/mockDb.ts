@@ -16,6 +16,7 @@ interface DailyLogRow {
   base_hours: number | null;
   day_rate: number | null;
   fixed_value: number | null;
+  hassan_commission: number | null;
 }
 
 interface MonthlyExpenseRow {
@@ -27,6 +28,24 @@ interface MonthlyExpenseRow {
   payment_method: string | null;
 }
 
+interface EmployeeAdvanceRow {
+  id: number;
+  employee_id: number;
+  date: string;
+  amount: number;
+  note: string | null;
+}
+
+interface HassanLedgerRow {
+  id: number;
+  date: string;
+  type: "loan" | "repayment" | "due" | "collection";
+  amount: number;
+  party_name: string | null;
+  description: string | null;
+  note: string | null;
+}
+
 interface MockState {
   partners: { id: number; name: string }[];
   employees: { id: number; name: string; wage_type: "daily" | "monthly"; rate: number }[];
@@ -35,6 +54,8 @@ interface MockState {
   equipment: { id: number; name: string; shares: { partner_id: number; percentage: number }[] }[];
   daily_logs: DailyLogRow[];
   monthly_expenses: MonthlyExpenseRow[];
+  employee_advances: EmployeeAdvanceRow[];
+  hassan_ledger: HassanLedgerRow[];
   nextId: number;
 }
 
@@ -44,6 +65,19 @@ function computeDayValue(log: DailyLogRow): number {
   const hourlyRate = dayRate / 8;
   const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - (log.base_hours ?? 0));
   return dayRate + overtimeHours * hourlyRate;
+}
+
+const WINCH_PERCENTAGE_EQUIPMENT = ["ونش 5 طن دبوسة", "ونش 3 وصلة"];
+
+function computePairedCommission(equipmentName: string, driverLog: DailyLogRow, contractorLog: DailyLogRow): number {
+  if (WINCH_PERCENTAGE_EQUIPMENT.includes(equipmentName)) {
+    const k = contractorLog.day_rate ?? 0;
+    return k <= 2500 ? k * 0.2 : k * 0.175;
+  }
+  const k = contractorLog.day_rate ?? 0;
+  const h = driverLog.day_rate ?? 0;
+  const overtimeHours = Math.max(0, (contractorLog.actual_hours ?? 0) - (contractorLog.base_hours ?? 0));
+  return k - h + overtimeHours * (k / 8 - h / 8);
 }
 
 const STORAGE_KEY = "al-bunyan-mock-db";
@@ -120,13 +154,20 @@ function buildSeedState(): MockState {
     equipment,
     daily_logs: [],
     monthly_expenses: [],
+    employee_advances: [],
+    hassan_ledger: [],
     nextId,
   };
 }
 
 function loadState(): MockState {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) return JSON.parse(raw);
+  if (raw) {
+    const state = JSON.parse(raw) as MockState;
+    if (!state.employee_advances) state.employee_advances = [];
+    if (!state.hassan_ledger) state.hassan_ledger = [];
+    return state;
+  }
   const seeded = buildSeedState();
   saveState(seeded);
   return seeded;
@@ -145,10 +186,18 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((l) => ({ ...l, day_value: computeDayValue(l) }));
   }
-  if (channel === "dailyLogs:create") {
-    const id = state.nextId++;
-    const record: DailyLogRow = { id, ...payload };
-    state.daily_logs.push(record);
+  if (channel === "dailyLogs:upsert") {
+    const existing = state.daily_logs.find(
+      (l) => l.equipment_id === payload.equipment_id && l.date === payload.date && l.role === payload.role
+    );
+    let record: DailyLogRow;
+    if (existing) {
+      Object.assign(existing, payload);
+      record = existing;
+    } else {
+      record = { id: state.nextId++, ...payload };
+      state.daily_logs.push(record);
+    }
     saveState(state);
     return { ...record, day_value: computeDayValue(record) };
   }
@@ -207,6 +256,136 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     }));
 
     return { driverIncome, marketIncome, income, expenseTotal, netProfit, distribution };
+  }
+
+  if (channel === "employeeAdvances:list") {
+    return state.employee_advances
+      .filter((a) => a.employee_id === payload.employee_id && a.date.startsWith(payload.month))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+  if (channel === "employeeAdvances:create") {
+    const record: EmployeeAdvanceRow = { id: state.nextId++, ...payload, note: payload.note ?? null };
+    state.employee_advances.push(record);
+    saveState(state);
+    return record;
+  }
+  if (channel === "employeeAdvances:delete") {
+    state.employee_advances = state.employee_advances.filter((a) => a.id !== payload.id);
+    saveState(state);
+    return { ok: true };
+  }
+
+  if (channel === "payroll:summary") {
+    const { month } = payload;
+    return [...state.employees]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((emp) => {
+        const advancesTotal = state.employee_advances
+          .filter((a) => a.employee_id === emp.id && a.date.startsWith(month))
+          .reduce((sum, a) => sum + a.amount, 0);
+
+        if (emp.wage_type === "monthly") {
+          return {
+            id: emp.id,
+            name: emp.name,
+            wage_type: emp.wage_type,
+            rate: emp.rate,
+            days_worked: null,
+            gross_pay: emp.rate,
+            advances_total: advancesTotal,
+            net_pay: emp.rate - advancesTotal,
+          };
+        }
+
+        const logs = state.daily_logs.filter(
+          (l) => l.role === "driver" && l.person_name === emp.name && l.date.startsWith(month)
+        );
+        const grossPay = logs.reduce((sum, l) => sum + computeDayValue(l), 0);
+        return {
+          id: emp.id,
+          name: emp.name,
+          wage_type: emp.wage_type,
+          rate: emp.rate,
+          days_worked: logs.length,
+          gross_pay: grossPay,
+          advances_total: advancesTotal,
+          net_pay: grossPay - advancesTotal,
+        };
+      });
+  }
+
+  if (channel === "hassan:commissionSummary") {
+    const { month } = payload;
+    const rows: { equipment_id: number; equipment_name: string; date: string; source: string; commission: number }[] = [];
+
+    for (const equipment of state.equipment) {
+      const driverLogs = state.daily_logs.filter(
+        (l) => l.equipment_id === equipment.id && l.role === "driver" && l.date.startsWith(month)
+      );
+      const contractorLogs = state.daily_logs.filter(
+        (l) => l.equipment_id === equipment.id && l.role === "contractor" && l.date.startsWith(month)
+      );
+      const marketLogs = state.daily_logs.filter(
+        (l) =>
+          l.equipment_id === equipment.id &&
+          l.role === "market" &&
+          l.date.startsWith(month) &&
+          l.hassan_commission != null
+      );
+
+      const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
+      for (const contractorLog of contractorLogs) {
+        const driverLog = driverByDate.get(contractorLog.date);
+        if (!driverLog) continue;
+        rows.push({
+          equipment_id: equipment.id,
+          equipment_name: equipment.name,
+          date: contractorLog.date,
+          source: "paired",
+          commission: computePairedCommission(equipment.name, driverLog, contractorLog),
+        });
+      }
+      for (const marketLog of marketLogs) {
+        rows.push({
+          equipment_id: equipment.id,
+          equipment_name: equipment.name,
+          date: marketLog.date,
+          source: "market",
+          commission: marketLog.hassan_commission ?? 0,
+        });
+      }
+    }
+
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    const total = rows.reduce((sum, r) => sum + r.commission, 0);
+    return { rows, total };
+  }
+
+  if (channel === "hassanLedger:list") {
+    return state.hassan_ledger
+      .filter((e) => e.date.startsWith(payload.month))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+  if (channel === "hassanLedger:create") {
+    const record: HassanLedgerRow = {
+      id: state.nextId++,
+      ...payload,
+      party_name: payload.party_name ?? null,
+      description: payload.description ?? null,
+      note: payload.note ?? null,
+    };
+    state.hassan_ledger.push(record);
+    saveState(state);
+    return record;
+  }
+  if (channel === "hassanLedger:delete") {
+    state.hassan_ledger = state.hassan_ledger.filter((e) => e.id !== payload.id);
+    saveState(state);
+    return { ok: true };
+  }
+  if (channel === "hassanLedger:balance") {
+    const sum = (type: string) => state.hassan_ledger.filter((e) => e.type === type).reduce((s, e) => s + e.amount, 0);
+    return { netDebt: sum("loan") - sum("repayment"), netDue: sum("due") - sum("collection") };
   }
 
   const [entity, action] = channel.split(":");

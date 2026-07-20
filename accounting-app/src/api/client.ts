@@ -5,10 +5,15 @@ import {
   DailyLogRole,
   Driver,
   Equipment,
+  EmployeeAdvance,
   EquipmentSummary,
   ExpenseCategory,
+  HassanBalance,
+  HassanCommissionSummary,
+  HassanLedgerEntry,
   MonthlyExpense,
   Partner,
+  PayrollRow,
 } from "./types";
 
 declare global {
@@ -58,7 +63,7 @@ export const equipmentApi = {
 export const dailyLogsApi = {
   list: (equipment_id: number, month: string, role: DailyLogRole): Promise<DailyLog[]> =>
     invoke("dailyLogs:list", { equipment_id, month, role }),
-  create: (log: Omit<DailyLog, "id" | "day_value">): Promise<DailyLog> => invoke("dailyLogs:create", log),
+  upsert: (log: Omit<DailyLog, "id" | "day_value">): Promise<DailyLog> => invoke("dailyLogs:upsert", log),
   remove: (id: number): Promise<void> => invoke("dailyLogs:delete", { id }),
 };
 
@@ -68,4 +73,26 @@ export const monthlyExpensesApi = {
   create: (expense: Omit<MonthlyExpense, "id" | "category_name">): Promise<MonthlyExpense> =>
     invoke("monthlyExpenses:create", expense),
   remove: (id: number): Promise<void> => invoke("monthlyExpenses:delete", { id }),
+};
+
+export const employeeAdvancesApi = {
+  list: (employee_id: number, month: string): Promise<EmployeeAdvance[]> =>
+    invoke("employeeAdvances:list", { employee_id, month }),
+  create: (advance: Omit<EmployeeAdvance, "id">): Promise<EmployeeAdvance> =>
+    invoke("employeeAdvances:create", advance),
+  remove: (id: number): Promise<void> => invoke("employeeAdvances:delete", { id }),
+};
+
+export const payrollApi = {
+  summary: (month: string): Promise<PayrollRow[]> => invoke("payroll:summary", { month }),
+};
+
+export const hassanApi = {
+  commissionSummary: (month: string): Promise<HassanCommissionSummary> =>
+    invoke("hassan:commissionSummary", { month }),
+  ledgerList: (month: string): Promise<HassanLedgerEntry[]> => invoke("hassanLedger:list", { month }),
+  ledgerCreate: (entry: Omit<HassanLedgerEntry, "id">): Promise<HassanLedgerEntry> =>
+    invoke("hassanLedger:create", entry),
+  ledgerRemove: (id: number): Promise<void> => invoke("hassanLedger:delete", { id }),
+  balance: (): Promise<HassanBalance> => invoke("hassanLedger:balance"),
 };

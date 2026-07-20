@@ -20,3 +20,19 @@ export function yearOf(monthKey: string): string {
 export function monthOptionsForYear(year: string): { key: string; label: string }[] {
   return ARABIC_MONTHS.map((label, i) => ({ key: `${year}-${String(i + 1).padStart(2, "0")}`, label }));
 }
+
+const WEEKDAY_NAMES_AR = ["أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
+
+export function daysInMonth(monthKey: string): string[] {
+  const [year, month] = monthKey.split("-").map(Number);
+  const count = new Date(year, month, 0).getDate();
+  return Array.from({ length: count }, (_, i) => {
+    const day = String(i + 1).padStart(2, "0");
+    return `${monthKey}-${day}`;
+  });
+}
+
+export function weekdayLabel(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return WEEKDAY_NAMES_AR[new Date(year, month - 1, day).getDay()];
+}

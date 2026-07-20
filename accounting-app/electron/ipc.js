@@ -104,23 +104,35 @@ function registerIpcHandlers(db) {
     return rows.map((row) => ({ ...row, day_value: computeDayValue(row) }));
   });
 
-  ipcMain.handle("dailyLogs:create", (_e, log) => {
-    const info = db
-      .prepare(
-        `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, fixed_value)
-         VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @fixed_value)`
-      )
-      .run({
-        equipment_id: log.equipment_id,
-        date: log.date,
-        role: log.role,
-        person_name: log.person_name,
-        actual_hours: log.actual_hours ?? null,
-        base_hours: log.base_hours ?? null,
-        day_rate: log.day_rate ?? null,
-        fixed_value: log.fixed_value ?? null,
-      });
-    const row = db.prepare("SELECT * FROM daily_logs WHERE id = ?").get(info.lastInsertRowid);
+  // One row per equipment/date/role — matches the spreadsheet's "one line per
+  // day of the month" layout, so saving a day's cells overwrites that day's
+  // row instead of appending a new one.
+  ipcMain.handle("dailyLogs:upsert", (_e, log) => {
+    const params = {
+      equipment_id: log.equipment_id,
+      date: log.date,
+      role: log.role,
+      person_name: log.person_name,
+      actual_hours: log.actual_hours ?? null,
+      base_hours: log.base_hours ?? null,
+      day_rate: log.day_rate ?? null,
+      fixed_value: log.fixed_value ?? null,
+      hassan_commission: log.hassan_commission ?? null,
+    };
+    db.prepare(
+      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, fixed_value, hassan_commission)
+       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @fixed_value, @hassan_commission)
+       ON CONFLICT(equipment_id, date, role) DO UPDATE SET
+         person_name = excluded.person_name,
+         actual_hours = excluded.actual_hours,
+         base_hours = excluded.base_hours,
+         day_rate = excluded.day_rate,
+         fixed_value = excluded.fixed_value,
+         hassan_commission = excluded.hassan_commission`
+    ).run(params);
+    const row = db
+      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ?")
+      .get(log.equipment_id, log.date, log.role);
     return { ...row, day_value: computeDayValue(row) };
   });
 
@@ -194,6 +206,162 @@ function registerIpcHandlers(db) {
     }));
 
     return { driverIncome, marketIncome, income, expenseTotal, netProfit, distribution };
+  });
+
+  // --- Employee advances (سلف) ---
+  ipcMain.handle("employeeAdvances:list", (_e, { employee_id, month }) =>
+    db
+      .prepare("SELECT * FROM employee_advances WHERE employee_id = ? AND date LIKE ? ORDER BY date")
+      .all(employee_id, `${month}%`)
+  );
+  ipcMain.handle("employeeAdvances:create", (_e, advance) => {
+    const info = db
+      .prepare("INSERT INTO employee_advances (employee_id, date, amount, note) VALUES (@employee_id, @date, @amount, @note)")
+      .run({ ...advance, note: advance.note ?? null });
+    return db.prepare("SELECT * FROM employee_advances WHERE id = ?").get(info.lastInsertRowid);
+  });
+  ipcMain.handle("employeeAdvances:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM employee_advances WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
+  // --- Payroll summary (doc section 5): daily wage = sum of driver day-values
+  // across every equipment this month; monthly wage = fixed rate. Advances
+  // are deducted from either type. ---
+  ipcMain.handle("payroll:summary", (_e, { month }) => {
+    const employees = db.prepare("SELECT * FROM employees ORDER BY name").all();
+    const driverLogsStmt = db.prepare(
+      "SELECT * FROM daily_logs WHERE role = 'driver' AND person_name = ? AND date LIKE ?"
+    );
+    const advancesStmt = db.prepare(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM employee_advances WHERE employee_id = ? AND date LIKE ?"
+    );
+
+    return employees.map((emp) => {
+      const advancesTotal = advancesStmt.get(emp.id, `${month}%`).total;
+      if (emp.wage_type === "monthly") {
+        const grossPay = emp.rate;
+        return {
+          id: emp.id,
+          name: emp.name,
+          wage_type: emp.wage_type,
+          rate: emp.rate,
+          days_worked: null,
+          gross_pay: grossPay,
+          advances_total: advancesTotal,
+          net_pay: grossPay - advancesTotal,
+        };
+      }
+      const logs = driverLogsStmt.all(emp.name, `${month}%`);
+      const grossPay = logs.reduce((sum, l) => sum + computeDayValue(l), 0);
+      return {
+        id: emp.id,
+        name: emp.name,
+        wage_type: emp.wage_type,
+        rate: emp.rate,
+        days_worked: logs.length,
+        gross_pay: grossPay,
+        advances_total: advancesTotal,
+        net_pay: grossPay - advancesTotal,
+      };
+    });
+  });
+
+  // --- Hassan: commission (doc section 4) ---
+  // Regular equipment: commission = (contractor day_rate - driver day_rate)
+  // + overtime_hours * (contractor_rate/8 - driver_rate/8), paired by date.
+  // The two winches use a flat % of the contractor's day_rate instead.
+  // سركي سوق has no formula — whatever commission was typed in on that row.
+  const WINCH_PERCENTAGE_EQUIPMENT = ["ونش 5 طن دبوسة", "ونش 3 وصلة"];
+
+  function computePairedCommission(equipmentName, driverLog, contractorLog) {
+    if (WINCH_PERCENTAGE_EQUIPMENT.includes(equipmentName)) {
+      const k = contractorLog.day_rate ?? 0;
+      return k <= 2500 ? k * 0.2 : k * 0.175;
+    }
+    const k = contractorLog.day_rate ?? 0;
+    const h = driverLog.day_rate ?? 0;
+    const overtimeHours = Math.max(0, (contractorLog.actual_hours ?? 0) - (contractorLog.base_hours ?? 0));
+    return (k - h) + overtimeHours * (k / 8 - h / 8);
+  }
+
+  ipcMain.handle("hassan:commissionSummary", (_e, { month }) => {
+    const equipmentList = db.prepare("SELECT * FROM equipment ORDER BY name").all();
+    const rows = [];
+
+    for (const equipment of equipmentList) {
+      const driverLogs = db
+        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
+        .all(equipment.id, `${month}%`);
+      const contractorLogs = db
+        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'contractor' AND date LIKE ?")
+        .all(equipment.id, `${month}%`);
+      const marketLogs = db
+        .prepare(
+          "SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND date LIKE ? AND hassan_commission IS NOT NULL"
+        )
+        .all(equipment.id, `${month}%`);
+
+      const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
+      for (const contractorLog of contractorLogs) {
+        const driverLog = driverByDate.get(contractorLog.date);
+        if (!driverLog) continue;
+        rows.push({
+          equipment_id: equipment.id,
+          equipment_name: equipment.name,
+          date: contractorLog.date,
+          source: "paired",
+          commission: computePairedCommission(equipment.name, driverLog, contractorLog),
+        });
+      }
+      for (const marketLog of marketLogs) {
+        rows.push({
+          equipment_id: equipment.id,
+          equipment_name: equipment.name,
+          date: marketLog.date,
+          source: "market",
+          commission: marketLog.hassan_commission ?? 0,
+        });
+      }
+    }
+
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    const total = rows.reduce((sum, r) => sum + r.commission, 0);
+    return { rows, total };
+  });
+
+  // --- Hassan: personal ledger (doc section 7) — separate from commission ---
+  ipcMain.handle("hassanLedger:list", (_e, { month }) =>
+    db.prepare("SELECT * FROM hassan_ledger WHERE date LIKE ? ORDER BY date DESC").all(`${month}%`)
+  );
+  ipcMain.handle("hassanLedger:create", (_e, entry) => {
+    const info = db
+      .prepare(
+        `INSERT INTO hassan_ledger (date, type, amount, party_name, description, note)
+         VALUES (@date, @type, @amount, @party_name, @description, @note)`
+      )
+      .run({
+        date: entry.date,
+        type: entry.type,
+        amount: entry.amount,
+        party_name: entry.party_name ?? null,
+        description: entry.description ?? null,
+        note: entry.note ?? null,
+      });
+    return db.prepare("SELECT * FROM hassan_ledger WHERE id = ?").get(info.lastInsertRowid);
+  });
+  ipcMain.handle("hassanLedger:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM hassan_ledger WHERE id = ?").run(id);
+    return { ok: true };
+  });
+  ipcMain.handle("hassanLedger:balance", () => {
+    const sums = db
+      .prepare("SELECT type, COALESCE(SUM(amount), 0) AS total FROM hassan_ledger GROUP BY type")
+      .all();
+    const byType = Object.fromEntries(sums.map((s) => [s.type, s.total]));
+    const netDebt = (byType.loan ?? 0) - (byType.repayment ?? 0);
+    const netDue = (byType.due ?? 0) - (byType.collection ?? 0);
+    return { netDebt, netDue };
   });
 }
 
