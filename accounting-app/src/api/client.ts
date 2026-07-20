@@ -1,5 +1,15 @@
 import { mockInvoke } from "./mockDb";
-import { Contractor, Driver, Equipment, ExpenseCategory, Partner } from "./types";
+import {
+  Contractor,
+  DailyLog,
+  DailyLogRole,
+  Driver,
+  Equipment,
+  EquipmentSummary,
+  ExpenseCategory,
+  MonthlyExpense,
+  Partner,
+} from "./types";
 
 declare global {
   interface Window {
@@ -41,4 +51,21 @@ export const equipmentApi = {
   create: (data: { name: string; shares: { partner_id: number; percentage: number }[] }): Promise<Equipment> =>
     invoke("equipment:create", data),
   remove: (id: number): Promise<void> => invoke("equipment:delete", { id }),
+  summary: (equipment_id: number, month: string): Promise<EquipmentSummary> =>
+    invoke("equipment:summary", { equipment_id, month }),
+};
+
+export const dailyLogsApi = {
+  list: (equipment_id: number, month: string, role: DailyLogRole): Promise<DailyLog[]> =>
+    invoke("dailyLogs:list", { equipment_id, month, role }),
+  create: (log: Omit<DailyLog, "id" | "day_value">): Promise<DailyLog> => invoke("dailyLogs:create", log),
+  remove: (id: number): Promise<void> => invoke("dailyLogs:delete", { id }),
+};
+
+export const monthlyExpensesApi = {
+  list: (equipment_id: number, month: string): Promise<MonthlyExpense[]> =>
+    invoke("monthlyExpenses:list", { equipment_id, month }),
+  create: (expense: Omit<MonthlyExpense, "id" | "category_name">): Promise<MonthlyExpense> =>
+    invoke("monthlyExpenses:create", expense),
+  remove: (id: number): Promise<void> => invoke("monthlyExpenses:delete", { id }),
 };

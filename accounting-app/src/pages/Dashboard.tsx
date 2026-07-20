@@ -21,14 +21,7 @@ import {
   totalPayables,
   totalReceivables,
 } from "../data/dashboardData";
-
-function formatEGP(value: number) {
-  const sign = value < 0 ? "-" : "";
-  // Western digits + bidi isolation (U+2066/U+2069): keeps the sign glued to
-  // the number instead of drifting across the RTL/LTR boundary.
-  const amount = `${sign}${Math.abs(value).toLocaleString("en-US")}`;
-  return `⁦${amount}⁩ ج.م`;
-}
+import { formatEGP } from "../utils/format";
 
 export default function Dashboard() {
   return (
