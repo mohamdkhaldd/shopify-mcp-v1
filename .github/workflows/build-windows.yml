@@ -1,0 +1,26 @@
+name: Build Windows Installer
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: accounting-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install
+
+      - run: npm run electron:build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: al-bunyan-accounting-windows-installer
+          path: accounting-app/release/*.exe

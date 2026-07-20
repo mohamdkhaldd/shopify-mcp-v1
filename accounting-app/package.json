@@ -33,15 +33,24 @@
     "vite": "^5.4.2",
     "wait-on": "^8.0.0"
   },
+  "author": "شركة البنيان لتأجير المعدات الثقيلة",
   "build": {
     "appId": "com.albunyan.accounting",
     "productName": "حسابات البنيان",
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "dist/**/*",
       "electron/**/*"
     ],
     "win": {
       "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
     }
   }
 }
