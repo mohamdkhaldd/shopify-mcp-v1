@@ -351,7 +351,10 @@ export default function DailyLogTable({
                       value={row.person_name}
                       onChange={(e) => handlePersonChange(date, e.target.value)}
                       onBlur={() => saveRow(date)}
-                      className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 bg-white"
+                      className={[
+                        "w-full rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 bg-white",
+                        row.is_paid_leave ? "no-print" : "",
+                      ].join(" ")}
                     >
                       <option value=""></option>
                       {people.map((p) => (
@@ -360,6 +363,7 @@ export default function DailyLogTable({
                         </option>
                       ))}
                     </select>
+                    {row.is_paid_leave && <span className="print-only">&nbsp;</span>}
                   </td>
                   {mode === "hours" ? (
                     <>
