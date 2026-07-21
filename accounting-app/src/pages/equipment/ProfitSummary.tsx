@@ -24,15 +24,15 @@ export default function ProfitSummary({ equipmentId, month, refreshKey }: Profit
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-card shadow-card p-5">
-          <div className="text-sm text-slate-500 font-semibold">دخل التشغيل (سركي + سركي سوق)</div>
+          <div className="text-sm text-slate-500 font-semibold">دخل التشغيل (سركي سوق)</div>
           <div className="mt-2 text-xl font-extrabold text-slate-900">{formatEGP(summary.income)}</div>
-          <div className="mt-1 text-xs text-slate-400">
-            سركي: {formatEGP(summary.driverIncome)} — سركي سوق: {formatEGP(summary.marketIncome)}
-          </div>
         </div>
         <div className="bg-white rounded-card shadow-card p-5">
           <div className="text-sm text-slate-500 font-semibold">إجمالي المصروفات</div>
           <div className="mt-2 text-xl font-extrabold text-rose-600">{formatEGP(summary.expenseTotal)}</div>
+          <div className="mt-1 text-xs text-slate-400">
+            مرتب السائق: {formatEGP(summary.driverSalaryExpense)} — مصروفات تانية: {formatEGP(summary.manualExpenseTotal)}
+          </div>
         </div>
         <div className="bg-white rounded-card shadow-card p-5">
           <div className="text-sm text-slate-500 font-semibold">صافي الربح</div>

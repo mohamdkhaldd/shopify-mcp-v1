@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { expenseCategoriesApi, monthlyExpensesApi } from "../../api/client";
+import { equipmentApi, expenseCategoriesApi, monthlyExpensesApi } from "../../api/client";
 import { ExpenseCategory, MonthlyExpense } from "../../api/types";
 import { formatEGP } from "../../utils/format";
 import { PAYMENT_METHODS, paymentMethodLabel } from "../../utils/paymentMethods";
@@ -13,16 +13,21 @@ interface ExpensesTableProps {
 export default function ExpensesTable({ equipmentId, month, onChanged }: ExpensesTableProps) {
   const [expenses, setExpenses] = useState<MonthlyExpense[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [driverSalaryExpense, setDriverSalaryExpense] = useState(0);
   const [loading, setLoading] = useState(true);
   const [categoryId, setCategoryId] = useState("");
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
 
   const refresh = () => monthlyExpensesApi.list(equipmentId, month).then(setExpenses);
+  const refreshDriverSalary = () =>
+    equipmentApi.summary(equipmentId, month).then((s) => setDriverSalaryExpense(s.driverSalaryExpense));
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([refresh(), expenseCategoriesApi.list().then(setCategories)]).finally(() => setLoading(false));
+    Promise.all([refresh(), refreshDriverSalary(), expenseCategoriesApi.list().then(setCategories)]).finally(() =>
+      setLoading(false)
+    );
   }, [equipmentId, month]);
 
   async function handleAdd(e: FormEvent) {
@@ -46,7 +51,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
     onChanged?.();
   }
 
-  const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const total = expenses.reduce((sum, e) => sum + e.amount, 0) + driverSalaryExpense;
 
   return (
     <div className="bg-white rounded-card shadow-card p-5">
@@ -100,7 +105,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
 
       {loading ? (
         <div className="text-sm text-slate-400">جاري التحميل...</div>
-      ) : expenses.length === 0 ? (
+      ) : expenses.length === 0 && driverSalaryExpense === 0 ? (
         <div className="text-sm text-slate-400">لسه مفيش مصروفات مسجلة لشهر {month}.</div>
       ) : (
         <div className="overflow-x-auto">
@@ -114,6 +119,17 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
               </tr>
             </thead>
             <tbody>
+              {driverSalaryExpense > 0 && (
+                <tr className="border-b border-slate-50 last:border-0 bg-slate-50/60">
+                  <td className="py-2 font-semibold text-slate-700">
+                    مرتب السائق
+                    <span className="text-xs text-slate-400 font-normal"> (تلقائي من شيت السركي)</span>
+                  </td>
+                  <td className="py-2 text-slate-600">{formatEGP(driverSalaryExpense)}</td>
+                  <td className="py-2 text-slate-400">—</td>
+                  <td className="py-2"></td>
+                </tr>
+              )}
               {expenses.map((exp) => (
                 <tr key={exp.id} className="border-b border-slate-50 last:border-0">
                   <td className="py-2 font-semibold text-slate-700">{exp.category_name ?? "—"}</td>

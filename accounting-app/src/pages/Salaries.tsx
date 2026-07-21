@@ -9,6 +9,19 @@ import { currentMonthKey, monthLabel } from "../utils/months";
 import { formatEGP } from "../utils/format";
 import { PAYMENT_METHODS, paymentMethodLabel } from "../utils/paymentMethods";
 
+// شيت المرتب بيتبعت للسائق كإيصال — عايزين "اشتغل على المعدة دي كذا يوم" مش
+// سرد كل يوم لوحده، فبنجمع أيام الشغل حسب المعدة بدل التفاصيل اليومية.
+function equipmentTotals(days: PayrollDetail["days"]): { equipment_name: string; days: number; value: number }[] {
+  const byEquipment = new Map<string, { days: number; value: number }>();
+  for (const d of days) {
+    const entry = byEquipment.get(d.equipment_name) ?? { days: 0, value: 0 };
+    entry.days += 1;
+    entry.value += d.day_value;
+    byEquipment.set(d.equipment_name, entry);
+  }
+  return [...byEquipment.entries()].map(([equipment_name, e]) => ({ equipment_name, ...e }));
+}
+
 function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: string; onChanged: () => void }) {
   const [detail, setDetail] = useState<PayrollDetail | null>(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -89,26 +102,24 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
 
           {row.wage_type === "daily" && (
             <div className="mb-4">
-              <div className="text-xs font-bold text-slate-500 mb-1.5">أيام العمل ({detail.days.length})</div>
+              <div className="text-xs font-bold text-slate-500 mb-1.5">الشغل حسب المعدة ({detail.days.length} يوم)</div>
               {detail.days.length === 0 ? (
                 <div className="text-xs text-slate-400">لسه ملوش أيام مسجلة الشهر ده.</div>
               ) : (
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-slate-400 border-b border-slate-100">
-                      <th className="text-start font-semibold py-1.5">التاريخ</th>
                       <th className="text-start font-semibold py-1.5">المعدة</th>
-                      <th className="text-start font-semibold py-1.5">الساعات</th>
+                      <th className="text-start font-semibold py-1.5">عدد الأيام</th>
                       <th className="text-start font-semibold py-1.5">القيمة</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {detail.days.map((d, i) => (
-                      <tr key={i} className="border-b border-slate-50 last:border-0">
-                        <td className="py-1.5 text-slate-600">{d.date}</td>
-                        <td className="py-1.5 text-slate-600">{d.equipment_name}</td>
-                        <td className="py-1.5 text-slate-500">{d.actual_hours ?? "—"}</td>
-                        <td className="py-1.5 font-semibold text-slate-700">{formatEGP(d.day_value)}</td>
+                    {equipmentTotals(detail.days).map((e) => (
+                      <tr key={e.equipment_name} className="border-b border-slate-50 last:border-0">
+                        <td className="py-1.5 text-slate-600">{e.equipment_name}</td>
+                        <td className="py-1.5 text-slate-500">{e.days}</td>
+                        <td className="py-1.5 font-semibold text-slate-700">{formatEGP(e.value)}</td>
                       </tr>
                     ))}
                   </tbody>

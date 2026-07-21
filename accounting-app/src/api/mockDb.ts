@@ -267,15 +267,20 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       .map((l) => ({ ...l, day_value: computeDayValue(l) }));
   }
   if (channel === "dailyLogs:upsert") {
+    // للسركي، المرتب سعر ثابت من الإعدادات دايمًا، مش أي رقم متبعت من الشاشة.
+    const resolvedPayload =
+      payload.role === "driver"
+        ? { ...payload, day_rate: state.employees.find((e) => e.name === payload.person_name)?.rate ?? 0 }
+        : payload;
     const existing = state.daily_logs.find(
-      (l) => l.equipment_id === payload.equipment_id && l.date === payload.date && l.role === payload.role
+      (l) => l.equipment_id === resolvedPayload.equipment_id && l.date === resolvedPayload.date && l.role === resolvedPayload.role
     );
     let record: DailyLogRow;
     if (existing) {
-      Object.assign(existing, payload);
+      Object.assign(existing, resolvedPayload);
       record = existing;
     } else {
-      record = { id: state.nextId++, ...payload };
+      record = { id: state.nextId++, ...resolvedPayload };
       state.daily_logs.push(record);
     }
     saveState(state);
@@ -285,17 +290,6 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     state.daily_logs = state.daily_logs.filter((l) => l.id !== payload.id);
     saveState(state);
     return { ok: true };
-  }
-
-  if (channel === "dailyLogs:marketForMonth") {
-    return state.daily_logs
-      .filter((l) => l.role === "market" && l.date.startsWith(payload.month))
-      .map((l) => ({
-        ...l,
-        equipment_name: state.equipment.find((e) => e.id === l.equipment_id)?.name ?? "—",
-        day_value: computeDayValue(l),
-      }))
-      .sort((a, b) => a.equipment_name.localeCompare(b.equipment_name) || a.date.localeCompare(b.date));
   }
 
   if (channel === "monthlyExpenses:list") {
@@ -322,20 +316,27 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { ok: true };
   }
 
+  // السركي دلوقتي مرتبه سعر ثابت من الإعدادات، مش دخل للمعدة — فبيتحسب
+  // كمصروف حقيقي على المعدة ("مرتب سائق") بدل ما يتحط في جانب الدخل.
+  // month=null يحسب كل الوقت (مستخدم في equipmentAllTimeProfit).
+  function driverSalaryForEquipment(equipmentId: number, month: string | null): number {
+    return state.daily_logs
+      .filter((l) => l.equipment_id === equipmentId && l.role === "driver" && (month === null || l.date.startsWith(month)))
+      .reduce((sum, l) => sum + computeDayValue(l), 0);
+  }
+
   if (channel === "equipment:summary") {
     const { equipment_id, month } = payload;
-    const driverLogs = state.daily_logs.filter(
-      (l) => l.equipment_id === equipment_id && l.role === "driver" && l.date.startsWith(month)
-    );
     const marketLogs = state.daily_logs.filter(
       (l) => l.equipment_id === equipment_id && l.role === "market" && l.date.startsWith(month)
     );
     const expenses = state.monthly_expenses.filter((e) => e.equipment_id === equipment_id && e.month === month);
 
-    const driverIncome = driverLogs.reduce((sum, l) => sum + computeDayValue(l), 0);
     const marketIncome = marketLogs.reduce((sum, l) => sum + computeDayValue(l), 0);
-    const income = driverIncome + marketIncome;
-    const expenseTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
+    const income = marketIncome;
+    const driverSalaryExpense = driverSalaryForEquipment(equipment_id, month);
+    const manualExpenseTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
+    const expenseTotal = manualExpenseTotal + driverSalaryExpense;
     const netProfit = income - expenseTotal;
 
     const equipment = state.equipment.find((e) => e.id === equipment_id);
@@ -346,7 +347,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       amount: (netProfit * s.percentage) / 100,
     }));
 
-    return { driverIncome, marketIncome, income, expenseTotal, netProfit, distribution };
+    return { marketIncome, income, driverSalaryExpense, manualExpenseTotal, expenseTotal, netProfit, distribution };
   }
 
   if (channel === "employeeAdvances:list") {
@@ -627,12 +628,13 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
 
   function equipmentAllTimeProfit(equipmentId: number): number {
     const income = state.daily_logs
-      .filter((l) => l.equipment_id === equipmentId && (l.role === "driver" || l.role === "market"))
+      .filter((l) => l.equipment_id === equipmentId && l.role === "market")
       .reduce((sum, l) => sum + computeDayValue(l), 0);
     const expense = state.monthly_expenses
       .filter((e) => e.equipment_id === equipmentId)
       .reduce((sum, e) => sum + e.amount, 0);
-    return income - expense;
+    const driverSalaryExpense = driverSalaryForEquipment(equipmentId, null);
+    return income - expense - driverSalaryExpense;
   }
 
   if (channel === "partners:updateOpeningBalance") {
@@ -672,16 +674,14 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
 
     const equipmentBreakdown = equipmentList.map((e) => {
       const share = e.shares.find((s) => s.partner_id === partner_id)!;
-      const driverIncome = state.daily_logs
-        .filter((l) => l.equipment_id === e.id && l.role === "driver" && l.date.startsWith(month))
-        .reduce((sum, l) => sum + computeDayValue(l), 0);
       const marketIncome = state.daily_logs
         .filter((l) => l.equipment_id === e.id && l.role === "market" && l.date.startsWith(month))
         .reduce((sum, l) => sum + computeDayValue(l), 0);
       const expense = state.monthly_expenses
         .filter((exp) => exp.equipment_id === e.id && exp.month === month)
         .reduce((sum, exp) => sum + exp.amount, 0);
-      const netProfit = driverIncome + marketIncome - expense;
+      const driverSalaryExpense = driverSalaryForEquipment(e.id, month);
+      const netProfit = marketIncome - expense - driverSalaryExpense;
       return { equipment_name: e.name, percentage: share.percentage, monthAmount: (netProfit * share.percentage) / 100 };
     });
 
@@ -837,11 +837,13 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     let totalExpense = 0;
     const equipmentRows = state.equipment.map((eq) => {
       const income = state.daily_logs
-        .filter((l) => l.equipment_id === eq.id && (l.role === "driver" || l.role === "market") && l.date.startsWith(month))
+        .filter((l) => l.equipment_id === eq.id && l.role === "market" && l.date.startsWith(month))
         .reduce((sum, l) => sum + computeDayValue(l), 0);
-      const expense = state.monthly_expenses
+      const manualExpense = state.monthly_expenses
         .filter((e) => e.equipment_id === eq.id && e.month === month)
         .reduce((sum, e) => sum + e.amount, 0);
+      const driverSalaryExpense = driverSalaryForEquipment(eq.id, month);
+      const expense = manualExpense + driverSalaryExpense;
       totalIncome += income;
       totalExpense += expense;
       return { equipment_name: eq.name, income, expense, netProfit: income - expense };

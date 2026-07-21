@@ -12,6 +12,18 @@ function computeDayValue(log) {
   return dayRate + overtimeHours * hourlyRate;
 }
 
+// السركي (driver) دلوقتي مرتبه سعر ثابت من الإعدادات، مش دخل للمعدة — فبيتحسب
+// كمصروف حقيقي على المعدة ("مرتب سائق") بدل ما يتحط في جانب الدخل. month=null
+// يحسب كل الوقت (مستخدم في equipmentAllTimeProfit لحساب الشركاء).
+function driverSalaryForEquipment(db, equipmentId, month) {
+  const logs = month
+    ? db
+        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
+        .all(equipmentId, `${month}%`)
+    : db.prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver'").all(equipmentId);
+  return logs.reduce((sum, l) => sum + computeDayValue(l), 0);
+}
+
 function registerIpcHandlers(db) {
   // --- Partners ---
   ipcMain.handle("partners:list", () => db.prepare("SELECT * FROM partners ORDER BY name").all());
@@ -120,6 +132,13 @@ function registerIpcHandlers(db) {
   // day of the month" layout, so saving a day's cells overwrites that day's
   // row instead of appending a new one.
   ipcMain.handle("dailyLogs:upsert", (_e, log) => {
+    // للسركي، المرتب سعر ثابت من الإعدادات دايمًا — الباك إند هو اللي بيحدده،
+    // مش أي رقم متبعت من الشاشة، عشان يفضل مطابق لسعر السائق مهما حصل.
+    let dayRate = log.day_rate ?? null;
+    if (log.role === "driver") {
+      const employee = db.prepare("SELECT rate FROM employees WHERE name = ?").get(log.person_name);
+      dayRate = employee?.rate ?? 0;
+    }
     const params = {
       equipment_id: log.equipment_id,
       date: log.date,
@@ -127,7 +146,7 @@ function registerIpcHandlers(db) {
       person_name: log.person_name,
       actual_hours: log.actual_hours ?? null,
       base_hours: log.base_hours ?? null,
-      day_rate: log.day_rate ?? null,
+      day_rate: dayRate,
       fixed_value: log.fixed_value ?? null,
       hassan_commission: log.hassan_commission ?? null,
     };
@@ -151,21 +170,6 @@ function registerIpcHandlers(db) {
   ipcMain.handle("dailyLogs:delete", (_e, { id }) => {
     db.prepare("DELETE FROM daily_logs WHERE id = ?").run(id);
     return { ok: true };
-  });
-
-  // Every سركي سوق (market) row across all equipment for one month — lets
-  // Hassan enter his commission from a dedicated screen instead of the
-  // equipment's daily-log sheet, which gets printed and sent to partners.
-  ipcMain.handle("dailyLogs:marketForMonth", (_e, { month }) => {
-    const rows = db
-      .prepare(
-        `SELECT dl.*, e.name AS equipment_name FROM daily_logs dl
-         JOIN equipment e ON e.id = dl.equipment_id
-         WHERE dl.role = 'market' AND dl.date LIKE ?
-         ORDER BY e.name, dl.date`
-      )
-      .all(`${month}%`);
-    return rows.map((row) => ({ ...row, day_value: computeDayValue(row) }));
   });
 
   // --- Monthly expenses ---
@@ -201,9 +205,6 @@ function registerIpcHandlers(db) {
 
   // --- Profit summary + partner distribution for one equipment/month ---
   ipcMain.handle("equipment:summary", (_e, { equipment_id, month }) => {
-    const driverLogs = db
-      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
-      .all(equipment_id, `${month}%`);
     const marketLogs = db
       .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND date LIKE ?")
       .all(equipment_id, `${month}%`);
@@ -211,10 +212,11 @@ function registerIpcHandlers(db) {
       .prepare("SELECT * FROM monthly_expenses WHERE equipment_id = ? AND month = ?")
       .all(equipment_id, month);
 
-    const driverIncome = driverLogs.reduce((sum, l) => sum + computeDayValue(l), 0);
     const marketIncome = marketLogs.reduce((sum, l) => sum + computeDayValue(l), 0);
-    const income = driverIncome + marketIncome;
-    const expenseTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
+    const income = marketIncome;
+    const driverSalaryExpense = driverSalaryForEquipment(db, equipment_id, month);
+    const manualExpenseTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
+    const expenseTotal = manualExpenseTotal + driverSalaryExpense;
     const netProfit = income - expenseTotal;
 
     const shares = db
@@ -232,7 +234,7 @@ function registerIpcHandlers(db) {
       amount: (netProfit * s.percentage) / 100,
     }));
 
-    return { driverIncome, marketIncome, income, expenseTotal, netProfit, distribution };
+    return { marketIncome, income, driverSalaryExpense, manualExpenseTotal, expenseTotal, netProfit, distribution };
   });
 
   // --- Employee advances (سلف) ---
@@ -561,13 +563,14 @@ function registerIpcHandlers(db) {
   // same idea as the contractors' remaining balance.
   function equipmentAllTimeProfit(equipmentId) {
     const income = db
-      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role IN ('driver', 'market')")
+      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market'")
       .all(equipmentId)
       .reduce((sum, l) => sum + computeDayValue(l), 0);
     const expense = db
       .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM monthly_expenses WHERE equipment_id = ?")
       .get(equipmentId).total;
-    return income - expense;
+    const driverSalaryExpense = driverSalaryForEquipment(db, equipmentId, null);
+    return income - expense - driverSalaryExpense;
   }
 
   ipcMain.handle("partners:summary", () => {
@@ -609,10 +612,6 @@ function registerIpcHandlers(db) {
       .all(partner_id);
 
     const equipmentBreakdown = shares.map((s) => {
-      const driverIncome = db
-        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
-        .all(s.equipment_id, `${month}%`)
-        .reduce((sum, l) => sum + computeDayValue(l), 0);
       const marketIncome = db
         .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND date LIKE ?")
         .all(s.equipment_id, `${month}%`)
@@ -620,7 +619,8 @@ function registerIpcHandlers(db) {
       const expense = db
         .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM monthly_expenses WHERE equipment_id = ? AND month = ?")
         .get(s.equipment_id, month).total;
-      const netProfit = driverIncome + marketIncome - expense;
+      const driverSalaryExpense = driverSalaryForEquipment(db, s.equipment_id, month);
+      const netProfit = marketIncome - expense - driverSalaryExpense;
       return {
         equipment_name: s.equipment_name,
         percentage: s.percentage,
@@ -779,12 +779,14 @@ function registerIpcHandlers(db) {
     let totalExpense = 0;
     const equipmentRows = equipmentList.map((eq) => {
       const income = db
-        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role IN ('driver','market') AND date LIKE ?")
+        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND date LIKE ?")
         .all(eq.id, `${month}%`)
         .reduce((sum, l) => sum + computeDayValue(l), 0);
-      const expense = db
+      const manualExpense = db
         .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM monthly_expenses WHERE equipment_id = ? AND month = ?")
         .get(eq.id, month).total;
+      const driverSalaryExpense = driverSalaryForEquipment(db, eq.id, month);
+      const expense = manualExpense + driverSalaryExpense;
       totalIncome += income;
       totalExpense += expense;
       return { equipment_name: eq.name, income, expense, netProfit: income - expense };
