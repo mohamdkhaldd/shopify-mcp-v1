@@ -15,6 +15,7 @@ interface DailyLogRow {
   actual_hours: number | null;
   base_hours: number | null;
   day_rate: number | null;
+  is_paid_leave: boolean;
   fixed_value: number | null;
   hassan_commission: number | null;
 }
@@ -117,6 +118,7 @@ const ACCOUNT_NAME_AR: Record<string, string> = { wallet: "محفظة", instapay
 
 function computeDayValue(log: DailyLogRow): number {
   if (log.role === "market") return (log.fixed_value ?? 0) - (log.hassan_commission ?? 0);
+  if (log.is_paid_leave) return 0;
   const dayRate = log.day_rate ?? 0;
   const hourlyRate = dayRate / 8;
   const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - (log.base_hours ?? 0));
@@ -125,24 +127,23 @@ function computeDayValue(log: DailyLogRow): number {
 
 // مرتب السائق مبني على سعره الثابت المسجل في الإعدادات، مش على أي رقم متكتب
 // في شيت السركي (ده بقى بيمثل قد إيه المعدة اشتغلت بيه، رقم مختلف تمامًا).
+// بيتطبق على أصحاب الأجر اليومي بس — بيتحسب من الأيام المسجلة فعليًا فقط.
 function computeDriverWageValue(log: DailyLogRow, employeeRate: number): number {
+  if (log.is_paid_leave) return 0;
   const hourlyRate = employeeRate / 8;
   const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - (log.base_hours ?? 0));
   return employeeRate + overtimeHours * hourlyRate;
 }
 
-// أيام الجمعة إجازة أسبوعية مدفوعة لأصحاب الأجر اليومي، حتى لو مفيش سجل ليها
-// في شيت السركي — بتتحسب كيوم عادي بسعر السائق الثابت.
-function fridaysInMonth(monthKey: string): string[] {
+function daysInMonthList(monthKey: string): string[] {
   const [year, month] = monthKey.split("-").map(Number);
   const daysCount = new Date(year, month, 0).getDate();
-  const fridays: string[] = [];
-  for (let day = 1; day <= daysCount; day++) {
-    if (new Date(year, month - 1, day).getDay() === 5) {
-      fridays.push(`${monthKey}-${String(day).padStart(2, "0")}`);
-    }
-  }
-  return fridays;
+  return Array.from({ length: daysCount }, (_, i) => `${monthKey}-${String(i + 1).padStart(2, "0")}`);
+}
+
+function isFriday(dateStr: string): boolean {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).getDay() === 5;
 }
 
 const WINCH_PERCENTAGE_EQUIPMENT = ["ونش 5 طن دبوسة", "ونش 3 وصلة"];
@@ -335,13 +336,31 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
 
   // مرتب السائق بيتحط كمصروف حقيقي على المعدة ("مرتب سائق") محسوب من سعره
   // الثابت في الإعدادات. month=null يحسب كل الوقت (مستخدم في equipmentAllTimeProfit).
+  // بيشمل بس أصحاب الأجر اليومي — الشهري بيتحسب كتكلفة شركة عامة في المرتبات.
   function driverSalaryForEquipment(equipmentId: number, month: string | null): number {
     return state.daily_logs
       .filter((l) => l.equipment_id === equipmentId && l.role === "driver" && (month === null || l.date.startsWith(month)))
       .reduce((sum, l) => {
         const employee = state.employees.find((e) => e.name === l.person_name);
-        return sum + computeDriverWageValue(l, employee?.rate ?? 0);
+        if (!employee || employee.wage_type !== "daily") return sum;
+        return sum + computeDriverWageValue(l, employee.rate);
       }, 0);
+  }
+
+  // موظف بمرتب شهري: مرتبه بيتقسم على عدد أيام الشهر، وأي يوم مفيش له حضور
+  // ولا إجازة مدفوعة مُعلّمة بيتخصم من مرتبه — ما عدا الجمعة، دايمًا مدفوعة.
+  function monthlyEmployeeGrossPay(emp: { name: string; rate: number }, month: string) {
+    const days = daysInMonthList(month);
+    const dailyRate = emp.rate / days.length;
+    const logs = state.daily_logs.filter((l) => l.role === "driver" && l.person_name === emp.name && l.date.startsWith(month));
+    const accountedDates = new Set(logs.map((l) => l.date));
+    let deductedDays = 0;
+    for (const date of days) {
+      if (isFriday(date)) continue;
+      if (accountedDates.has(date)) continue;
+      deductedDays++;
+    }
+    return { grossPay: emp.rate - deductedDays * dailyRate, deductedDays, dailyRate };
   }
 
   if (channel === "equipment:summary") {
@@ -414,25 +433,24 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
           .reduce((sum, a) => sum + a.amount, 0);
 
         if (emp.wage_type === "monthly") {
+          const { grossPay, deductedDays } = monthlyEmployeeGrossPay(emp, month);
           return {
             id: emp.id,
             name: emp.name,
             wage_type: emp.wage_type,
             rate: emp.rate,
             days_worked: null,
-            gross_pay: emp.rate,
+            deducted_days: deductedDays,
+            gross_pay: grossPay,
             advances_total: advancesTotal,
-            net_pay: emp.rate - advancesTotal,
+            net_pay: grossPay - advancesTotal,
           };
         }
 
         const logs = state.daily_logs.filter(
           (l) => l.role === "driver" && l.person_name === emp.name && l.date.startsWith(month)
         );
-        const loggedPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
-        const workedDates = new Set(logs.map((l) => l.date));
-        const paidFridays = fridaysInMonth(month).filter((f) => !workedDates.has(f));
-        const grossPay = loggedPay + paidFridays.length * emp.rate;
+        const grossPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
         return {
           id: emp.id,
           name: emp.name,
@@ -455,13 +473,35 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     const advancesTotal = advances.reduce((sum, a) => sum + a.amount, 0);
 
     if (employee.wage_type === "monthly") {
-      return { employee, days: [], advances, grossPay: employee.rate, advancesTotal, netPay: employee.rate - advancesTotal };
+      const { grossPay, deductedDays, dailyRate } = monthlyEmployeeGrossPay(employee, month);
+      const logs = state.daily_logs
+        .filter((l) => l.role === "driver" && l.person_name === employee.name && l.date.startsWith(month))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const days = logs.map((l) => ({
+        date: l.date,
+        equipment_name: l.is_paid_leave ? "إجازة مدفوعة" : state.equipment.find((e) => e.id === l.equipment_id)?.name ?? "—",
+        actual_hours: l.actual_hours,
+        base_hours: l.base_hours,
+        day_rate: null as number | null,
+        day_value: 0,
+      }));
+      return {
+        employee,
+        days,
+        advances,
+        grossPay,
+        advancesTotal,
+        netPay: grossPay - advancesTotal,
+        deductedDays,
+        deductionAmount: deductedDays * dailyRate,
+        dailyRate,
+      };
     }
 
     const logs = state.daily_logs
       .filter((l) => l.role === "driver" && l.person_name === employee.name && l.date.startsWith(month))
       .sort((a, b) => a.date.localeCompare(b.date));
-    const loggedDays = logs.map((l) => ({
+    const days = logs.map((l) => ({
       date: l.date,
       equipment_name: state.equipment.find((e) => e.id === l.equipment_id)?.name ?? "—",
       actual_hours: l.actual_hours,
@@ -469,18 +509,6 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       day_rate: employee.rate,
       day_value: computeDriverWageValue(l, employee.rate),
     }));
-    const workedDates = new Set(logs.map((l) => l.date));
-    const fridayDays = fridaysInMonth(month)
-      .filter((f) => !workedDates.has(f))
-      .map((date) => ({
-        date,
-        equipment_name: "إجازة يوم الجمعة",
-        actual_hours: null as number | null,
-        base_hours: null as number | null,
-        day_rate: employee.rate,
-        day_value: employee.rate,
-      }));
-    const days = [...loggedDays, ...fridayDays].sort((a, b) => a.date.localeCompare(b.date));
     const grossPay = days.reduce((sum, d) => sum + d.day_value, 0);
 
     return { employee, days, advances, grossPay, advancesTotal, netPay: grossPay - advancesTotal };
@@ -905,15 +933,12 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
         .filter((a) => a.employee_id === emp.id && a.date.startsWith(month))
         .reduce((sum, a) => sum + a.amount, 0);
       if (emp.wage_type === "monthly") {
-        payrollTotal += emp.rate - advances;
+        const { grossPay } = monthlyEmployeeGrossPay(emp, month);
+        payrollTotal += grossPay - advances;
       } else {
-        const logs = state.daily_logs.filter(
-          (l) => l.role === "driver" && l.person_name === emp.name && l.date.startsWith(month)
-        );
-        const loggedPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
-        const workedDates = new Set(logs.map((l) => l.date));
-        const paidFridays = fridaysInMonth(month).filter((f) => !workedDates.has(f));
-        const gross = loggedPay + paidFridays.length * emp.rate;
+        const gross = state.daily_logs
+          .filter((l) => l.role === "driver" && l.person_name === emp.name && l.date.startsWith(month))
+          .reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
         payrollTotal += gross - advances;
       }
     }

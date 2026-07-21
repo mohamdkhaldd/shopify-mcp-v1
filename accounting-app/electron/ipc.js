@@ -6,6 +6,7 @@ const { ipcMain } = require("electron");
 // hours at all — the day value is just whatever fixed amount was entered.
 function computeDayValue(log) {
   if (log.role === "market") return (log.fixed_value ?? 0) - (log.hassan_commission ?? 0);
+  if (log.is_paid_leave) return 0;
   const dayRate = log.day_rate ?? 0;
   const hourlyRate = dayRate / 8;
   const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - (log.base_hours ?? 0));
@@ -14,28 +15,49 @@ function computeDayValue(log) {
 
 // مرتب السائق مبني على سعره الثابت المسجل في الإعدادات، مش على أي رقم متكتب
 // في شيت السركي (ده بقى بيمثل قد إيه المعدة اشتغلت بيه، رقم مختلف تمامًا).
+// بيتطبق على أصحاب الأجر اليومي بس — مفيش أوفر تايم ولا إجازة جمعة تلقائية،
+// بيتحسب بس من الأيام المسجلة فعليًا.
 function computeDriverWageValue(log, employeeRate) {
+  if (log.is_paid_leave) return 0;
   const hourlyRate = employeeRate / 8;
   const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - (log.base_hours ?? 0));
   return employeeRate + overtimeHours * hourlyRate;
 }
 
-// أيام الجمعة إجازة أسبوعية مدفوعة لأصحاب الأجر اليومي، حتى لو مفيش سجل ليها
-// في شيت السركي — بتتحسب كيوم عادي بسعر السائق الثابت.
-function fridaysInMonth(monthKey) {
+function daysInMonthList(monthKey) {
   const [year, month] = monthKey.split("-").map(Number);
   const daysCount = new Date(year, month, 0).getDate();
-  const fridays = [];
-  for (let day = 1; day <= daysCount; day++) {
-    if (new Date(year, month - 1, day).getDay() === 5) {
-      fridays.push(`${monthKey}-${String(day).padStart(2, "0")}`);
-    }
+  return Array.from({ length: daysCount }, (_, i) => `${monthKey}-${String(i + 1).padStart(2, "0")}`);
+}
+
+function isFriday(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).getDay() === 5;
+}
+
+// موظف بمرتب شهري: مرتبه بيتقسم على عدد أيام الشهر، وأي يوم مفيش له حضور
+// (سجل عادي) ولا إجازة مدفوعة مُعلّمة بيتخصم من مرتبه — ما عدا الجمعة، اللي
+// دايمًا بتتحسب كيوم عمل حتى لو مفيش سجل ليها خالص.
+function monthlyEmployeeGrossPay(db, emp, month) {
+  const days = daysInMonthList(month);
+  const dailyRate = emp.rate / days.length;
+  const logs = db
+    .prepare("SELECT * FROM daily_logs WHERE role = 'driver' AND person_name = ? AND date LIKE ?")
+    .all(emp.name, `${month}%`);
+  const accountedDates = new Set(logs.map((l) => l.date));
+  let deductedDays = 0;
+  for (const date of days) {
+    if (isFriday(date)) continue;
+    if (accountedDates.has(date)) continue;
+    deductedDays++;
   }
-  return fridays;
+  return { grossPay: emp.rate - deductedDays * dailyRate, deductedDays, dailyRate, logs };
 }
 
 // مرتب السائق بيتحط كمصروف حقيقي على المعدة ("مرتب سائق") بدل الاعتماد على
 // دخل السركي المكتوب. month=null يحسب كل الوقت (مستخدم في equipmentAllTimeProfit).
+// بيشمل بس أصحاب الأجر اليومي — الشهري مرتبه مش مقسوم على المعدات، بيتحسب
+// كتكلفة شركة عامة في شيت المرتبات لوحده.
 function driverSalaryForEquipment(db, equipmentId, month) {
   const logs = month
     ? db
@@ -43,8 +65,9 @@ function driverSalaryForEquipment(db, equipmentId, month) {
         .all(equipmentId, `${month}%`)
     : db.prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver'").all(equipmentId);
   return logs.reduce((sum, l) => {
-    const employee = db.prepare("SELECT rate FROM employees WHERE name = ?").get(l.person_name);
-    return sum + computeDriverWageValue(l, employee?.rate ?? 0);
+    const employee = db.prepare("SELECT * FROM employees WHERE name = ?").get(l.person_name);
+    if (!employee || employee.wage_type !== "daily") return sum;
+    return sum + computeDriverWageValue(l, employee.rate);
   }, 0);
 }
 
@@ -187,17 +210,19 @@ function registerIpcHandlers(db) {
       actual_hours: log.actual_hours ?? null,
       base_hours: log.base_hours ?? null,
       day_rate: log.day_rate ?? null,
+      is_paid_leave: log.is_paid_leave ? 1 : 0,
       fixed_value: log.fixed_value ?? null,
       hassan_commission: log.hassan_commission ?? null,
     };
     db.prepare(
-      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, fixed_value, hassan_commission)
-       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @fixed_value, @hassan_commission)
+      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, fixed_value, hassan_commission)
+       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @fixed_value, @hassan_commission)
        ON CONFLICT(equipment_id, date, role) DO UPDATE SET
          person_name = excluded.person_name,
          actual_hours = excluded.actual_hours,
          base_hours = excluded.base_hours,
          day_rate = excluded.day_rate,
+         is_paid_leave = excluded.is_paid_leave,
          fixed_value = excluded.fixed_value,
          hassan_commission = excluded.hassan_commission`
     ).run(params);
@@ -325,23 +350,21 @@ function registerIpcHandlers(db) {
     return employees.map((emp) => {
       const advancesTotal = advancesStmt.get(emp.id, `${month}%`).total;
       if (emp.wage_type === "monthly") {
-        const grossPay = emp.rate;
+        const { grossPay, deductedDays } = monthlyEmployeeGrossPay(db, emp, month);
         return {
           id: emp.id,
           name: emp.name,
           wage_type: emp.wage_type,
           rate: emp.rate,
           days_worked: null,
+          deducted_days: deductedDays,
           gross_pay: grossPay,
           advances_total: advancesTotal,
           net_pay: grossPay - advancesTotal,
         };
       }
       const logs = driverLogsStmt.all(emp.name, `${month}%`);
-      const loggedPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
-      const workedDates = new Set(logs.map((l) => l.date));
-      const paidFridays = fridaysInMonth(month).filter((f) => !workedDates.has(f));
-      const grossPay = loggedPay + paidFridays.length * emp.rate;
+      const grossPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
       return {
         id: emp.id,
         name: emp.name,
@@ -366,13 +389,33 @@ function registerIpcHandlers(db) {
     const advancesTotal = advances.reduce((sum, a) => sum + a.amount, 0);
 
     if (employee.wage_type === "monthly") {
+      const { grossPay, deductedDays, dailyRate } = monthlyEmployeeGrossPay(db, employee, month);
+      const logsWithEquipment = db
+        .prepare(
+          `SELECT dl.*, e.name AS equipment_name FROM daily_logs dl
+           JOIN equipment e ON e.id = dl.equipment_id
+           WHERE dl.role = 'driver' AND dl.person_name = ? AND dl.date LIKE ?
+           ORDER BY dl.date`
+        )
+        .all(employee.name, `${month}%`);
+      const days = logsWithEquipment.map((l) => ({
+        date: l.date,
+        equipment_name: l.is_paid_leave ? "إجازة مدفوعة" : l.equipment_name,
+        actual_hours: l.actual_hours,
+        base_hours: l.base_hours,
+        day_rate: null,
+        day_value: 0,
+      }));
       return {
         employee,
-        days: [],
+        days,
         advances,
-        grossPay: employee.rate,
+        grossPay,
         advancesTotal,
-        netPay: employee.rate - advancesTotal,
+        netPay: grossPay - advancesTotal,
+        deductedDays,
+        deductionAmount: deductedDays * dailyRate,
+        dailyRate,
       };
     }
 
@@ -384,7 +427,7 @@ function registerIpcHandlers(db) {
          ORDER BY dl.date`
       )
       .all(employee.name, `${month}%`);
-    const loggedDays = logs.map((l) => ({
+    const days = logs.map((l) => ({
       date: l.date,
       equipment_name: l.equipment_name,
       actual_hours: l.actual_hours,
@@ -392,18 +435,6 @@ function registerIpcHandlers(db) {
       day_rate: employee.rate,
       day_value: computeDriverWageValue(l, employee.rate),
     }));
-    const workedDates = new Set(logs.map((l) => l.date));
-    const fridayDays = fridaysInMonth(month)
-      .filter((f) => !workedDates.has(f))
-      .map((date) => ({
-        date,
-        equipment_name: "إجازة يوم الجمعة",
-        actual_hours: null,
-        base_hours: null,
-        day_rate: employee.rate,
-        day_value: employee.rate,
-      }));
-    const days = [...loggedDays, ...fridayDays].sort((a, b) => a.date.localeCompare(b.date));
     const grossPay = days.reduce((sum, d) => sum + d.day_value, 0);
 
     return { employee, days, advances, grossPay, advancesTotal, netPay: grossPay - advancesTotal };
@@ -871,15 +902,13 @@ function registerIpcHandlers(db) {
         .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_advances WHERE employee_id = ? AND date LIKE ?")
         .get(emp.id, `${month}%`).total;
       if (emp.wage_type === "monthly") {
-        payrollTotal += emp.rate - advances;
+        const { grossPay } = monthlyEmployeeGrossPay(db, emp, month);
+        payrollTotal += grossPay - advances;
       } else {
-        const logs = db
+        const gross = db
           .prepare("SELECT * FROM daily_logs WHERE role = 'driver' AND person_name = ? AND date LIKE ?")
-          .all(emp.name, `${month}%`);
-        const loggedPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
-        const workedDates = new Set(logs.map((l) => l.date));
-        const paidFridays = fridaysInMonth(month).filter((f) => !workedDates.has(f));
-        const gross = loggedPay + paidFridays.length * emp.rate;
+          .all(emp.name, `${month}%`)
+          .reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
         payrollTotal += gross - advances;
       }
     }

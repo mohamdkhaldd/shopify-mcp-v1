@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS daily_logs (
   actual_hours REAL,
   base_hours REAL,
   day_rate REAL,
+  is_paid_leave INTEGER NOT NULL DEFAULT 0,
   fixed_value REAL,
   hassan_commission REAL,
   UNIQUE (equipment_id, date, role)
@@ -235,6 +236,14 @@ function initDatabase() {
     if (!hasColumn) {
       db.exec(`ALTER TABLE ${table} ADD COLUMN opening_balance REAL NOT NULL DEFAULT 0`);
     }
+  }
+
+  const dailyLogsHasPaidLeave = db
+    .prepare("PRAGMA table_info(daily_logs)")
+    .all()
+    .some((col) => col.name === "is_paid_leave");
+  if (!dailyLogsHasPaidLeave) {
+    db.exec("ALTER TABLE daily_logs ADD COLUMN is_paid_leave INTEGER NOT NULL DEFAULT 0");
   }
 
   const accountCount = db.prepare("SELECT COUNT(*) AS c FROM treasury_accounts").get().c;

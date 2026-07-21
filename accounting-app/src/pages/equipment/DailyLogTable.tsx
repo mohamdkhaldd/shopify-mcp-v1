@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { dailyLogsApi } from "../../api/client";
-import { DailyLog, DailyLogRole } from "../../api/types";
+import { DailyLog, DailyLogRole, WageType } from "../../api/types";
 import { daysInMonth, weekdayLabel } from "../../utils/months";
 import { formatEGP } from "../../utils/format";
 
@@ -8,6 +8,7 @@ interface Person {
   id: number;
   name: string;
   rate?: number;
+  wage_type?: WageType;
 }
 
 interface DailyLogTableProps {
@@ -26,6 +27,7 @@ interface RowDraft {
   actual_hours: string;
   base_hours: string;
   day_rate: string;
+  is_paid_leave: boolean;
   fixed_value: string;
   hassan_commission: string;
   day_value: number;
@@ -39,6 +41,7 @@ function emptyRow(): RowDraft {
     actual_hours: "",
     base_hours: "8",
     day_rate: "",
+    is_paid_leave: false,
     fixed_value: "",
     hassan_commission: "",
     day_value: 0,
@@ -95,11 +98,16 @@ export default function DailyLogTable({
       actual_hours: log.actual_hours?.toString() ?? "",
       base_hours: log.base_hours?.toString() ?? "8",
       day_rate: log.day_rate?.toString() ?? "",
+      is_paid_leave: log.is_paid_leave ?? false,
       fixed_value: log.fixed_value?.toString() ?? "",
       hassan_commission: log.hassan_commission?.toString() ?? "",
       day_value: log.day_value,
       saving: false,
     };
+  }
+
+  function isMonthlyPerson(name: string): boolean {
+    return people.find((p) => p.name === name)?.wage_type === "monthly";
   }
 
   function updateRow(date: string, patch: Partial<RowDraft>) {
@@ -109,15 +117,21 @@ export default function DailyLogTable({
   function handlePersonChange(date: string, name: string) {
     const match = people.find((p) => p.name === name);
     const patch: Partial<RowDraft> = { person_name: name };
-    if (match?.rate && mode === "hours") patch.day_rate = String(match.rate);
+    // سعر اليوم هنا معناه دخل المعدة، مش مرتب الشخص — نقترحه بس من سعر السائق
+    // اليومي، لأن مرتب الموظف الشهري رقم شهري ومالوش علاقة بقيمة يوم شغل المعدة.
+    if (match?.rate && match.wage_type !== "monthly" && mode === "hours") patch.day_rate = String(match.rate);
+    if (match?.wage_type !== "monthly") patch.is_paid_leave = false;
     updateRow(date, patch);
   }
 
-  async function saveRow(date: string) {
-    const row = rows[date];
+  async function saveRow(date: string, override?: Partial<RowDraft>) {
+    const row = { ...(rows[date] ?? emptyRow()), ...override };
     if (!row) return;
 
-    const hasContent = mode === "hours" ? row.person_name && row.day_rate : row.person_name && row.fixed_value;
+    const hasContent =
+      mode === "hours"
+        ? row.person_name && (row.day_rate || row.is_paid_leave)
+        : row.person_name && row.fixed_value;
 
     if (!hasContent) {
       if (row.id) {
@@ -134,9 +148,10 @@ export default function DailyLogTable({
       date,
       role,
       person_name: row.person_name,
-      actual_hours: mode === "hours" ? Number(row.actual_hours) || 0 : null,
-      base_hours: mode === "hours" ? Number(row.base_hours) || 0 : null,
+      actual_hours: mode === "hours" && !row.is_paid_leave ? Number(row.actual_hours) || 0 : null,
+      base_hours: mode === "hours" && !row.is_paid_leave ? Number(row.base_hours) || 0 : null,
       day_rate: mode === "hours" ? Number(row.day_rate) || 0 : null,
+      is_paid_leave: row.is_paid_leave,
       fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
       hassan_commission: mode === "fixed" && row.hassan_commission ? Number(row.hassan_commission) : null,
     });
@@ -144,10 +159,15 @@ export default function DailyLogTable({
     onChanged?.();
   }
 
+  function toggleLeave(date: string, checked: boolean) {
+    updateRow(date, { is_paid_leave: checked });
+    saveRow(date, { is_paid_leave: checked });
+  }
+
   function handleBulkPersonChange(name: string) {
     setBulkPerson(name);
     const match = people.find((p) => p.name === name);
-    if (match?.rate) setBulkRate(String(match.rate));
+    if (match?.rate && match.wage_type !== "monthly") setBulkRate(String(match.rate));
   }
 
   // Fills a whole date range with the same name/rate/base-hours in one go —
@@ -173,6 +193,7 @@ export default function DailyLogTable({
         actual_hours: Number(bulkBaseHours) || 0,
         base_hours: Number(bulkBaseHours) || 0,
         day_rate: Number(bulkRate) || 0,
+        is_paid_leave: false,
         fixed_value: null,
         hassan_commission: null,
       });
@@ -284,6 +305,11 @@ export default function DailyLogTable({
                   <th className="text-start font-semibold py-2">الساعات الفعلية</th>
                   <th className="text-start font-semibold py-2">الساعات الأساسية</th>
                   <th className="text-start font-semibold py-2">اليومية</th>
+                  {role === "driver" && (
+                    <th className="text-start font-semibold py-2 whitespace-nowrap">
+                      <span className="no-print">إجازة مدفوعة</span>
+                    </th>
+                  )}
                 </>
               ) : (
                 // القيمة والكوميشن قبل الخصم يفضلوا مخفيين وقت الطباعة — الشيت
@@ -366,9 +392,23 @@ export default function DailyLogTable({
                           value={row.day_rate}
                           onChange={(e) => updateRow(date, { day_rate: e.target.value })}
                           onBlur={() => saveRow(date)}
-                          className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          disabled={row.is_paid_leave}
+                          className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       </td>
+                      {role === "driver" && (
+                        <td className="no-print py-1.5 text-center">
+                          {isMonthlyPerson(row.person_name) && (
+                            <input
+                              type="checkbox"
+                              checked={row.is_paid_leave}
+                              onChange={(e) => toggleLeave(date, e.target.checked)}
+                              className="w-4 h-4 accent-primary"
+                              title="إجازة مدفوعة — مش هيتخصم من مرتبه الشهري"
+                            />
+                          )}
+                        </td>
+                      )}
                     </>
                   ) : (
                     <>
@@ -403,7 +443,10 @@ export default function DailyLogTable({
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={mode === "hours" ? 5 : 4} className="pt-3 text-sm font-bold text-slate-700">
+              <td
+                colSpan={mode === "hours" ? (role === "driver" ? 6 : 5) : 4}
+                className="pt-3 text-sm font-bold text-slate-700"
+              >
                 إجمالي الشهر
               </td>
               <td className="pt-3 text-sm font-bold text-primary-dark whitespace-nowrap">{formatEGP(monthTotal)}</td>

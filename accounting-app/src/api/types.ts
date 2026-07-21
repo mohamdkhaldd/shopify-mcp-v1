@@ -46,6 +46,7 @@ export interface DailyLog {
   actual_hours: number | null;
   base_hours: number | null;
   day_rate: number | null;
+  is_paid_leave: boolean;
   fixed_value: number | null;
   hassan_commission: number | null;
   day_value: number;
@@ -96,6 +97,7 @@ export interface PayrollRow {
   wage_type: WageType;
   rate: number;
   days_worked: number | null;
+  deducted_days?: number;
   gross_pay: number;
   advances_total: number;
   net_pay: number;
@@ -117,6 +119,9 @@ export interface PayrollDetail {
   grossPay: number;
   advancesTotal: number;
   netPay: number;
+  deductedDays?: number;
+  deductionAmount?: number;
+  dailyRate?: number;
 }
 
 export interface HassanCommissionRow {

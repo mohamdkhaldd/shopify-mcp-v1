@@ -128,6 +128,32 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
             </div>
           )}
 
+          {row.wage_type === "monthly" && (
+            <div className="mb-4">
+              <div className="text-xs font-bold text-slate-500 mb-1.5">تفاصيل المرتب الشهري</div>
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                <div className="bg-slate-50 rounded-lg px-3 py-2 text-center">
+                  <div className="text-xs text-slate-400">سعر اليوم</div>
+                  <div className="font-semibold text-slate-700">{formatEGP(detail.dailyRate ?? 0)}</div>
+                </div>
+                <div className="bg-slate-50 rounded-lg px-3 py-2 text-center">
+                  <div className="text-xs text-slate-400">أيام الغياب</div>
+                  <div className="font-semibold text-slate-700">{detail.deductedDays ?? 0}</div>
+                </div>
+                <div className="bg-rose-50 rounded-lg px-3 py-2 text-center">
+                  <div className="text-xs text-slate-400">قيمة الخصم</div>
+                  <div className="font-semibold text-rose-600">
+                    {(detail.deductionAmount ?? 0) > 0 ? `- ${formatEGP(detail.deductionAmount ?? 0)}` : "—"}
+                  </div>
+                </div>
+              </div>
+              <div className="text-[11px] text-slate-400">
+                المرتب الشهري بيتقسم على عدد أيام الشهر، وأي يوم مشتغلش فيه (وملوش إجازة مدفوعة) بيتخصم من المرتب —
+                إلا يوم الجمعة اللي بيتحسب مدفوع دايمًا حتى لو مفيش شغل.
+              </div>
+            </div>
+          )}
+
           <div>
             <div className="text-xs font-bold text-slate-500 mb-1.5">السلف</div>
             {detail.advances.length > 0 && (

@@ -4,7 +4,7 @@ import MonthPicker from "../../components/equipment/MonthPicker";
 import PrintButton from "../../components/PrintButton";
 import { PrintHeader, PrintSignoff } from "../../components/PrintSignoff";
 import { contractorsApi, dailyLogsApi, employeesApi } from "../../api/client";
-import { Equipment } from "../../api/types";
+import { Equipment, WageType } from "../../api/types";
 import { currentMonthKey, monthLabel } from "../../utils/months";
 import DailyLogTable from "./DailyLogTable";
 import ExpensesTable from "./ExpensesTable";
@@ -28,7 +28,7 @@ interface EquipmentDetailProps {
 export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailProps) {
   const [tab, setTab] = useState<Tab>("summary");
   const [month, setMonth] = useState(currentMonthKey());
-  const [employees, setEmployees] = useState<{ id: number; name: string; rate: number }[]>([]);
+  const [employees, setEmployees] = useState<{ id: number; name: string; rate: number; wage_type: WageType }[]>([]);
   const [contractors, setContractors] = useState<{ id: number; name: string }[]>([]);
   const [mismatchedDates, setMismatchedDates] = useState<Set<string>>(new Set());
   const [refreshKey, setRefreshKey] = useState(0);
