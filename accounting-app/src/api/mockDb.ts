@@ -151,11 +151,6 @@ function daysInMonthList(monthKey: string): string[] {
   return Array.from({ length: daysCount }, (_, i) => `${monthKey}-${String(i + 1).padStart(2, "0")}`);
 }
 
-function isFriday(dateStr: string): boolean {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d).getDay() === 5;
-}
-
 const WINCH_PERCENTAGE_EQUIPMENT = ["ونش 5 طن دبوسة", "ونش 3 وصلة"];
 
 function computePairedCommission(equipmentName: string, driverLog: DailyLogRow, contractorLog: DailyLogRow): number {
@@ -369,7 +364,8 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
 
   // موظف بمرتب شهري وله حضور مرتبط بالسركي (سواق شهري مثلًا): مرتبه بيتقسم
   // على عدد أيام الشهر، وأي يوم مفيش له حضور ولا إجازة مدفوعة مُعلّمة
-  // بيتخصم من مرتبه — ما عدا الجمعة، دايمًا مدفوعة. أما الموظف اللي مرتبه
+  // بيتخصم من مرتبه — من غير أي استثناء تلقائي ليوم الجمعة، لازم المكتب
+  // يعلّم بنفسه أي يوم عايز يتحسب مدفوع من غير شغل. أما الموظف اللي مرتبه
   // ثابت مهما حصل (زي مكنيكي مش بيتسجل في سركي أي معدة) فبياخد مرتبه كامل.
   function monthlyEmployeeGrossPay(emp: { name: string; rate: number; fixed_salary?: boolean }, month: string) {
     const days = daysInMonthList(month);
@@ -381,7 +377,6 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     const accountedDates = new Set(logs.map((l) => l.date));
     let deductedDays = 0;
     for (const date of days) {
-      if (isFriday(date)) continue;
       if (accountedDates.has(date)) continue;
       deductedDays++;
     }
@@ -536,28 +531,14 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
         const logs = state.daily_logs
           .filter((l) => l.role === "driver" && l.person_name === employee.name && l.date.startsWith(month))
           .sort((a, b) => a.date.localeCompare(b.date));
-        const loggedDates = new Set(logs.map((l) => l.date));
         days = logs.map((l) => ({
           date: l.date,
-          equipment_name: l.is_paid_leave ? "إجازة مدفوعة" : state.equipment.find((e) => e.id === l.equipment_id)?.name ?? "—",
+          equipment_name: state.equipment.find((e) => e.id === l.equipment_id)?.name ?? "—",
           actual_hours: l.actual_hours,
           base_hours: l.base_hours,
           day_rate: null,
           day_value: dailyRate,
         }));
-        for (const date of daysInMonthList(month)) {
-          if (isFriday(date) && !loggedDates.has(date)) {
-            days.push({
-              date,
-              equipment_name: "أيام الجمعة",
-              actual_hours: null,
-              base_hours: null,
-              day_rate: null,
-              day_value: dailyRate,
-            });
-          }
-        }
-        days.sort((a, b) => a.date.localeCompare(b.date));
       }
       return {
         employee,

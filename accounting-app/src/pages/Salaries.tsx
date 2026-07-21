@@ -10,8 +10,9 @@ import { formatEGP } from "../utils/format";
 import { PAYMENT_METHODS, paymentMethodLabel } from "../utils/paymentMethods";
 
 // شيت المرتب بيتبعت للسائق كإيصال — عايزين "اشتغل على المعدة دي كذا يوم أخد
-// كذا" مش خصم من مرتب كامل، فبنجمع أيام الشغل (والجمعات المدفوعة للشهري)
-// حسب المعدة بدل التفاصيل اليومية، والمجموع بيبقى هو الإجمالي نفسه.
+// كذا" مش خصم من مرتب كامل، فبنجمع أيام الشغل (بما فيها أي يوم اتعلّم إجازة
+// مدفوعة — بيظهر تحت المعدة اللي اتسجل عليها زي أي يوم شغل عادي) حسب المعدة
+// بدل التفاصيل اليومية، والمجموع بيبقى هو الإجمالي نفسه.
 function equipmentTotals(days: PayrollDetail["days"]): { equipment_name: string; days: number; value: number }[] {
   const byEquipment = new Map<string, { days: number; value: number }>();
   for (const d of days) {

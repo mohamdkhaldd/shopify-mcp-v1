@@ -30,16 +30,12 @@ function daysInMonthList(monthKey) {
   return Array.from({ length: daysCount }, (_, i) => `${monthKey}-${String(i + 1).padStart(2, "0")}`);
 }
 
-function isFriday(dateStr) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d).getDay() === 5;
-}
-
 // موظف بمرتب شهري وله حضور مرتبط بالسركي (سواق شهري مثلًا): مرتبه بيتقسم
 // على عدد أيام الشهر، وأي يوم مفيش له حضور (سجل عادي) ولا إجازة مدفوعة
-// مُعلّمة بيتخصم من مرتبه — ما عدا الجمعة، اللي دايمًا بتتحسب كيوم عمل حتى
-// لو مفيش سجل ليها خالص. أما الموظف اللي مرتبه ثابت مهما حصل (زي مكنيكي
-// مش بيتسجل في سركي أي معدة أصلًا) فبياخد مرتبه كامل من غير أي حساب حضور.
+// مُعلّمة بيتخصم من مرتبه — من غير أي استثناء تلقائي ليوم الجمعة، لازم
+// المكتب يعلّم بنفسه أي يوم عايز يتحسب مدفوع من غير شغل (سواء جمعة أو أي
+// يوم تاني). أما الموظف اللي مرتبه ثابت مهما حصل (زي مكنيكي مش بيتسجل في
+// سركي أي معدة أصلًا) فبياخد مرتبه كامل من غير أي حساب حضور.
 function monthlyEmployeeGrossPay(db, emp, month) {
   const days = daysInMonthList(month);
   const dailyRate = emp.rate / days.length;
@@ -52,7 +48,6 @@ function monthlyEmployeeGrossPay(db, emp, month) {
   const accountedDates = new Set(logs.map((l) => l.date));
   let deductedDays = 0;
   for (const date of days) {
-    if (isFriday(date)) continue;
     if (accountedDates.has(date)) continue;
     deductedDays++;
   }
@@ -416,8 +411,9 @@ function registerIpcHandlers(db) {
   // month, which equipment, and what it paid, plus advances and bonuses.
   // This is what gets screenshotted and sent to the driver. Monthly wages
   // show a plain days×equipment breakdown too (no "full salary minus
-  // deduction" framing) — unlogged Fridays are still paid, so they show up
-  // as their own "أيام الجمعة" line at the employee's daily rate. ---
+  // deduction" framing) — a day marked as paid leave shows under whatever
+  // equipment it was logged on, same as a normal work day, since the office
+  // marks it explicitly rather than the sheet guessing or labeling it. ---
   ipcMain.handle("payroll:detail", (_e, { employee_id, month }) => {
     const employee = db.prepare("SELECT * FROM employees WHERE id = ?").get(employee_id);
     const advances = db
@@ -441,28 +437,14 @@ function registerIpcHandlers(db) {
              ORDER BY dl.date`
           )
           .all(employee.name, `${month}%`);
-        const loggedDates = new Set(logsWithEquipment.map((l) => l.date));
         days = logsWithEquipment.map((l) => ({
           date: l.date,
-          equipment_name: l.is_paid_leave ? "إجازة مدفوعة" : l.equipment_name,
+          equipment_name: l.equipment_name,
           actual_hours: l.actual_hours,
           base_hours: l.base_hours,
           day_rate: null,
           day_value: dailyRate,
         }));
-        for (const date of daysInMonthList(month)) {
-          if (isFriday(date) && !loggedDates.has(date)) {
-            days.push({
-              date,
-              equipment_name: "أيام الجمعة",
-              actual_hours: null,
-              base_hours: null,
-              day_rate: null,
-              day_value: dailyRate,
-            });
-          }
-        }
-        days.sort((a, b) => a.date.localeCompare(b.date));
       }
       return {
         employee,
