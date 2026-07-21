@@ -24,6 +24,7 @@ interface MonthlyExpenseRow {
   id: number;
   equipment_id: number;
   month: string;
+  date: string | null;
   category_id: number | null;
   amount: number;
   payment_method: string | null;
@@ -269,6 +270,7 @@ function loadState(): MockState {
     for (const p of state.partners) if (p.opening_balance == null) p.opening_balance = 0;
     for (const c of state.contractors) if (c.opening_balance == null) c.opening_balance = 0;
     for (const e of state.employees) if (e.fixed_salary == null) e.fixed_salary = false;
+    for (const e of state.monthly_expenses) if (e.date === undefined) e.date = null;
     if (!state.employee_advances) state.employee_advances = [];
     if (!state.employee_bonuses) state.employee_bonuses = [];
     if (!state.hassan_ledger) state.hassan_ledger = [];
@@ -328,6 +330,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
   if (channel === "monthlyExpenses:list") {
     return state.monthly_expenses
       .filter((e) => e.equipment_id === payload.equipment_id && e.month === payload.month)
+      .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || a.id - b.id)
       .map((e) => ({
         ...e,
         category_name: state.expense_categories.find((c) => c.id === e.category_id)?.name ?? null,
@@ -335,7 +338,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
   }
   if (channel === "monthlyExpenses:create") {
     const id = state.nextId++;
-    const record: MonthlyExpenseRow = { id, ...payload };
+    const record: MonthlyExpenseRow = { id, ...payload, date: payload.date ?? null };
     state.monthly_expenses.push(record);
     saveState(state);
     return {

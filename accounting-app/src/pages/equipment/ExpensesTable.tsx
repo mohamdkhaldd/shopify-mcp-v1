@@ -3,6 +3,15 @@ import { equipmentApi, expenseCategoriesApi, monthlyExpensesApi } from "../../ap
 import { ExpenseCategory, MonthlyExpense } from "../../api/types";
 import { formatEGP } from "../../utils/format";
 import { PAYMENT_METHODS, paymentMethodLabel } from "../../utils/paymentMethods";
+import { daysInMonth } from "../../utils/months";
+
+// المصروف بيتفلتر حسب الشهر المعروض، فلازم تاريخه يقع جوه نفس الشهر ده —
+// وإلا كان هيتسجل وميظهرش أبدًا في أي شهر بتتصفحه.
+function defaultDateForMonth(month: string): string {
+  const dates = daysInMonth(month);
+  const today = new Date().toISOString().slice(0, 10);
+  return dates.includes(today) ? today : dates[0];
+}
 
 interface ExpensesTableProps {
   equipmentId: number;
@@ -18,6 +27,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
   const [categoryId, setCategoryId] = useState("");
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [date, setDate] = useState(() => defaultDateForMonth(month));
 
   const refresh = () => monthlyExpensesApi.list(equipmentId, month).then(setExpenses);
   const refreshDriverSalary = () =>
@@ -30,12 +40,19 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
     );
   }, [equipmentId, month]);
 
+  useEffect(() => {
+    setDate(defaultDateForMonth(month));
+  }, [month]);
+
+  const monthDates = daysInMonth(month);
+
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
     if (!categoryId || !amount) return;
     await monthlyExpensesApi.create({
       equipment_id: equipmentId,
       month,
+      date,
       category_id: Number(categoryId),
       amount: Number(amount),
       payment_method: paymentMethod,
@@ -56,6 +73,17 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
   return (
     <div className="bg-white rounded-card shadow-card p-5">
       <form onSubmit={handleAdd} className="no-print flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">التاريخ</label>
+          <input
+            type="date"
+            value={date}
+            min={monthDates[0]}
+            max={monthDates[monthDates.length - 1]}
+            onChange={(e) => setDate(e.target.value)}
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+        </div>
         <div>
           <label className="block text-xs text-slate-400 mb-1">نوع المصروف</label>
           <select
@@ -112,6 +140,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
           <table className="w-full text-sm">
             <thead>
               <tr className="text-slate-400 border-b border-slate-100">
+                <th className="text-start font-semibold py-2">التاريخ</th>
                 <th className="text-start font-semibold py-2">نوع المصروف</th>
                 <th className="text-start font-semibold py-2">القيمة</th>
                 <th className="text-start font-semibold py-2">طريقة الدفع</th>
@@ -121,6 +150,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
             <tbody>
               {driverSalaryExpense > 0 && (
                 <tr className="border-b border-slate-50 last:border-0 bg-slate-50/60">
+                  <td className="py-2 text-slate-400">—</td>
                   <td className="py-2 font-semibold text-slate-700">
                     مرتب السائق
                     <span className="text-xs text-slate-400 font-normal"> (تلقائي من سعره في الإعدادات وأيام شغله)</span>
@@ -132,6 +162,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
               )}
               {expenses.map((exp) => (
                 <tr key={exp.id} className="border-b border-slate-50 last:border-0">
+                  <td className="py-2 text-slate-500">{exp.date ?? "—"}</td>
                   <td className="py-2 font-semibold text-slate-700">{exp.category_name ?? "—"}</td>
                   <td className="py-2 text-slate-600">{formatEGP(exp.amount)}</td>
                   <td className="py-2 text-slate-500">{paymentMethodLabel(exp.payment_method)}</td>
@@ -148,7 +179,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
             </tbody>
             <tfoot>
               <tr>
-                <td className="pt-3 text-sm font-bold text-slate-700">إجمالي الشهر</td>
+                <td className="pt-3 text-sm font-bold text-slate-700" colSpan={2}>إجمالي الشهر</td>
                 <td className="pt-3 text-sm font-bold text-rose-600">{formatEGP(total)}</td>
                 <td colSpan={2}></td>
               </tr>

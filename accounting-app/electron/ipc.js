@@ -244,7 +244,7 @@ function registerIpcHandlers(db) {
       .prepare(
         `SELECT me.*, ec.name AS category_name FROM monthly_expenses me
          LEFT JOIN expense_categories ec ON ec.id = me.category_id
-         WHERE me.equipment_id = ? AND me.month = ? ORDER BY me.id`
+         WHERE me.equipment_id = ? AND me.month = ? ORDER BY me.date, me.id`
       )
       .all(equipment_id, month)
   );
@@ -252,10 +252,10 @@ function registerIpcHandlers(db) {
   ipcMain.handle("monthlyExpenses:create", (_e, expense) => {
     const info = db
       .prepare(
-        `INSERT INTO monthly_expenses (equipment_id, month, category_id, amount, payment_method)
-         VALUES (@equipment_id, @month, @category_id, @amount, @payment_method)`
+        `INSERT INTO monthly_expenses (equipment_id, month, date, category_id, amount, payment_method)
+         VALUES (@equipment_id, @month, @date, @category_id, @amount, @payment_method)`
       )
-      .run(expense);
+      .run({ ...expense, date: expense.date ?? null });
     return db
       .prepare(
         `SELECT me.*, ec.name AS category_name FROM monthly_expenses me

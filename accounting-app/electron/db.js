@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS monthly_expenses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   equipment_id INTEGER NOT NULL REFERENCES equipment(id) ON DELETE CASCADE,
   month TEXT NOT NULL,
+  date TEXT,
   category_id INTEGER REFERENCES expense_categories(id),
   amount REAL NOT NULL,
   payment_method TEXT
@@ -268,6 +269,14 @@ function initDatabase() {
     .some((col) => col.name === "fixed_salary");
   if (!employeesHasFixedSalary) {
     db.exec("ALTER TABLE employees ADD COLUMN fixed_salary INTEGER NOT NULL DEFAULT 0");
+  }
+
+  const monthlyExpensesHasDate = db
+    .prepare("PRAGMA table_info(monthly_expenses)")
+    .all()
+    .some((col) => col.name === "date");
+  if (!monthlyExpensesHasDate) {
+    db.exec("ALTER TABLE monthly_expenses ADD COLUMN date TEXT");
   }
 
   const accountCount = db.prepare("SELECT COUNT(*) AS c FROM treasury_accounts").get().c;

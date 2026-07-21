@@ -57,6 +57,7 @@ export interface MonthlyExpense {
   id: number;
   equipment_id: number;
   month: string;
+  date: string | null;
   category_id: number | null;
   category_name: string | null;
   amount: number;
