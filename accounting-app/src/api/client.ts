@@ -14,6 +14,7 @@ import {
   ExpenseCategory,
   HassanBalance,
   HassanCommissionSummary,
+  HassanEquipmentCommissionDetail,
   HassanLedgerEntry,
   HassanPartyBalance,
   MonthlyExpense,
@@ -126,6 +127,8 @@ export const systemApi = {
 export const hassanApi = {
   commissionSummary: (month: string): Promise<HassanCommissionSummary> =>
     invoke("hassan:commissionSummary", { month }),
+  equipmentCommission: (equipment_id: number, month: string): Promise<HassanEquipmentCommissionDetail> =>
+    invoke("hassan:equipmentCommission", { equipment_id, month }),
   ledgerList: (month: string): Promise<HassanLedgerEntry[]> => invoke("hassanLedger:list", { month }),
   ledgerCreate: (entry: Omit<HassanLedgerEntry, "id">): Promise<HassanLedgerEntry> =>
     invoke("hassanLedger:create", entry),

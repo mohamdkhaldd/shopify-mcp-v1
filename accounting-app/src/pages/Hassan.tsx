@@ -1,10 +1,11 @@
-import { FormEvent, useEffect, useState } from "react";
+import { Fragment, FormEvent, useEffect, useState } from "react";
 import MonthPicker from "../components/equipment/MonthPicker";
 import Icon from "../components/Icon";
 import { hassanApi } from "../api/client";
 import {
   HassanBalance,
   HassanCommissionSummary,
+  HassanEquipmentCommissionDetail,
   HassanLedgerEntry,
   HassanLedgerType,
   HassanPartyBalance,
@@ -23,8 +24,81 @@ function typeLabel(type: HassanLedgerType) {
   return LEDGER_TYPES.find((t) => t.value === type)?.label ?? type;
 }
 
+function EquipmentCommissionPanel({ equipmentId, month }: { equipmentId: number; month: string }) {
+  const [detail, setDetail] = useState<HassanEquipmentCommissionDetail | null>(null);
+
+  useEffect(() => {
+    setDetail(null);
+    hassanApi.equipmentCommission(equipmentId, month).then(setDetail);
+  }, [equipmentId, month]);
+
+  if (!detail) {
+    return (
+      <tr>
+        <td colSpan={2} className="px-4 py-4 text-sm text-slate-400">
+          جاري التحميل...
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr>
+      <td colSpan={2} className="bg-slate-50 px-4 py-5 rounded-xl">
+        <div className="bg-white rounded-card shadow-card p-5">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+            <div className="font-extrabold text-slate-900">{detail.equipment_name}</div>
+            <div className="flex items-center gap-2">
+              <div className="text-center bg-primary-light rounded-xl px-4 py-2">
+                <div className="text-xs text-slate-500">إجمالي الشهر</div>
+                <div className="font-bold text-slate-800">{formatEGP(detail.monthTotal)}</div>
+              </div>
+              <div className="text-center bg-primary rounded-xl px-4 py-2">
+                <div className="text-xs text-white/80">إجمالي السنة</div>
+                <div className="font-extrabold text-white">{formatEGP(detail.yearTotal)}</div>
+              </div>
+            </div>
+          </div>
+
+          {detail.days.length === 0 ? (
+            <div className="text-sm text-slate-400">مفيش كوميشن محسوب على المعدة دي الشهر ده.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-100">
+                  <th className="text-start font-semibold py-1.5">اليوم</th>
+                  <th className="text-start font-semibold py-1.5">المقاول بكام</th>
+                  <th className="text-start font-semibold py-1.5">السركي بكام</th>
+                  <th className="text-start font-semibold py-1.5">كوميشن حسن</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.days.map((d, i) => (
+                  <tr key={i} className="border-b border-slate-50 last:border-0">
+                    <td className="py-1.5 text-slate-500">{d.date}</td>
+                    <td className="py-1.5 text-slate-600">{formatEGP(d.contractor_rate)}</td>
+                    <td className="py-1.5 text-slate-600">{d.driver_rate == null ? "—" : formatEGP(d.driver_rate)}</td>
+                    <td className="py-1.5 font-semibold text-primary-dark">{formatEGP(d.commission)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={3} className="pt-2 text-sm font-bold text-slate-700">إجمالي الشهر</td>
+                  <td className="pt-2 text-sm font-bold text-primary-dark">{formatEGP(detail.monthTotal)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function CommissionTab({ month }: { month: string }) {
   const [summary, setSummary] = useState<HassanCommissionSummary | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
     hassanApi.commissionSummary(month).then(setSummary);
@@ -32,12 +106,14 @@ function CommissionTab({ month }: { month: string }) {
 
   if (!summary) return <div className="text-sm text-slate-400">جاري التحميل...</div>;
 
-  const byEquipment = new Map<string, number>();
+  const byEquipment = new Map<number, { equipment_name: string; commission: number }>();
   for (const row of summary.rows) {
-    byEquipment.set(row.equipment_name, (byEquipment.get(row.equipment_name) ?? 0) + row.commission);
+    const entry = byEquipment.get(row.equipment_id) ?? { equipment_name: row.equipment_name, commission: 0 };
+    entry.commission += row.commission;
+    byEquipment.set(row.equipment_id, entry);
   }
   const equipmentTotals = [...byEquipment.entries()]
-    .map(([equipment_name, commission]) => ({ equipment_name, commission }))
+    .map(([equipment_id, e]) => ({ equipment_id, ...e }))
     .sort((a, b) => b.commission - a.commission);
 
   return (
@@ -48,7 +124,8 @@ function CommissionTab({ month }: { month: string }) {
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-4">الكوميشن حسب المعدة — {month}</h2>
+        <h2 className="font-bold text-slate-800 mb-1">الكوميشن حسب المعدة — {month}</h2>
+        <p className="text-xs text-slate-400 mb-4">دوس على اسم المعدة تشوف شيتها بالتفصيل — يوم بيوم.</p>
         {equipmentTotals.length === 0 ? (
           <div className="text-sm text-slate-400">مفيش كوميشن محسوب الشهر ده.</div>
         ) : (
@@ -61,10 +138,20 @@ function CommissionTab({ month }: { month: string }) {
             </thead>
             <tbody>
               {equipmentTotals.map((e) => (
-                <tr key={e.equipment_name} className="border-b border-slate-50 last:border-0">
-                  <td className="py-2 font-semibold text-slate-700">{e.equipment_name}</td>
-                  <td className="py-2 font-semibold text-primary-dark">{formatEGP(e.commission)}</td>
-                </tr>
+                <Fragment key={e.equipment_id}>
+                  <tr className="border-b border-slate-50 last:border-0">
+                    <td className="py-2">
+                      <button
+                        onClick={() => setExpandedId(expandedId === e.equipment_id ? null : e.equipment_id)}
+                        className="font-semibold text-slate-700 hover:text-primary"
+                      >
+                        {e.equipment_name}
+                      </button>
+                    </td>
+                    <td className="py-2 font-semibold text-primary-dark">{formatEGP(e.commission)}</td>
+                  </tr>
+                  {expandedId === e.equipment_id && <EquipmentCommissionPanel equipmentId={e.equipment_id} month={month} />}
+                </Fragment>
               ))}
             </tbody>
             <tfoot>

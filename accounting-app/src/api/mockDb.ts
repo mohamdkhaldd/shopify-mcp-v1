@@ -618,6 +618,56 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { rows, total };
   }
 
+  if (channel === "hassan:equipmentCommission") {
+    const { equipment_id, month } = payload;
+    const equipment = state.equipment.find((e) => e.id === equipment_id)!;
+    const year = month.split("-")[0];
+
+    const driverLogs = state.daily_logs.filter(
+      (l) => l.equipment_id === equipment_id && l.role === "driver" && l.date.startsWith(`${year}-`)
+    );
+    const contractorLogs = state.daily_logs.filter(
+      (l) => l.equipment_id === equipment_id && l.role === "contractor" && l.date.startsWith(`${year}-`)
+    );
+    const marketLogs = state.daily_logs.filter(
+      (l) =>
+        l.equipment_id === equipment_id &&
+        l.role === "market" &&
+        l.date.startsWith(`${year}-`) &&
+        l.hassan_commission != null
+    );
+
+    const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
+    const allRows: { date: string; source: "paired" | "market"; contractor_rate: number; driver_rate: number | null; commission: number }[] = [];
+    for (const contractorLog of contractorLogs) {
+      const driverLog = driverByDate.get(contractorLog.date);
+      if (!driverLog) continue;
+      allRows.push({
+        date: contractorLog.date,
+        source: "paired",
+        contractor_rate: contractorLog.day_rate ?? 0,
+        driver_rate: driverLog.day_rate ?? 0,
+        commission: computePairedCommission(equipment.name, driverLog, contractorLog),
+      });
+    }
+    for (const marketLog of marketLogs) {
+      allRows.push({
+        date: marketLog.date,
+        source: "market",
+        contractor_rate: marketLog.fixed_value ?? 0,
+        driver_rate: null,
+        commission: marketLog.hassan_commission ?? 0,
+      });
+    }
+    allRows.sort((a, b) => a.date.localeCompare(b.date));
+
+    const days = allRows.filter((r) => r.date.startsWith(month));
+    const monthTotal = days.reduce((sum, r) => sum + r.commission, 0);
+    const yearTotal = allRows.reduce((sum, r) => sum + r.commission, 0);
+
+    return { equipment_id, equipment_name: equipment.name, days, monthTotal, yearTotal };
+  }
+
   if (channel === "hassanLedger:list") {
     return state.hassan_ledger
       .filter((e) => e.date.startsWith(payload.month))

@@ -148,6 +148,22 @@ export interface HassanCommissionSummary {
   total: number;
 }
 
+export interface HassanEquipmentCommissionDay {
+  date: string;
+  source: "paired" | "market";
+  contractor_rate: number;
+  driver_rate: number | null;
+  commission: number;
+}
+
+export interface HassanEquipmentCommissionDetail {
+  equipment_id: number;
+  equipment_name: string;
+  days: HassanEquipmentCommissionDay[];
+  monthTotal: number;
+  yearTotal: number;
+}
+
 export type HassanLedgerType = "loan" | "repayment" | "due" | "collection";
 
 export interface HassanLedgerEntry {
