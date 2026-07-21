@@ -35,12 +35,17 @@ function isFriday(dateStr) {
   return new Date(y, m - 1, d).getDay() === 5;
 }
 
-// موظف بمرتب شهري: مرتبه بيتقسم على عدد أيام الشهر، وأي يوم مفيش له حضور
-// (سجل عادي) ولا إجازة مدفوعة مُعلّمة بيتخصم من مرتبه — ما عدا الجمعة، اللي
-// دايمًا بتتحسب كيوم عمل حتى لو مفيش سجل ليها خالص.
+// موظف بمرتب شهري وله حضور مرتبط بالسركي (سواق شهري مثلًا): مرتبه بيتقسم
+// على عدد أيام الشهر، وأي يوم مفيش له حضور (سجل عادي) ولا إجازة مدفوعة
+// مُعلّمة بيتخصم من مرتبه — ما عدا الجمعة، اللي دايمًا بتتحسب كيوم عمل حتى
+// لو مفيش سجل ليها خالص. أما الموظف اللي مرتبه ثابت مهما حصل (زي مكنيكي
+// مش بيتسجل في سركي أي معدة أصلًا) فبياخد مرتبه كامل من غير أي حساب حضور.
 function monthlyEmployeeGrossPay(db, emp, month) {
   const days = daysInMonthList(month);
   const dailyRate = emp.rate / days.length;
+  if (emp.fixed_salary) {
+    return { grossPay: emp.rate, deductedDays: 0, dailyRate, logs: [] };
+  }
   const logs = db
     .prepare("SELECT * FROM daily_logs WHERE role = 'driver' AND person_name = ? AND date LIKE ?")
     .all(emp.name, `${month}%`);
@@ -91,11 +96,11 @@ function registerIpcHandlers(db) {
 
   // --- Employees (drivers / salaried workers) ---
   ipcMain.handle("employees:list", () => db.prepare("SELECT * FROM employees ORDER BY name").all());
-  ipcMain.handle("employees:create", (_e, { name, wage_type, rate }) => {
+  ipcMain.handle("employees:create", (_e, { name, wage_type, rate, fixed_salary }) => {
     const info = db
-      .prepare("INSERT INTO employees (name, wage_type, rate) VALUES (?, ?, ?)")
-      .run(name.trim(), wage_type, rate);
-    return { id: info.lastInsertRowid, name: name.trim(), wage_type, rate };
+      .prepare("INSERT INTO employees (name, wage_type, rate, fixed_salary) VALUES (?, ?, ?, ?)")
+      .run(name.trim(), wage_type, rate, fixed_salary ? 1 : 0);
+    return { id: info.lastInsertRowid, name: name.trim(), wage_type, rate, fixed_salary: !!fixed_salary };
   });
   ipcMain.handle("employees:delete", (_e, { id }) => {
     db.prepare("DELETE FROM employees WHERE id = ?").run(id);
@@ -104,14 +109,15 @@ function registerIpcHandlers(db) {
   // بيسمح بتعديل السائق (زي زيادة مرتبه) من غير ما تحذفه وتضيفه تاني كسائق
   // جديد — لو اسمه اتغيّر، بنحدّث سجلات السركي القديمة اللي باسمه القديم
   // عشان تفضل مربوطة بيه.
-  ipcMain.handle("employees:update", (_e, { id, name, wage_type, rate }) => {
+  ipcMain.handle("employees:update", (_e, { id, name, wage_type, rate, fixed_salary }) => {
     const trimmedName = name.trim();
     const existing = db.prepare("SELECT * FROM employees WHERE id = ?").get(id);
     const tx = db.transaction(() => {
-      db.prepare("UPDATE employees SET name = ?, wage_type = ?, rate = ? WHERE id = ?").run(
+      db.prepare("UPDATE employees SET name = ?, wage_type = ?, rate = ?, fixed_salary = ? WHERE id = ?").run(
         trimmedName,
         wage_type,
         rate,
+        fixed_salary ? 1 : 0,
         id
       );
       if (existing && existing.name !== trimmedName) {
@@ -381,6 +387,7 @@ function registerIpcHandlers(db) {
           name: emp.name,
           wage_type: emp.wage_type,
           rate: emp.rate,
+          fixed_salary: !!emp.fixed_salary,
           days_worked: null,
           gross_pay: grossPay,
           advances_total: advancesTotal,
@@ -395,6 +402,7 @@ function registerIpcHandlers(db) {
         name: emp.name,
         wage_type: emp.wage_type,
         rate: emp.rate,
+        fixed_salary: !!emp.fixed_salary,
         days_worked: logs.length,
         gross_pay: grossPay,
         advances_total: advancesTotal,
@@ -423,36 +431,39 @@ function registerIpcHandlers(db) {
 
     if (employee.wage_type === "monthly") {
       const { grossPay, dailyRate } = monthlyEmployeeGrossPay(db, employee, month);
-      const logsWithEquipment = db
-        .prepare(
-          `SELECT dl.*, e.name AS equipment_name FROM daily_logs dl
-           JOIN equipment e ON e.id = dl.equipment_id
-           WHERE dl.role = 'driver' AND dl.person_name = ? AND dl.date LIKE ?
-           ORDER BY dl.date`
-        )
-        .all(employee.name, `${month}%`);
-      const loggedDates = new Set(logsWithEquipment.map((l) => l.date));
-      const days = logsWithEquipment.map((l) => ({
-        date: l.date,
-        equipment_name: l.is_paid_leave ? "إجازة مدفوعة" : l.equipment_name,
-        actual_hours: l.actual_hours,
-        base_hours: l.base_hours,
-        day_rate: null,
-        day_value: dailyRate,
-      }));
-      for (const date of daysInMonthList(month)) {
-        if (isFriday(date) && !loggedDates.has(date)) {
-          days.push({
-            date,
-            equipment_name: "أيام الجمعة",
-            actual_hours: null,
-            base_hours: null,
-            day_rate: null,
-            day_value: dailyRate,
-          });
+      let days = [];
+      if (!employee.fixed_salary) {
+        const logsWithEquipment = db
+          .prepare(
+            `SELECT dl.*, e.name AS equipment_name FROM daily_logs dl
+             JOIN equipment e ON e.id = dl.equipment_id
+             WHERE dl.role = 'driver' AND dl.person_name = ? AND dl.date LIKE ?
+             ORDER BY dl.date`
+          )
+          .all(employee.name, `${month}%`);
+        const loggedDates = new Set(logsWithEquipment.map((l) => l.date));
+        days = logsWithEquipment.map((l) => ({
+          date: l.date,
+          equipment_name: l.is_paid_leave ? "إجازة مدفوعة" : l.equipment_name,
+          actual_hours: l.actual_hours,
+          base_hours: l.base_hours,
+          day_rate: null,
+          day_value: dailyRate,
+        }));
+        for (const date of daysInMonthList(month)) {
+          if (isFriday(date) && !loggedDates.has(date)) {
+            days.push({
+              date,
+              equipment_name: "أيام الجمعة",
+              actual_hours: null,
+              base_hours: null,
+              day_rate: null,
+              day_value: dailyRate,
+            });
+          }
         }
+        days.sort((a, b) => a.date.localeCompare(b.date));
       }
-      days.sort((a, b) => a.date.localeCompare(b.date));
       return {
         employee,
         days,

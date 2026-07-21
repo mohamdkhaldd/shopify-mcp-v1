@@ -106,7 +106,7 @@ interface SupplierPaymentRow {
 
 interface MockState {
   partners: { id: number; name: string; opening_balance: number }[];
-  employees: { id: number; name: string; wage_type: "daily" | "monthly"; rate: number }[];
+  employees: { id: number; name: string; wage_type: "daily" | "monthly"; rate: number; fixed_salary: boolean }[];
   contractors: { id: number; name: string; opening_balance: number }[];
   expense_categories: { id: number; name: string }[];
   equipment: { id: number; name: string; shares: { partner_id: number; percentage: number }[] }[];
@@ -169,7 +169,7 @@ function computePairedCommission(equipmentName: string, driverLog: DailyLogRow, 
   return k - h + overtimeHours * (k / 8 - h / 8);
 }
 
-const STORAGE_KEY = "al-bunyan-mock-db-v3";
+const STORAGE_KEY = "al-bunyan-mock-db-v4";
 
 // Real starting data pulled from the company's existing Excel system, so the
 // preview opens already reflecting how the business actually operates.
@@ -190,19 +190,21 @@ const SEED_EQUIPMENT: { name: string; shares: [string, number][] }[] = [
   { name: "ونش 3 وصلة", shares: [["الحج رمضان", 33.33], ["أبو طارق", 33.33], ["أبو أدهم", 33.34]] },
 ];
 
-const SEED_EMPLOYEES: [string, "daily" | "monthly", number][] = [
-  ["سيد حسين", "daily", 600],
-  ["أشرف", "daily", 550],
-  ["فتحي", "daily", 500],
-  ["محمد الصياد", "daily", 500],
-  ["أسامة علي", "daily", 475],
-  ["أبو نسمة", "daily", 400],
-  ["محمود", "daily", 400],
-  ["خالد", "daily", 375],
-  ["بدري", "daily", 375],
-  ["فكري", "daily", 375],
-  ["عبدالله", "daily", 500],
-  ["التربو", "monthly", 12000],
+// fixed_salary بيبقى true بس لموظف شهري مرتبه ثابت مهما حصل (زي المكنيكي) —
+// مش مرتبط بحضوره في السركي زي السواقين الشهريين.
+const SEED_EMPLOYEES: [string, "daily" | "monthly", number, boolean][] = [
+  ["سيد حسين", "daily", 600, false],
+  ["أشرف", "daily", 550, false],
+  ["فتحي", "daily", 500, false],
+  ["محمد الصياد", "daily", 500, false],
+  ["أسامة علي", "daily", 475, false],
+  ["أبو نسمة", "daily", 400, false],
+  ["محمود", "daily", 400, false],
+  ["خالد", "daily", 375, false],
+  ["بدري", "daily", 375, false],
+  ["فكري", "daily", 375, false],
+  ["عبدالله", "daily", 500, false],
+  ["التربو", "monthly", 12000, true],
 ];
 
 const SEED_CONTRACTORS = ["محمد حماد", "حسام مرزوق", "مصطفى عثمان", "عثمان معتمد", "محمود عبد الكريم", "سوق"];
@@ -229,11 +231,12 @@ function buildSeedState(): MockState {
     })),
   }));
 
-  const employees = SEED_EMPLOYEES.map(([name, wage_type, rate]) => ({
+  const employees = SEED_EMPLOYEES.map(([name, wage_type, rate, fixed_salary]) => ({
     id: nextId++,
     name,
     wage_type,
     rate,
+    fixed_salary,
   }));
 
   const contractors = SEED_CONTRACTORS.map((name) => ({ id: nextId++, name, opening_balance: 0 }));
@@ -270,6 +273,7 @@ function loadState(): MockState {
     const state = JSON.parse(raw) as MockState;
     for (const p of state.partners) if (p.opening_balance == null) p.opening_balance = 0;
     for (const c of state.contractors) if (c.opening_balance == null) c.opening_balance = 0;
+    for (const e of state.employees) if (e.fixed_salary == null) e.fixed_salary = false;
     if (!state.employee_advances) state.employee_advances = [];
     if (!state.employee_bonuses) state.employee_bonuses = [];
     if (!state.hassan_ledger) state.hassan_ledger = [];
@@ -363,11 +367,16 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       }, 0);
   }
 
-  // موظف بمرتب شهري: مرتبه بيتقسم على عدد أيام الشهر، وأي يوم مفيش له حضور
-  // ولا إجازة مدفوعة مُعلّمة بيتخصم من مرتبه — ما عدا الجمعة، دايمًا مدفوعة.
-  function monthlyEmployeeGrossPay(emp: { name: string; rate: number }, month: string) {
+  // موظف بمرتب شهري وله حضور مرتبط بالسركي (سواق شهري مثلًا): مرتبه بيتقسم
+  // على عدد أيام الشهر، وأي يوم مفيش له حضور ولا إجازة مدفوعة مُعلّمة
+  // بيتخصم من مرتبه — ما عدا الجمعة، دايمًا مدفوعة. أما الموظف اللي مرتبه
+  // ثابت مهما حصل (زي مكنيكي مش بيتسجل في سركي أي معدة) فبياخد مرتبه كامل.
+  function monthlyEmployeeGrossPay(emp: { name: string; rate: number; fixed_salary?: boolean }, month: string) {
     const days = daysInMonthList(month);
     const dailyRate = emp.rate / days.length;
+    if (emp.fixed_salary) {
+      return { grossPay: emp.rate, deductedDays: 0, dailyRate };
+    }
     const logs = state.daily_logs.filter((l) => l.role === "driver" && l.person_name === emp.name && l.date.startsWith(month));
     const accountedDates = new Set(logs.map((l) => l.date));
     let deductedDays = 0;
@@ -480,6 +489,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
             name: emp.name,
             wage_type: emp.wage_type,
             rate: emp.rate,
+            fixed_salary: !!emp.fixed_salary,
             days_worked: null,
             gross_pay: grossPay,
             advances_total: advancesTotal,
@@ -497,6 +507,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
           name: emp.name,
           wage_type: emp.wage_type,
           rate: emp.rate,
+          fixed_salary: !!emp.fixed_salary,
           days_worked: logs.length,
           gross_pay: grossPay,
           advances_total: advancesTotal,
@@ -520,31 +531,34 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
 
     if (employee.wage_type === "monthly") {
       const { grossPay, dailyRate } = monthlyEmployeeGrossPay(employee, month);
-      const logs = state.daily_logs
-        .filter((l) => l.role === "driver" && l.person_name === employee.name && l.date.startsWith(month))
-        .sort((a, b) => a.date.localeCompare(b.date));
-      const loggedDates = new Set(logs.map((l) => l.date));
-      const days = logs.map((l) => ({
-        date: l.date,
-        equipment_name: l.is_paid_leave ? "إجازة مدفوعة" : state.equipment.find((e) => e.id === l.equipment_id)?.name ?? "—",
-        actual_hours: l.actual_hours,
-        base_hours: l.base_hours,
-        day_rate: null as number | null,
-        day_value: dailyRate,
-      }));
-      for (const date of daysInMonthList(month)) {
-        if (isFriday(date) && !loggedDates.has(date)) {
-          days.push({
-            date,
-            equipment_name: "أيام الجمعة",
-            actual_hours: null,
-            base_hours: null,
-            day_rate: null,
-            day_value: dailyRate,
-          });
+      let days: { date: string; equipment_name: string; actual_hours: number | null; base_hours: number | null; day_rate: number | null; day_value: number }[] = [];
+      if (!employee.fixed_salary) {
+        const logs = state.daily_logs
+          .filter((l) => l.role === "driver" && l.person_name === employee.name && l.date.startsWith(month))
+          .sort((a, b) => a.date.localeCompare(b.date));
+        const loggedDates = new Set(logs.map((l) => l.date));
+        days = logs.map((l) => ({
+          date: l.date,
+          equipment_name: l.is_paid_leave ? "إجازة مدفوعة" : state.equipment.find((e) => e.id === l.equipment_id)?.name ?? "—",
+          actual_hours: l.actual_hours,
+          base_hours: l.base_hours,
+          day_rate: null,
+          day_value: dailyRate,
+        }));
+        for (const date of daysInMonthList(month)) {
+          if (isFriday(date) && !loggedDates.has(date)) {
+            days.push({
+              date,
+              equipment_name: "أيام الجمعة",
+              actual_hours: null,
+              base_hours: null,
+              day_rate: null,
+              day_value: dailyRate,
+            });
+          }
         }
+        days.sort((a, b) => a.date.localeCompare(b.date));
       }
-      days.sort((a, b) => a.date.localeCompare(b.date));
       return {
         employee,
         days,
@@ -1053,6 +1067,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     employee.name = trimmedName;
     employee.wage_type = payload.wage_type;
     employee.rate = payload.rate;
+    employee.fixed_salary = !!payload.fixed_salary;
     saveState(state);
     return employee;
   }

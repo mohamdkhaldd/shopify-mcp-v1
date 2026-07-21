@@ -7,13 +7,19 @@ function EditRow({ item, onSaved, onCancel }: { item: Driver; onSaved: () => voi
   const [name, setName] = useState(item.name);
   const [wageType, setWageType] = useState<WageType>(item.wage_type);
   const [rate, setRate] = useState(String(item.rate));
+  const [fixedSalary, setFixedSalary] = useState(item.fixed_salary);
 
   async function save(e: FormEvent) {
     e.preventDefault();
     const trimmed = name.trim();
     const rateValue = Number(rate);
     if (!trimmed || !rateValue) return;
-    await employeesApi.update(item.id, { name: trimmed, wage_type: wageType, rate: rateValue });
+    await employeesApi.update(item.id, {
+      name: trimmed,
+      wage_type: wageType,
+      rate: rateValue,
+      fixed_salary: wageType === "monthly" && fixedSalary,
+    });
     onSaved();
   }
 
@@ -54,6 +60,17 @@ function EditRow({ item, onSaved, onCancel }: { item: Driver; onSaved: () => voi
           إلغاء
         </button>
       </div>
+      {wageType === "monthly" && (
+        <label className="sm:col-span-4 flex items-center gap-2 text-xs text-slate-500">
+          <input
+            type="checkbox"
+            checked={fixedSalary}
+            onChange={(e) => setFixedSalary(e.target.checked)}
+            className="w-4 h-4 accent-primary"
+          />
+          مرتب ثابت مهما حصل (مش مرتبط بحضوره في السركي — زي المكنيكي)
+        </label>
+      )}
     </form>
   );
 }
@@ -63,6 +80,7 @@ export default function DriversTab() {
   const [name, setName] = useState("");
   const [wageType, setWageType] = useState<WageType>("daily");
   const [rate, setRate] = useState("");
+  const [fixedSalary, setFixedSalary] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -77,9 +95,15 @@ export default function DriversTab() {
     const trimmed = name.trim();
     const rateValue = Number(rate);
     if (!trimmed || !rateValue) return;
-    await employeesApi.create({ name: trimmed, wage_type: wageType, rate: rateValue });
+    await employeesApi.create({
+      name: trimmed,
+      wage_type: wageType,
+      rate: rateValue,
+      fixed_salary: wageType === "monthly" && fixedSalary,
+    });
     setName("");
     setRate("");
+    setFixedSalary(false);
     await refresh();
   }
 
@@ -100,7 +124,7 @@ export default function DriversTab() {
         عايز تزود مرتب حد؟ دوس "تعديل" جنب اسمه وغيّر الرقم — مش محتاج تحذفه وتضيفه من الأول.
       </p>
 
-      <form onSubmit={handleAdd} className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-5">
+      <form onSubmit={handleAdd} className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-2">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -133,6 +157,19 @@ export default function DriversTab() {
         </div>
       </form>
 
+      {wageType === "monthly" && (
+        <label className="flex items-center gap-2 text-xs text-slate-500 mb-5">
+          <input
+            type="checkbox"
+            checked={fixedSalary}
+            onChange={(e) => setFixedSalary(e.target.checked)}
+            className="w-4 h-4 accent-primary"
+          />
+          مرتب ثابت مهما حصل (مش مرتبط بحضوره في السركي — زي المكنيكي)
+        </label>
+      )}
+      {wageType !== "monthly" && <div className="mb-5" />}
+
       {loading ? (
         <div className="text-sm text-slate-400">جاري التحميل...</div>
       ) : items.length === 0 ? (
@@ -154,6 +191,7 @@ export default function DriversTab() {
                     <div className="text-sm font-semibold text-slate-700">{item.name}</div>
                     <div className="text-xs text-slate-400">
                       {item.wage_type === "daily" ? "يومي" : "شهري"} — {item.rate.toLocaleString("en-US")} ج.م
+                      {item.wage_type === "monthly" && item.fixed_salary && " — مرتب ثابت مهما حصل"}
                     </div>
                   </div>
                 </div>

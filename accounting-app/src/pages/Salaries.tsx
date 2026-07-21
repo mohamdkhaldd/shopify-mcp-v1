@@ -132,28 +132,36 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
           </div>
 
           <div className="mb-4">
-            <div className="text-xs font-bold text-slate-500 mb-1.5">الشغل حسب المعدة ({detail.days.length} يوم)</div>
-            {detail.days.length === 0 ? (
-              <div className="text-xs text-slate-400">لسه ملوش أيام مسجلة الشهر ده.</div>
+            {row.wage_type === "monthly" && row.fixed_salary ? (
+              <div className="text-xs text-slate-400 bg-slate-50 rounded-lg px-3 py-2">
+                مرتب ثابت مهما حصل — مش مرتبط بالحضور في السركي.
+              </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-slate-400 border-b border-slate-100">
-                    <th className="text-start font-semibold py-1.5">المعدة</th>
-                    <th className="text-start font-semibold py-1.5">عدد الأيام</th>
-                    <th className="text-start font-semibold py-1.5">القيمة</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {equipmentTotals(detail.days).map((e) => (
-                    <tr key={e.equipment_name} className="border-b border-slate-50 last:border-0">
-                      <td className="py-1.5 text-slate-600">{e.equipment_name}</td>
-                      <td className="py-1.5 text-slate-500">{e.days}</td>
-                      <td className="py-1.5 font-semibold text-slate-700">{formatEGP(e.value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <>
+                <div className="text-xs font-bold text-slate-500 mb-1.5">الشغل حسب المعدة ({detail.days.length} يوم)</div>
+                {detail.days.length === 0 ? (
+                  <div className="text-xs text-slate-400">لسه ملوش أيام مسجلة الشهر ده.</div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-slate-400 border-b border-slate-100">
+                        <th className="text-start font-semibold py-1.5">المعدة</th>
+                        <th className="text-start font-semibold py-1.5">عدد الأيام</th>
+                        <th className="text-start font-semibold py-1.5">القيمة</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {equipmentTotals(detail.days).map((e) => (
+                        <tr key={e.equipment_name} className="border-b border-slate-50 last:border-0">
+                          <td className="py-1.5 text-slate-600">{e.equipment_name}</td>
+                          <td className="py-1.5 text-slate-500">{e.days}</td>
+                          <td className="py-1.5 font-semibold text-slate-700">{formatEGP(e.value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </>
             )}
           </div>
 

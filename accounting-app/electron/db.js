@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS employees (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,
   wage_type TEXT NOT NULL CHECK (wage_type IN ('daily', 'monthly')),
-  rate REAL NOT NULL
+  rate REAL NOT NULL,
+  fixed_salary INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS employee_advances (
@@ -164,19 +165,21 @@ const SEED_EQUIPMENT = [
   { name: "ونش 3 وصلة", shares: [["الحج رمضان", 33.33], ["أبو طارق", 33.33], ["أبو أدهم", 33.34]] },
 ];
 
+// العمود الرابع (fixed_salary) بيبقى true بس لموظف شهري مرتبه ثابت مهما
+// حصل (زي المكنيكي) — مش مرتبط بحضوره في السركي زي السواقين الشهريين.
 const SEED_EMPLOYEES = [
-  ["سيد حسين", "daily", 600],
-  ["أشرف", "daily", 550],
-  ["فتحي", "daily", 500],
-  ["محمد الصياد", "daily", 500],
-  ["أسامة علي", "daily", 475],
-  ["أبو نسمة", "daily", 400],
-  ["محمود", "daily", 400],
-  ["خالد", "daily", 375],
-  ["بدري", "daily", 375],
-  ["فكري", "daily", 375],
-  ["عبدالله", "daily", 500],
-  ["التربو", "monthly", 12000],
+  ["سيد حسين", "daily", 600, false],
+  ["أشرف", "daily", 550, false],
+  ["فتحي", "daily", 500, false],
+  ["محمد الصياد", "daily", 500, false],
+  ["أسامة علي", "daily", 475, false],
+  ["أبو نسمة", "daily", 400, false],
+  ["محمود", "daily", 400, false],
+  ["خالد", "daily", 375, false],
+  ["بدري", "daily", 375, false],
+  ["فكري", "daily", 375, false],
+  ["عبدالله", "daily", 500, false],
+  ["التربو", "monthly", 12000, true],
 ];
 
 const SEED_CONTRACTORS = ["محمد حماد", "حسام مرزوق", "مصطفى عثمان", "عثمان معتمد", "محمود عبد الكريم", "سوق"];
@@ -194,7 +197,9 @@ function seedIfEmpty(db) {
   const insertShare = db.prepare(
     "INSERT INTO equipment_partner_shares (equipment_id, partner_id, percentage) VALUES (?, ?, ?)"
   );
-  const insertEmployee = db.prepare("INSERT INTO employees (name, wage_type, rate) VALUES (?, ?, ?)");
+  const insertEmployee = db.prepare(
+    "INSERT INTO employees (name, wage_type, rate, fixed_salary) VALUES (?, ?, ?, ?)"
+  );
   const insertContractor = db.prepare("INSERT INTO contractors (name) VALUES (?)");
   const insertCategory = db.prepare("INSERT INTO expense_categories (name) VALUES (?)");
 
@@ -211,8 +216,8 @@ function seedIfEmpty(db) {
       }
     }
 
-    for (const [name, wageType, rate] of SEED_EMPLOYEES) {
-      insertEmployee.run(name, wageType, rate);
+    for (const [name, wageType, rate, fixedSalary] of SEED_EMPLOYEES) {
+      insertEmployee.run(name, wageType, rate, fixedSalary ? 1 : 0);
     }
 
     for (const name of SEED_CONTRACTORS) {
@@ -255,6 +260,14 @@ function initDatabase() {
     .some((col) => col.name === "is_paid_leave");
   if (!dailyLogsHasPaidLeave) {
     db.exec("ALTER TABLE daily_logs ADD COLUMN is_paid_leave INTEGER NOT NULL DEFAULT 0");
+  }
+
+  const employeesHasFixedSalary = db
+    .prepare("PRAGMA table_info(employees)")
+    .all()
+    .some((col) => col.name === "fixed_salary");
+  if (!employeesHasFixedSalary) {
+    db.exec("ALTER TABLE employees ADD COLUMN fixed_salary INTEGER NOT NULL DEFAULT 0");
   }
 
   const accountCount = db.prepare("SELECT COUNT(*) AS c FROM treasury_accounts").get().c;

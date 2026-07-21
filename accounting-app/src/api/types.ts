@@ -11,6 +11,7 @@ export interface Driver {
   name: string;
   wage_type: WageType;
   rate: number;
+  fixed_salary: boolean;
 }
 
 export interface EquipmentPartnerShare {
@@ -105,6 +106,7 @@ export interface PayrollRow {
   name: string;
   wage_type: WageType;
   rate: number;
+  fixed_salary: boolean;
   days_worked: number | null;
   gross_pay: number;
   advances_total: number;
