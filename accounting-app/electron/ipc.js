@@ -1009,20 +1009,22 @@ function registerIpcHandlers(db) {
     };
   });
 
-  // --- Danger zone: wipe every business record so the office can start
-  // entering its own real data from a blank system. Deleting the parent
-  // rows cascades to everything referencing them; treasury accounts stay
-  // (they're fixed account types, not data the user enters) but their
-  // balances reset to zero. ---
+  // --- Danger zone: wipe every recorded transaction (السركي, expenses,
+  // advances, bonuses, payments, Hassan's ledger) so the office can start a
+  // clean month — but keep the reference lists (equipment, partners, their
+  // shares, employees, contractors, expense categories, suppliers) exactly
+  // as set up, since that's real business setup, not day-to-day entries. ---
   ipcMain.handle("system:resetAll", () => {
     const tx = db.transaction(() => {
-      db.prepare("DELETE FROM equipment").run();
-      db.prepare("DELETE FROM partners").run();
-      db.prepare("DELETE FROM employees").run();
-      db.prepare("DELETE FROM contractors").run();
-      db.prepare("DELETE FROM suppliers").run();
-      db.prepare("DELETE FROM expense_categories").run();
+      db.prepare("DELETE FROM daily_logs").run();
+      db.prepare("DELETE FROM monthly_expenses").run();
+      db.prepare("DELETE FROM employee_advances").run();
+      db.prepare("DELETE FROM employee_bonuses").run();
       db.prepare("DELETE FROM hassan_ledger").run();
+      db.prepare("DELETE FROM contractor_payments").run();
+      db.prepare("DELETE FROM partner_payments").run();
+      db.prepare("DELETE FROM supplier_purchases").run();
+      db.prepare("DELETE FROM supplier_payments").run();
       db.prepare("UPDATE treasury_accounts SET current_balance = 0").run();
     });
     tx();

@@ -169,18 +169,82 @@ function computePairedCommission(equipmentName: string, driverLog: DailyLogRow, 
   return k - h + overtimeHours * (k / 8 - h / 8);
 }
 
-const STORAGE_KEY = "al-bunyan-mock-db-v2";
+const STORAGE_KEY = "al-bunyan-mock-db-v3";
 
-// كل الجداول تبدأ فاضية — المستخدم بيضيف بياناته الحقيقية بنفسه من صفحة
-// الإعدادات، مفيش داتا تجريبية متحطة مسبقًا.
+// Real starting data pulled from the company's existing Excel system, so the
+// preview opens already reflecting how the business actually operates.
+// Only the reference/master lists are seeded — daily logs, expenses,
+// advances and every other transactional table always start empty.
+const SEED_PARTNERS = ["الحج رمضان", "أبو طارق", "أبو أدهم", "مصطفى علي", "د. حازم", "محمد رمضان"];
+
+const SEED_EQUIPMENT: { name: string; shares: [string, number][] }[] = [
+  { name: "مان لفت 42", shares: [["الحج رمضان", 12.5], ["أبو طارق", 29.17], ["أبو أدهم", 58.33]] },
+  { name: "مان لفت 28 أزرق", shares: [["أبو أدهم", 50], ["الحج رمضان", 25], ["أبو طارق", 25]] },
+  { name: "مان لفت 28 أصفر", shares: [["الحج رمضان", 25], ["مصطفى علي", 75]] },
+  { name: "بوكيت أزرق", shares: [["الحج رمضان", 33.33], ["أبو طارق", 33.33], ["أبو أدهم", 33.34]] },
+  { name: "بوكيت أوتوماتيك", shares: [["مصطفى علي", 50], ["الحج رمضان", 50]] },
+  { name: "بوكيت ميتسوبيشي", shares: [["الحج رمضان", 50], ["مصطفى علي", 50]] },
+  { name: "بوكيت أخضر", shares: [["الحج رمضان", 50], ["أبو طارق", 50]] },
+  { name: "بوكيت كامل", shares: [["د. حازم", 100]] },
+  { name: "ونش 5 طن دبوسة", shares: [["الحج رمضان", 33.33], ["محمد رمضان", 33.33], ["أبو طارق", 33.34]] },
+  { name: "ونش 3 وصلة", shares: [["الحج رمضان", 33.33], ["أبو طارق", 33.33], ["أبو أدهم", 33.34]] },
+];
+
+const SEED_EMPLOYEES: [string, "daily" | "monthly", number][] = [
+  ["سيد حسين", "daily", 600],
+  ["أشرف", "daily", 550],
+  ["فتحي", "daily", 500],
+  ["محمد الصياد", "daily", 500],
+  ["أسامة علي", "daily", 475],
+  ["أبو نسمة", "daily", 400],
+  ["محمود", "daily", 400],
+  ["خالد", "daily", 375],
+  ["بدري", "daily", 375],
+  ["فكري", "daily", 375],
+  ["عبدالله", "daily", 500],
+  ["التربو", "monthly", 12000],
+];
+
+const SEED_CONTRACTORS = ["محمد حماد", "حسام مرزوق", "مصطفى عثمان", "عثمان معتمد", "محمود عبد الكريم", "سوق"];
+
+const SEED_EXPENSE_CATEGORIES = [
+  "زيت", "صيانة", "مكنيكي", "راتب سائق", "سكن", "سولار", "كارتة", "مواصلات", "قطع غيار", "شهادة معايرة", "زيت هيدروليك",
+];
+
 function buildSeedState(): MockState {
   let nextId = 1;
+  const partnerIds: Record<string, number> = {};
+  const partners = SEED_PARTNERS.map((name) => {
+    const id = nextId++;
+    partnerIds[name] = id;
+    return { id, name, opening_balance: 0 };
+  });
+
+  const equipment = SEED_EQUIPMENT.map((eq) => ({
+    id: nextId++,
+    name: eq.name,
+    shares: eq.shares.map(([partnerName, percentage]) => ({
+      partner_id: partnerIds[partnerName],
+      percentage,
+    })),
+  }));
+
+  const employees = SEED_EMPLOYEES.map(([name, wage_type, rate]) => ({
+    id: nextId++,
+    name,
+    wage_type,
+    rate,
+  }));
+
+  const contractors = SEED_CONTRACTORS.map((name) => ({ id: nextId++, name, opening_balance: 0 }));
+  const expense_categories = SEED_EXPENSE_CATEGORIES.map((name) => ({ id: nextId++, name }));
+
   return {
-    partners: [],
-    employees: [],
-    contractors: [],
-    expense_categories: [],
-    equipment: [],
+    partners,
+    employees,
+    contractors,
+    expense_categories,
+    equipment,
     daily_logs: [],
     monthly_expenses: [],
     employee_advances: [],
@@ -994,8 +1058,20 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
   }
 
   if (channel === "system:resetAll") {
-    const fresh = buildSeedState();
-    saveState(fresh);
+    // بيمسح السركي والمصروفات والسلف والحوافز ودفعات المقاولين والشركاء
+    // وحساب حسن بس — المعدات والشركاء والسائقين والمقاولين وأنواع المصروفات
+    // بتفضل زي ما هي، مش من الداتا اللي بتتمسح.
+    state.daily_logs = [];
+    state.monthly_expenses = [];
+    state.employee_advances = [];
+    state.employee_bonuses = [];
+    state.hassan_ledger = [];
+    state.contractor_payments = [];
+    state.partner_payments = [];
+    state.supplier_purchases = [];
+    state.supplier_payments = [];
+    for (const acc of state.treasury_accounts) acc.current_balance = 0;
+    saveState(state);
     return { ok: true };
   }
 

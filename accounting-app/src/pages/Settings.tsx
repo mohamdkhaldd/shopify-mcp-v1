@@ -23,10 +23,10 @@ export default function Settings() {
 
   async function handleResetAll() {
     const step1 = window.confirm(
-      "هتمسح كل البيانات نهائيًا — المعدات والشركاء والسائقين والمقاولين والسركي والمصروفات وكل حاجة. متأكد؟"
+      "هتمسح كل السركي والمقاول ومصروفات المعدات والسلف والحوافز ودفعات المقاولين والشركاء وحساب حسن — المعدات والشركاء والسائقين والمقاولين هيفضلوا زي ما هما. متأكد؟"
     );
     if (!step1) return;
-    const step2 = window.confirm("تأكيد أخير: مفيش رجوع بعد كده. تمسح كل البيانات فعلاً؟");
+    const step2 = window.confirm("تأكيد أخير: مفيش رجوع بعد كده. تمسح كل السركي والمصروفات فعلاً؟");
     if (!step2) return;
     setResetting(true);
     await systemApi.resetAll();
@@ -85,15 +85,16 @@ export default function Settings() {
       <div className="bg-white rounded-card shadow-card p-5 border border-rose-100">
         <h2 className="font-bold text-rose-600 mb-1">منطقة الخطر</h2>
         <p className="text-xs text-slate-400 mb-3">
-          بيمسح كل البيانات نهائيًا (المعدات، الشركاء، السائقين، المقاولين، السركي، المصروفات، الرواتب، كل حاجة)
-          عشان تبدأ تسجيل بياناتك الحقيقية من الأول.
+          بيمسح كل السركي والمقاول ومصروفات المعدات والسلف والحوافز ودفعات المقاولين والشركاء وحساب حسن، عشان تبدأ
+          شهر جديد فاضي — من غير ما يمسح المعدات ولا الشركاء ولا نسبهم ولا السائقين ولا المقاولين، دول بيفضلوا زي
+          ما هما.
         </p>
         <button
           onClick={handleResetAll}
           disabled={resetting}
           className="text-sm font-semibold text-rose-600 border border-rose-200 rounded-xl px-4 py-2 hover:bg-rose-50 disabled:opacity-50"
         >
-          {resetting ? "جاري المسح..." : "مسح كل البيانات وابدأ من جديد"}
+          {resetting ? "جاري المسح..." : "مسح كل السركي والمصروفات وابدأ شهر جديد"}
         </button>
       </div>
     </div>
