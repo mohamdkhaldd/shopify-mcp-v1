@@ -91,15 +91,24 @@ export interface EmployeeAdvance {
   note: string | null;
 }
 
+export interface EmployeeBonus {
+  id: number;
+  employee_id: number;
+  date: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  note: string | null;
+}
+
 export interface PayrollRow {
   id: number;
   name: string;
   wage_type: WageType;
   rate: number;
   days_worked: number | null;
-  deducted_days?: number;
   gross_pay: number;
   advances_total: number;
+  bonuses_total: number;
   net_pay: number;
 }
 
@@ -116,12 +125,11 @@ export interface PayrollDetail {
   employee: Driver;
   days: PayrollDayEntry[];
   advances: EmployeeAdvance[];
+  bonuses: EmployeeBonus[];
   grossPay: number;
   advancesTotal: number;
+  bonusesTotal: number;
   netPay: number;
-  deductedDays?: number;
-  deductionAmount?: number;
-  dailyRate?: number;
 }
 
 export interface HassanCommissionRow {

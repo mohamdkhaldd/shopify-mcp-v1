@@ -3,14 +3,15 @@ import MonthPicker from "../components/equipment/MonthPicker";
 import Icon from "../components/Icon";
 import PrintButton from "../components/PrintButton";
 import { PrintSignoff } from "../components/PrintSignoff";
-import { employeeAdvancesApi, payrollApi } from "../api/client";
+import { employeeAdvancesApi, employeeBonusesApi, payrollApi } from "../api/client";
 import { PaymentMethod, PayrollDetail, PayrollRow } from "../api/types";
 import { currentMonthKey, monthLabel } from "../utils/months";
 import { formatEGP } from "../utils/format";
 import { PAYMENT_METHODS, paymentMethodLabel } from "../utils/paymentMethods";
 
-// شيت المرتب بيتبعت للسائق كإيصال — عايزين "اشتغل على المعدة دي كذا يوم" مش
-// سرد كل يوم لوحده، فبنجمع أيام الشغل حسب المعدة بدل التفاصيل اليومية.
+// شيت المرتب بيتبعت للسائق كإيصال — عايزين "اشتغل على المعدة دي كذا يوم أخد
+// كذا" مش خصم من مرتب كامل، فبنجمع أيام الشغل (والجمعات المدفوعة للشهري)
+// حسب المعدة بدل التفاصيل اليومية، والمجموع بيبقى هو الإجمالي نفسه.
 function equipmentTotals(days: PayrollDetail["days"]): { equipment_name: string; days: number; value: number }[] {
   const byEquipment = new Map<string, { days: number; value: number }>();
   for (const d of days) {
@@ -28,6 +29,10 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [note, setNote] = useState("");
+  const [bonusDate, setBonusDate] = useState(new Date().toISOString().slice(0, 10));
+  const [bonusAmount, setBonusAmount] = useState("");
+  const [bonusMethod, setBonusMethod] = useState<PaymentMethod>("cash");
+  const [bonusNote, setBonusNote] = useState("");
 
   const refresh = () => payrollApi.detail(row.id, month).then(setDetail);
 
@@ -58,10 +63,32 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
     onChanged();
   }
 
+  async function handleAddBonus(e: FormEvent) {
+    e.preventDefault();
+    if (!bonusAmount || !bonusNote) return;
+    await employeeBonusesApi.create({
+      employee_id: row.id,
+      date: bonusDate,
+      amount: Number(bonusAmount),
+      payment_method: bonusMethod,
+      note: bonusNote,
+    });
+    setBonusAmount("");
+    setBonusNote("");
+    await refresh();
+    onChanged();
+  }
+
+  async function handleDeleteBonus(id: number) {
+    await employeeBonusesApi.remove(id);
+    await refresh();
+    onChanged();
+  }
+
   if (!detail) {
     return (
       <tr>
-        <td colSpan={6} className="px-4 py-4 text-sm text-slate-400">
+        <td colSpan={7} className="px-4 py-4 text-sm text-slate-400">
           جاري التحميل...
         </td>
       </tr>
@@ -70,7 +97,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
 
   return (
     <tr>
-      <td colSpan={6} className="bg-slate-50 px-4 py-5 rounded-xl">
+      <td colSpan={7} className="bg-slate-50 px-4 py-5 rounded-xl">
         <div className="bg-white rounded-card shadow-card p-5 max-w-2xl">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
             <div>
@@ -85,7 +112,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="grid grid-cols-4 gap-2.5 mb-4">
             <div className="text-center bg-primary-light rounded-xl py-2.5">
               <div className="text-xs text-slate-500">الإجمالي</div>
               <div className="font-bold text-slate-800">{formatEGP(detail.grossPay)}</div>
@@ -94,67 +121,43 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
               <div className="text-xs text-slate-500">السلف</div>
               <div className="font-bold text-rose-600">{formatEGP(detail.advancesTotal)}</div>
             </div>
+            <div className="text-center bg-emerald-50 rounded-xl py-2.5">
+              <div className="text-xs text-slate-500">الحافز</div>
+              <div className="font-bold text-emerald-600">{formatEGP(detail.bonusesTotal)}</div>
+            </div>
             <div className="text-center bg-primary rounded-xl py-2.5">
               <div className="text-xs text-white/80">الصافي المستحق</div>
               <div className="font-extrabold text-white">{formatEGP(detail.netPay)}</div>
             </div>
           </div>
 
-          {row.wage_type === "daily" && (
-            <div className="mb-4">
-              <div className="text-xs font-bold text-slate-500 mb-1.5">الشغل حسب المعدة ({detail.days.length} يوم)</div>
-              {detail.days.length === 0 ? (
-                <div className="text-xs text-slate-400">لسه ملوش أيام مسجلة الشهر ده.</div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-slate-400 border-b border-slate-100">
-                      <th className="text-start font-semibold py-1.5">المعدة</th>
-                      <th className="text-start font-semibold py-1.5">عدد الأيام</th>
-                      <th className="text-start font-semibold py-1.5">القيمة</th>
+          <div className="mb-4">
+            <div className="text-xs font-bold text-slate-500 mb-1.5">الشغل حسب المعدة ({detail.days.length} يوم)</div>
+            {detail.days.length === 0 ? (
+              <div className="text-xs text-slate-400">لسه ملوش أيام مسجلة الشهر ده.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-slate-400 border-b border-slate-100">
+                    <th className="text-start font-semibold py-1.5">المعدة</th>
+                    <th className="text-start font-semibold py-1.5">عدد الأيام</th>
+                    <th className="text-start font-semibold py-1.5">القيمة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {equipmentTotals(detail.days).map((e) => (
+                    <tr key={e.equipment_name} className="border-b border-slate-50 last:border-0">
+                      <td className="py-1.5 text-slate-600">{e.equipment_name}</td>
+                      <td className="py-1.5 text-slate-500">{e.days}</td>
+                      <td className="py-1.5 font-semibold text-slate-700">{formatEGP(e.value)}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {equipmentTotals(detail.days).map((e) => (
-                      <tr key={e.equipment_name} className="border-b border-slate-50 last:border-0">
-                        <td className="py-1.5 text-slate-600">{e.equipment_name}</td>
-                        <td className="py-1.5 text-slate-500">{e.days}</td>
-                        <td className="py-1.5 font-semibold text-slate-700">{formatEGP(e.value)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
 
-          {row.wage_type === "monthly" && (
-            <div className="mb-4">
-              <div className="text-xs font-bold text-slate-500 mb-1.5">تفاصيل المرتب الشهري</div>
-              <div className="grid grid-cols-3 gap-2 mb-2">
-                <div className="bg-slate-50 rounded-lg px-3 py-2 text-center">
-                  <div className="text-xs text-slate-400">سعر اليوم</div>
-                  <div className="font-semibold text-slate-700">{formatEGP(detail.dailyRate ?? 0)}</div>
-                </div>
-                <div className="bg-slate-50 rounded-lg px-3 py-2 text-center">
-                  <div className="text-xs text-slate-400">أيام الغياب</div>
-                  <div className="font-semibold text-slate-700">{detail.deductedDays ?? 0}</div>
-                </div>
-                <div className="bg-rose-50 rounded-lg px-3 py-2 text-center">
-                  <div className="text-xs text-slate-400">قيمة الخصم</div>
-                  <div className="font-semibold text-rose-600">
-                    {(detail.deductionAmount ?? 0) > 0 ? `- ${formatEGP(detail.deductionAmount ?? 0)}` : "—"}
-                  </div>
-                </div>
-              </div>
-              <div className="text-[11px] text-slate-400">
-                المرتب الشهري بيتقسم على عدد أيام الشهر، وأي يوم مشتغلش فيه (وملوش إجازة مدفوعة) بيتخصم من المرتب —
-                إلا يوم الجمعة اللي بيتحسب مدفوع دايمًا حتى لو مفيش شغل.
-              </div>
-            </div>
-          )}
-
-          <div>
+          <div className="mb-4">
             <div className="text-xs font-bold text-slate-500 mb-1.5">السلف</div>
             {detail.advances.length > 0 && (
               <ul className="space-y-1 mb-2">
@@ -210,6 +213,62 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
             </form>
           </div>
 
+          <div>
+            <div className="text-xs font-bold text-slate-500 mb-1.5">الحافز</div>
+            {detail.bonuses.length > 0 && (
+              <ul className="space-y-1 mb-2">
+                {detail.bonuses.map((b) => (
+                  <li key={b.id} className="flex items-center justify-between text-sm">
+                    <span className="text-slate-600">
+                      {b.date} — {formatEGP(b.amount)} — {paymentMethodLabel(b.payment_method)}{" "}
+                      {b.note && <span className="text-slate-400">({b.note})</span>}
+                    </span>
+                    <button onClick={() => handleDeleteBonus(b.id)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
+                      حذف
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form onSubmit={handleAddBonus} className="no-print flex flex-wrap items-end gap-2">
+              <input
+                type="date"
+                value={bonusDate}
+                onChange={(e) => setBonusDate(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <input
+                type="number"
+                min="0"
+                placeholder="القيمة"
+                value={bonusAmount}
+                onChange={(e) => setBonusAmount(e.target.value)}
+                className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <select
+                value={bonusMethod}
+                onChange={(e) => setBonusMethod(e.target.value as PaymentMethod)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              >
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="الحافز ده عشان إيه؟"
+                value={bonusNote}
+                onChange={(e) => setBonusNote(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <button type="submit" className="bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-emerald-700">
+                إضافة حافز
+              </button>
+            </form>
+          </div>
+
           <PrintSignoff />
         </div>
       </td>
@@ -239,7 +298,7 @@ export default function Salaries() {
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">الرواتب</h1>
           <p className="text-sm text-slate-500 mt-1">
-            دوس على اسم أي سائق تشوف شيت مرتبه بالتفصيل — الأيام والمعدات والسلف — وتقدر تصوره وتبعتهوله.
+            دوس على اسم أي سائق تشوف شيت مرتبه بالتفصيل — الأيام والمعدات والسلف والحافز — وتقدر تصوره وتبعتهوله.
           </p>
         </div>
         <MonthPicker month={month} onChange={setMonth} />
@@ -259,6 +318,7 @@ export default function Salaries() {
                 <th className="text-start font-semibold py-2">أيام العمل</th>
                 <th className="text-start font-semibold py-2">الإجمالي</th>
                 <th className="text-start font-semibold py-2">السلف</th>
+                <th className="text-start font-semibold py-2">الحافز</th>
                 <th className="text-start font-semibold py-2">الصافي</th>
               </tr>
             </thead>
@@ -281,6 +341,9 @@ export default function Salaries() {
                     <td className="py-2.5 text-rose-500">
                       {row.advances_total > 0 ? `- ${formatEGP(row.advances_total)}` : "—"}
                     </td>
+                    <td className="py-2.5 text-emerald-600">
+                      {row.bonuses_total > 0 ? `+ ${formatEGP(row.bonuses_total)}` : "—"}
+                    </td>
                     <td className="py-2.5 font-bold text-primary-dark">{formatEGP(row.net_pay)}</td>
                   </tr>
                   {expandedId === row.id && <PayslipPanel row={row} month={month} onChanged={refresh} />}
@@ -289,7 +352,7 @@ export default function Salaries() {
             </tbody>
             <tfoot className="no-print">
               <tr>
-                <td colSpan={5} className="pt-3 text-sm font-bold text-slate-700">
+                <td colSpan={6} className="pt-3 text-sm font-bold text-slate-700">
                   إجمالي صافي الرواتب
                 </td>
                 <td className="pt-3 text-sm font-bold text-primary-dark">{formatEGP(totalNet)}</td>

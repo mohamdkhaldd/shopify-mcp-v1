@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { expenseCategoriesApi } from "../api/client";
+import { expenseCategoriesApi, systemApi } from "../api/client";
 import SimpleEntityManager from "../components/settings/SimpleEntityManager";
 import Icon from "../components/Icon";
 import DriversTab from "./settings/DriversTab";
@@ -19,6 +19,19 @@ const tabs: { id: TabId; label: string; icon: string }[] = [
 
 export default function Settings() {
   const [active, setActive] = useState<TabId>("partners");
+  const [resetting, setResetting] = useState(false);
+
+  async function handleResetAll() {
+    const step1 = window.confirm(
+      "هتمسح كل البيانات نهائيًا — المعدات والشركاء والسائقين والمقاولين والسركي والمصروفات وكل حاجة. متأكد؟"
+    );
+    if (!step1) return;
+    const step2 = window.confirm("تأكيد أخير: مفيش رجوع بعد كده. تمسح كل البيانات فعلاً؟");
+    if (!step2) return;
+    setResetting(true);
+    await systemApi.resetAll();
+    window.location.reload();
+  }
 
   return (
     <div className="space-y-6">
@@ -68,6 +81,21 @@ export default function Settings() {
           api={expenseCategoriesApi}
         />
       )}
+
+      <div className="bg-white rounded-card shadow-card p-5 border border-rose-100">
+        <h2 className="font-bold text-rose-600 mb-1">منطقة الخطر</h2>
+        <p className="text-xs text-slate-400 mb-3">
+          بيمسح كل البيانات نهائيًا (المعدات، الشركاء، السائقين، المقاولين، السركي، المصروفات، الرواتب، كل حاجة)
+          عشان تبدأ تسجيل بياناتك الحقيقية من الأول.
+        </p>
+        <button
+          onClick={handleResetAll}
+          disabled={resetting}
+          className="text-sm font-semibold text-rose-600 border border-rose-200 rounded-xl px-4 py-2 hover:bg-rose-50 disabled:opacity-50"
+        >
+          {resetting ? "جاري المسح..." : "مسح كل البيانات وابدأ من جديد"}
+        </button>
+      </div>
     </div>
   );
 }

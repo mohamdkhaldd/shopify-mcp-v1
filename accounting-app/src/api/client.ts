@@ -9,6 +9,7 @@ import {
   Driver,
   Equipment,
   EmployeeAdvance,
+  EmployeeBonus,
   EquipmentSummary,
   ExpenseCategory,
   HassanBalance,
@@ -104,10 +105,22 @@ export const employeeAdvancesApi = {
   remove: (id: number): Promise<void> => invoke("employeeAdvances:delete", { id }),
 };
 
+export const employeeBonusesApi = {
+  list: (employee_id: number, month: string): Promise<EmployeeBonus[]> =>
+    invoke("employeeBonuses:list", { employee_id, month }),
+  create: (bonus: Omit<EmployeeBonus, "id">): Promise<EmployeeBonus> =>
+    invoke("employeeBonuses:create", bonus),
+  remove: (id: number): Promise<void> => invoke("employeeBonuses:delete", { id }),
+};
+
 export const payrollApi = {
   summary: (month: string): Promise<PayrollRow[]> => invoke("payroll:summary", { month }),
   detail: (employee_id: number, month: string): Promise<PayrollDetail> =>
     invoke("payroll:detail", { employee_id, month }),
+};
+
+export const systemApi = {
+  resetAll: (): Promise<void> => invoke("system:resetAll"),
 };
 
 export const hassanApi = {

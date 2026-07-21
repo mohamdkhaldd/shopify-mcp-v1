@@ -335,9 +335,30 @@ function registerIpcHandlers(db) {
     return { ok: true };
   });
 
+  // --- Employee bonuses (حافز) — an amount added on top of the payroll, with
+  // a note explaining what it's for. Applies to daily and monthly wages alike. ---
+  ipcMain.handle("employeeBonuses:list", (_e, { employee_id, month }) =>
+    db
+      .prepare("SELECT * FROM employee_bonuses WHERE employee_id = ? AND date LIKE ? ORDER BY date")
+      .all(employee_id, `${month}%`)
+  );
+  ipcMain.handle("employeeBonuses:create", (_e, bonus) => {
+    const info = db
+      .prepare(
+        `INSERT INTO employee_bonuses (employee_id, date, amount, payment_method, note)
+         VALUES (@employee_id, @date, @amount, @payment_method, @note)`
+      )
+      .run({ ...bonus, payment_method: bonus.payment_method || "cash", note: bonus.note ?? null });
+    return db.prepare("SELECT * FROM employee_bonuses WHERE id = ?").get(info.lastInsertRowid);
+  });
+  ipcMain.handle("employeeBonuses:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM employee_bonuses WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
   // --- Payroll summary (doc section 5): daily wage = sum of driver day-values
-  // across every equipment this month; monthly wage = fixed rate. Advances
-  // are deducted from either type. ---
+  // across every equipment this month; monthly wage = prorated fixed rate.
+  // Advances are deducted and bonuses are added for either type. ---
   ipcMain.handle("payroll:summary", (_e, { month }) => {
     const employees = db.prepare("SELECT * FROM employees ORDER BY name").all();
     const driverLogsStmt = db.prepare(
@@ -346,21 +367,25 @@ function registerIpcHandlers(db) {
     const advancesStmt = db.prepare(
       "SELECT COALESCE(SUM(amount), 0) AS total FROM employee_advances WHERE employee_id = ? AND date LIKE ?"
     );
+    const bonusesStmt = db.prepare(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM employee_bonuses WHERE employee_id = ? AND date LIKE ?"
+    );
 
     return employees.map((emp) => {
       const advancesTotal = advancesStmt.get(emp.id, `${month}%`).total;
+      const bonusesTotal = bonusesStmt.get(emp.id, `${month}%`).total;
       if (emp.wage_type === "monthly") {
-        const { grossPay, deductedDays } = monthlyEmployeeGrossPay(db, emp, month);
+        const { grossPay } = monthlyEmployeeGrossPay(db, emp, month);
         return {
           id: emp.id,
           name: emp.name,
           wage_type: emp.wage_type,
           rate: emp.rate,
           days_worked: null,
-          deducted_days: deductedDays,
           gross_pay: grossPay,
           advances_total: advancesTotal,
-          net_pay: grossPay - advancesTotal,
+          bonuses_total: bonusesTotal,
+          net_pay: grossPay + bonusesTotal - advancesTotal,
         };
       }
       const logs = driverLogsStmt.all(emp.name, `${month}%`);
@@ -373,23 +398,31 @@ function registerIpcHandlers(db) {
         days_worked: logs.length,
         gross_pay: grossPay,
         advances_total: advancesTotal,
-        net_pay: grossPay - advancesTotal,
+        bonuses_total: bonusesTotal,
+        net_pay: grossPay + bonusesTotal - advancesTotal,
       };
     });
   });
 
   // --- Payroll detail: the per-driver "payslip" — every day worked this
-  // month, which equipment, and what it paid, plus the advances list. This
-  // is what gets screenshotted and sent to the driver. ---
+  // month, which equipment, and what it paid, plus advances and bonuses.
+  // This is what gets screenshotted and sent to the driver. Monthly wages
+  // show a plain days×equipment breakdown too (no "full salary minus
+  // deduction" framing) — unlogged Fridays are still paid, so they show up
+  // as their own "أيام الجمعة" line at the employee's daily rate. ---
   ipcMain.handle("payroll:detail", (_e, { employee_id, month }) => {
     const employee = db.prepare("SELECT * FROM employees WHERE id = ?").get(employee_id);
     const advances = db
       .prepare("SELECT * FROM employee_advances WHERE employee_id = ? AND date LIKE ? ORDER BY date")
       .all(employee_id, `${month}%`);
     const advancesTotal = advances.reduce((sum, a) => sum + a.amount, 0);
+    const bonuses = db
+      .prepare("SELECT * FROM employee_bonuses WHERE employee_id = ? AND date LIKE ? ORDER BY date")
+      .all(employee_id, `${month}%`);
+    const bonusesTotal = bonuses.reduce((sum, b) => sum + b.amount, 0);
 
     if (employee.wage_type === "monthly") {
-      const { grossPay, deductedDays, dailyRate } = monthlyEmployeeGrossPay(db, employee, month);
+      const { grossPay, dailyRate } = monthlyEmployeeGrossPay(db, employee, month);
       const logsWithEquipment = db
         .prepare(
           `SELECT dl.*, e.name AS equipment_name FROM daily_logs dl
@@ -398,24 +431,37 @@ function registerIpcHandlers(db) {
            ORDER BY dl.date`
         )
         .all(employee.name, `${month}%`);
+      const loggedDates = new Set(logsWithEquipment.map((l) => l.date));
       const days = logsWithEquipment.map((l) => ({
         date: l.date,
         equipment_name: l.is_paid_leave ? "إجازة مدفوعة" : l.equipment_name,
         actual_hours: l.actual_hours,
         base_hours: l.base_hours,
         day_rate: null,
-        day_value: 0,
+        day_value: dailyRate,
       }));
+      for (const date of daysInMonthList(month)) {
+        if (isFriday(date) && !loggedDates.has(date)) {
+          days.push({
+            date,
+            equipment_name: "أيام الجمعة",
+            actual_hours: null,
+            base_hours: null,
+            day_rate: null,
+            day_value: dailyRate,
+          });
+        }
+      }
+      days.sort((a, b) => a.date.localeCompare(b.date));
       return {
         employee,
         days,
         advances,
+        bonuses,
         grossPay,
         advancesTotal,
-        netPay: grossPay - advancesTotal,
-        deductedDays,
-        deductionAmount: deductedDays * dailyRate,
-        dailyRate,
+        bonusesTotal,
+        netPay: grossPay + bonusesTotal - advancesTotal,
       };
     }
 
@@ -437,7 +483,7 @@ function registerIpcHandlers(db) {
     }));
     const grossPay = days.reduce((sum, d) => sum + d.day_value, 0);
 
-    return { employee, days, advances, grossPay, advancesTotal, netPay: grossPay - advancesTotal };
+    return { employee, days, advances, bonuses, grossPay, advancesTotal, bonusesTotal, netPay: grossPay + bonusesTotal - advancesTotal };
   });
 
   // --- Hassan: commission (doc section 4) ---
@@ -773,6 +819,7 @@ function registerIpcHandlers(db) {
     const outgoingExpenses = sumByMethod("monthly_expenses", "payment_method", "month", month);
     const outgoingSuppliers = sumByMethod("supplier_payments", "method", "date", `${month}%`);
     const outgoingAdvances = sumByMethod("employee_advances", "payment_method", "date", `${month}%`);
+    const outgoingBonuses = sumByMethod("employee_bonuses", "payment_method", "date", `${month}%`);
 
     return accounts.map((acc) => {
       const monthIncoming = incoming[acc.name] ?? 0;
@@ -780,7 +827,8 @@ function registerIpcHandlers(db) {
         (outgoingPartners[acc.name] ?? 0) +
         (outgoingExpenses[acc.name] ?? 0) +
         (outgoingSuppliers[acc.name] ?? 0) +
-        (outgoingAdvances[acc.name] ?? 0);
+        (outgoingAdvances[acc.name] ?? 0) +
+        (outgoingBonuses[acc.name] ?? 0);
       const netMovement = monthIncoming - monthOutgoing;
       return {
         id: acc.id,
@@ -901,15 +949,18 @@ function registerIpcHandlers(db) {
       const advances = db
         .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_advances WHERE employee_id = ? AND date LIKE ?")
         .get(emp.id, `${month}%`).total;
+      const bonuses = db
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_bonuses WHERE employee_id = ? AND date LIKE ?")
+        .get(emp.id, `${month}%`).total;
       if (emp.wage_type === "monthly") {
         const { grossPay } = monthlyEmployeeGrossPay(db, emp, month);
-        payrollTotal += grossPay - advances;
+        payrollTotal += grossPay + bonuses - advances;
       } else {
         const gross = db
           .prepare("SELECT * FROM daily_logs WHERE role = 'driver' AND person_name = ? AND date LIKE ?")
           .all(emp.name, `${month}%`)
           .reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
-        payrollTotal += gross - advances;
+        payrollTotal += gross + bonuses - advances;
       }
     }
     const commissionRows = [];
@@ -956,6 +1007,26 @@ function registerIpcHandlers(db) {
       hassanCommissionTotal,
       treasuryBalances: treasuryAccounts.map((a) => ({ name: a.name, name_ar: ACCOUNT_NAME_AR[a.name] ?? a.name, balance: a.current_balance })),
     };
+  });
+
+  // --- Danger zone: wipe every business record so the office can start
+  // entering its own real data from a blank system. Deleting the parent
+  // rows cascades to everything referencing them; treasury accounts stay
+  // (they're fixed account types, not data the user enters) but their
+  // balances reset to zero. ---
+  ipcMain.handle("system:resetAll", () => {
+    const tx = db.transaction(() => {
+      db.prepare("DELETE FROM equipment").run();
+      db.prepare("DELETE FROM partners").run();
+      db.prepare("DELETE FROM employees").run();
+      db.prepare("DELETE FROM contractors").run();
+      db.prepare("DELETE FROM suppliers").run();
+      db.prepare("DELETE FROM expense_categories").run();
+      db.prepare("DELETE FROM hassan_ledger").run();
+      db.prepare("UPDATE treasury_accounts SET current_balance = 0").run();
+    });
+    tx();
+    return { ok: true };
   });
 }
 
