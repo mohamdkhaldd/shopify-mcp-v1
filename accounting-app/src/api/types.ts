@@ -69,6 +69,7 @@ export interface PartnerDistributionRow {
 }
 
 export interface EquipmentSummary {
+  driverIncome: number;
   marketIncome: number;
   income: number;
   driverSalaryExpense: number;

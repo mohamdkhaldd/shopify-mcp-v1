@@ -55,11 +55,6 @@ export default function DailyLogTable({
   mismatchedDates,
   onChanged,
 }: DailyLogTableProps) {
-  // للسركي (role="driver")، مرتب السائق ثابت من سعره المسجل في الإعدادات —
-  // مش بيتكتب يدوي في الشيت خالص، الشيت ده بس بيسجل الأيام والساعات.
-  // المقاول لسه بيكتب سعره يدوي كل يوم لأنه مش موظف بسعر ثابت في الإعدادات.
-  const isDriverAutoRate = role === "driver";
-
   const dates = useMemo(() => daysInMonth(month), [month]);
   const [rows, setRows] = useState<Record<string, RowDraft>>({});
   const [loading, setLoading] = useState(true);
@@ -122,10 +117,7 @@ export default function DailyLogTable({
     const row = rows[date];
     if (!row) return;
 
-    const hasContent =
-      mode === "hours"
-        ? row.person_name && (isDriverAutoRate || row.day_rate)
-        : row.person_name && row.fixed_value;
+    const hasContent = mode === "hours" ? row.person_name && row.day_rate : row.person_name && row.fixed_value;
 
     if (!hasContent) {
       if (row.id) {
@@ -136,12 +128,6 @@ export default function DailyLogTable({
       return;
     }
 
-    // للسركي: نحدد سعر اليوم من سعر السائق المسجل في الإعدادات، مش من اللي
-    // كتبناه في الخانة (الخانة دي مبقتش موجودة أصلاً للسركي).
-    const resolvedDayRate = isDriverAutoRate
-      ? people.find((p) => p.name === row.person_name)?.rate ?? 0
-      : Number(row.day_rate) || 0;
-
     updateRow(date, { saving: true });
     const saved = await dailyLogsApi.upsert({
       equipment_id: equipmentId,
@@ -150,7 +136,7 @@ export default function DailyLogTable({
       person_name: row.person_name,
       actual_hours: mode === "hours" ? Number(row.actual_hours) || 0 : null,
       base_hours: mode === "hours" ? Number(row.base_hours) || 0 : null,
-      day_rate: mode === "hours" ? resolvedDayRate : null,
+      day_rate: mode === "hours" ? Number(row.day_rate) || 0 : null,
       fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
       hassan_commission: mode === "fixed" && row.hassan_commission ? Number(row.hassan_commission) : null,
     });
@@ -170,10 +156,7 @@ export default function DailyLogTable({
   async function applyBulkFill() {
     const from = Number(bulkFrom);
     const to = Number(bulkTo);
-    const resolvedRate = isDriverAutoRate
-      ? people.find((p) => p.name === bulkPerson)?.rate ?? 0
-      : Number(bulkRate) || 0;
-    if (!bulkPerson || !resolvedRate || !from || !to || from > to) return;
+    if (!bulkPerson || !bulkRate || !from || !to || from > to) return;
 
     setBulkApplying(true);
     const targetDates = dates.filter((date) => {
@@ -189,7 +172,7 @@ export default function DailyLogTable({
         person_name: bulkPerson,
         actual_hours: Number(bulkBaseHours) || 0,
         base_hours: Number(bulkBaseHours) || 0,
-        day_rate: resolvedRate,
+        day_rate: Number(bulkRate) || 0,
         fixed_value: null,
         hassan_commission: null,
       });
@@ -205,8 +188,6 @@ export default function DailyLogTable({
   if (loading) {
     return <div className="bg-white rounded-card shadow-card p-5 text-sm text-slate-400">جاري التحميل...</div>;
   }
-
-  const hoursColumnCount = isDriverAutoRate ? 4 : 5; // اليوم+الاسم+فعلية+أساسية(+يومية للمقاول بس)
 
   return (
     <div className="bg-white rounded-card shadow-card p-5">
@@ -257,18 +238,16 @@ export default function DailyLogTable({
                 ))}
               </select>
             </div>
-            {!isDriverAutoRate && (
-              <div>
-                <label className="block text-[11px] text-slate-400 mb-1">سعر اليوم</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={bulkRate}
-                  onChange={(e) => setBulkRate(e.target.value)}
-                  className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                />
-              </div>
-            )}
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1">سعر اليوم</label>
+              <input
+                type="number"
+                min="0"
+                value={bulkRate}
+                onChange={(e) => setBulkRate(e.target.value)}
+                className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+            </div>
             <div>
               <label className="block text-[11px] text-slate-400 mb-1">الساعات الأساسية</label>
               <input
@@ -282,16 +261,14 @@ export default function DailyLogTable({
             </div>
             <button
               onClick={applyBulkFill}
-              disabled={bulkApplying || !bulkPerson || (!isDriverAutoRate && !bulkRate)}
+              disabled={bulkApplying || !bulkPerson || !bulkRate}
               className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
             >
               {bulkApplying ? "جاري التعبئة..." : "تطبيق على الأيام"}
             </button>
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
-            {isDriverAutoRate
-              ? "بيملأ الاسم والساعات الأساسية لكل الأيام في المدى ده (المرتب بيتحسب من سعر السائق في الإعدادات) — لو يوم فيه أوفر تايم عدّل الساعات الفعلية بتاعته لوحده بعد التعبئة."
-              : "بيملأ الاسم وسعر اليوم والساعات الأساسية لكل الأيام في المدى ده، وبيفترض إن الساعات الفعلية زي الأساسية (من غير أوفر تايم) — لو يوم فيه أوفر تايم عدّل الساعات الفعلية بتاعته لوحده بعد التعبئة."}
+            بيملأ الاسم وسعر اليوم والساعات الأساسية لكل الأيام في المدى ده، وبيفترض إن الساعات الفعلية زي الأساسية (من غير أوفر تايم) — لو يوم فيه أوفر تايم عدّل الساعات الفعلية بتاعته لوحده بعد التعبئة.
           </div>
         </div>
       )}
@@ -306,7 +283,7 @@ export default function DailyLogTable({
                 <>
                   <th className="text-start font-semibold py-2">الساعات الفعلية</th>
                   <th className="text-start font-semibold py-2">الساعات الأساسية</th>
-                  {!isDriverAutoRate && <th className="text-start font-semibold py-2">اليومية</th>}
+                  <th className="text-start font-semibold py-2">اليومية</th>
                 </>
               ) : (
                 // القيمة والكوميشن قبل الخصم يفضلوا مخفيين وقت الطباعة — الشيت
@@ -382,18 +359,16 @@ export default function DailyLogTable({
                           className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                         />
                       </td>
-                      {!isDriverAutoRate && (
-                        <td className="py-1.5">
-                          <input
-                            type="number"
-                            min="0"
-                            value={row.day_rate}
-                            onChange={(e) => updateRow(date, { day_rate: e.target.value })}
-                            onBlur={() => saveRow(date)}
-                            className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                          />
-                        </td>
-                      )}
+                      <td className="py-1.5">
+                        <input
+                          type="number"
+                          min="0"
+                          value={row.day_rate}
+                          onChange={(e) => updateRow(date, { day_rate: e.target.value })}
+                          onBlur={() => saveRow(date)}
+                          className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        />
+                      </td>
                     </>
                   ) : (
                     <>
@@ -428,7 +403,7 @@ export default function DailyLogTable({
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={mode === "hours" ? hoursColumnCount : 4} className="pt-3 text-sm font-bold text-slate-700">
+              <td colSpan={mode === "hours" ? 5 : 4} className="pt-3 text-sm font-bold text-slate-700">
                 إجمالي الشهر
               </td>
               <td className="pt-3 text-sm font-bold text-primary-dark whitespace-nowrap">{formatEGP(monthTotal)}</td>
