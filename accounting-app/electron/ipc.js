@@ -20,6 +20,20 @@ function computeDriverWageValue(log, employeeRate) {
   return employeeRate + overtimeHours * hourlyRate;
 }
 
+// أيام الجمعة إجازة أسبوعية مدفوعة لأصحاب الأجر اليومي، حتى لو مفيش سجل ليها
+// في شيت السركي — بتتحسب كيوم عادي بسعر السائق الثابت.
+function fridaysInMonth(monthKey) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const daysCount = new Date(year, month, 0).getDate();
+  const fridays = [];
+  for (let day = 1; day <= daysCount; day++) {
+    if (new Date(year, month - 1, day).getDay() === 5) {
+      fridays.push(`${monthKey}-${String(day).padStart(2, "0")}`);
+    }
+  }
+  return fridays;
+}
+
 // مرتب السائق بيتحط كمصروف حقيقي على المعدة ("مرتب سائق") بدل الاعتماد على
 // دخل السركي المكتوب. month=null يحسب كل الوقت (مستخدم في equipmentAllTimeProfit).
 function driverSalaryForEquipment(db, equipmentId, month) {
@@ -63,6 +77,29 @@ function registerIpcHandlers(db) {
   ipcMain.handle("employees:delete", (_e, { id }) => {
     db.prepare("DELETE FROM employees WHERE id = ?").run(id);
     return { ok: true };
+  });
+  // بيسمح بتعديل السائق (زي زيادة مرتبه) من غير ما تحذفه وتضيفه تاني كسائق
+  // جديد — لو اسمه اتغيّر، بنحدّث سجلات السركي القديمة اللي باسمه القديم
+  // عشان تفضل مربوطة بيه.
+  ipcMain.handle("employees:update", (_e, { id, name, wage_type, rate }) => {
+    const trimmedName = name.trim();
+    const existing = db.prepare("SELECT * FROM employees WHERE id = ?").get(id);
+    const tx = db.transaction(() => {
+      db.prepare("UPDATE employees SET name = ?, wage_type = ?, rate = ? WHERE id = ?").run(
+        trimmedName,
+        wage_type,
+        rate,
+        id
+      );
+      if (existing && existing.name !== trimmedName) {
+        db.prepare("UPDATE daily_logs SET person_name = ? WHERE role = 'driver' AND person_name = ?").run(
+          trimmedName,
+          existing.name
+        );
+      }
+    });
+    tx();
+    return db.prepare("SELECT * FROM employees WHERE id = ?").get(id);
   });
 
   // --- Contractors ---
@@ -301,7 +338,10 @@ function registerIpcHandlers(db) {
         };
       }
       const logs = driverLogsStmt.all(emp.name, `${month}%`);
-      const grossPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
+      const loggedPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
+      const workedDates = new Set(logs.map((l) => l.date));
+      const paidFridays = fridaysInMonth(month).filter((f) => !workedDates.has(f));
+      const grossPay = loggedPay + paidFridays.length * emp.rate;
       return {
         id: emp.id,
         name: emp.name,
@@ -344,7 +384,7 @@ function registerIpcHandlers(db) {
          ORDER BY dl.date`
       )
       .all(employee.name, `${month}%`);
-    const days = logs.map((l) => ({
+    const loggedDays = logs.map((l) => ({
       date: l.date,
       equipment_name: l.equipment_name,
       actual_hours: l.actual_hours,
@@ -352,6 +392,18 @@ function registerIpcHandlers(db) {
       day_rate: employee.rate,
       day_value: computeDriverWageValue(l, employee.rate),
     }));
+    const workedDates = new Set(logs.map((l) => l.date));
+    const fridayDays = fridaysInMonth(month)
+      .filter((f) => !workedDates.has(f))
+      .map((date) => ({
+        date,
+        equipment_name: "إجازة يوم الجمعة",
+        actual_hours: null,
+        base_hours: null,
+        day_rate: employee.rate,
+        day_value: employee.rate,
+      }));
+    const days = [...loggedDays, ...fridayDays].sort((a, b) => a.date.localeCompare(b.date));
     const grossPay = days.reduce((sum, d) => sum + d.day_value, 0);
 
     return { employee, days, advances, grossPay, advancesTotal, netPay: grossPay - advancesTotal };
@@ -821,10 +873,13 @@ function registerIpcHandlers(db) {
       if (emp.wage_type === "monthly") {
         payrollTotal += emp.rate - advances;
       } else {
-        const gross = db
+        const logs = db
           .prepare("SELECT * FROM daily_logs WHERE role = 'driver' AND person_name = ? AND date LIKE ?")
-          .all(emp.name, `${month}%`)
-          .reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
+          .all(emp.name, `${month}%`);
+        const loggedPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
+        const workedDates = new Set(logs.map((l) => l.date));
+        const paidFridays = fridaysInMonth(month).filter((f) => !workedDates.has(f));
+        const gross = loggedPay + paidFridays.length * emp.rate;
         payrollTotal += gross - advances;
       }
     }

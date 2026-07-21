@@ -131,6 +131,20 @@ function computeDriverWageValue(log: DailyLogRow, employeeRate: number): number 
   return employeeRate + overtimeHours * hourlyRate;
 }
 
+// أيام الجمعة إجازة أسبوعية مدفوعة لأصحاب الأجر اليومي، حتى لو مفيش سجل ليها
+// في شيت السركي — بتتحسب كيوم عادي بسعر السائق الثابت.
+function fridaysInMonth(monthKey: string): string[] {
+  const [year, month] = monthKey.split("-").map(Number);
+  const daysCount = new Date(year, month, 0).getDate();
+  const fridays: string[] = [];
+  for (let day = 1; day <= daysCount; day++) {
+    if (new Date(year, month - 1, day).getDay() === 5) {
+      fridays.push(`${monthKey}-${String(day).padStart(2, "0")}`);
+    }
+  }
+  return fridays;
+}
+
 const WINCH_PERCENTAGE_EQUIPMENT = ["ونش 5 طن دبوسة", "ونش 3 وصلة"];
 
 function computePairedCommission(equipmentName: string, driverLog: DailyLogRow, contractorLog: DailyLogRow): number {
@@ -415,7 +429,10 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
         const logs = state.daily_logs.filter(
           (l) => l.role === "driver" && l.person_name === emp.name && l.date.startsWith(month)
         );
-        const grossPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
+        const loggedPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
+        const workedDates = new Set(logs.map((l) => l.date));
+        const paidFridays = fridaysInMonth(month).filter((f) => !workedDates.has(f));
+        const grossPay = loggedPay + paidFridays.length * emp.rate;
         return {
           id: emp.id,
           name: emp.name,
@@ -444,7 +461,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     const logs = state.daily_logs
       .filter((l) => l.role === "driver" && l.person_name === employee.name && l.date.startsWith(month))
       .sort((a, b) => a.date.localeCompare(b.date));
-    const days = logs.map((l) => ({
+    const loggedDays = logs.map((l) => ({
       date: l.date,
       equipment_name: state.equipment.find((e) => e.id === l.equipment_id)?.name ?? "—",
       actual_hours: l.actual_hours,
@@ -452,6 +469,18 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       day_rate: employee.rate,
       day_value: computeDriverWageValue(l, employee.rate),
     }));
+    const workedDates = new Set(logs.map((l) => l.date));
+    const fridayDays = fridaysInMonth(month)
+      .filter((f) => !workedDates.has(f))
+      .map((date) => ({
+        date,
+        equipment_name: "إجازة يوم الجمعة",
+        actual_hours: null as number | null,
+        base_hours: null as number | null,
+        day_rate: employee.rate,
+        day_value: employee.rate,
+      }));
+    const days = [...loggedDays, ...fridayDays].sort((a, b) => a.date.localeCompare(b.date));
     const grossPay = days.reduce((sum, d) => sum + d.day_value, 0);
 
     return { employee, days, advances, grossPay, advancesTotal, netPay: grossPay - advancesTotal };
@@ -878,9 +907,13 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       if (emp.wage_type === "monthly") {
         payrollTotal += emp.rate - advances;
       } else {
-        const gross = state.daily_logs
-          .filter((l) => l.role === "driver" && l.person_name === emp.name && l.date.startsWith(month))
-          .reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
+        const logs = state.daily_logs.filter(
+          (l) => l.role === "driver" && l.person_name === emp.name && l.date.startsWith(month)
+        );
+        const loggedPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
+        const workedDates = new Set(logs.map((l) => l.date));
+        const paidFridays = fridaysInMonth(month).filter((f) => !workedDates.has(f));
+        const gross = loggedPay + paidFridays.length * emp.rate;
         payrollTotal += gross - advances;
       }
     }
@@ -912,6 +945,21 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       hassanCommissionTotal,
       treasuryBalances: state.treasury_accounts.map((a) => ({ name: a.name, name_ar: ACCOUNT_NAME_AR[a.name] ?? a.name, balance: a.current_balance })),
     };
+  }
+
+  if (channel === "employees:update") {
+    const employee = state.employees.find((e) => e.id === payload.id)!;
+    const trimmedName = payload.name.trim();
+    if (employee.name !== trimmedName) {
+      for (const log of state.daily_logs) {
+        if (log.role === "driver" && log.person_name === employee.name) log.person_name = trimmedName;
+      }
+    }
+    employee.name = trimmedName;
+    employee.wage_type = payload.wage_type;
+    employee.rate = payload.rate;
+    saveState(state);
+    return employee;
   }
 
   const [entity, action] = channel.split(":");
