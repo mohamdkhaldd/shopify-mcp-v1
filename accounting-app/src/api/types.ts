@@ -349,7 +349,8 @@ export interface DashboardSummary {
   currentMonthLabel: string;
   currentMonthProfit: number;
   totalReceivables: number;
-  totalPayables: number;
+  totalPartnersDue: number;
+  totalSuppliersDue: number;
   monthlyProfitTrend: DashboardMonthlyProfit[];
   equipmentExpenses: DashboardEquipmentExpense[];
 }

@@ -75,16 +75,23 @@ export default function Dashboard() {
         <KpiCard
           label="مستحق للشركة"
           value={formatEGP(summary.totalReceivables)}
-          icon="partners"
+          icon="contractors"
           tone="neutral"
-          sub="فلوس على المقاولين وغيرهم لحد النهاردة"
+          sub="فلوس على المقاولين لحد النهاردة"
         />
         <KpiCard
-          label="مستحق على الشركة"
-          value={formatEGP(summary.totalPayables)}
+          label="مستحق للشركاء"
+          value={formatEGP(summary.totalPartnersDue)}
+          icon="partners"
+          tone="neutral"
+          sub="نصيب الشركاء من الأرباح لحد النهاردة"
+        />
+        <KpiCard
+          label="مستحق للموردين"
+          value={formatEGP(summary.totalSuppliersDue)}
           icon="suppliers"
           tone="neutral"
-          sub="فلوس للشركاء والموردين وغيرهم لحد النهاردة"
+          sub="مشتريات من الموردين لسه ما اتدفعتش"
         />
       </div>
 

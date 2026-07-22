@@ -1212,7 +1212,8 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       currentMonthLabel: MONTH_NAMES_AR[currentMonthIndex],
       currentMonthProfit: monthlyProfitTrend[currentMonthIndex].profit,
       totalReceivables,
-      totalPayables: partnersRemaining + suppliersRemaining,
+      totalPartnersDue: partnersRemaining,
+      totalSuppliersDue: suppliersRemaining,
       monthlyProfitTrend,
       equipmentExpenses,
     };

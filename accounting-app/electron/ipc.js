@@ -1194,7 +1194,8 @@ function registerIpcHandlers(db) {
       currentMonthLabel: MONTH_NAMES_AR[currentMonthIndex],
       currentMonthProfit: monthlyProfitTrend[currentMonthIndex].profit,
       totalReceivables,
-      totalPayables: partnersRemaining + suppliersRemaining,
+      totalPartnersDue: partnersRemaining,
+      totalSuppliersDue: suppliersRemaining,
       monthlyProfitTrend,
       equipmentExpenses,
     };
