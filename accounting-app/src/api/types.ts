@@ -354,3 +354,89 @@ export interface DashboardSummary {
   monthlyProfitTrend: DashboardMonthlyProfit[];
   equipmentExpenses: DashboardEquipmentExpense[];
 }
+
+export interface WasteEntry {
+  id: number;
+  date: string;
+  amount: number;
+  payment_method: string | null;
+  note: string | null;
+}
+
+export interface OutgoingEquipmentExpenseRow {
+  id: number;
+  equipment_id: number;
+  equipment_name: string;
+  month: string;
+  date: string | null;
+  category_id: number | null;
+  category_name: string | null;
+  amount: number;
+  payment_method: string | null;
+}
+
+export interface OutgoingCategoryTotal {
+  category_name: string;
+  total: number;
+}
+
+export interface OutgoingPartnerPaymentRow {
+  id: number;
+  partner_id: number;
+  partner_name: string;
+  date: string;
+  amount: number;
+  method: string;
+  note: string | null;
+}
+
+export interface OutgoingSupplierPaymentRow {
+  id: number;
+  supplier_id: number;
+  supplier_name: string;
+  date: string;
+  amount: number;
+  method: string;
+  note: string | null;
+}
+
+export interface OutgoingPayrollRow {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  date: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  note: string | null;
+  kind: "advance" | "bonus";
+}
+
+export interface OutgoingSummary {
+  equipmentExpenses: OutgoingEquipmentExpenseRow[];
+  categoryTotals: OutgoingCategoryTotal[];
+  equipmentExpensesTotal: number;
+  partnerPayments: OutgoingPartnerPaymentRow[];
+  partnerPaymentsTotal: number;
+  supplierPayments: OutgoingSupplierPaymentRow[];
+  supplierPaymentsTotal: number;
+  payroll: OutgoingPayrollRow[];
+  payrollTotal: number;
+  waste: WasteEntry[];
+  wasteTotal: number;
+  totalOutgoing: number;
+}
+
+export interface IncomingContractorPaymentRow {
+  id: number;
+  contractor_id: number;
+  contractor_name: string;
+  date: string;
+  amount: number;
+  method: string;
+  note: string | null;
+}
+
+export interface IncomingSummary {
+  contractorPayments: IncomingContractorPaymentRow[];
+  totalIncoming: number;
+}

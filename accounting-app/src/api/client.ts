@@ -18,8 +18,10 @@ import {
   HassanEquipmentCommissionDetail,
   HassanLedgerEntry,
   HassanPartyBalance,
+  IncomingSummary,
   MonthlyExpense,
   MonthlyReport,
+  OutgoingSummary,
   Partner,
   PartnerDetail,
   PartnerPayment,
@@ -31,6 +33,7 @@ import {
   SupplierPurchase,
   TreasuryAccount,
   TreasurySummaryRow,
+  WasteEntry,
 } from "./types";
 
 declare global {
@@ -205,4 +208,15 @@ export const reportsApi = {
 
 export const dashboardApi = {
   summary: (): Promise<DashboardSummary> => invoke("dashboard:summary"),
+};
+
+export const wasteApi = {
+  list: (month: string): Promise<WasteEntry[]> => invoke("waste:list", { month }),
+  create: (entry: Omit<WasteEntry, "id">): Promise<WasteEntry> => invoke("waste:create", entry),
+  remove: (id: number): Promise<void> => invoke("waste:delete", { id }),
+};
+
+export const outgoingIncomingApi = {
+  outgoing: (month: string): Promise<OutgoingSummary> => invoke("outgoing:list", { month }),
+  incoming: (month: string): Promise<IncomingSummary> => invoke("incoming:list", { month }),
 };

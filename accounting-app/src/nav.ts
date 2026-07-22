@@ -6,6 +6,8 @@ export type SectionId =
   | "contractors"
   | "partners"
   | "treasury"
+  | "outgoingIncoming"
+  | "waste"
   | "suppliers"
   | "reports"
   | "settings";
@@ -24,6 +26,8 @@ export const navItems: NavItem[] = [
   { id: "contractors", label: "المقاولين", icon: "contractors" },
   { id: "partners", label: "الشركاء", icon: "partners" },
   { id: "treasury", label: "الخزنة", icon: "treasury" },
+  { id: "outgoingIncoming", label: "الصادر والوارد", icon: "flow" },
+  { id: "waste", label: "الهالك", icon: "waste" },
   { id: "suppliers", label: "الموردين", icon: "suppliers" },
   { id: "reports", label: "التقارير", icon: "reports" },
   { id: "settings", label: "الإعدادات", icon: "settings" },

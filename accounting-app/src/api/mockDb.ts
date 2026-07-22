@@ -105,6 +105,14 @@ interface SupplierPaymentRow {
   note: string | null;
 }
 
+interface WasteEntryRow {
+  id: number;
+  date: string;
+  amount: number;
+  payment_method: string | null;
+  note: string | null;
+}
+
 interface MockState {
   partners: { id: number; name: string; opening_balance: number }[];
   employees: { id: number; name: string; wage_type: "daily" | "monthly"; rate: number; fixed_salary: boolean }[];
@@ -122,6 +130,7 @@ interface MockState {
   suppliers: SupplierRow[];
   supplier_purchases: SupplierPurchaseRow[];
   supplier_payments: SupplierPaymentRow[];
+  waste_entries: WasteEntryRow[];
   nextId: number;
 }
 
@@ -260,6 +269,7 @@ function buildSeedState(): MockState {
     suppliers: [],
     supplier_purchases: [],
     supplier_payments: [],
+    waste_entries: [],
     nextId,
   };
 }
@@ -288,6 +298,7 @@ function loadState(): MockState {
     if (!state.suppliers) state.suppliers = [];
     if (!state.supplier_purchases) state.supplier_purchases = [];
     if (!state.supplier_payments) state.supplier_payments = [];
+    if (!state.waste_entries) state.waste_entries = [];
     return state;
   }
   const seeded = buildSeedState();
@@ -1219,6 +1230,105 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     };
   }
 
+  if (channel === "waste:list") {
+    return state.waste_entries
+      .filter((w) => w.date.startsWith(payload.month))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+  }
+  if (channel === "waste:create") {
+    const record: WasteEntryRow = {
+      id: state.nextId++,
+      date: payload.date,
+      amount: payload.amount,
+      payment_method: payload.payment_method || "cash",
+      note: payload.note ?? null,
+    };
+    state.waste_entries.push(record);
+    saveState(state);
+    return record;
+  }
+  if (channel === "waste:delete") {
+    state.waste_entries = state.waste_entries.filter((w) => w.id !== payload.id);
+    saveState(state);
+    return { ok: true };
+  }
+
+  // الصادر: كل مصروف حقيقي طلع من الشركة في الشهر ده — مصاريف المعدات، دفعات
+  // الشركاء والموردين، السلف والمكافآت الفعلية اللي اتصرفت للموظفين، والهالك.
+  // مرتب الموظف النهائي مش معاملة مسجلة فعليًا (زي مستحق المقاول قبل ما يتدفع)،
+  // فبيظهر في "الرواتب" بس السلف والمكافآت الحقيقية اللي اتدفعت.
+  if (channel === "outgoing:list") {
+    const { month } = payload;
+    const equipmentExpenses = state.monthly_expenses
+      .filter((e) => e.month === month)
+      .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || a.id - b.id)
+      .map((e) => ({
+        ...e,
+        equipment_name: state.equipment.find((eq) => eq.id === e.equipment_id)?.name ?? "—",
+        category_name: state.expense_categories.find((c) => c.id === e.category_id)?.name ?? null,
+      }));
+    const categoryTotalsMap = new Map<string, number>();
+    for (const row of equipmentExpenses) {
+      const label = row.category_name || "بدون نوع";
+      categoryTotalsMap.set(label, (categoryTotalsMap.get(label) ?? 0) + row.amount);
+    }
+    const categoryTotals = [...categoryTotalsMap.entries()].map(([category_name, total]) => ({ category_name, total }));
+    const equipmentExpensesTotal = equipmentExpenses.reduce((sum, r) => sum + r.amount, 0);
+
+    const partnerPayments = state.partner_payments
+      .filter((p) => p.date.startsWith(month))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+      .map((p) => ({ ...p, partner_name: state.partners.find((x) => x.id === p.partner_id)?.name ?? "—" }));
+    const partnerPaymentsTotal = partnerPayments.reduce((sum, r) => sum + r.amount, 0);
+
+    const supplierPayments = state.supplier_payments
+      .filter((p) => p.date.startsWith(month))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+      .map((p) => ({ ...p, supplier_name: state.suppliers.find((x) => x.id === p.supplier_id)?.name ?? "—" }));
+    const supplierPaymentsTotal = supplierPayments.reduce((sum, r) => sum + r.amount, 0);
+
+    const advances = state.employee_advances
+      .filter((a) => a.date.startsWith(month))
+      .map((a) => ({ ...a, employee_name: state.employees.find((x) => x.id === a.employee_id)?.name ?? "—", kind: "advance" as const }));
+    const bonuses = state.employee_bonuses
+      .filter((b) => b.date.startsWith(month))
+      .map((b) => ({ ...b, employee_name: state.employees.find((x) => x.id === b.employee_id)?.name ?? "—", kind: "bonus" as const }));
+    const payroll = [...advances, ...bonuses].sort((a, b) => a.date.localeCompare(b.date));
+    const payrollTotal = payroll.reduce((sum, r) => sum + r.amount, 0);
+
+    const waste = state.waste_entries
+      .filter((w) => w.date.startsWith(month))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+    const wasteTotal = waste.reduce((sum, w) => sum + w.amount, 0);
+
+    const totalOutgoing = equipmentExpensesTotal + partnerPaymentsTotal + supplierPaymentsTotal + payrollTotal + wasteTotal;
+
+    return {
+      equipmentExpenses,
+      categoryTotals,
+      equipmentExpensesTotal,
+      partnerPayments,
+      partnerPaymentsTotal,
+      supplierPayments,
+      supplierPaymentsTotal,
+      payroll,
+      payrollTotal,
+      waste,
+      wasteTotal,
+      totalOutgoing,
+    };
+  }
+
+  if (channel === "incoming:list") {
+    const { month } = payload;
+    const contractorPayments = state.contractor_payments
+      .filter((p) => p.date.startsWith(month))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+      .map((p) => ({ ...p, contractor_name: state.contractors.find((x) => x.id === p.contractor_id)?.name ?? "—" }));
+    const totalIncoming = contractorPayments.reduce((sum, r) => sum + r.amount, 0);
+    return { contractorPayments, totalIncoming };
+  }
+
   if (channel === "employees:update") {
     const employee = state.employees.find((e) => e.id === payload.id)!;
     const trimmedName = payload.name.trim();
@@ -1248,6 +1358,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     state.partner_payments = [];
     state.supplier_purchases = [];
     state.supplier_payments = [];
+    state.waste_entries = [];
     for (const acc of state.treasury_accounts) acc.current_balance = 0;
     saveState(state);
     return { ok: true };

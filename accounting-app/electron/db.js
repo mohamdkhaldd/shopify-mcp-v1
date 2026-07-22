@@ -145,6 +145,14 @@ CREATE TABLE IF NOT EXISTS supplier_payments (
   method TEXT,
   note TEXT
 );
+
+CREATE TABLE IF NOT EXISTS waste_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  amount REAL NOT NULL,
+  payment_method TEXT,
+  note TEXT
+);
 `;
 
 // Real starting data pulled from the company's existing Excel system, so the

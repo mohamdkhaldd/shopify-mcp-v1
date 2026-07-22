@@ -41,6 +41,10 @@ const paths: Record<string, JSX.Element> = {
     <path d="M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
   ),
   moon: <path d="M20.5 14.5a8.5 8.5 0 1 1-9-11 7 7 0 0 0 9 11Z" />,
+  flow: <path d="M3 8h13l-3.5-3.5M21 16H8l3.5 3.5" />,
+  waste: (
+    <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" />
+  ),
 };
 
 export default function Icon({ name, className = "w-5 h-5" }: IconProps) {
