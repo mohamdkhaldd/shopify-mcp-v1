@@ -165,7 +165,7 @@ function computePairedCommission(equipmentName: string, driverLog: DailyLogRow, 
   return k - h + overtimeHours * (k / 8 - h / 8);
 }
 
-const STORAGE_KEY = "al-bunyan-mock-db-v4";
+const STORAGE_KEY = "al-bunyan-mock-db-v5";
 
 // Real starting data pulled from the company's existing Excel system, so the
 // preview opens already reflecting how the business actually operates.
