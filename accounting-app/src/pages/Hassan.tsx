@@ -143,7 +143,8 @@ function CommissionTab({ month }: { month: string }) {
                     <td className="py-2">
                       <button
                         onClick={() => setExpandedId(expandedId === e.equipment_id ? null : e.equipment_id)}
-                        className="font-semibold text-slate-700 hover:text-primary"
+                        className="font-semibold text-slate-700 hover:text-primary underline decoration-dashed decoration-slate-300 underline-offset-4 hover:decoration-primary"
+                        title="دوس تشوف التفاصيل اليومية للمعدة دي بس"
                       >
                         {e.equipment_name}
                       </button>
@@ -164,36 +165,6 @@ function CommissionTab({ month }: { month: string }) {
         )}
       </div>
 
-      <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-4">التفاصيل اليومية</h2>
-        {summary.rows.length === 0 ? (
-          <div className="text-sm text-slate-400">
-            مفيش كوميشن محسوب الشهر ده — الكوميشن بيتحسب تلقائيًا لما يبقى فيه سركي ومقاول لنفس المعدة ونفس اليوم، أو
-            كوميشن سركي سوق المُدخل يدويًا.
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-slate-400 border-b border-slate-100">
-                <th className="text-start font-semibold py-2">المعدة</th>
-                <th className="text-start font-semibold py-2">التاريخ</th>
-                <th className="text-start font-semibold py-2">المصدر</th>
-                <th className="text-start font-semibold py-2">الكوميشن</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summary.rows.map((row, i) => (
-                <tr key={i} className="border-b border-slate-50 last:border-0">
-                  <td className="py-2 font-semibold text-slate-700">{row.equipment_name}</td>
-                  <td className="py-2 text-slate-500">{row.date}</td>
-                  <td className="py-2 text-slate-500">{row.source === "paired" ? "سركي/مقاول" : "سركي سوق"}</td>
-                  <td className="py-2 font-semibold text-primary-dark">{formatEGP(row.commission)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
     </div>
   );
 }

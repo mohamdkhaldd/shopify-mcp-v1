@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { equipmentApi, expenseCategoriesApi, monthlyExpensesApi } from "../../api/client";
-import { ExpenseCategory, MonthlyExpense } from "../../api/types";
+import { DriverSalaryBreakdownRow, ExpenseCategory, MonthlyExpense } from "../../api/types";
 import { formatEGP } from "../../utils/format";
 import { PAYMENT_METHODS, paymentMethodLabel } from "../../utils/paymentMethods";
 import { daysInMonth } from "../../utils/months";
@@ -22,7 +22,7 @@ interface ExpensesTableProps {
 export default function ExpensesTable({ equipmentId, month, onChanged }: ExpensesTableProps) {
   const [expenses, setExpenses] = useState<MonthlyExpense[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
-  const [driverSalaryExpense, setDriverSalaryExpense] = useState(0);
+  const [driverSalaryBreakdown, setDriverSalaryBreakdown] = useState<DriverSalaryBreakdownRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoryId, setCategoryId] = useState("");
   const [amount, setAmount] = useState("");
@@ -31,7 +31,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
 
   const refresh = () => monthlyExpensesApi.list(equipmentId, month).then(setExpenses);
   const refreshDriverSalary = () =>
-    equipmentApi.summary(equipmentId, month).then((s) => setDriverSalaryExpense(s.driverSalaryExpense));
+    equipmentApi.summary(equipmentId, month).then((s) => setDriverSalaryBreakdown(s.driverSalaryBreakdown));
 
   useEffect(() => {
     setLoading(true);
@@ -68,7 +68,8 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
     onChanged?.();
   }
 
-  const total = expenses.reduce((sum, e) => sum + e.amount, 0) + driverSalaryExpense;
+  const driverSalaryTotal = driverSalaryBreakdown.reduce((sum, d) => sum + d.amount, 0);
+  const total = expenses.reduce((sum, e) => sum + e.amount, 0) + driverSalaryTotal;
 
   return (
     <div className="bg-white rounded-card shadow-card p-5">
@@ -133,7 +134,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
 
       {loading ? (
         <div className="text-sm text-slate-400">جاري التحميل...</div>
-      ) : expenses.length === 0 && driverSalaryExpense === 0 ? (
+      ) : expenses.length === 0 && driverSalaryBreakdown.length === 0 ? (
         <div className="text-sm text-slate-400">لسه مفيش مصروفات مسجلة لشهر {month}.</div>
       ) : (
         <div className="overflow-x-auto">
@@ -148,18 +149,18 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
               </tr>
             </thead>
             <tbody>
-              {driverSalaryExpense > 0 && (
-                <tr className="border-b border-slate-50 last:border-0 bg-slate-50/60">
+              {driverSalaryBreakdown.map((d) => (
+                <tr key={d.name} className="border-b border-slate-50 last:border-0 bg-slate-50/60">
                   <td className="py-2 text-slate-400">—</td>
                   <td className="py-2 font-semibold text-slate-700">
-                    مرتب السائق
+                    مرتب سائق: {d.name}
                     <span className="text-xs text-slate-400 font-normal"> (تلقائي من سعره في الإعدادات وأيام شغله)</span>
                   </td>
-                  <td className="py-2 text-slate-600">{formatEGP(driverSalaryExpense)}</td>
+                  <td className="py-2 text-slate-600">{formatEGP(d.amount)}</td>
                   <td className="py-2 text-slate-400">—</td>
                   <td className="py-2"></td>
                 </tr>
-              )}
+              ))}
               {expenses.map((exp) => (
                 <tr key={exp.id} className="border-b border-slate-50 last:border-0">
                   <td className="py-2 text-slate-500">{exp.date ?? "—"}</td>

@@ -71,6 +71,23 @@ function driverSalaryForEquipment(db, equipmentId, month) {
   }, 0);
 }
 
+// نفس حساب مرتب السائق بس مقسّم بالاسم — لو أكتر من سواق شغلوا على نفس
+// المعدة في نفس الشهر (سواق اتغيّر نص الشهر مثلًا)، كل واحد بيظهر في شيت
+// المصروفات بمرتبه لوحده بدل رقم واحد مجمّع مالوش اسم.
+function driverSalaryBreakdownForEquipment(db, equipmentId, month) {
+  const logs = db
+    .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
+    .all(equipmentId, `${month}%`);
+  const byDriver = new Map();
+  for (const l of logs) {
+    const employee = db.prepare("SELECT * FROM employees WHERE name = ?").get(l.person_name);
+    if (!employee || employee.wage_type !== "daily") continue;
+    const amount = computeDriverWageValue(l, employee.rate);
+    byDriver.set(l.person_name, (byDriver.get(l.person_name) ?? 0) + amount);
+  }
+  return [...byDriver.entries()].map(([name, amount]) => ({ name, amount }));
+}
+
 function registerIpcHandlers(db) {
   // --- Partners ---
   ipcMain.handle("partners:list", () => db.prepare("SELECT * FROM partners ORDER BY name").all());
@@ -311,7 +328,8 @@ function registerIpcHandlers(db) {
     const driverIncome = driverLogs.reduce((sum, l) => sum + computeDayValue(l), 0);
     const marketIncome = marketLogs.reduce((sum, l) => sum + computeDayValue(l), 0);
     const income = driverIncome + marketIncome;
-    const driverSalaryExpense = driverSalaryForEquipment(db, equipment_id, month);
+    const driverSalaryBreakdown = driverSalaryBreakdownForEquipment(db, equipment_id, month);
+    const driverSalaryExpense = driverSalaryBreakdown.reduce((sum, d) => sum + d.amount, 0);
     const manualExpenseTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
     const expenseTotal = manualExpenseTotal + driverSalaryExpense;
     const netProfit = income - expenseTotal;
@@ -336,6 +354,7 @@ function registerIpcHandlers(db) {
       marketIncome,
       income,
       driverSalaryExpense,
+      driverSalaryBreakdown,
       manualExpenseTotal,
       expenseTotal,
       netProfit,

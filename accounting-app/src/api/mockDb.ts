@@ -367,6 +367,20 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       }, 0);
   }
 
+  // نفس حساب مرتب السائق بس مقسّم بالاسم — لو أكتر من سواق شغلوا على نفس
+  // المعدة في نفس الشهر، كل واحد بيظهر في شيت المصروفات بمرتبه لوحده.
+  function driverSalaryBreakdownForEquipment(equipmentId: number, month: string): { name: string; amount: number }[] {
+    const byDriver = new Map<string, number>();
+    for (const l of state.daily_logs) {
+      if (l.equipment_id !== equipmentId || l.role !== "driver" || !l.date.startsWith(month)) continue;
+      const employee = state.employees.find((e) => e.name === l.person_name);
+      if (!employee || employee.wage_type !== "daily") continue;
+      const amount = computeDriverWageValue(l, employee.rate);
+      byDriver.set(l.person_name, (byDriver.get(l.person_name) ?? 0) + amount);
+    }
+    return [...byDriver.entries()].map(([name, amount]) => ({ name, amount }));
+  }
+
   // موظف بمرتب شهري وله حضور مرتبط بالسركي (سواق شهري مثلًا): مرتبه بيتقسم
   // على عدد أيام الشهر، وأي يوم مفيش له حضور ولا إجازة مدفوعة مُعلّمة
   // بيتخصم من مرتبه — من غير أي استثناء تلقائي ليوم الجمعة، لازم المكتب
@@ -401,7 +415,8 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     const driverIncome = driverLogs.reduce((sum, l) => sum + computeDayValue(l), 0);
     const marketIncome = marketLogs.reduce((sum, l) => sum + computeDayValue(l), 0);
     const income = driverIncome + marketIncome;
-    const driverSalaryExpense = driverSalaryForEquipment(equipment_id, month);
+    const driverSalaryBreakdown = driverSalaryBreakdownForEquipment(equipment_id, month);
+    const driverSalaryExpense = driverSalaryBreakdown.reduce((sum, d) => sum + d.amount, 0);
     const manualExpenseTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
     const expenseTotal = manualExpenseTotal + driverSalaryExpense;
     const netProfit = income - expenseTotal;
@@ -419,6 +434,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       marketIncome,
       income,
       driverSalaryExpense,
+      driverSalaryBreakdown,
       manualExpenseTotal,
       expenseTotal,
       netProfit,

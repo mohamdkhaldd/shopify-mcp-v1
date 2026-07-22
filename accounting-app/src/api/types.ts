@@ -74,11 +74,17 @@ export interface PartnerDistributionRow {
   amount: number;
 }
 
+export interface DriverSalaryBreakdownRow {
+  name: string;
+  amount: number;
+}
+
 export interface EquipmentSummary {
   driverIncome: number;
   marketIncome: number;
   income: number;
   driverSalaryExpense: number;
+  driverSalaryBreakdown: DriverSalaryBreakdownRow[];
   manualExpenseTotal: number;
   expenseTotal: number;
   netProfit: number;
