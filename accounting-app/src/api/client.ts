@@ -6,6 +6,7 @@ import {
   ContractorSummary,
   DailyLog,
   DailyLogRole,
+  DashboardSummary,
   Driver,
   Equipment,
   EmployeeAdvance,
@@ -200,4 +201,8 @@ export const suppliersApi = {
 
 export const reportsApi = {
   monthly: (month: string): Promise<MonthlyReport> => invoke("reports:monthly", { month }),
+};
+
+export const dashboardApi = {
+  summary: (): Promise<DashboardSummary> => invoke("dashboard:summary"),
 };

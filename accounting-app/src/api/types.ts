@@ -325,3 +325,25 @@ export interface MonthlyReport {
   hassanCommissionTotal: number;
   treasuryBalances: { name: TreasuryAccountName; name_ar: string; balance: number }[];
 }
+
+export interface DashboardMonthlyProfit {
+  month: string;
+  profit: number;
+}
+
+export interface DashboardEquipmentExpense {
+  name: string;
+  annualExpense: number;
+}
+
+export interface DashboardSummary {
+  totalAnnualProfit: number;
+  totalAnnualExpense: number;
+  equipmentCount: number;
+  currentMonthLabel: string;
+  currentMonthProfit: number;
+  totalReceivables: number;
+  totalPayables: number;
+  monthlyProfitTrend: DashboardMonthlyProfit[];
+  equipmentExpenses: DashboardEquipmentExpense[];
+}

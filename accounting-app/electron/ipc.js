@@ -1080,6 +1080,107 @@ function registerIpcHandlers(db) {
     };
   });
 
+  // --- Dashboard: live headline numbers for the home page, computed from
+  // the real database for the current calendar year — replaces the old
+  // hardcoded Excel-snapshot placeholder that never got wired up. ---
+  const MONTH_NAMES_AR = [
+    "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+    "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+  ];
+
+  ipcMain.handle("dashboard:summary", () => {
+    const now = new Date();
+    const year = String(now.getFullYear());
+    const currentMonthIndex = now.getMonth();
+    const equipmentList = db.prepare("SELECT * FROM equipment ORDER BY name").all();
+
+    function equipmentMonthTotals(equipmentId, monthKey) {
+      const income = db
+        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role IN ('driver', 'market') AND date LIKE ?")
+        .all(equipmentId, `${monthKey}%`)
+        .reduce((sum, l) => sum + computeDayValue(l), 0);
+      const manualExpense = db
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM monthly_expenses WHERE equipment_id = ? AND month = ?")
+        .get(equipmentId, monthKey).total;
+      const driverSalaryExpense = driverSalaryForEquipment(db, equipmentId, monthKey);
+      const expense = manualExpense + driverSalaryExpense;
+      return { profit: income - expense, expense };
+    }
+
+    const equipmentAnnualExpense = new Map(equipmentList.map((e) => [e.id, 0]));
+    const monthlyProfitTrend = [];
+    let totalAnnualProfit = 0;
+    let totalAnnualExpense = 0;
+
+    for (let m = 0; m < 12; m++) {
+      const monthKey = `${year}-${String(m + 1).padStart(2, "0")}`;
+      let monthProfit = 0;
+      for (const eq of equipmentList) {
+        const { profit, expense } = equipmentMonthTotals(eq.id, monthKey);
+        monthProfit += profit;
+        totalAnnualExpense += expense;
+        equipmentAnnualExpense.set(eq.id, equipmentAnnualExpense.get(eq.id) + expense);
+      }
+      monthlyProfitTrend.push({ month: MONTH_NAMES_AR[m], profit: monthProfit });
+      totalAnnualProfit += monthProfit;
+    }
+
+    const equipmentExpenses = equipmentList.map((eq) => ({
+      name: eq.name,
+      annualExpense: equipmentAnnualExpense.get(eq.id),
+    }));
+
+    const contractors = db.prepare("SELECT * FROM contractors").all();
+    const totalReceivables = contractors.reduce((sum, c) => {
+      const totalWork =
+        c.opening_balance +
+        db
+          .prepare("SELECT * FROM daily_logs WHERE role = 'contractor' AND person_name = ?")
+          .all(c.name)
+          .reduce((s, l) => s + computeDayValue(l), 0);
+      const totalPaid = db
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM contractor_payments WHERE contractor_id = ?")
+        .get(c.id).total;
+      return sum + (totalWork - totalPaid);
+    }, 0);
+
+    const partners = db.prepare("SELECT * FROM partners").all();
+    const partnersRemaining = partners.reduce((sum, p) => {
+      const shares = db
+        .prepare("SELECT equipment_id, percentage FROM equipment_partner_shares WHERE partner_id = ?")
+        .all(p.id);
+      const totalDue =
+        p.opening_balance + shares.reduce((s, sh) => s + (equipmentAllTimeProfit(sh.equipment_id) * sh.percentage) / 100, 0);
+      const totalPaid = db
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM partner_payments WHERE partner_id = ?")
+        .get(p.id).total;
+      return sum + (totalDue - totalPaid);
+    }, 0);
+
+    const suppliers = db.prepare("SELECT * FROM suppliers").all();
+    const suppliersRemaining = suppliers.reduce((sum, s) => {
+      const totalPurchases = db
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM supplier_purchases WHERE supplier_id = ?")
+        .get(s.id).total;
+      const totalPaid = db
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM supplier_payments WHERE supplier_id = ?")
+        .get(s.id).total;
+      return sum + (totalPurchases - totalPaid);
+    }, 0);
+
+    return {
+      totalAnnualProfit,
+      totalAnnualExpense,
+      equipmentCount: equipmentList.length,
+      currentMonthLabel: MONTH_NAMES_AR[currentMonthIndex],
+      currentMonthProfit: monthlyProfitTrend[currentMonthIndex].profit,
+      totalReceivables,
+      totalPayables: partnersRemaining + suppliersRemaining,
+      monthlyProfitTrend,
+      equipmentExpenses,
+    };
+  });
+
   // --- Danger zone: wipe every recorded transaction (السركي, expenses,
   // advances, bonuses, payments, Hassan's ledger) so the office can start a
   // clean month — but keep the reference lists (equipment, partners, their

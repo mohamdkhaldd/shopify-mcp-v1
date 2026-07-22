@@ -1113,6 +1113,95 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     };
   }
 
+  // بديل حي لمصدر بيانات الرئيسية اللي كان ثابت من ملف إكسل قديم — بيحسب
+  // كل حاجة من الداتا الحقيقية للسنة الحالية.
+  if (channel === "dashboard:summary") {
+    const MONTH_NAMES_AR = [
+      "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+      "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+    ];
+    const now = new Date();
+    const year = String(now.getFullYear());
+    const currentMonthIndex = now.getMonth();
+
+    function equipmentMonthTotals(equipmentId: number, monthKey: string) {
+      const income = state.daily_logs
+        .filter((l) => l.equipment_id === equipmentId && (l.role === "driver" || l.role === "market") && l.date.startsWith(monthKey))
+        .reduce((sum, l) => sum + computeDayValue(l), 0);
+      const manualExpense = state.monthly_expenses
+        .filter((e) => e.equipment_id === equipmentId && e.month === monthKey)
+        .reduce((sum, e) => sum + e.amount, 0);
+      const driverSalaryExpense = driverSalaryForEquipment(equipmentId, monthKey);
+      const expense = manualExpense + driverSalaryExpense;
+      return { profit: income - expense, expense };
+    }
+
+    const equipmentAnnualExpense = new Map(state.equipment.map((e) => [e.id, 0]));
+    const monthlyProfitTrend: { month: string; profit: number }[] = [];
+    let totalAnnualProfit = 0;
+    let totalAnnualExpense = 0;
+
+    for (let m = 0; m < 12; m++) {
+      const monthKey = `${year}-${String(m + 1).padStart(2, "0")}`;
+      let monthProfit = 0;
+      for (const eq of state.equipment) {
+        const { profit, expense } = equipmentMonthTotals(eq.id, monthKey);
+        monthProfit += profit;
+        totalAnnualExpense += expense;
+        equipmentAnnualExpense.set(eq.id, (equipmentAnnualExpense.get(eq.id) ?? 0) + expense);
+      }
+      monthlyProfitTrend.push({ month: MONTH_NAMES_AR[m], profit: monthProfit });
+      totalAnnualProfit += monthProfit;
+    }
+
+    const equipmentExpenses = state.equipment.map((eq) => ({
+      name: eq.name,
+      annualExpense: equipmentAnnualExpense.get(eq.id) ?? 0,
+    }));
+
+    const totalReceivables = state.contractors.reduce((sum, c) => {
+      const totalWork =
+        c.opening_balance +
+        state.daily_logs
+          .filter((l) => l.role === "contractor" && l.person_name === c.name)
+          .reduce((s, l) => s + computeDayValue(l), 0);
+      const totalPaid = state.contractor_payments
+        .filter((p) => p.contractor_id === c.id)
+        .reduce((s, p) => s + p.amount, 0);
+      return sum + (totalWork - totalPaid);
+    }, 0);
+
+    const partnersRemaining = state.partners.reduce((sum, p) => {
+      const shares = state.equipment.flatMap((eq) =>
+        eq.shares.filter((s) => s.partner_id === p.id).map((s) => ({ equipment_id: eq.id, percentage: s.percentage }))
+      );
+      const totalDue =
+        p.opening_balance + shares.reduce((s, sh) => s + (equipmentAllTimeProfit(sh.equipment_id) * sh.percentage) / 100, 0);
+      const totalPaid = state.partner_payments.filter((pp) => pp.partner_id === p.id).reduce((s, pp) => s + pp.amount, 0);
+      return sum + (totalDue - totalPaid);
+    }, 0);
+
+    const suppliersRemaining = state.suppliers.reduce((sum, s) => {
+      const totalPurchases = state.supplier_purchases
+        .filter((p) => p.supplier_id === s.id)
+        .reduce((sm, p) => sm + p.amount, 0);
+      const totalPaid = state.supplier_payments.filter((p) => p.supplier_id === s.id).reduce((sm, p) => sm + p.amount, 0);
+      return sum + (totalPurchases - totalPaid);
+    }, 0);
+
+    return {
+      totalAnnualProfit,
+      totalAnnualExpense,
+      equipmentCount: state.equipment.length,
+      currentMonthLabel: MONTH_NAMES_AR[currentMonthIndex],
+      currentMonthProfit: monthlyProfitTrend[currentMonthIndex].profit,
+      totalReceivables,
+      totalPayables: partnersRemaining + suppliersRemaining,
+      monthlyProfitTrend,
+      equipmentExpenses,
+    };
+  }
+
   if (channel === "employees:update") {
     const employee = state.employees.find((e) => e.id === payload.id)!;
     const trimmedName = payload.name.trim();

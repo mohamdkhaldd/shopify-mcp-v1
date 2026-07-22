@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -11,21 +12,18 @@ import {
 } from "recharts";
 import KpiCard from "../components/KpiCard";
 import { useTheme } from "../theme";
-import {
-  currentMonthLabel,
-  currentMonthProfit,
-  equipmentCount,
-  equipmentExpenses,
-  monthlyProfitTrend,
-  totalAnnualExpense,
-  totalAnnualProfit,
-  totalPayables,
-  totalReceivables,
-} from "../data/dashboardData";
+import { dashboardApi } from "../api/client";
+import { DashboardSummary } from "../api/types";
 import { formatEGP } from "../utils/format";
 
 export default function Dashboard() {
   const { theme } = useTheme();
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+
+  useEffect(() => {
+    dashboardApi.summary().then(setSummary);
+  }, []);
+
   const gridStroke = theme === "dark" ? "#243057" : "#EEF2F0";
   const tickFill = theme === "dark" ? "#94A0C9" : "#64748B";
   const categoryTickFill = theme === "dark" ? "#D7DDF3" : "#334155";
@@ -34,54 +32,56 @@ export default function Dashboard() {
       ? { direction: "rtl" as const, fontFamily: "Cairo", borderRadius: 12, border: "1px solid #2B3A63", background: "#121B3A", color: "#E7ECFB" }
       : { direction: "rtl" as const, fontFamily: "Cairo", borderRadius: 12, border: "1px solid #E2E8F0" };
 
+  if (!summary) {
+    return <div className="text-sm text-slate-400">جاري التحميل...</div>;
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-slate-900">لوحة التحكم الرئيسية</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          نظرة عامة على أداء الشركة — الأرقام مأخوذة من ملف الإكسيل الحالي كنقطة بداية
-        </p>
+        <p className="text-sm text-slate-500 mt-1">نظرة عامة على أداء الشركة — أرقام حية من بيانات النظام الفعلية</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <KpiCard
           label="صافي الربح السنوي"
-          value={formatEGP(totalAnnualProfit)}
-          icon={totalAnnualProfit >= 0 ? "trendUp" : "trendDown"}
-          tone={totalAnnualProfit >= 0 ? "positive" : "negative"}
+          value={formatEGP(summary.totalAnnualProfit)}
+          icon={summary.totalAnnualProfit >= 0 ? "trendUp" : "trendDown"}
+          tone={summary.totalAnnualProfit >= 0 ? "positive" : "negative"}
           sub="إجمالي كل المعدات — السنة الحالية"
         />
         <KpiCard
           label="عدد المعدات"
-          value={equipmentCount.toLocaleString("en-US")}
+          value={summary.equipmentCount.toLocaleString("en-US")}
           icon="equipment"
           tone="neutral"
           sub="معدات مسجلة في النظام"
         />
         <KpiCard
           label="إجمالي المصروف السنوي"
-          value={formatEGP(totalAnnualExpense)}
+          value={formatEGP(summary.totalAnnualExpense)}
           icon="treasury"
           tone="neutral"
           sub="كل بنود مصاريف المعدات"
         />
         <KpiCard
-          label={`صافي ربح شهر ${currentMonthLabel}`}
-          value={formatEGP(currentMonthProfit)}
-          icon={currentMonthProfit >= 0 ? "trendUp" : "trendDown"}
-          tone={currentMonthProfit >= 0 ? "positive" : "negative"}
+          label={`صافي ربح شهر ${summary.currentMonthLabel}`}
+          value={formatEGP(summary.currentMonthProfit)}
+          icon={summary.currentMonthProfit >= 0 ? "trendUp" : "trendDown"}
+          tone={summary.currentMonthProfit >= 0 ? "positive" : "negative"}
           sub="أحدث شهر مسجّل"
         />
         <KpiCard
           label="مستحق للشركة"
-          value={formatEGP(totalReceivables)}
+          value={formatEGP(summary.totalReceivables)}
           icon="partners"
           tone="neutral"
           sub="فلوس على المقاولين وغيرهم لحد النهاردة"
         />
         <KpiCard
           label="مستحق على الشركة"
-          value={formatEGP(totalPayables)}
+          value={formatEGP(summary.totalPayables)}
           icon="suppliers"
           tone="neutral"
           sub="فلوس للشركاء والموردين وغيرهم لحد النهاردة"
@@ -95,7 +95,7 @@ export default function Dashboard() {
             <span className="text-xs text-slate-400">السنة الحالية</span>
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={monthlyProfitTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <AreaChart data={summary.monthlyProfitTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#2F8F63" stopOpacity={0.35} />
@@ -123,7 +123,7 @@ export default function Dashboard() {
           </div>
           <ResponsiveContainer width="100%" height={340}>
             <BarChart
-              data={equipmentExpenses}
+              data={summary.equipmentExpenses}
               layout="vertical"
               margin={{ top: 0, right: 10, left: 0, bottom: 0 }}
               barCategoryGap={10}
@@ -157,7 +157,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {equipmentExpenses.map((eq) => (
+              {summary.equipmentExpenses.map((eq) => (
                 <tr key={eq.name} className="border-b border-slate-50 last:border-0">
                   <td className="py-2.5 font-semibold text-slate-700">{eq.name}</td>
                   <td className="py-2.5 text-slate-500">{formatEGP(eq.annualExpense)}</td>
