@@ -11,18 +11,32 @@ import {
   YAxis,
 } from "recharts";
 import KpiCard from "../components/KpiCard";
+import Modal from "../components/Modal";
 import { useTheme } from "../theme";
-import { dashboardApi } from "../api/client";
-import { DashboardSummary } from "../api/types";
+import { contractorsDashboardApi, dashboardApi, partnersDashboardApi, suppliersApi } from "../api/client";
+import { ContractorSummary, DashboardSummary, PartnerSummary, SupplierDashboardRow } from "../api/types";
 import { formatEGP } from "../utils/format";
+
+type DrilldownKind = "expense" | "contractors" | "partners" | "suppliers" | null;
 
 export default function Dashboard() {
   const { theme } = useTheme();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [drilldown, setDrilldown] = useState<DrilldownKind>(null);
+  const [contractorRows, setContractorRows] = useState<ContractorSummary[] | null>(null);
+  const [partnerRows, setPartnerRows] = useState<PartnerSummary[] | null>(null);
+  const [supplierRows, setSupplierRows] = useState<SupplierDashboardRow[] | null>(null);
 
   useEffect(() => {
     dashboardApi.summary().then(setSummary);
   }, []);
+
+  function openDrilldown(kind: DrilldownKind) {
+    setDrilldown(kind);
+    if (kind === "contractors" && !contractorRows) contractorsDashboardApi.summary().then(setContractorRows);
+    if (kind === "partners" && !partnerRows) partnersDashboardApi.summary().then(setPartnerRows);
+    if (kind === "suppliers" && !supplierRows) suppliersApi.dashboard().then(setSupplierRows);
+  }
 
   const gridStroke = theme === "dark" ? "#243057" : "#EEF2F0";
   const tickFill = theme === "dark" ? "#94A0C9" : "#64748B";
@@ -64,6 +78,7 @@ export default function Dashboard() {
           icon="treasury"
           tone="neutral"
           sub="كل بنود مصاريف المعدات"
+          onClick={() => openDrilldown("expense")}
         />
         <KpiCard
           label={`صافي ربح شهر ${summary.currentMonthLabel}`}
@@ -78,6 +93,7 @@ export default function Dashboard() {
           icon="contractors"
           tone="neutral"
           sub="فلوس على المقاولين لحد النهاردة"
+          onClick={() => openDrilldown("contractors")}
         />
         <KpiCard
           label="مستحق للشركاء"
@@ -85,6 +101,7 @@ export default function Dashboard() {
           icon="partners"
           tone="neutral"
           sub="نصيب الشركاء من الأرباح لحد النهاردة"
+          onClick={() => openDrilldown("partners")}
         />
         <KpiCard
           label="مستحق للموردين"
@@ -92,6 +109,7 @@ export default function Dashboard() {
           icon="suppliers"
           tone="neutral"
           sub="مشتريات من الموردين لسه ما اتدفعتش"
+          onClick={() => openDrilldown("suppliers")}
         />
       </div>
 
@@ -174,6 +192,120 @@ export default function Dashboard() {
           </table>
         </div>
       </div>
+
+      {drilldown === "expense" && (
+        <Modal title="مصروف كل معدة (سنويًا)" onClose={() => setDrilldown(null)}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-slate-400 border-b border-slate-100">
+                <th className="text-start font-semibold py-2">المعدة</th>
+                <th className="text-start font-semibold py-2">المصروف السنوي</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.equipmentExpenses.map((eq) => (
+                <tr key={eq.name} className="border-b border-slate-50 last:border-0">
+                  <td className="py-2.5 font-semibold text-slate-700">{eq.name}</td>
+                  <td className="py-2.5 text-slate-500">{formatEGP(eq.annualExpense)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Modal>
+      )}
+
+      {drilldown === "contractors" && (
+        <Modal title="المستحق من كل مقاول" onClose={() => setDrilldown(null)}>
+          {!contractorRows ? (
+            <div className="text-sm text-slate-400">جاري التحميل...</div>
+          ) : contractorRows.length === 0 ? (
+            <div className="text-sm text-slate-400">لسه مفيش مقاولين مسجلين.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-100">
+                  <th className="text-start font-semibold py-2">المقاول</th>
+                  <th className="text-start font-semibold py-2">عليه</th>
+                  <th className="text-start font-semibold py-2">دفع</th>
+                  <th className="text-start font-semibold py-2">الباقي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contractorRows.map((c) => (
+                  <tr key={c.id} className="border-b border-slate-50 last:border-0">
+                    <td className="py-2.5 font-semibold text-slate-700">{c.name}</td>
+                    <td className="py-2.5 text-slate-500">{formatEGP(c.totalWork)}</td>
+                    <td className="py-2.5 text-slate-500">{formatEGP(c.totalPaid)}</td>
+                    <td className="py-2.5 font-semibold text-primary-dark">{formatEGP(c.remaining)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Modal>
+      )}
+
+      {drilldown === "partners" && (
+        <Modal title="المستحق لكل شريك" onClose={() => setDrilldown(null)}>
+          {!partnerRows ? (
+            <div className="text-sm text-slate-400">جاري التحميل...</div>
+          ) : partnerRows.length === 0 ? (
+            <div className="text-sm text-slate-400">لسه مفيش شركاء مسجلين.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-100">
+                  <th className="text-start font-semibold py-2">الشريك</th>
+                  <th className="text-start font-semibold py-2">له</th>
+                  <th className="text-start font-semibold py-2">اتدفع له</th>
+                  <th className="text-start font-semibold py-2">الباقي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {partnerRows.map((p) => (
+                  <tr key={p.id} className="border-b border-slate-50 last:border-0">
+                    <td className="py-2.5 font-semibold text-slate-700">{p.name}</td>
+                    <td className="py-2.5 text-slate-500">{formatEGP(p.totalDue)}</td>
+                    <td className="py-2.5 text-slate-500">{formatEGP(p.totalPaid)}</td>
+                    <td className="py-2.5 font-semibold text-primary-dark">{formatEGP(p.remaining)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Modal>
+      )}
+
+      {drilldown === "suppliers" && (
+        <Modal title="المستحق لكل مورد" onClose={() => setDrilldown(null)}>
+          {!supplierRows ? (
+            <div className="text-sm text-slate-400">جاري التحميل...</div>
+          ) : supplierRows.length === 0 ? (
+            <div className="text-sm text-slate-400">لسه مفيش موردين مسجلين.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-100">
+                  <th className="text-start font-semibold py-2">المورد</th>
+                  <th className="text-start font-semibold py-2">المشتريات</th>
+                  <th className="text-start font-semibold py-2">اتدفع</th>
+                  <th className="text-start font-semibold py-2">الباقي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {supplierRows.map((s) => (
+                  <tr key={s.id} className="border-b border-slate-50 last:border-0">
+                    <td className="py-2.5 font-semibold text-slate-700">{s.name}</td>
+                    <td className="py-2.5 text-slate-500">{formatEGP(s.totalPurchases)}</td>
+                    <td className="py-2.5 text-slate-500">{formatEGP(s.totalPaid)}</td>
+                    <td className="py-2.5 font-semibold text-primary-dark">{formatEGP(s.remaining)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Modal>
+      )}
     </div>
   );
 }
