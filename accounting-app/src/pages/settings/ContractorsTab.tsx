@@ -1,8 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
-import { contractorsApi } from "../../api/client";
+import { contractorPaymentsApi, contractorsApi } from "../../api/client";
 import { Contractor } from "../../api/types";
 import Icon from "../../components/Icon";
 import { formatEGP } from "../../utils/format";
+import { useUndo } from "../../context/UndoContext";
 
 function OpeningBalanceCell({ contractor, onSaved }: { contractor: Contractor; onSaved: () => void }) {
   const [editing, setEditing] = useState(false);
@@ -48,6 +49,7 @@ export default function ContractorsTab() {
   const [name, setName] = useState("");
   const [openingBalance, setOpeningBalance] = useState("");
   const [loading, setLoading] = useState(true);
+  const { pushUndo } = useUndo();
 
   const refresh = () => contractorsApi.list().then(setItems);
 
@@ -66,8 +68,27 @@ export default function ContractorsTab() {
   }
 
   async function handleDelete(id: number) {
+    const contractor = items.find((c) => c.id === id);
+    if (!contractor) return;
+
+    const payments = await contractorPaymentsApi.list(id);
+
     await contractorsApi.remove(id);
     await refresh();
+
+    pushUndo(`اتمسح المقاول "${contractor.name}"`, async () => {
+      const restored = await contractorsApi.create(contractor.name, contractor.opening_balance);
+      for (const payment of payments) {
+        await contractorPaymentsApi.create({
+          contractor_id: restored.id,
+          date: payment.date,
+          amount: payment.amount,
+          method: payment.method,
+          note: payment.note,
+        });
+      }
+      await refresh();
+    });
   }
 
   return (

@@ -1,8 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
-import { partnersApi } from "../../api/client";
+import { equipmentApi, partnerPaymentsApi, partnersApi } from "../../api/client";
 import { Partner } from "../../api/types";
 import Icon from "../../components/Icon";
 import { formatEGP } from "../../utils/format";
+import { useUndo } from "../../context/UndoContext";
 
 function OpeningBalanceCell({ partner, onSaved }: { partner: Partner; onSaved: () => void }) {
   const [editing, setEditing] = useState(false);
@@ -48,6 +49,7 @@ export default function PartnersTab() {
   const [name, setName] = useState("");
   const [openingBalance, setOpeningBalance] = useState("");
   const [loading, setLoading] = useState(true);
+  const { pushUndo } = useUndo();
 
   const refresh = () => partnersApi.list().then(setItems);
 
@@ -66,8 +68,37 @@ export default function PartnersTab() {
   }
 
   async function handleDelete(id: number) {
+    const partner = items.find((p) => p.id === id);
+    if (!partner) return;
+
+    const equipmentList = await equipmentApi.list();
+    const affectedEquipment = equipmentList
+      .filter((eq) => eq.shares.some((s) => s.partner_id === id))
+      .map((eq) => ({ id: eq.id, purchase_price: eq.purchase_price, shares: eq.shares }));
+    const payments = await partnerPaymentsApi.list(id);
+
     await partnersApi.remove(id);
     await refresh();
+
+    pushUndo(`اتمسح الشريك "${partner.name}"`, async () => {
+      const restored = await partnersApi.create(partner.name, partner.opening_balance);
+      for (const eq of affectedEquipment) {
+        const restoredShares = eq.shares.map((s) =>
+          s.partner_id === id ? { partner_id: restored.id, percentage: s.percentage } : s
+        );
+        await equipmentApi.update(eq.id, { purchase_price: eq.purchase_price, shares: restoredShares });
+      }
+      for (const payment of payments) {
+        await partnerPaymentsApi.create({
+          partner_id: restored.id,
+          date: payment.date,
+          amount: payment.amount,
+          method: payment.method,
+          note: payment.note,
+        });
+      }
+      await refresh();
+    });
   }
 
   return (

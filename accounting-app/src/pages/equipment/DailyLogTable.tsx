@@ -68,8 +68,6 @@ export default function DailyLogTable({
   const [bulkRate, setBulkRate] = useState("");
   const [bulkBaseHours, setBulkBaseHours] = useState("8");
   const [bulkApplying, setBulkApplying] = useState(false);
-  const [clearing, setClearing] = useState(false);
-  const [undoSnapshot, setUndoSnapshot] = useState<{ date: string; row: RowDraft }[] | null>(null);
 
   const refresh = () =>
     dailyLogsApi.list(equipmentId, month, role).then((logs) => {
@@ -84,7 +82,6 @@ export default function DailyLogTable({
 
   useEffect(() => {
     setLoading(true);
-    setUndoSnapshot(null);
     refresh().finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [equipmentId, month, role]);
@@ -207,63 +204,6 @@ export default function DailyLogTable({
     onChanged?.();
   }
 
-  // بيمسح كل الأيام المسجلة في الشيت ده لشهر واحد، وبيسيب نسخة منها في الذاكرة
-  // عشان تقدر ترجعها بـ Ctrl+Z أو زرار "تراجع" لو غلطت.
-  async function handleClearAll() {
-    const activeDates = dates.filter((d) => rows[d]?.id);
-    if (activeDates.length === 0) return;
-    const label = role === "driver" ? "السركي" : "المقاول";
-    const confirmed = window.confirm(
-      `هتمسح كل بيانات شيت ${label} للشهر ده (${activeDates.length} يوم مسجل). تقدر ترجعها بعدين بـ Ctrl+Z. متأكد؟`
-    );
-    if (!confirmed) return;
-
-    const snapshot = activeDates.map((date) => ({ date, row: rows[date] }));
-    setClearing(true);
-    for (const date of activeDates) {
-      const id = rows[date].id;
-      if (id) await dailyLogsApi.remove(id);
-    }
-    await refresh();
-    setClearing(false);
-    setUndoSnapshot(snapshot);
-    onChanged?.();
-  }
-
-  async function undoClear() {
-    if (!undoSnapshot) return;
-    const snapshot = undoSnapshot;
-    setUndoSnapshot(null);
-    for (const { date, row } of snapshot) {
-      await dailyLogsApi.upsert({
-        equipment_id: equipmentId,
-        date,
-        role,
-        person_name: row.person_name,
-        actual_hours: mode === "hours" && !row.is_paid_leave ? Number(row.actual_hours) || 0 : null,
-        base_hours: mode === "hours" && !row.is_paid_leave ? Number(row.base_hours) || 0 : null,
-        day_rate: mode === "hours" ? Number(row.day_rate) || 0 : null,
-        is_paid_leave: row.is_paid_leave,
-        fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
-        hassan_commission: mode === "fixed" && row.hassan_commission ? Number(row.hassan_commission) : null,
-      });
-    }
-    await refresh();
-    onChanged?.();
-  }
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && undoSnapshot) {
-        e.preventDefault();
-        undoClear();
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [undoSnapshot]);
-
   const monthTotal = Object.values(rows).reduce((sum, r) => sum + (r.id ? r.day_value : 0), 0);
 
   if (loading) {
@@ -272,27 +212,6 @@ export default function DailyLogTable({
 
   return (
     <div className="bg-white rounded-card shadow-card p-5">
-      {undoSnapshot && (
-        <div className="no-print flex items-center justify-between gap-2 bg-amber-50 text-amber-700 text-sm rounded-xl px-4 py-2.5 mb-4">
-          <span>اتمسح شيت الشهر ده ({undoSnapshot.length} يوم) — تقدر ترجعه بـ Ctrl+Z أو الزرار ده.</span>
-          <button onClick={undoClear} className="shrink-0 bg-white text-amber-700 border border-amber-300 rounded-lg px-3 py-1 text-xs font-semibold hover:bg-amber-100">
-            تراجع
-          </button>
-        </div>
-      )}
-
-      {(role === "driver" || role === "contractor") && (
-        <div className="no-print flex justify-end mb-3">
-          <button
-            onClick={handleClearAll}
-            disabled={clearing}
-            className="text-xs font-semibold text-rose-500 hover:text-rose-700 disabled:opacity-50"
-          >
-            {clearing ? "جاري المسح..." : `امسح شيت ${role === "driver" ? "السركي" : "المقاول"} كله للشهر ده`}
-          </button>
-        </div>
-      )}
-
       {mode === "hours" && (
         <div className="no-print bg-slate-50 rounded-xl p-3 mb-4">
           <div className="text-xs font-bold text-slate-500 mb-2">تعبئة سريعة لمجموعة أيام دفعة واحدة</div>

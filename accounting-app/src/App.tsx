@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { UndoProvider } from "./context/UndoContext";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
@@ -16,20 +17,22 @@ export default function App() {
   const [active, setActive] = useState<SectionId>("home");
 
   return (
-    <div className="flex min-h-screen" dir="rtl">
-      <Sidebar active={active} onSelect={setActive} />
-      <main className="flex-1 p-6 xl:p-8 max-w-[1400px] mx-auto w-full">
-        {active === "home" && <Dashboard />}
-        {active === "settings" && <Settings />}
-        {active === "equipment" && <Equipment />}
-        {active === "salaries" && <Salaries />}
-        {active === "hassan" && <Hassan />}
-        {active === "contractors" && <Contractors />}
-        {active === "partners" && <Partners />}
-        {active === "treasury" && <Treasury />}
-        {active === "suppliers" && <Suppliers />}
-        {active === "reports" && <Reports />}
-      </main>
-    </div>
+    <UndoProvider>
+      <div className="flex min-h-screen" dir="rtl">
+        <Sidebar active={active} onSelect={setActive} />
+        <main className="flex-1 p-6 xl:p-8 max-w-[1400px] mx-auto w-full">
+          {active === "home" && <Dashboard />}
+          {active === "settings" && <Settings />}
+          {active === "equipment" && <Equipment />}
+          {active === "salaries" && <Salaries />}
+          {active === "hassan" && <Hassan />}
+          {active === "contractors" && <Contractors />}
+          {active === "partners" && <Partners />}
+          {active === "treasury" && <Treasury />}
+          {active === "suppliers" && <Suppliers />}
+          {active === "reports" && <Reports />}
+        </main>
+      </div>
+    </UndoProvider>
   );
 }

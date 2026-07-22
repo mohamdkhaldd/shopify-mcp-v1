@@ -2,18 +2,21 @@ import { FormEvent, useEffect, useState } from "react";
 import Icon from "../../components/Icon";
 import { employeesApi } from "../../api/client";
 import { Driver, WageType } from "../../api/types";
+import { useUndo } from "../../context/UndoContext";
 
 function EditRow({ item, onSaved, onCancel }: { item: Driver; onSaved: () => void; onCancel: () => void }) {
   const [name, setName] = useState(item.name);
   const [wageType, setWageType] = useState<WageType>(item.wage_type);
   const [rate, setRate] = useState(String(item.rate));
   const [fixedSalary, setFixedSalary] = useState(item.fixed_salary);
+  const { pushUndo } = useUndo();
 
   async function save(e: FormEvent) {
     e.preventDefault();
     const trimmed = name.trim();
     const rateValue = Number(rate);
     if (!trimmed || !rateValue) return;
+    const previous = { name: item.name, wage_type: item.wage_type, rate: item.rate, fixed_salary: item.fixed_salary };
     await employeesApi.update(item.id, {
       name: trimmed,
       wage_type: wageType,
@@ -21,6 +24,10 @@ function EditRow({ item, onSaved, onCancel }: { item: Driver; onSaved: () => voi
       fixed_salary: wageType === "monthly" && fixedSalary,
     });
     onSaved();
+    pushUndo(`اتغيرت بيانات "${item.name}"`, async () => {
+      await employeesApi.update(item.id, previous);
+      onSaved();
+    });
   }
 
   return (
@@ -83,6 +90,7 @@ export default function DriversTab() {
   const [fixedSalary, setFixedSalary] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const { pushUndo } = useUndo();
 
   const refresh = () => employeesApi.list().then(setItems);
 
@@ -108,8 +116,19 @@ export default function DriversTab() {
   }
 
   async function handleDelete(id: number) {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
     await employeesApi.remove(id);
     await refresh();
+    pushUndo(`اتمسح "${item.name}"`, async () => {
+      await employeesApi.create({
+        name: item.name,
+        wage_type: item.wage_type,
+        rate: item.rate,
+        fixed_salary: item.fixed_salary,
+      });
+      await refresh();
+    });
   }
 
   async function handleSaved() {
