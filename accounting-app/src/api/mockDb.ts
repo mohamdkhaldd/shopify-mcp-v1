@@ -408,60 +408,47 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return result;
   }
 
-  // مرتب السائق بيتحط كمصروف حقيقي على المعدة ("مرتب سائق") — أصحاب الأجر
-  // اليومي بيتحسبوا من سعرهم الثابت مباشرة، وأصحاب المرتب الشهري بالتقسيم
-  // بالأيام أعلاه. month=null يحسب كل الوقت (مستخدم في equipmentAllTimeProfit).
+  // مرتب أي سواق (يومي أو شهري — مفيش فرق) بيتحط كمصروف على المعدة من الفلوس
+  // الحقيقية اللي فعلاً اتاخدت (سلف + مكافآت + دفعات مرتب)، مقسومة على المعدات
+  // حسب أيام الشغل — لا مصروف بيتسجل غير لما فلوس فعلية تتاخد.
+  // month=null يحسب كل الوقت (مستخدم في equipmentAllTimeProfit).
   function driverSalaryForEquipment(equipmentId: number, month: string | null): number {
     const logs = state.daily_logs.filter(
       (l) => l.equipment_id === equipmentId && l.role === "driver" && (month === null || l.date.startsWith(month))
     );
 
-    let dailyWageSum = 0;
-    const monthlyEmployees = new Map<number, string>();
+    const employees = new Map<number, string>();
     for (const l of logs) {
       const employee = state.employees.find((e) => e.name === l.person_name);
-      if (!employee) continue;
-      if (employee.wage_type === "daily") {
-        dailyWageSum += computeDriverWageValue(l, employee.rate);
-      } else {
-        monthlyEmployees.set(employee.id, employee.name);
+      if (employee) employees.set(employee.id, employee.name);
+    }
+    if (employees.size === 0) return 0;
+
+    const months = month ? [month] : [...new Set(logs.map((l) => l.date.slice(0, 7)))];
+    let sum = 0;
+    for (const [empId, empName] of employees) {
+      for (const m of months) {
+        const allocation = monthlySalaryAllocationForEmployeeMonth(empName, empId, m);
+        sum += allocation.get(equipmentId) ?? 0;
       }
     }
-
-    let monthlySum = 0;
-    if (monthlyEmployees.size > 0) {
-      const months = month ? [month] : [...new Set(logs.map((l) => l.date.slice(0, 7)))];
-      for (const [empId, empName] of monthlyEmployees) {
-        for (const m of months) {
-          const allocation = monthlySalaryAllocationForEmployeeMonth(empName, empId, m);
-          monthlySum += allocation.get(equipmentId) ?? 0;
-        }
-      }
-    }
-
-    return dailyWageSum + monthlySum;
+    return sum;
   }
 
   // نفس حساب مرتب السائق بس مقسّم بالاسم — لو أكتر من سواق شغلوا على نفس
   // المعدة في نفس الشهر، كل واحد بيظهر في شيت المصروفات بمرتبه لوحده.
   function driverSalaryBreakdownForEquipment(equipmentId: number, month: string): { name: string; amount: number }[] {
-    const byDriver = new Map<string, number>();
-    const monthlyEmployees = new Map<number, string>();
+    const employees = new Map<number, string>();
     for (const l of state.daily_logs) {
       if (l.equipment_id !== equipmentId || l.role !== "driver" || !l.date.startsWith(month)) continue;
       const employee = state.employees.find((e) => e.name === l.person_name);
-      if (!employee) continue;
-      if (employee.wage_type === "daily") {
-        const amount = computeDriverWageValue(l, employee.rate);
-        byDriver.set(l.person_name, (byDriver.get(l.person_name) ?? 0) + amount);
-      } else {
-        monthlyEmployees.set(employee.id, employee.name);
-      }
+      if (employee) employees.set(employee.id, employee.name);
     }
-    for (const [empId, empName] of monthlyEmployees) {
+    const byDriver = new Map<string, number>();
+    for (const [empId, empName] of employees) {
       const allocation = monthlySalaryAllocationForEmployeeMonth(empName, empId, month);
       const amount = allocation.get(equipmentId) ?? 0;
-      if (amount > 0) byDriver.set(empName, (byDriver.get(empName) ?? 0) + amount);
+      if (amount > 0) byDriver.set(empName, amount);
     }
     return [...byDriver.entries()].map(([name, amount]) => ({ name, amount }));
   }

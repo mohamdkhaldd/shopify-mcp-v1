@@ -155,7 +155,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
                   <td className="py-2 text-slate-400">—</td>
                   <td className="py-2 font-semibold text-slate-700">
                     مرتب سائق: {d.name}
-                    <span className="text-xs text-slate-400 font-normal"> (تلقائي من سعره في الإعدادات وأيام شغله)</span>
+                    <span className="text-xs text-slate-400 font-normal"> (من الفلوس اللي فعلاً اتاخدت — سلف ومكافآت ودفعات مرتب — مقسومة على أيام شغله)</span>
                   </td>
                   <td className="py-2 text-slate-600">{formatEGP(d.amount)}</td>
                   <td className="py-2 text-slate-400">—</td>

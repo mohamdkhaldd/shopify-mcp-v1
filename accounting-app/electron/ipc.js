@@ -106,6 +106,9 @@ function equipmentDaysNote(db, employeeName, month) {
     .join("، ");
 }
 
+// مرتب أي سواق (يومي أو شهري — مفيش فرق) بيتحط كمصروف على المعدة من الفلوس
+// الحقيقية اللي فعلاً اتاخدت (سلف + مكافآت + دفعات مرتب)، مقسومة على المعدات
+// حسب أيام الشغل — لا مصروف بيتسجل غير لما فلوس فعلية تتاخد.
 function driverSalaryForEquipment(db, equipmentId, month) {
   const logs = month
     ? db
@@ -113,32 +116,23 @@ function driverSalaryForEquipment(db, equipmentId, month) {
         .all(equipmentId, `${month}%`)
     : db.prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver'").all(equipmentId);
 
-  let dailyWageSum = 0;
-  const monthlyEmployees = new Map();
+  const employees = new Map();
   for (const l of logs) {
     const employee = db.prepare("SELECT * FROM employees WHERE name = ?").get(l.person_name);
-    if (!employee) continue;
-    if (employee.wage_type === "daily") {
-      dailyWageSum += computeDriverWageValue(l, employee.rate);
-    } else {
-      monthlyEmployees.set(employee.id, employee.name);
+    if (employee) employees.set(employee.id, employee.name);
+  }
+  if (employees.size === 0) return 0;
+
+  // كل شهر فيه سجلات له إجمالي فلوس ماخوذة مختلف، لازم نلف عليه لوحده.
+  const months = month ? [month] : [...new Set(logs.map((l) => l.date.slice(0, 7)))];
+  let sum = 0;
+  for (const [empId, empName] of employees) {
+    for (const m of months) {
+      const allocation = monthlySalaryAllocationForEmployeeMonth(db, empName, empId, m);
+      sum += allocation.get(equipmentId) ?? 0;
     }
   }
-
-  // للموظفين الشهريين لازم نلف على كل شهر فيه سجلات لوحده — كل شهر له إجمالي
-  // مأخوذ مختلف، مينفعش نجمعهم كلهم في استعلام واحد زي اليومية.
-  let monthlySum = 0;
-  if (monthlyEmployees.size > 0) {
-    const months = month ? [month] : [...new Set(logs.map((l) => l.date.slice(0, 7)))];
-    for (const [empId, empName] of monthlyEmployees) {
-      for (const m of months) {
-        const allocation = monthlySalaryAllocationForEmployeeMonth(db, empName, empId, m);
-        monthlySum += allocation.get(equipmentId) ?? 0;
-      }
-    }
-  }
-
-  return dailyWageSum + monthlySum;
+  return sum;
 }
 
 // نفس حساب مرتب السائق بس مقسّم بالاسم — لو أكتر من سواق شغلوا على نفس
@@ -148,22 +142,16 @@ function driverSalaryBreakdownForEquipment(db, equipmentId, month) {
   const logs = db
     .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
     .all(equipmentId, `${month}%`);
-  const byDriver = new Map();
-  const monthlyEmployees = new Map();
+  const employees = new Map();
   for (const l of logs) {
     const employee = db.prepare("SELECT * FROM employees WHERE name = ?").get(l.person_name);
-    if (!employee) continue;
-    if (employee.wage_type === "daily") {
-      const amount = computeDriverWageValue(l, employee.rate);
-      byDriver.set(l.person_name, (byDriver.get(l.person_name) ?? 0) + amount);
-    } else {
-      monthlyEmployees.set(employee.id, employee.name);
-    }
+    if (employee) employees.set(employee.id, employee.name);
   }
-  for (const [empId, empName] of monthlyEmployees) {
+  const byDriver = new Map();
+  for (const [empId, empName] of employees) {
     const allocation = monthlySalaryAllocationForEmployeeMonth(db, empName, empId, month);
     const amount = allocation.get(equipmentId) ?? 0;
-    if (amount > 0) byDriver.set(empName, (byDriver.get(empName) ?? 0) + amount);
+    if (amount > 0) byDriver.set(empName, amount);
   }
   return [...byDriver.entries()].map(([name, amount]) => ({ name, amount }));
 }
