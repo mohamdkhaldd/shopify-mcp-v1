@@ -4,6 +4,7 @@ import { suppliersApi } from "../api/client";
 import { SupplierDashboardRow } from "../api/types";
 import { formatEGP } from "../utils/format";
 import { PAYMENT_METHODS, paymentMethodLabel } from "../utils/paymentMethods";
+import { useUndo } from "../context/UndoContext";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -148,6 +149,7 @@ export default function Suppliers() {
   const [names, setNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const { pushUndo } = useUndo();
 
   const refresh = () => {
     suppliersApi.dashboard().then(setRows);
@@ -159,6 +161,36 @@ export default function Suppliers() {
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleDeletePurchase(supplierName: string, purchase: SupplierDashboardRow["purchases"][number]) {
+    await suppliersApi.removePurchase(purchase.id);
+    await refresh();
+    pushUndo(`اتمسح مشترى "${supplierName}" (${formatEGP(purchase.amount)})`, async () => {
+      await suppliersApi.createPurchase({
+        supplier_name: supplierName,
+        date: purchase.date,
+        description: purchase.description,
+        amount: purchase.amount,
+        note: purchase.note,
+      });
+      await refresh();
+    });
+  }
+
+  async function handleDeletePayment(supplierName: string, payment: SupplierDashboardRow["payments"][number]) {
+    await suppliersApi.removePayment(payment.id);
+    await refresh();
+    pushUndo(`اتمسحت دفعة "${supplierName}" (${formatEGP(payment.amount)})`, async () => {
+      await suppliersApi.createPayment({
+        supplier_name: supplierName,
+        date: payment.date,
+        amount: payment.amount,
+        method: payment.method,
+        note: payment.note,
+      });
+      await refresh();
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -191,7 +223,7 @@ export default function Suppliers() {
                 <th className="text-start font-semibold py-2">عدد مرات الشراء</th>
                 <th className="text-start font-semibold py-2">إجمالي المشتريات</th>
                 <th className="text-start font-semibold py-2">إجمالي المدفوع</th>
-                <th className="text-start font-semibold py-2">الباقي عليه</th>
+                <th className="text-start font-semibold py-2">المتبقي له</th>
               </tr>
             </thead>
             <tbody>
@@ -223,8 +255,16 @@ export default function Suppliers() {
                             ) : (
                               <ul className="space-y-1 text-sm">
                                 {s.purchases.map((p) => (
-                                  <li key={p.id} className="text-slate-600">
-                                    {p.date} — {formatEGP(p.amount)} {p.description && <span className="text-slate-400">({p.description})</span>}
+                                  <li key={p.id} className="flex items-center justify-between gap-2 text-slate-600">
+                                    <span>
+                                      {p.date} — {formatEGP(p.amount)} {p.description && <span className="text-slate-400">({p.description})</span>}
+                                    </span>
+                                    <button
+                                      onClick={() => handleDeletePurchase(s.name, p)}
+                                      className="no-print shrink-0 text-xs text-rose-500 hover:text-rose-700 font-semibold"
+                                    >
+                                      حذف
+                                    </button>
                                   </li>
                                 ))}
                               </ul>
@@ -237,8 +277,16 @@ export default function Suppliers() {
                             ) : (
                               <ul className="space-y-1 text-sm">
                                 {s.payments.map((p) => (
-                                  <li key={p.id} className="text-slate-600">
-                                    {p.date} — {formatEGP(p.amount)} — {paymentMethodLabel(p.method)}
+                                  <li key={p.id} className="flex items-center justify-between gap-2 text-slate-600">
+                                    <span>
+                                      {p.date} — {formatEGP(p.amount)} — {paymentMethodLabel(p.method)}
+                                    </span>
+                                    <button
+                                      onClick={() => handleDeletePayment(s.name, p)}
+                                      className="no-print shrink-0 text-xs text-rose-500 hover:text-rose-700 font-semibold"
+                                    >
+                                      حذف
+                                    </button>
                                   </li>
                                 ))}
                               </ul>
