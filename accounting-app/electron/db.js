@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS partners (
 
 CREATE TABLE IF NOT EXISTS equipment (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE
+  name TEXT NOT NULL UNIQUE,
+  purchase_price REAL NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS equipment_partner_shares (
@@ -277,6 +278,14 @@ function initDatabase() {
     .some((col) => col.name === "date");
   if (!monthlyExpensesHasDate) {
     db.exec("ALTER TABLE monthly_expenses ADD COLUMN date TEXT");
+  }
+
+  const equipmentHasPurchasePrice = db
+    .prepare("PRAGMA table_info(equipment)")
+    .all()
+    .some((col) => col.name === "purchase_price");
+  if (!equipmentHasPurchasePrice) {
+    db.exec("ALTER TABLE equipment ADD COLUMN purchase_price REAL NOT NULL DEFAULT 0");
   }
 
   const accountCount = db.prepare("SELECT COUNT(*) AS c FROM treasury_accounts").get().c;

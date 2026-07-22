@@ -22,6 +22,9 @@ export interface EquipmentPartnerShare {
 export interface Equipment {
   id: number;
   name: string;
+  purchase_price: number;
+  allTimeProfit: number;
+  roiPercent: number | null;
   shares: EquipmentPartnerShare[];
 }
 

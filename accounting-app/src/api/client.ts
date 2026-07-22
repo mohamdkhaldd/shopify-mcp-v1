@@ -76,8 +76,15 @@ export const expenseCategoriesApi = {
 
 export const equipmentApi = {
   list: (): Promise<Equipment[]> => invoke("equipment:list"),
-  create: (data: { name: string; shares: { partner_id: number; percentage: number }[] }): Promise<Equipment> =>
-    invoke("equipment:create", data),
+  create: (data: {
+    name: string;
+    purchase_price: number;
+    shares: { partner_id: number; percentage: number }[];
+  }): Promise<Equipment> => invoke("equipment:create", data),
+  update: (
+    id: number,
+    data: { purchase_price: number; shares: { partner_id: number; percentage: number }[] }
+  ): Promise<Equipment> => invoke("equipment:update", { id, ...data }),
   remove: (id: number): Promise<void> => invoke("equipment:delete", { id }),
   summary: (equipment_id: number, month: string): Promise<EquipmentSummary> =>
     invoke("equipment:summary", { equipment_id, month }),

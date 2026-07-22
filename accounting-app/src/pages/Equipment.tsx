@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Icon from "../components/Icon";
 import { equipmentApi } from "../api/client";
 import { Equipment as EquipmentType } from "../api/types";
+import { formatEGP } from "../utils/format";
 import EquipmentDetail from "./equipment/EquipmentDetail";
 
 export default function Equipment() {
@@ -47,6 +48,14 @@ export default function Equipment() {
               <div className="mt-1 text-xs text-slate-400">
                 {eq.shares.length === 0 ? "بدون شركاء محددين" : `${eq.shares.length} شركاء`}
               </div>
+              {eq.purchase_price > 0 && (
+                <div className="mt-1 text-xs text-slate-400">
+                  سعر الشراء: {formatEGP(eq.purchase_price)} — رجّعت{" "}
+                  <span className={eq.roiPercent != null && eq.roiPercent >= 100 ? "text-primary font-semibold" : "text-slate-500"}>
+                    {(eq.roiPercent ?? 0).toFixed(1)}%
+                  </span>
+                </div>
+              )}
             </button>
           ))}
         </div>

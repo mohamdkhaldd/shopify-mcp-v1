@@ -110,7 +110,7 @@ interface MockState {
   employees: { id: number; name: string; wage_type: "daily" | "monthly"; rate: number; fixed_salary: boolean }[];
   contractors: { id: number; name: string; opening_balance: number }[];
   expense_categories: { id: number; name: string }[];
-  equipment: { id: number; name: string; shares: { partner_id: number; percentage: number }[] }[];
+  equipment: { id: number; name: string; purchase_price: number; shares: { partner_id: number; percentage: number }[] }[];
   daily_logs: DailyLogRow[];
   monthly_expenses: MonthlyExpenseRow[];
   employee_advances: EmployeeAdvanceRow[];
@@ -165,7 +165,7 @@ function computePairedCommission(equipmentName: string, driverLog: DailyLogRow, 
   return k - h + overtimeHours * (k / 8 - h / 8);
 }
 
-const STORAGE_KEY = "al-bunyan-mock-db-v5";
+const STORAGE_KEY = "al-bunyan-mock-db-v6";
 
 // Real starting data pulled from the company's existing Excel system, so the
 // preview opens already reflecting how the business actually operates.
@@ -221,6 +221,7 @@ function buildSeedState(): MockState {
   const equipment = SEED_EQUIPMENT.map((eq) => ({
     id: nextId++,
     name: eq.name,
+    purchase_price: 0,
     shares: eq.shares.map(([partnerName, percentage]) => ({
       partner_id: partnerIds[partnerName],
       percentage,
@@ -271,6 +272,7 @@ function loadState(): MockState {
     for (const c of state.contractors) if (c.opening_balance == null) c.opening_balance = 0;
     for (const e of state.employees) if (e.fixed_salary == null) e.fixed_salary = false;
     for (const e of state.monthly_expenses) if (e.date === undefined) e.date = null;
+    for (const eq of state.equipment) if (eq.purchase_price == null) eq.purchase_price = 0;
     if (!state.employee_advances) state.employee_advances = [];
     if (!state.employee_bonuses) state.employee_bonuses = [];
     if (!state.hassan_ledger) state.hassan_ledger = [];
@@ -817,6 +819,27 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       .reduce((sum, e) => sum + e.amount, 0);
     const driverSalaryExpense = driverSalaryForEquipment(equipmentId, null);
     return income - expense - driverSalaryExpense;
+  }
+
+  // كل معدة بتحمل سعر شرائها، وبنحسب لها "رجعت كام في الميه من سعرها" من
+  // صافي ربحها من أول ما بدأت — زي جدول الإكسيل القديم.
+  if (channel === "equipment:list") {
+    return state.equipment.map((eq) => {
+      const allTimeProfit = equipmentAllTimeProfit(eq.id);
+      const roiPercent = eq.purchase_price > 0 ? (allTimeProfit / eq.purchase_price) * 100 : null;
+      return { ...eq, allTimeProfit, roiPercent };
+    });
+  }
+
+  // بيسمح بتعديل سعر الشراء ونسب الشركاء من غير ما تحذف المعدة وتضيفها تاني.
+  if (channel === "equipment:update") {
+    const eq = state.equipment.find((e) => e.id === payload.id)!;
+    eq.purchase_price = payload.purchase_price ?? 0;
+    eq.shares = payload.shares ?? [];
+    saveState(state);
+    const allTimeProfit = equipmentAllTimeProfit(eq.id);
+    const roiPercent = eq.purchase_price > 0 ? (allTimeProfit / eq.purchase_price) * 100 : null;
+    return { ...eq, allTimeProfit, roiPercent };
   }
 
   if (channel === "partners:updateOpeningBalance") {
