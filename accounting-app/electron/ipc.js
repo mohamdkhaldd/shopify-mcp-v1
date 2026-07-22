@@ -417,12 +417,17 @@ function registerIpcHandlers(db) {
     const bonusesStmt = db.prepare(
       "SELECT COALESCE(SUM(amount), 0) AS total FROM employee_bonuses WHERE employee_id = ? AND date LIKE ?"
     );
+    const paidStmt = db.prepare(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM salary_payments WHERE employee_id = ? AND date LIKE ?"
+    );
 
     return employees.map((emp) => {
       const advancesTotal = advancesStmt.get(emp.id, `${month}%`).total;
       const bonusesTotal = bonusesStmt.get(emp.id, `${month}%`).total;
+      const paidTotal = paidStmt.get(emp.id, `${month}%`).total;
       if (emp.wage_type === "monthly") {
         const { grossPay } = monthlyEmployeeGrossPay(db, emp, month);
+        const netPay = grossPay + bonusesTotal - advancesTotal;
         return {
           id: emp.id,
           name: emp.name,
@@ -433,11 +438,14 @@ function registerIpcHandlers(db) {
           gross_pay: grossPay,
           advances_total: advancesTotal,
           bonuses_total: bonusesTotal,
-          net_pay: grossPay + bonusesTotal - advancesTotal,
+          net_pay: netPay,
+          paid_total: paidTotal,
+          remaining: netPay - paidTotal,
         };
       }
       const logs = driverLogsStmt.all(emp.name, `${month}%`);
       const grossPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
+      const netPay = grossPay + bonusesTotal - advancesTotal;
       return {
         id: emp.id,
         name: emp.name,
@@ -448,7 +456,9 @@ function registerIpcHandlers(db) {
         gross_pay: grossPay,
         advances_total: advancesTotal,
         bonuses_total: bonusesTotal,
-        net_pay: grossPay + bonusesTotal - advancesTotal,
+        net_pay: netPay,
+        paid_total: paidTotal,
+        remaining: netPay - paidTotal,
       };
     });
   });
@@ -470,6 +480,10 @@ function registerIpcHandlers(db) {
       .prepare("SELECT * FROM employee_bonuses WHERE employee_id = ? AND date LIKE ? ORDER BY date")
       .all(employee_id, `${month}%`);
     const bonusesTotal = bonuses.reduce((sum, b) => sum + b.amount, 0);
+    const payments = db
+      .prepare("SELECT * FROM salary_payments WHERE employee_id = ? AND date LIKE ? ORDER BY date")
+      .all(employee_id, `${month}%`);
+    const paidTotal = payments.reduce((sum, p) => sum + p.amount, 0);
 
     if (employee.wage_type === "monthly") {
       const { grossPay, dailyRate } = monthlyEmployeeGrossPay(db, employee, month);
@@ -492,15 +506,19 @@ function registerIpcHandlers(db) {
           day_value: dailyRate,
         }));
       }
+      const netPay = grossPay + bonusesTotal - advancesTotal;
       return {
         employee,
         days,
         advances,
         bonuses,
+        payments,
         grossPay,
         advancesTotal,
         bonusesTotal,
-        netPay: grossPay + bonusesTotal - advancesTotal,
+        paidTotal,
+        netPay,
+        remaining: netPay - paidTotal,
       };
     }
 
@@ -521,8 +539,44 @@ function registerIpcHandlers(db) {
       day_value: computeDriverWageValue(l, employee.rate),
     }));
     const grossPay = days.reduce((sum, d) => sum + d.day_value, 0);
+    const netPay = grossPay + bonusesTotal - advancesTotal;
 
-    return { employee, days, advances, bonuses, grossPay, advancesTotal, bonusesTotal, netPay: grossPay + bonusesTotal - advancesTotal };
+    return {
+      employee,
+      days,
+      advances,
+      bonuses,
+      payments,
+      grossPay,
+      advancesTotal,
+      bonusesTotal,
+      paidTotal,
+      netPay,
+      remaining: netPay - paidTotal,
+    };
+  });
+
+  // --- دفع المرتب النهائي: تسجيل إن مبلغ من المرتب اتدفع فعلاً للموظف، بتاريخه
+  // وطريقة دفعه — نفس فكرة دفعات الشركاء والمقاولين، لأن صافي المرتب المحسوب
+  // شهريًا يفضل "مستحق" لحد ما يتسجل له دفعة فعلية زي دي. ---
+  ipcMain.handle("salaryPayments:list", (_e, { employee_id, month }) =>
+    db.prepare("SELECT * FROM salary_payments WHERE employee_id = ? AND date LIKE ? ORDER BY date").all(employee_id, `${month}%`)
+  );
+  ipcMain.handle("salaryPayments:create", (_e, payment) => {
+    const info = db
+      .prepare(`INSERT INTO salary_payments (employee_id, date, amount, payment_method, note) VALUES (@employee_id, @date, @amount, @payment_method, @note)`)
+      .run({
+        employee_id: payment.employee_id,
+        date: payment.date,
+        amount: payment.amount,
+        payment_method: payment.payment_method || "cash",
+        note: payment.note ?? null,
+      });
+    return db.prepare("SELECT * FROM salary_payments WHERE id = ?").get(info.lastInsertRowid);
+  });
+  ipcMain.handle("salaryPayments:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM salary_payments WHERE id = ?").run(id);
+    return { ok: true };
   });
 
   // --- Hassan: commission (doc section 4) ---
@@ -910,6 +964,7 @@ function registerIpcHandlers(db) {
     const outgoingSuppliers = sumByMethod("supplier_payments", "method", "date", `${month}%`);
     const outgoingAdvances = sumByMethod("employee_advances", "payment_method", "date", `${month}%`);
     const outgoingBonuses = sumByMethod("employee_bonuses", "payment_method", "date", `${month}%`);
+    const outgoingSalaryPayments = sumByMethod("salary_payments", "payment_method", "date", `${month}%`);
 
     return accounts.map((acc) => {
       const monthIncoming = incoming[acc.name] ?? 0;
@@ -918,7 +973,8 @@ function registerIpcHandlers(db) {
         (outgoingExpenses[acc.name] ?? 0) +
         (outgoingSuppliers[acc.name] ?? 0) +
         (outgoingAdvances[acc.name] ?? 0) +
-        (outgoingBonuses[acc.name] ?? 0);
+        (outgoingBonuses[acc.name] ?? 0) +
+        (outgoingSalaryPayments[acc.name] ?? 0);
       const netMovement = monthIncoming - monthOutgoing;
       return {
         id: acc.id,
@@ -1281,7 +1337,15 @@ function registerIpcHandlers(db) {
       )
       .all(`${month}%`)
       .map((r) => ({ ...r, kind: "bonus" }));
-    const payroll = [...advances, ...bonuses].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    const salaryPayments = db
+      .prepare(
+        `SELECT sp.*, e.name AS employee_name FROM salary_payments sp
+         JOIN employees e ON e.id = sp.employee_id
+         WHERE sp.date LIKE ? ORDER BY sp.date, sp.id`
+      )
+      .all(`${month}%`)
+      .map((r) => ({ ...r, kind: "salary" }));
+    const payroll = [...advances, ...bonuses, ...salaryPayments].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     const payrollTotal = payroll.reduce((sum, r) => sum + r.amount, 0);
 
     const waste = db.prepare("SELECT * FROM waste_entries WHERE date LIKE ? ORDER BY date, id").all(`${month}%`);
@@ -1328,6 +1392,7 @@ function registerIpcHandlers(db) {
       db.prepare("DELETE FROM monthly_expenses").run();
       db.prepare("DELETE FROM employee_advances").run();
       db.prepare("DELETE FROM employee_bonuses").run();
+      db.prepare("DELETE FROM salary_payments").run();
       db.prepare("DELETE FROM hassan_ledger").run();
       db.prepare("DELETE FROM contractor_payments").run();
       db.prepare("DELETE FROM partner_payments").run();

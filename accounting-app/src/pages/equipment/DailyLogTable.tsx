@@ -3,6 +3,7 @@ import { dailyLogsApi } from "../../api/client";
 import { DailyLog, DailyLogRole, WageType } from "../../api/types";
 import { daysInMonth, weekdayLabel } from "../../utils/months";
 import { formatEGP } from "../../utils/format";
+import { useUndo } from "../../context/UndoContext";
 
 interface Person {
   id: number;
@@ -68,6 +69,8 @@ export default function DailyLogTable({
   const [bulkRate, setBulkRate] = useState("");
   const [bulkBaseHours, setBulkBaseHours] = useState("8");
   const [bulkApplying, setBulkApplying] = useState(false);
+  const [bulkClearing, setBulkClearing] = useState(false);
+  const { pushUndo } = useUndo();
 
   const refresh = () =>
     dailyLogsApi.list(equipmentId, month, role).then((logs) => {
@@ -204,6 +207,50 @@ export default function DailyLogTable({
     onChanged?.();
   }
 
+  // بيفرّغ مجموعة أيام دفعة واحدة (يعني الشخص دا مشتغلش الأيام دي) — بديل
+  // سريع لمسح كل يوم لوحده يدويًا. بيسيب نسخة من الأيام اللي اتمسحت في نظام
+  // التراجع العام عشان لو غلط في المدى يرجّعها بسهولة.
+  async function applyBulkClear() {
+    const from = Number(bulkFrom);
+    const to = Number(bulkTo);
+    if (!from || !to || from > to) return;
+
+    const targetDates = dates.filter((date) => {
+      const day = Number(date.slice(-2));
+      return day >= from && day <= to && rows[date]?.id;
+    });
+    if (targetDates.length === 0) return;
+
+    const snapshot = targetDates.map((date) => ({ date, row: rows[date] }));
+    setBulkClearing(true);
+    for (const date of targetDates) {
+      const id = rows[date].id;
+      if (id) await dailyLogsApi.remove(id);
+    }
+    await refresh();
+    setBulkClearing(false);
+    onChanged?.();
+
+    pushUndo(`اتفرّغت الأيام من ${from} لـ ${to} (${snapshot.length} يوم)`, async () => {
+      for (const { date, row } of snapshot) {
+        await dailyLogsApi.upsert({
+          equipment_id: equipmentId,
+          date,
+          role,
+          person_name: row.person_name,
+          actual_hours: mode === "hours" && !row.is_paid_leave ? Number(row.actual_hours) || 0 : null,
+          base_hours: mode === "hours" && !row.is_paid_leave ? Number(row.base_hours) || 0 : null,
+          day_rate: mode === "hours" ? Number(row.day_rate) || 0 : null,
+          is_paid_leave: row.is_paid_leave,
+          fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
+          hassan_commission: mode === "fixed" && row.hassan_commission ? Number(row.hassan_commission) : null,
+        });
+      }
+      await refresh();
+      onChanged?.();
+    });
+  }
+
   const monthTotal = Object.values(rows).reduce((sum, r) => sum + (r.id ? r.day_value : 0), 0);
 
   if (loading) {
@@ -287,9 +334,16 @@ export default function DailyLogTable({
             >
               {bulkApplying ? "جاري التعبئة..." : "تطبيق على الأيام"}
             </button>
+            <button
+              onClick={applyBulkClear}
+              disabled={bulkClearing}
+              className="bg-white border border-rose-200 text-rose-600 rounded-lg px-4 py-1.5 text-sm font-semibold hover:bg-rose-50 disabled:opacity-50"
+            >
+              {bulkClearing ? "جاري الإفراغ..." : "افرغ الأيام دي (مشتغلش)"}
+            </button>
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
-            بيملأ الاسم وسعر اليوم والساعات الأساسية لكل الأيام في المدى ده، وبيفترض إن الساعات الفعلية زي الأساسية (من غير أوفر تايم) — لو يوم فيه أوفر تايم عدّل الساعات الفعلية بتاعته لوحده بعد التعبئة.
+            "تطبيق على الأيام" بيملأ الاسم وسعر اليوم والساعات الأساسية لكل الأيام في المدى ده (من غير أوفر تايم). "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده من غير ما تحتاج اسم أو سعر — يعني الشخص مشتغلش الأيام دي، وتقدر ترجعها بـ Ctrl+Z لو غلطت.
           </div>
         </div>
       )}

@@ -3,7 +3,7 @@ import MonthPicker from "../components/equipment/MonthPicker";
 import Icon from "../components/Icon";
 import PrintButton from "../components/PrintButton";
 import { PrintSignoff } from "../components/PrintSignoff";
-import { employeeAdvancesApi, employeeBonusesApi, payrollApi } from "../api/client";
+import { employeeAdvancesApi, employeeBonusesApi, payrollApi, salaryPaymentsApi } from "../api/client";
 import { PaymentMethod, PayrollDetail, PayrollRow } from "../api/types";
 import { currentMonthKey, monthLabel } from "../utils/months";
 import { formatEGP } from "../utils/format";
@@ -34,6 +34,10 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
   const [bonusAmount, setBonusAmount] = useState("");
   const [bonusMethod, setBonusMethod] = useState<PaymentMethod>("cash");
   const [bonusNote, setBonusNote] = useState("");
+  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
+  const [payNote, setPayNote] = useState("");
 
   const refresh = () => payrollApi.detail(row.id, month).then(setDetail);
 
@@ -41,6 +45,12 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row.id, month]);
+
+  // بيقترح المبلغ الباقي تلقائيًا كل ما الشيت يتحدّث — لو مفيش باقي (اتدفع
+  // كله) بيسيب الخانة فاضية بدل ما يقترح صفر أو رقم سالب.
+  useEffect(() => {
+    if (detail) setPayAmount(detail.remaining > 0 ? String(detail.remaining) : "");
+  }, [detail?.remaining]);
 
   async function handleAddAdvance(e: FormEvent) {
     e.preventDefault();
@@ -86,10 +96,31 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
     onChanged();
   }
 
+  async function handleAddPayment(e: FormEvent) {
+    e.preventDefault();
+    if (!payAmount) return;
+    await salaryPaymentsApi.create({
+      employee_id: row.id,
+      date: payDate,
+      amount: Number(payAmount),
+      payment_method: payMethod,
+      note: payNote || null,
+    });
+    setPayNote("");
+    await refresh();
+    onChanged();
+  }
+
+  async function handleDeletePayment(id: number) {
+    await salaryPaymentsApi.remove(id);
+    await refresh();
+    onChanged();
+  }
+
   if (!detail) {
     return (
       <tr>
-        <td colSpan={7} className="px-4 py-4 text-sm text-slate-400">
+        <td colSpan={8} className="px-4 py-4 text-sm text-slate-400">
           جاري التحميل...
         </td>
       </tr>
@@ -98,7 +129,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
 
   return (
     <tr>
-      <td colSpan={7} className="bg-slate-50 px-4 py-5 rounded-xl">
+      <td colSpan={8} className="bg-slate-50 px-4 py-5 rounded-xl">
         <div className="bg-white rounded-card shadow-card p-5 max-w-2xl">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
             <div>
@@ -130,6 +161,75 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
               <div className="text-xs text-white/80">الصافي المستحق</div>
               <div className="font-extrabold text-white">{formatEGP(detail.netPay)}</div>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 mb-4">
+            <div>
+              <div className="text-xs text-slate-500">اتدفع من الصافي</div>
+              <div className="font-bold text-emerald-600">{formatEGP(detail.paidTotal)}</div>
+            </div>
+            <div className="text-end">
+              <div className="text-xs text-slate-500">الباقي</div>
+              <div className={`font-extrabold ${detail.remaining > 0 ? "text-rose-600" : "text-slate-800"}`}>
+                {formatEGP(detail.remaining)}
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="text-xs font-bold text-slate-500 mb-1.5">دفع المرتب</div>
+            {detail.payments.length > 0 && (
+              <ul className="space-y-1 mb-2">
+                {detail.payments.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between text-sm">
+                    <span className="text-slate-600">
+                      {p.date} — {formatEGP(p.amount)} — {paymentMethodLabel(p.payment_method)}{" "}
+                      {p.note && <span className="text-slate-400">({p.note})</span>}
+                    </span>
+                    <button onClick={() => handleDeletePayment(p.id)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
+                      حذف
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form onSubmit={handleAddPayment} className="no-print flex flex-wrap items-end gap-2">
+              <input
+                type="date"
+                value={payDate}
+                onChange={(e) => setPayDate(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <input
+                type="number"
+                min="0"
+                placeholder="القيمة"
+                value={payAmount}
+                onChange={(e) => setPayAmount(e.target.value)}
+                className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <select
+                value={payMethod}
+                onChange={(e) => setPayMethod(e.target.value as PaymentMethod)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              >
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="ملاحظة (اختياري)"
+                value={payNote}
+                onChange={(e) => setPayNote(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <button type="submit" className="bg-primary text-white rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-primary-dark">
+                دفعت المرتب
+              </button>
+            </form>
           </div>
 
           <div className="mb-4">
@@ -300,6 +400,7 @@ export default function Salaries() {
   }, [month]);
 
   const totalNet = rows.reduce((sum, r) => sum + r.net_pay, 0);
+  const totalRemaining = rows.reduce((sum, r) => sum + r.remaining, 0);
 
   return (
     <div className="space-y-6">
@@ -329,6 +430,7 @@ export default function Salaries() {
                 <th className="text-start font-semibold py-2">السلف</th>
                 <th className="text-start font-semibold py-2">الحافز</th>
                 <th className="text-start font-semibold py-2">الصافي</th>
+                <th className="text-start font-semibold py-2">الباقي</th>
               </tr>
             </thead>
             <tbody>
@@ -354,6 +456,9 @@ export default function Salaries() {
                       {row.bonuses_total > 0 ? `+ ${formatEGP(row.bonuses_total)}` : "—"}
                     </td>
                     <td className="py-2.5 font-bold text-primary-dark">{formatEGP(row.net_pay)}</td>
+                    <td className={`py-2.5 font-bold ${row.remaining > 0 ? "text-rose-600" : "text-slate-400"}`}>
+                      {formatEGP(row.remaining)}
+                    </td>
                   </tr>
                   {expandedId === row.id && <PayslipPanel row={row} month={month} onChanged={refresh} />}
                 </Fragment>
@@ -365,6 +470,7 @@ export default function Salaries() {
                   إجمالي صافي الرواتب
                 </td>
                 <td className="pt-3 text-sm font-bold text-primary-dark">{formatEGP(totalNet)}</td>
+                <td className="pt-3 text-sm font-bold text-rose-600">{formatEGP(totalRemaining)}</td>
               </tr>
             </tfoot>
           </table>

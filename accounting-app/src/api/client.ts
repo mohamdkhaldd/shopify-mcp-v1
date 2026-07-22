@@ -28,6 +28,7 @@ import {
   PartnerSummary,
   PayrollDetail,
   PayrollRow,
+  SalaryPayment,
   SupplierDashboardRow,
   SupplierPayment,
   SupplierPurchase,
@@ -129,6 +130,13 @@ export const payrollApi = {
   summary: (month: string): Promise<PayrollRow[]> => invoke("payroll:summary", { month }),
   detail: (employee_id: number, month: string): Promise<PayrollDetail> =>
     invoke("payroll:detail", { employee_id, month }),
+};
+
+export const salaryPaymentsApi = {
+  list: (employee_id: number, month: string): Promise<SalaryPayment[]> =>
+    invoke("salaryPayments:list", { employee_id, month }),
+  create: (payment: Omit<SalaryPayment, "id">): Promise<SalaryPayment> => invoke("salaryPayments:create", payment),
+  remove: (id: number): Promise<void> => invoke("salaryPayments:delete", { id }),
 };
 
 export const systemApi = {

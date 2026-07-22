@@ -153,6 +153,15 @@ CREATE TABLE IF NOT EXISTS waste_entries (
   payment_method TEXT,
   note TEXT
 );
+
+CREATE TABLE IF NOT EXISTS salary_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  amount REAL NOT NULL,
+  payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('wallet', 'instapay', 'cash')),
+  note TEXT
+);
 `;
 
 // Real starting data pulled from the company's existing Excel system, so the

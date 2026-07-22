@@ -195,9 +195,9 @@ function OutgoingView({ data }: { data: OutgoingSummary }) {
         )}
       </Section>
 
-      <Section title="الرواتب (سلف ومكافآت مدفوعة)" total={data.payrollTotal}>
+      <Section title="الرواتب (سلف ومكافآت ودفعات مرتبات)" total={data.payrollTotal}>
         {data.payroll.length === 0 ? (
-          <div className="text-sm text-slate-400">لسه مفيش سلف ولا مكافآت مسجلة الشهر ده.</div>
+          <div className="text-sm text-slate-400">لسه مفيش سلف ولا مكافآت ولا دفعات مرتبات مسجلة الشهر ده.</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -215,7 +215,9 @@ function OutgoingView({ data }: { data: OutgoingSummary }) {
                 <tr key={`${p.kind}-${p.id}`} className="border-b border-slate-50 last:border-0">
                   <td className="py-2 text-slate-500">{p.date}</td>
                   <td className="py-2 font-semibold text-slate-700">{p.employee_name}</td>
-                  <td className="py-2 text-slate-500">{p.kind === "advance" ? "سلفة" : "مكافأة"}</td>
+                  <td className="py-2 text-slate-500">
+                    {p.kind === "advance" ? "سلفة" : p.kind === "bonus" ? "مكافأة" : "دفعة مرتب"}
+                  </td>
                   <td className="py-2 text-slate-500">{paymentMethodLabel(p.payment_method)}</td>
                   <td className="py-2 text-slate-500">{p.note ?? "—"}</td>
                   <td className="py-2 font-semibold text-slate-700">{formatEGP(p.amount)}</td>

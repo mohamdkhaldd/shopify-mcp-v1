@@ -111,6 +111,15 @@ export interface EmployeeBonus {
   note: string | null;
 }
 
+export interface SalaryPayment {
+  id: number;
+  employee_id: number;
+  date: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  note: string | null;
+}
+
 export interface PayrollRow {
   id: number;
   name: string;
@@ -122,6 +131,8 @@ export interface PayrollRow {
   advances_total: number;
   bonuses_total: number;
   net_pay: number;
+  paid_total: number;
+  remaining: number;
 }
 
 export interface PayrollDayEntry {
@@ -138,10 +149,13 @@ export interface PayrollDetail {
   days: PayrollDayEntry[];
   advances: EmployeeAdvance[];
   bonuses: EmployeeBonus[];
+  payments: SalaryPayment[];
   grossPay: number;
   advancesTotal: number;
   bonusesTotal: number;
+  paidTotal: number;
   netPay: number;
+  remaining: number;
 }
 
 export interface HassanCommissionRow {
@@ -408,7 +422,7 @@ export interface OutgoingPayrollRow {
   amount: number;
   payment_method: PaymentMethod;
   note: string | null;
-  kind: "advance" | "bonus";
+  kind: "advance" | "bonus" | "salary";
 }
 
 export interface OutgoingSummary {
