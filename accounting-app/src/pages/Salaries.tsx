@@ -57,6 +57,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
     if (!amount) return;
     await employeeAdvancesApi.create({
       employee_id: row.id,
+      month,
       date,
       amount: Number(amount),
       payment_method: paymentMethod,
@@ -79,6 +80,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
     if (!bonusAmount || !bonusNote) return;
     await employeeBonusesApi.create({
       employee_id: row.id,
+      month,
       date: bonusDate,
       amount: Number(bonusAmount),
       payment_method: bonusMethod,
@@ -147,8 +149,8 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
 
           <div className="grid grid-cols-4 gap-2.5 mb-4">
             <div className="text-center bg-primary-light rounded-xl py-2.5">
-              <div className="text-xs text-slate-500">أخد كام (سلف + مكافآت + دفعات مرتب)</div>
-              <div className="font-bold text-slate-800">{formatEGP(detail.takenTotal)}</div>
+              <div className="text-xs text-slate-500">المرتب من العمل</div>
+              <div className="font-bold text-slate-800">{formatEGP(detail.grossPay)}</div>
             </div>
             <div className="text-center bg-rose-50 rounded-xl py-2.5">
               <div className="text-xs text-slate-500">السلف</div>
@@ -159,7 +161,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
               <div className="font-bold text-emerald-600">{formatEGP(detail.bonusesTotal)}</div>
             </div>
             <div className="text-center bg-primary rounded-xl py-2.5">
-              <div className="text-xs text-white/80">الصافي المستحق</div>
+              <div className="text-xs text-white/80">الإجمالي</div>
               <div className="font-extrabold text-white">{formatEGP(detail.netPay)}</div>
             </div>
           </div>
@@ -232,9 +234,6 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
                 دفعت المرتب
               </button>
             </form>
-            <div className="text-[11px] text-slate-400 mt-1.5">
-              الدفعة دي بتتحسب على مرتب شهر {monthLabel(month)} {month.split("-")[0]} حتى لو التاريخ اللي هتختاره وقع في شهر تاني (زي لو الدفع اتأخر).
-            </div>
           </div>
 
           <div className="mb-4">
@@ -433,10 +432,10 @@ export default function Salaries() {
                 <th className="text-start font-semibold py-2">الاسم</th>
                 <th className="text-start font-semibold py-2">نوع الأجر</th>
                 <th className="text-start font-semibold py-2">أيام العمل</th>
-                <th className="text-start font-semibold py-2">أخد كام</th>
+                <th className="text-start font-semibold py-2">المرتب من العمل</th>
                 <th className="text-start font-semibold py-2">السلف</th>
                 <th className="text-start font-semibold py-2">الحافز</th>
-                <th className="text-start font-semibold py-2">الصافي</th>
+                <th className="text-start font-semibold py-2">الإجمالي</th>
                 <th className="text-start font-semibold py-2">الباقي</th>
               </tr>
             </thead>
@@ -455,7 +454,7 @@ export default function Salaries() {
                     </td>
                     <td className="py-2.5 text-slate-500">{row.wage_type === "daily" ? "يومي" : "شهري"}</td>
                     <td className="py-2.5 text-slate-500">{row.days_worked ?? "—"}</td>
-                    <td className="py-2.5 text-slate-600">{formatEGP(row.taken_total)}</td>
+                    <td className="py-2.5 text-slate-600">{formatEGP(row.gross_pay)}</td>
                     <td className="py-2.5 text-rose-500">
                       {row.advances_total > 0 ? `- ${formatEGP(row.advances_total)}` : "—"}
                     </td>

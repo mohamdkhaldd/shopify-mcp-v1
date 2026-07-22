@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS employees (
 CREATE TABLE IF NOT EXISTS employee_advances (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  month TEXT NOT NULL DEFAULT '',
   date TEXT NOT NULL,
   amount REAL NOT NULL,
   payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('wallet', 'instapay', 'cash')),
@@ -47,6 +48,7 @@ CREATE TABLE IF NOT EXISTS employee_advances (
 CREATE TABLE IF NOT EXISTS employee_bonuses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  month TEXT NOT NULL DEFAULT '',
   date TEXT NOT NULL,
   amount REAL NOT NULL,
   payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('wallet', 'instapay', 'cash')),
@@ -306,15 +308,17 @@ function initDatabase() {
     db.exec("ALTER TABLE equipment ADD COLUMN purchase_price REAL NOT NULL DEFAULT 0");
   }
 
-  // month = أي شهر مرتب الدفعة دي بتقفل (زي يونيو)، date = تاريخ الدفع الحقيقي
-  // (ممكن يكون في يوليو لو الدفع اتأخر) — لازم يتفصلوا عشان شيت الرواتب يحسبها
-  // على الشهر الصح، وشيت الصادر يحسبها على تاريخها الحقيقي.
-  const salaryPaymentsHasMonth = db
-    .prepare("PRAGMA table_info(salary_payments)")
-    .all()
-    .some((col) => col.name === "month");
-  if (!salaryPaymentsHasMonth) {
-    db.exec("ALTER TABLE salary_payments ADD COLUMN month TEXT NOT NULL DEFAULT ''");
+  // month = أي شهر مرتب الدفعة/السلفة/المكافأة دي بتخص (زي يونيو)، date = تاريخها
+  // الحقيقي (ممكن يكون في يوليو لو اتأخرت) — لازم يتفصلوا عشان تحسب كلها على
+  // شهرها الصح في كل مكان: شيت الرواتب، الصادر، الخزنة، ومصروف المعدة.
+  for (const table of ["salary_payments", "employee_advances", "employee_bonuses"]) {
+    const hasMonth = db
+      .prepare(`PRAGMA table_info(${table})`)
+      .all()
+      .some((col) => col.name === "month");
+    if (!hasMonth) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN month TEXT NOT NULL DEFAULT ''`);
+    }
   }
 
   const accountCount = db.prepare("SELECT COUNT(*) AS c FROM treasury_accounts").get().c;

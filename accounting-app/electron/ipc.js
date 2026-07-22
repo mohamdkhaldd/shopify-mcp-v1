@@ -71,11 +71,11 @@ function monthlySalaryAllocationForEmployeeMonth(db, employeeName, employeeId, m
   for (const l of logs) daysByEquipment.set(l.equipment_id, (daysByEquipment.get(l.equipment_id) ?? 0) + 1);
 
   const advancesTotal = db
-    .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_advances WHERE employee_id = ? AND date LIKE ?")
-    .get(employeeId, `${month}%`).total;
+    .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_advances WHERE employee_id = ? AND month = ?")
+    .get(employeeId, month).total;
   const bonusesTotal = db
-    .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_bonuses WHERE employee_id = ? AND date LIKE ?")
-    .get(employeeId, `${month}%`).total;
+    .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_bonuses WHERE employee_id = ? AND month = ?")
+    .get(employeeId, month).total;
   const paidTotal = db
     .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM salary_payments WHERE employee_id = ? AND month = ?")
     .get(employeeId, month).total;
@@ -430,17 +430,16 @@ function registerIpcHandlers(db) {
     };
   });
 
-  // --- Employee advances (سلف) ---
+  // --- Employee advances (سلف) — month = شهر المرتب اللي السلفة دي بتتخصم
+  // منه (زي ما هو المشاهد وقت التسجيل)، date = تاريخ صرفها الحقيقي. ---
   ipcMain.handle("employeeAdvances:list", (_e, { employee_id, month }) =>
-    db
-      .prepare("SELECT * FROM employee_advances WHERE employee_id = ? AND date LIKE ? ORDER BY date")
-      .all(employee_id, `${month}%`)
+    db.prepare("SELECT * FROM employee_advances WHERE employee_id = ? AND month = ? ORDER BY date").all(employee_id, month)
   );
   ipcMain.handle("employeeAdvances:create", (_e, advance) => {
     const info = db
       .prepare(
-        `INSERT INTO employee_advances (employee_id, date, amount, payment_method, note)
-         VALUES (@employee_id, @date, @amount, @payment_method, @note)`
+        `INSERT INTO employee_advances (employee_id, month, date, amount, payment_method, note)
+         VALUES (@employee_id, @month, @date, @amount, @payment_method, @note)`
       )
       .run({ ...advance, payment_method: advance.payment_method || "cash", note: advance.note ?? null });
     return db.prepare("SELECT * FROM employee_advances WHERE id = ?").get(info.lastInsertRowid);
@@ -451,17 +450,16 @@ function registerIpcHandlers(db) {
   });
 
   // --- Employee bonuses (حافز) — an amount added on top of the payroll, with
-  // a note explaining what it's for. Applies to daily and monthly wages alike. ---
+  // a note explaining what it's for. Applies to daily and monthly wages alike.
+  // month = شهر المرتب اللي المكافأة دي بتتضاف عليه، date = تاريخها الحقيقي. ---
   ipcMain.handle("employeeBonuses:list", (_e, { employee_id, month }) =>
-    db
-      .prepare("SELECT * FROM employee_bonuses WHERE employee_id = ? AND date LIKE ? ORDER BY date")
-      .all(employee_id, `${month}%`)
+    db.prepare("SELECT * FROM employee_bonuses WHERE employee_id = ? AND month = ? ORDER BY date").all(employee_id, month)
   );
   ipcMain.handle("employeeBonuses:create", (_e, bonus) => {
     const info = db
       .prepare(
-        `INSERT INTO employee_bonuses (employee_id, date, amount, payment_method, note)
-         VALUES (@employee_id, @date, @amount, @payment_method, @note)`
+        `INSERT INTO employee_bonuses (employee_id, month, date, amount, payment_method, note)
+         VALUES (@employee_id, @month, @date, @amount, @payment_method, @note)`
       )
       .run({ ...bonus, payment_method: bonus.payment_method || "cash", note: bonus.note ?? null });
     return db.prepare("SELECT * FROM employee_bonuses WHERE id = ?").get(info.lastInsertRowid);
@@ -479,21 +477,22 @@ function registerIpcHandlers(db) {
     const driverLogsStmt = db.prepare(
       "SELECT * FROM daily_logs WHERE role = 'driver' AND person_name = ? AND date LIKE ?"
     );
+    // بالشهر (مش تاريخ الصرف الحقيقي) — لو اتأخرت لشهر بعده (زي سلفة/مكافأة/
+    // دفعة مرتب يونيو اتسجلت في يوليو)، تفضل محسوبة على يونيو، الشهر اللي
+    // بتخصه فعلاً وقت التسجيل من شيت الرواتب.
     const advancesStmt = db.prepare(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM employee_advances WHERE employee_id = ? AND date LIKE ?"
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM employee_advances WHERE employee_id = ? AND month = ?"
     );
     const bonusesStmt = db.prepare(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM employee_bonuses WHERE employee_id = ? AND date LIKE ?"
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM employee_bonuses WHERE employee_id = ? AND month = ?"
     );
-    // بالشهر (مش تاريخ الدفع الحقيقي) — لو الدفع اتأخر لشهر بعده (زي دفع مرتب
-    // يونيو في ٥ يوليو)، يفضل محسوب على يونيو، الشهر اللي بيقفله فعلاً.
     const paidStmt = db.prepare(
       "SELECT COALESCE(SUM(amount), 0) AS total FROM salary_payments WHERE employee_id = ? AND month = ?"
     );
 
     return employees.map((emp) => {
-      const advancesTotal = advancesStmt.get(emp.id, `${month}%`).total;
-      const bonusesTotal = bonusesStmt.get(emp.id, `${month}%`).total;
+      const advancesTotal = advancesStmt.get(emp.id, month).total;
+      const bonusesTotal = bonusesStmt.get(emp.id, month).total;
       const paidTotal = paidStmt.get(emp.id, month).total;
       if (emp.wage_type === "monthly") {
         const { grossPay } = monthlyEmployeeGrossPay(db, emp, month);
@@ -545,12 +544,12 @@ function registerIpcHandlers(db) {
   ipcMain.handle("payroll:detail", (_e, { employee_id, month }) => {
     const employee = db.prepare("SELECT * FROM employees WHERE id = ?").get(employee_id);
     const advances = db
-      .prepare("SELECT * FROM employee_advances WHERE employee_id = ? AND date LIKE ? ORDER BY date")
-      .all(employee_id, `${month}%`);
+      .prepare("SELECT * FROM employee_advances WHERE employee_id = ? AND month = ? ORDER BY date")
+      .all(employee_id, month);
     const advancesTotal = advances.reduce((sum, a) => sum + a.amount, 0);
     const bonuses = db
-      .prepare("SELECT * FROM employee_bonuses WHERE employee_id = ? AND date LIKE ? ORDER BY date")
-      .all(employee_id, `${month}%`);
+      .prepare("SELECT * FROM employee_bonuses WHERE employee_id = ? AND month = ? ORDER BY date")
+      .all(employee_id, month);
     const bonusesTotal = bonuses.reduce((sum, b) => sum + b.amount, 0);
     const payments = db
       .prepare("SELECT * FROM salary_payments WHERE employee_id = ? AND month = ? ORDER BY date")
@@ -1039,9 +1038,11 @@ function registerIpcHandlers(db) {
     const outgoingPartners = sumByMethod("partner_payments", "method", "date", `${month}%`);
     const outgoingExpenses = sumByMethod("monthly_expenses", "payment_method", "month", month);
     const outgoingSuppliers = sumByMethod("supplier_payments", "method", "date", `${month}%`);
-    const outgoingAdvances = sumByMethod("employee_advances", "payment_method", "date", `${month}%`);
-    const outgoingBonuses = sumByMethod("employee_bonuses", "payment_method", "date", `${month}%`);
-    const outgoingSalaryPayments = sumByMethod("salary_payments", "payment_method", "date", `${month}%`);
+    // السلف والمكافآت ودفعات المرتب بتتحسب على الشهر اللي المرتب بيخصه (زي
+    // مصروفات المعدات) — لو مرتب يونيو اتدفع في يوليو يفضل يسمع في يونيو هنا برضو.
+    const outgoingAdvances = sumByMethod("employee_advances", "payment_method", "month", month);
+    const outgoingBonuses = sumByMethod("employee_bonuses", "payment_method", "month", month);
+    const outgoingSalaryPayments = sumByMethod("salary_payments", "payment_method", "month", month);
 
     return accounts.map((acc) => {
       const monthIncoming = incoming[acc.name] ?? 0;
@@ -1092,9 +1093,9 @@ function registerIpcHandlers(db) {
     db.prepare(
       `SELECT ea.date, ea.amount, e.name AS employee_name FROM employee_advances ea
        JOIN employees e ON e.id = ea.employee_id
-       WHERE ea.payment_method = ? AND ea.date LIKE ?`
+       WHERE ea.payment_method = ? AND ea.month = ?`
     )
-      .all(account_name, `${month}%`)
+      .all(account_name, month)
       .forEach((r) => {
         const note = equipmentDaysNote(db, r.employee_name, month);
         rows.push({
@@ -1108,9 +1109,9 @@ function registerIpcHandlers(db) {
     db.prepare(
       `SELECT eb.date, eb.amount, e.name AS employee_name FROM employee_bonuses eb
        JOIN employees e ON e.id = eb.employee_id
-       WHERE eb.payment_method = ? AND eb.date LIKE ?`
+       WHERE eb.payment_method = ? AND eb.month = ?`
     )
-      .all(account_name, `${month}%`)
+      .all(account_name, month)
       .forEach((r) => {
         const note = equipmentDaysNote(db, r.employee_name, month);
         rows.push({
@@ -1124,9 +1125,9 @@ function registerIpcHandlers(db) {
     db.prepare(
       `SELECT sp.date, sp.amount, e.name AS employee_name FROM salary_payments sp
        JOIN employees e ON e.id = sp.employee_id
-       WHERE sp.payment_method = ? AND sp.date LIKE ?`
+       WHERE sp.payment_method = ? AND sp.month = ?`
     )
-      .all(account_name, `${month}%`)
+      .all(account_name, month)
       .forEach((r) => {
         const note = equipmentDaysNote(db, r.employee_name, month);
         rows.push({
@@ -1273,11 +1274,11 @@ function registerIpcHandlers(db) {
     let payrollTotal = 0;
     for (const emp of employees) {
       const advances = db
-        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_advances WHERE employee_id = ? AND date LIKE ?")
-        .get(emp.id, `${month}%`).total;
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_advances WHERE employee_id = ? AND month = ?")
+        .get(emp.id, month).total;
       const bonuses = db
-        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_bonuses WHERE employee_id = ? AND date LIKE ?")
-        .get(emp.id, `${month}%`).total;
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_bonuses WHERE employee_id = ? AND month = ?")
+        .get(emp.id, month).total;
       if (emp.wage_type === "monthly") {
         const { grossPay } = monthlyEmployeeGrossPay(db, emp, month);
         payrollTotal += grossPay + bonuses - advances;
@@ -1501,26 +1502,25 @@ function registerIpcHandlers(db) {
       .all(`${month}%`);
     const supplierPaymentsTotal = supplierPayments.reduce((sum, r) => sum + r.amount, 0);
 
+    // السلف والمكافآت ودفعات المرتب هنا بتتحسب على الشهر اللي بتخصه (زي
+    // مصروفات المعدات) مش تاريخ الصرف الحقيقي — لو دفعت مرتب يونيو في 5 يوليو
+    // يفضل يسمع في يونيو، هنا وفي الخزنة كمان.
     const advances = db
       .prepare(
         `SELECT ea.*, e.name AS employee_name FROM employee_advances ea
          JOIN employees e ON e.id = ea.employee_id
-         WHERE ea.date LIKE ? ORDER BY ea.date, ea.id`
+         WHERE ea.month = ? ORDER BY ea.date, ea.id`
       )
-      .all(`${month}%`)
+      .all(month)
       .map((r) => ({ ...r, kind: "advance" }));
     const bonuses = db
       .prepare(
         `SELECT eb.*, e.name AS employee_name FROM employee_bonuses eb
          JOIN employees e ON e.id = eb.employee_id
-         WHERE eb.date LIKE ? ORDER BY eb.date, eb.id`
+         WHERE eb.month = ? ORDER BY eb.date, eb.id`
       )
-      .all(`${month}%`)
+      .all(month)
       .map((r) => ({ ...r, kind: "bonus" }));
-    // دفعات المرتب هنا بتتحسب على الشهر اللي بتقفله (زي مصروفات المعدات)، مش
-    // تاريخ الدفع الحقيقي — لو دفعت مرتب يونيو في 5 يوليو يفضل يسمع في يونيو.
-    // الخزنة (treasury:summary) هي الوحيدة اللي بتفضل على التاريخ الحقيقي،
-    // عشان هي بتعكس رصيد الحساب الفعلي مش دفاتر الشهر.
     const salaryPayments = db
       .prepare(
         `SELECT sp.*, e.name AS employee_name FROM salary_payments sp

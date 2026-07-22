@@ -96,6 +96,7 @@ export type PaymentMethod = "wallet" | "instapay" | "cash";
 export interface EmployeeAdvance {
   id: number;
   employee_id: number;
+  month: string;
   date: string;
   amount: number;
   payment_method: PaymentMethod;
@@ -105,6 +106,7 @@ export interface EmployeeAdvance {
 export interface EmployeeBonus {
   id: number;
   employee_id: number;
+  month: string;
   date: string;
   amount: number;
   payment_method: PaymentMethod;

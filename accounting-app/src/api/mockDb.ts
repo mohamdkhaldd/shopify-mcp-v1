@@ -33,6 +33,7 @@ interface MonthlyExpenseRow {
 interface EmployeeAdvanceRow {
   id: number;
   employee_id: number;
+  month: string;
   date: string;
   amount: number;
   payment_method: "wallet" | "instapay" | "cash";
@@ -42,6 +43,7 @@ interface EmployeeAdvanceRow {
 interface EmployeeBonusRow {
   id: number;
   employee_id: number;
+  month: string;
   date: string;
   amount: number;
   payment_method: "wallet" | "instapay" | "cash";
@@ -297,6 +299,8 @@ function loadState(): MockState {
     for (const eq of state.equipment) if (eq.purchase_price == null) eq.purchase_price = 0;
     if (!state.employee_advances) state.employee_advances = [];
     if (!state.employee_bonuses) state.employee_bonuses = [];
+    for (const a of state.employee_advances) if (a.month == null) a.month = a.date.slice(0, 7);
+    for (const b of state.employee_bonuses) if (b.month == null) b.month = b.date.slice(0, 7);
     if (!state.hassan_ledger) state.hassan_ledger = [];
     if (!state.contractor_payments) state.contractor_payments = [];
     if (!state.partner_payments) state.partner_payments = [];
@@ -391,10 +395,10 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     for (const l of logs) daysByEquipment.set(l.equipment_id, (daysByEquipment.get(l.equipment_id) ?? 0) + 1);
 
     const advancesTotal = state.employee_advances
-      .filter((a) => a.employee_id === employeeId && a.date.startsWith(month))
+      .filter((a) => a.employee_id === employeeId && a.month === month)
       .reduce((sum, a) => sum + a.amount, 0);
     const bonusesTotal = state.employee_bonuses
-      .filter((b) => b.employee_id === employeeId && b.date.startsWith(month))
+      .filter((b) => b.employee_id === employeeId && b.month === month)
       .reduce((sum, b) => sum + b.amount, 0);
     const paidTotal = state.salary_payments
       .filter((p) => p.employee_id === employeeId && p.month === month)
@@ -516,7 +520,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
 
   if (channel === "employeeAdvances:list") {
     return state.employee_advances
-      .filter((a) => a.employee_id === payload.employee_id && a.date.startsWith(payload.month))
+      .filter((a) => a.employee_id === payload.employee_id && a.month === payload.month)
       .sort((a, b) => a.date.localeCompare(b.date));
   }
   if (channel === "employeeAdvances:create") {
@@ -538,7 +542,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
 
   if (channel === "employeeBonuses:list") {
     return state.employee_bonuses
-      .filter((b) => b.employee_id === payload.employee_id && b.date.startsWith(payload.month))
+      .filter((b) => b.employee_id === payload.employee_id && b.month === payload.month)
       .sort((a, b) => a.date.localeCompare(b.date));
   }
   if (channel === "employeeBonuses:create") {
@@ -564,10 +568,10 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((emp) => {
         const advancesTotal = state.employee_advances
-          .filter((a) => a.employee_id === emp.id && a.date.startsWith(month))
+          .filter((a) => a.employee_id === emp.id && a.month === month)
           .reduce((sum, a) => sum + a.amount, 0);
         const bonusesTotal = state.employee_bonuses
-          .filter((b) => b.employee_id === emp.id && b.date.startsWith(month))
+          .filter((b) => b.employee_id === emp.id && b.month === month)
           .reduce((sum, b) => sum + b.amount, 0);
         const paidTotal = state.salary_payments
           .filter((p) => p.employee_id === emp.id && p.month === month)
@@ -620,11 +624,11 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     const { employee_id, month } = payload;
     const employee = state.employees.find((e) => e.id === employee_id)!;
     const advances = state.employee_advances
-      .filter((a) => a.employee_id === employee_id && a.date.startsWith(month))
+      .filter((a) => a.employee_id === employee_id && a.month === month)
       .sort((a, b) => a.date.localeCompare(b.date));
     const advancesTotal = advances.reduce((sum, a) => sum + a.amount, 0);
     const bonuses = state.employee_bonuses
-      .filter((b) => b.employee_id === employee_id && b.date.startsWith(month))
+      .filter((b) => b.employee_id === employee_id && b.month === month)
       .sort((a, b) => a.date.localeCompare(b.date));
     const bonusesTotal = bonuses.reduce((sum, b) => sum + b.amount, 0);
     const payments = state.salary_payments
@@ -1094,17 +1098,19 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       state.supplier_payments,
       state.supplier_payments.map((p) => p.date.startsWith(month))
     );
+    // السلف والمكافآت ودفعات المرتب بتتحسب على الشهر اللي المرتب بيخصه، مش
+    // تاريخ الصرف الحقيقي — زي مصروفات المعدات بالظبط.
     const outAdvances = sumByMethod(
       state.employee_advances,
-      state.employee_advances.map((a) => a.date.startsWith(month))
+      state.employee_advances.map((a) => a.month === month)
     );
     const outBonuses = sumByMethod(
       state.employee_bonuses,
-      state.employee_bonuses.map((b) => b.date.startsWith(month))
+      state.employee_bonuses.map((b) => b.month === month)
     );
     const outSalaryPayments = sumByMethod(
       state.salary_payments,
-      state.salary_payments.map((p) => p.date.startsWith(month))
+      state.salary_payments.map((p) => p.month === month)
     );
 
     return state.treasury_accounts.map((acc) => {
@@ -1154,21 +1160,21 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     }
 
     for (const a of state.employee_advances) {
-      if (a.payment_method !== account_name || !a.date.startsWith(month)) continue;
+      if (a.payment_method !== account_name || a.month !== month) continue;
       const employeeName = state.employees.find((e) => e.id === a.employee_id)?.name ?? "—";
       const note = equipmentDaysNote(employeeName, month);
       rows.push({ date: a.date, direction: "out", label: `سلفة: ${employeeName}${note ? ` (${note})` : ""}`, amount: a.amount });
     }
 
     for (const b of state.employee_bonuses) {
-      if (b.payment_method !== account_name || !b.date.startsWith(month)) continue;
+      if (b.payment_method !== account_name || b.month !== month) continue;
       const employeeName = state.employees.find((e) => e.id === b.employee_id)?.name ?? "—";
       const note = equipmentDaysNote(employeeName, month);
       rows.push({ date: b.date, direction: "out", label: `مكافأة: ${employeeName}${note ? ` (${note})` : ""}`, amount: b.amount });
     }
 
     for (const p of state.salary_payments) {
-      if (p.payment_method !== account_name || !p.date.startsWith(month)) continue;
+      if (p.payment_method !== account_name || p.month !== month) continue;
       const employeeName = state.employees.find((e) => e.id === p.employee_id)?.name ?? "—";
       const note = equipmentDaysNote(employeeName, month);
       rows.push({ date: p.date, direction: "out", label: `دفعة مرتب: ${employeeName}${note ? ` (${note})` : ""}`, amount: p.amount });
@@ -1291,10 +1297,10 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     let payrollTotal = 0;
     for (const emp of state.employees) {
       const advances = state.employee_advances
-        .filter((a) => a.employee_id === emp.id && a.date.startsWith(month))
+        .filter((a) => a.employee_id === emp.id && a.month === month)
         .reduce((sum, a) => sum + a.amount, 0);
       const bonuses = state.employee_bonuses
-        .filter((b) => b.employee_id === emp.id && b.date.startsWith(month))
+        .filter((b) => b.employee_id === emp.id && b.month === month)
         .reduce((sum, b) => sum + b.amount, 0);
       if (emp.wage_type === "monthly") {
         const { grossPay } = monthlyEmployeeGrossPay(emp, month);
@@ -1484,10 +1490,10 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     const supplierPaymentsTotal = supplierPayments.reduce((sum, r) => sum + r.amount, 0);
 
     const advances = state.employee_advances
-      .filter((a) => a.date.startsWith(month))
+      .filter((a) => a.month === month)
       .map((a) => ({ ...a, employee_name: state.employees.find((x) => x.id === a.employee_id)?.name ?? "—", kind: "advance" as const }));
     const bonuses = state.employee_bonuses
-      .filter((b) => b.date.startsWith(month))
+      .filter((b) => b.month === month)
       .map((b) => ({ ...b, employee_name: state.employees.find((x) => x.id === b.employee_id)?.name ?? "—", kind: "bonus" as const }));
     const salaryPayments = state.salary_payments
       .filter((p) => p.month === month)
