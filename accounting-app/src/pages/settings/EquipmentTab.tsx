@@ -55,7 +55,8 @@ function SharesEditor({
             type="number"
             min="0"
             max="100"
-            placeholder="النسبة %"
+            step="0.01"
+            placeholder="النسبة % (زي 12.5)"
             className="w-28 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
           {shares.length > 1 && (

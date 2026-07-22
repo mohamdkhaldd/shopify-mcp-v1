@@ -19,6 +19,7 @@ function OpeningBalanceCell({ partner, onSaved }: { partner: Partner; onSaved: (
       <div className="flex items-center gap-2">
         <input
           type="number"
+          step="0.01"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-sm"
@@ -32,7 +33,11 @@ function OpeningBalanceCell({ partner, onSaved }: { partner: Partner; onSaved: (
   }
 
   return (
-    <button onClick={() => setEditing(true)} className="text-sm font-bold text-slate-700 hover:text-primary">
+    <button
+      onClick={() => setEditing(true)}
+      className="text-sm font-bold text-slate-700 hover:text-primary underline decoration-dashed decoration-slate-300 underline-offset-4 hover:decoration-primary"
+      title="دوس تعدّل الرصيد الافتتاحي"
+    >
       {formatEGP(partner.opening_balance)}
     </button>
   );
