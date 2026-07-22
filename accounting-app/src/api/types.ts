@@ -272,10 +272,19 @@ export interface PartnerEquipmentBreakdown {
   monthAmount: number;
 }
 
+export interface PartnerEquipmentYearBreakdown {
+  equipment_name: string;
+  percentage: number;
+  yearAmount: number;
+}
+
 export interface PartnerDetail {
   partner: Partner;
   monthDue: number;
   equipmentBreakdown: PartnerEquipmentBreakdown[];
+  year: string;
+  yearDue: number;
+  yearlyEquipmentBreakdown: PartnerEquipmentYearBreakdown[];
   totalDue: number;
   totalPaid: number;
   remaining: number;

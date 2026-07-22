@@ -114,6 +114,40 @@ export default function PartnerDetailView({ partnerId, onBack }: PartnerDetailVi
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">
+        <h2 className="font-bold text-slate-800 mb-4">توزيع المستحق على المعدات — سنة {detail.year}</h2>
+        {detail.yearlyEquipmentBreakdown.length === 0 ? (
+          <div className="text-sm text-slate-400">مفيش معدات مرتبطة بالشريك ده.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-slate-400 border-b border-slate-100">
+                <th className="text-start font-semibold py-2">المعدة</th>
+                <th className="text-start font-semibold py-2">نسبته</th>
+                <th className="text-start font-semibold py-2">المستحق طول السنة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.yearlyEquipmentBreakdown.map((e) => (
+                <tr key={e.equipment_name} className="border-b border-slate-50 last:border-0">
+                  <td className="py-2 font-semibold text-slate-700">{e.equipment_name}</td>
+                  <td className="py-2 text-slate-500">{e.percentage}%</td>
+                  <td className="py-2 font-semibold text-slate-700">{formatEGP(e.yearAmount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={2} className="pt-2 text-sm font-bold text-slate-700">
+                  إجمالي السنة
+                </td>
+                <td className="pt-2 text-sm font-bold text-primary-dark">{formatEGP(detail.yearDue)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+
+      <div className="bg-white rounded-card shadow-card p-5">
         <h2 className="font-bold text-slate-800 mb-4">سجل الدفعات</h2>
         <form onSubmit={handleAddPayment} className="no-print flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />

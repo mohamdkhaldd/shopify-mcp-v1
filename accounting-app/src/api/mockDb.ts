@@ -1023,6 +1023,22 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     });
   }
 
+  // صافي ربح معدة واحدة في شهر واحد — مستخدمة في توزيع أرباح الشركاء بالشهر
+  // وبالسنة.
+  function equipmentMonthNetProfit(equipmentId: number, monthKey: string): number {
+    const driverIncome = state.daily_logs
+      .filter((l) => l.equipment_id === equipmentId && l.role === "driver" && l.date.startsWith(monthKey))
+      .reduce((sum, l) => sum + computeDayValue(l), 0);
+    const marketIncome = state.daily_logs
+      .filter((l) => l.equipment_id === equipmentId && l.role === "market" && l.date.startsWith(monthKey))
+      .reduce((sum, l) => sum + computeDayValue(l), 0);
+    const expense = state.monthly_expenses
+      .filter((exp) => exp.equipment_id === equipmentId && exp.month === monthKey)
+      .reduce((sum, exp) => sum + exp.amount, 0);
+    const driverSalaryExpense = driverSalaryForEquipment(equipmentId, monthKey);
+    return driverIncome + marketIncome - expense - driverSalaryExpense;
+  }
+
   if (channel === "partners:detail") {
     const { partner_id, month } = payload;
     const partner = state.partners.find((p) => p.id === partner_id)!;
@@ -1030,21 +1046,23 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
 
     const equipmentBreakdown = equipmentList.map((e) => {
       const share = e.shares.find((s) => s.partner_id === partner_id)!;
-      const driverIncome = state.daily_logs
-        .filter((l) => l.equipment_id === e.id && l.role === "driver" && l.date.startsWith(month))
-        .reduce((sum, l) => sum + computeDayValue(l), 0);
-      const marketIncome = state.daily_logs
-        .filter((l) => l.equipment_id === e.id && l.role === "market" && l.date.startsWith(month))
-        .reduce((sum, l) => sum + computeDayValue(l), 0);
-      const expense = state.monthly_expenses
-        .filter((exp) => exp.equipment_id === e.id && exp.month === month)
-        .reduce((sum, exp) => sum + exp.amount, 0);
-      const driverSalaryExpense = driverSalaryForEquipment(e.id, month);
-      const netProfit = driverIncome + marketIncome - expense - driverSalaryExpense;
+      const netProfit = equipmentMonthNetProfit(e.id, month);
       return { equipment_name: e.name, percentage: share.percentage, monthAmount: (netProfit * share.percentage) / 100 };
     });
-
     const monthDue = equipmentBreakdown.reduce((sum, e) => sum + e.monthAmount, 0);
+
+    // نصيب الشريك من كل معدة على مدار السنة كلها — كل سنة بتتحسب لوحدها.
+    const year = month.split("-")[0];
+    const yearlyEquipmentBreakdown = equipmentList.map((e) => {
+      const share = e.shares.find((s) => s.partner_id === partner_id)!;
+      let yearNetProfit = 0;
+      for (let m = 1; m <= 12; m++) {
+        yearNetProfit += equipmentMonthNetProfit(e.id, `${year}-${String(m).padStart(2, "0")}`);
+      }
+      return { equipment_name: e.name, percentage: share.percentage, yearAmount: (yearNetProfit * share.percentage) / 100 };
+    });
+    const yearDue = yearlyEquipmentBreakdown.reduce((sum, e) => sum + e.yearAmount, 0);
+
     const totalDue =
       partner.opening_balance +
       equipmentList.reduce((sum, e) => {
@@ -1056,7 +1074,18 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       .sort((a, b) => b.date.localeCompare(a.date));
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
-    return { partner, monthDue, equipmentBreakdown, totalDue, totalPaid, remaining: totalDue - totalPaid, payments };
+    return {
+      partner,
+      monthDue,
+      equipmentBreakdown,
+      year,
+      yearDue,
+      yearlyEquipmentBreakdown,
+      totalDue,
+      totalPaid,
+      remaining: totalDue - totalPaid,
+      payments,
+    };
   }
 
   if (channel === "treasury:list") {
@@ -1217,7 +1246,14 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
   }
 
   if (channel === "suppliers:names") {
-    return state.suppliers.map((s) => s.name).sort();
+    return state.suppliers
+      .filter(
+        (s) =>
+          state.supplier_purchases.some((p) => p.supplier_id === s.id) ||
+          state.supplier_payments.some((p) => p.supplier_id === s.id)
+      )
+      .map((s) => s.name)
+      .sort();
   }
   if (channel === "supplierPurchases:create") {
     const supplier = findOrCreateSupplier(payload.supplier_name);

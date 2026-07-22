@@ -156,6 +156,24 @@ function driverSalaryBreakdownForEquipment(db, equipmentId, month) {
   return [...byDriver.entries()].map(([name, amount]) => ({ name, amount }));
 }
 
+// صافي ربح معدة واحدة في شهر واحد — دخل السركي + السركي سوق ناقص المصروفات
+// اليدوية ناقص مرتب السائق. مستخدمة في توزيع أرباح الشركاء بالشهر وبالسنة.
+function equipmentMonthNetProfit(db, equipmentId, monthKey) {
+  const driverIncome = db
+    .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
+    .all(equipmentId, `${monthKey}%`)
+    .reduce((sum, l) => sum + computeDayValue(l), 0);
+  const marketIncome = db
+    .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND date LIKE ?")
+    .all(equipmentId, `${monthKey}%`)
+    .reduce((sum, l) => sum + computeDayValue(l), 0);
+  const expense = db
+    .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM monthly_expenses WHERE equipment_id = ? AND month = ?")
+    .get(equipmentId, monthKey).total;
+  const driverSalaryExpense = driverSalaryForEquipment(db, equipmentId, monthKey);
+  return driverIncome + marketIncome - expense - driverSalaryExpense;
+}
+
 function registerIpcHandlers(db) {
   // --- Partners ---
   ipcMain.handle("partners:list", () => db.prepare("SELECT * FROM partners ORDER BY name").all());
@@ -977,27 +995,32 @@ function registerIpcHandlers(db) {
       .all(partner_id);
 
     const equipmentBreakdown = shares.map((s) => {
-      const driverIncome = db
-        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
-        .all(s.equipment_id, `${month}%`)
-        .reduce((sum, l) => sum + computeDayValue(l), 0);
-      const marketIncome = db
-        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND date LIKE ?")
-        .all(s.equipment_id, `${month}%`)
-        .reduce((sum, l) => sum + computeDayValue(l), 0);
-      const expense = db
-        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM monthly_expenses WHERE equipment_id = ? AND month = ?")
-        .get(s.equipment_id, month).total;
-      const driverSalaryExpense = driverSalaryForEquipment(db, s.equipment_id, month);
-      const netProfit = driverIncome + marketIncome - expense - driverSalaryExpense;
+      const netProfit = equipmentMonthNetProfit(db, s.equipment_id, month);
       return {
         equipment_name: s.equipment_name,
         percentage: s.percentage,
         monthAmount: (netProfit * s.percentage) / 100,
       };
     });
-
     const monthDue = equipmentBreakdown.reduce((sum, e) => sum + e.monthAmount, 0);
+
+    // نصيب الشريك من كل معدة على مدار السنة كلها (الشهور اللي فاتت لحد دلوقتي
+    // بتديه رقم، والشهور اللي لسه ماجاش وقتها بتدي صفر تلقائيًا لعدم وجود بيانات)
+    // — كل سنة بتتحسب لوحدها حسب السنة المختارة في المنتقي.
+    const year = month.split("-")[0];
+    const yearlyEquipmentBreakdown = shares.map((s) => {
+      let yearNetProfit = 0;
+      for (let m = 1; m <= 12; m++) {
+        yearNetProfit += equipmentMonthNetProfit(db, s.equipment_id, `${year}-${String(m).padStart(2, "0")}`);
+      }
+      return {
+        equipment_name: s.equipment_name,
+        percentage: s.percentage,
+        yearAmount: (yearNetProfit * s.percentage) / 100,
+      };
+    });
+    const yearDue = yearlyEquipmentBreakdown.reduce((sum, e) => sum + e.yearAmount, 0);
+
     const totalDue =
       partner.opening_balance +
       shares.reduce((sum, s) => sum + (equipmentAllTimeProfit(s.equipment_id) * s.percentage) / 100, 0);
@@ -1006,7 +1029,18 @@ function registerIpcHandlers(db) {
       .all(partner_id);
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
-    return { partner, monthDue, equipmentBreakdown, totalDue, totalPaid, remaining: totalDue - totalPaid, payments };
+    return {
+      partner,
+      monthDue,
+      equipmentBreakdown,
+      year,
+      yearDue,
+      yearlyEquipmentBreakdown,
+      totalDue,
+      totalPaid,
+      remaining: totalDue - totalPaid,
+      payments,
+    };
   });
 
   // --- Treasury (doc section 9) ---
@@ -1179,7 +1213,19 @@ function registerIpcHandlers(db) {
     return { id: info.lastInsertRowid, name: trimmed };
   }
 
-  ipcMain.handle("suppliers:names", () => db.prepare("SELECT name FROM suppliers ORDER BY name").all().map((r) => r.name));
+  // بس أسماء الموردين اللي لسه معاهم عملية بيع أو شراء فعلية — مورد اتمسحت
+  // كل حركاته منها مالوش داعي يفضل ظاهر في اقتراحات الاسم.
+  ipcMain.handle("suppliers:names", () =>
+    db
+      .prepare(
+        `SELECT name FROM suppliers s
+         WHERE EXISTS (SELECT 1 FROM supplier_purchases WHERE supplier_id = s.id)
+            OR EXISTS (SELECT 1 FROM supplier_payments WHERE supplier_id = s.id)
+         ORDER BY name`
+      )
+      .all()
+      .map((r) => r.name)
+  );
 
   ipcMain.handle("supplierPurchases:create", (_e, purchase) => {
     const supplier = findOrCreateSupplier(purchase.supplier_name);
