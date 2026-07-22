@@ -1231,22 +1231,26 @@ function registerIpcHandlers(db) {
     const purchasesStmt = db.prepare("SELECT * FROM supplier_purchases WHERE supplier_id = ? ORDER BY date DESC");
     const paymentsStmt = db.prepare("SELECT * FROM supplier_payments WHERE supplier_id = ? ORDER BY date DESC");
 
-    return suppliers.map((s) => {
-      const purchases = purchasesStmt.all(s.id);
-      const payments = paymentsStmt.all(s.id);
-      const totalPurchases = purchases.reduce((sum, p) => sum + p.amount, 0);
-      const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-      return {
-        id: s.id,
-        name: s.name,
-        purchaseCount: purchases.length,
-        totalPurchases,
-        totalPaid,
-        remaining: totalPurchases - totalPaid,
-        purchases,
-        payments,
-      };
-    });
+    return suppliers
+      .map((s) => {
+        const purchases = purchasesStmt.all(s.id);
+        const payments = paymentsStmt.all(s.id);
+        const totalPurchases = purchases.reduce((sum, p) => sum + p.amount, 0);
+        const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+        return {
+          id: s.id,
+          name: s.name,
+          purchaseCount: purchases.length,
+          totalPurchases,
+          totalPaid,
+          remaining: totalPurchases - totalPaid,
+          purchases,
+          payments,
+        };
+      })
+      // مورد من غير أي مشترى أو دفعة (زي بعد ما تتمسح كل حركاته) مالوش داعي
+      // يفضل ظاهر في القايمة فاضي.
+      .filter((s) => s.purchases.length > 0 || s.payments.length > 0);
   });
 
   // --- Reports: pulls the headline numbers from every module together for

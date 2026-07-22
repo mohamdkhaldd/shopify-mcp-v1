@@ -1258,22 +1258,26 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { ok: true };
   }
   if (channel === "suppliers:dashboard") {
-    return state.suppliers.map((s) => {
-      const purchases = state.supplier_purchases.filter((p) => p.supplier_id === s.id).sort((a, b) => b.date.localeCompare(a.date));
-      const payments = state.supplier_payments.filter((p) => p.supplier_id === s.id).sort((a, b) => b.date.localeCompare(a.date));
-      const totalPurchases = purchases.reduce((sum, p) => sum + p.amount, 0);
-      const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-      return {
-        id: s.id,
-        name: s.name,
-        purchaseCount: purchases.length,
-        totalPurchases,
-        totalPaid,
-        remaining: totalPurchases - totalPaid,
-        purchases,
-        payments,
-      };
-    });
+    return state.suppliers
+      .map((s) => {
+        const purchases = state.supplier_purchases.filter((p) => p.supplier_id === s.id).sort((a, b) => b.date.localeCompare(a.date));
+        const payments = state.supplier_payments.filter((p) => p.supplier_id === s.id).sort((a, b) => b.date.localeCompare(a.date));
+        const totalPurchases = purchases.reduce((sum, p) => sum + p.amount, 0);
+        const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+        return {
+          id: s.id,
+          name: s.name,
+          purchaseCount: purchases.length,
+          totalPurchases,
+          totalPaid,
+          remaining: totalPurchases - totalPaid,
+          purchases,
+          payments,
+        };
+      })
+      // مورد من غير أي مشترى أو دفعة (زي بعد ما تتمسح كل حركاته) مالوش داعي
+      // يفضل ظاهر في القايمة فاضي.
+      .filter((s) => s.purchases.length > 0 || s.payments.length > 0);
   }
 
   if (channel === "reports:monthly") {
