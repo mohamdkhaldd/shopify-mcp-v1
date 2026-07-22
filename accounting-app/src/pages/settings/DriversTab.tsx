@@ -51,6 +51,7 @@ function EditRow({ item, onSaved, onCancel }: { item: Driver; onSaved: () => voi
           onChange={(e) => setRate(e.target.value)}
           type="number"
           min="0"
+          step="any"
           className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
         <button
@@ -164,6 +165,7 @@ export default function DriversTab() {
             onChange={(e) => setRate(e.target.value)}
             type="number"
             min="0"
+            step="any"
             placeholder={wageType === "daily" ? "اليومية" : "المرتب"}
             className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
           />

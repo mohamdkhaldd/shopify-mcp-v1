@@ -114,6 +114,7 @@ export interface EmployeeBonus {
 export interface SalaryPayment {
   id: number;
   employee_id: number;
+  month: string;
   date: string;
   amount: number;
   payment_method: PaymentMethod;

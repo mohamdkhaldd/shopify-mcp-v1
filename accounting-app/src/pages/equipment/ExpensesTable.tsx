@@ -105,6 +105,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
           <input
             type="number"
             min="0"
+            step="any"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"

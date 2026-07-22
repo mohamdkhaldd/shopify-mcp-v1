@@ -311,6 +311,7 @@ export default function DailyLogTable({
               <input
                 type="number"
                 min="0"
+                step="any"
                 value={bulkRate}
                 onChange={(e) => setBulkRate(e.target.value)}
                 className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
@@ -447,6 +448,7 @@ export default function DailyLogTable({
                         <input
                           type="number"
                           min="0"
+                          step="any"
                           value={row.day_rate}
                           onChange={(e) => updateRow(date, { day_rate: e.target.value })}
                           onBlur={() => saveRow(date)}
@@ -474,6 +476,7 @@ export default function DailyLogTable({
                         <input
                           type="number"
                           min="0"
+                          step="any"
                           value={row.fixed_value}
                           onChange={(e) => updateRow(date, { fixed_value: e.target.value })}
                           onBlur={() => saveRow(date)}
@@ -484,6 +487,7 @@ export default function DailyLogTable({
                         <input
                           type="number"
                           min="0"
+                          step="any"
                           value={row.hassan_commission}
                           onChange={(e) => updateRow(date, { hassan_commission: e.target.value })}
                           onBlur={() => saveRow(date)}

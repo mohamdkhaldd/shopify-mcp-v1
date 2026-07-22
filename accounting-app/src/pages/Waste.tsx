@@ -43,6 +43,7 @@ function WasteForm({ onSaved }: { onSaved: () => void }) {
         <input
           type="number"
           min="0"
+          step="any"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"

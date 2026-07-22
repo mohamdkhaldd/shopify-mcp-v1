@@ -33,6 +33,7 @@ function AccountCard({ row, onSaved }: { row: TreasurySummaryRow; onSaved: () =>
           <div className="flex gap-2">
             <input
               type="number"
+              step="any"
               value={value}
               onChange={(e) => setValue(e.target.value)}
               className="w-32 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"

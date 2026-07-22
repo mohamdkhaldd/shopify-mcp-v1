@@ -117,6 +117,7 @@ function EditRow({
           onChange={(e) => setPurchasePrice(e.target.value)}
           type="number"
           min="0"
+          step="any"
           placeholder="سعر الشراء"
           className="w-48 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
@@ -204,6 +205,7 @@ export default function EquipmentTab() {
           onChange={(e) => setPurchasePrice(e.target.value)}
           type="number"
           min="0"
+          step="any"
           placeholder="سعر الشراء (اختياري)"
           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
         />

@@ -101,6 +101,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
     if (!payAmount) return;
     await salaryPaymentsApi.create({
       employee_id: row.id,
+      month,
       date: payDate,
       amount: Number(payAmount),
       payment_method: payMethod,
@@ -203,6 +204,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
               <input
                 type="number"
                 min="0"
+                step="any"
                 placeholder="القيمة"
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
@@ -230,6 +232,9 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
                 دفعت المرتب
               </button>
             </form>
+            <div className="text-[11px] text-slate-400 mt-1.5">
+              الدفعة دي بتتحسب على مرتب شهر {monthLabel(month)} {month.split("-")[0]} حتى لو التاريخ اللي هتختاره وقع في شهر تاني (زي لو الدفع اتأخر).
+            </div>
           </div>
 
           <div className="mb-4">
@@ -293,6 +298,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
               <input
                 type="number"
                 min="0"
+                step="any"
                 placeholder="القيمة"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
@@ -349,6 +355,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
               <input
                 type="number"
                 min="0"
+                step="any"
                 placeholder="القيمة"
                 value={bonusAmount}
                 onChange={(e) => setBonusAmount(e.target.value)}

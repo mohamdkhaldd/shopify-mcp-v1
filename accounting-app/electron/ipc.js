@@ -417,14 +417,16 @@ function registerIpcHandlers(db) {
     const bonusesStmt = db.prepare(
       "SELECT COALESCE(SUM(amount), 0) AS total FROM employee_bonuses WHERE employee_id = ? AND date LIKE ?"
     );
+    // بالشهر (مش تاريخ الدفع الحقيقي) — لو الدفع اتأخر لشهر بعده (زي دفع مرتب
+    // يونيو في ٥ يوليو)، يفضل محسوب على يونيو، الشهر اللي بيقفله فعلاً.
     const paidStmt = db.prepare(
-      "SELECT COALESCE(SUM(amount), 0) AS total FROM salary_payments WHERE employee_id = ? AND date LIKE ?"
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM salary_payments WHERE employee_id = ? AND month = ?"
     );
 
     return employees.map((emp) => {
       const advancesTotal = advancesStmt.get(emp.id, `${month}%`).total;
       const bonusesTotal = bonusesStmt.get(emp.id, `${month}%`).total;
-      const paidTotal = paidStmt.get(emp.id, `${month}%`).total;
+      const paidTotal = paidStmt.get(emp.id, month).total;
       if (emp.wage_type === "monthly") {
         const { grossPay } = monthlyEmployeeGrossPay(db, emp, month);
         const netPay = grossPay + bonusesTotal - advancesTotal;
@@ -481,8 +483,8 @@ function registerIpcHandlers(db) {
       .all(employee_id, `${month}%`);
     const bonusesTotal = bonuses.reduce((sum, b) => sum + b.amount, 0);
     const payments = db
-      .prepare("SELECT * FROM salary_payments WHERE employee_id = ? AND date LIKE ? ORDER BY date")
-      .all(employee_id, `${month}%`);
+      .prepare("SELECT * FROM salary_payments WHERE employee_id = ? AND month = ? ORDER BY date")
+      .all(employee_id, month);
     const paidTotal = payments.reduce((sum, p) => sum + p.amount, 0);
 
     if (employee.wage_type === "monthly") {
@@ -560,13 +562,16 @@ function registerIpcHandlers(db) {
   // وطريقة دفعه — نفس فكرة دفعات الشركاء والمقاولين، لأن صافي المرتب المحسوب
   // شهريًا يفضل "مستحق" لحد ما يتسجل له دفعة فعلية زي دي. ---
   ipcMain.handle("salaryPayments:list", (_e, { employee_id, month }) =>
-    db.prepare("SELECT * FROM salary_payments WHERE employee_id = ? AND date LIKE ? ORDER BY date").all(employee_id, `${month}%`)
+    db.prepare("SELECT * FROM salary_payments WHERE employee_id = ? AND month = ? ORDER BY date").all(employee_id, month)
   );
   ipcMain.handle("salaryPayments:create", (_e, payment) => {
     const info = db
-      .prepare(`INSERT INTO salary_payments (employee_id, date, amount, payment_method, note) VALUES (@employee_id, @date, @amount, @payment_method, @note)`)
+      .prepare(
+        `INSERT INTO salary_payments (employee_id, month, date, amount, payment_method, note) VALUES (@employee_id, @month, @date, @amount, @payment_method, @note)`
+      )
       .run({
         employee_id: payment.employee_id,
+        month: payment.month,
         date: payment.date,
         amount: payment.amount,
         payment_method: payment.payment_method || "cash",

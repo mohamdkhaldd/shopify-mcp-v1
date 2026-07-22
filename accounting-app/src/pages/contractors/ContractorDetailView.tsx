@@ -106,6 +106,7 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
           <input
             type="number"
             min="0"
+            step="any"
             placeholder="القيمة"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}

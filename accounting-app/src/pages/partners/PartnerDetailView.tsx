@@ -120,6 +120,7 @@ export default function PartnerDetailView({ partnerId, onBack }: PartnerDetailVi
           <input
             type="number"
             min="0"
+            step="any"
             placeholder="القيمة"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}

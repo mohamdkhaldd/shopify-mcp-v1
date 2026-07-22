@@ -116,6 +116,7 @@ interface WasteEntryRow {
 interface SalaryPaymentRow {
   id: number;
   employee_id: number;
+  month: string;
   date: string;
   amount: number;
   payment_method: "wallet" | "instapay" | "cash";
@@ -311,6 +312,7 @@ function loadState(): MockState {
     if (!state.supplier_payments) state.supplier_payments = [];
     if (!state.waste_entries) state.waste_entries = [];
     if (!state.salary_payments) state.salary_payments = [];
+    for (const p of state.salary_payments) if (p.month == null) p.month = p.date.slice(0, 7);
     return state;
   }
   const seeded = buildSeedState();
@@ -521,7 +523,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
           .filter((b) => b.employee_id === emp.id && b.date.startsWith(month))
           .reduce((sum, b) => sum + b.amount, 0);
         const paidTotal = state.salary_payments
-          .filter((p) => p.employee_id === emp.id && p.date.startsWith(month))
+          .filter((p) => p.employee_id === emp.id && p.month === month)
           .reduce((sum, p) => sum + p.amount, 0);
 
         if (emp.wage_type === "monthly") {
@@ -577,7 +579,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       .sort((a, b) => a.date.localeCompare(b.date));
     const bonusesTotal = bonuses.reduce((sum, b) => sum + b.amount, 0);
     const payments = state.salary_payments
-      .filter((p) => p.employee_id === employee_id && p.date.startsWith(month))
+      .filter((p) => p.employee_id === employee_id && p.month === month)
       .sort((a, b) => a.date.localeCompare(b.date));
     const paidTotal = payments.reduce((sum, p) => sum + p.amount, 0);
 
@@ -644,13 +646,14 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
 
   if (channel === "salaryPayments:list") {
     return state.salary_payments
-      .filter((p) => p.employee_id === payload.employee_id && p.date.startsWith(payload.month))
+      .filter((p) => p.employee_id === payload.employee_id && p.month === payload.month)
       .sort((a, b) => a.date.localeCompare(b.date));
   }
   if (channel === "salaryPayments:create") {
     const record: SalaryPaymentRow = {
       id: state.nextId++,
       employee_id: payload.employee_id,
+      month: payload.month,
       date: payload.date,
       amount: payload.amount,
       payment_method: payload.payment_method || "cash",
