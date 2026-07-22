@@ -379,29 +379,89 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { ok: true };
   }
 
-  // مرتب السائق بيتحط كمصروف حقيقي على المعدة ("مرتب سائق") محسوب من سعره
-  // الثابت في الإعدادات. month=null يحسب كل الوقت (مستخدم في equipmentAllTimeProfit).
-  // بيشمل بس أصحاب الأجر اليومي — الشهري بيتحسب كتكلفة شركة عامة في المرتبات.
+  // مرتب الموظف الشهري بيتقسم على المعدات اللي اشتغل عليها الشهر ده حسب عدد
+  // الأيام، من إجمالي الفلوس الحقيقية الماخدوها (سلف + مكافآت + دفعات مرتب
+  // فعلية) — لو مفيش فلوس اتاخدت لسه مفيش مصروف بيتسجل.
+  function monthlySalaryAllocationForEmployeeMonth(employeeName: string, employeeId: number, month: string): Map<number, number> {
+    const logs = state.daily_logs.filter((l) => l.role === "driver" && l.person_name === employeeName && l.date.startsWith(month));
+    const result = new Map<number, number>();
+    if (logs.length === 0) return result;
+
+    const daysByEquipment = new Map<number, number>();
+    for (const l of logs) daysByEquipment.set(l.equipment_id, (daysByEquipment.get(l.equipment_id) ?? 0) + 1);
+
+    const advancesTotal = state.employee_advances
+      .filter((a) => a.employee_id === employeeId && a.date.startsWith(month))
+      .reduce((sum, a) => sum + a.amount, 0);
+    const bonusesTotal = state.employee_bonuses
+      .filter((b) => b.employee_id === employeeId && b.date.startsWith(month))
+      .reduce((sum, b) => sum + b.amount, 0);
+    const paidTotal = state.salary_payments
+      .filter((p) => p.employee_id === employeeId && p.month === month)
+      .reduce((sum, p) => sum + p.amount, 0);
+    const totalTaken = advancesTotal + bonusesTotal + paidTotal;
+    if (totalTaken === 0) return result;
+
+    for (const [equipmentId, days] of daysByEquipment) {
+      result.set(equipmentId, totalTaken * (days / logs.length));
+    }
+    return result;
+  }
+
+  // مرتب السائق بيتحط كمصروف حقيقي على المعدة ("مرتب سائق") — أصحاب الأجر
+  // اليومي بيتحسبوا من سعرهم الثابت مباشرة، وأصحاب المرتب الشهري بالتقسيم
+  // بالأيام أعلاه. month=null يحسب كل الوقت (مستخدم في equipmentAllTimeProfit).
   function driverSalaryForEquipment(equipmentId: number, month: string | null): number {
-    return state.daily_logs
-      .filter((l) => l.equipment_id === equipmentId && l.role === "driver" && (month === null || l.date.startsWith(month)))
-      .reduce((sum, l) => {
-        const employee = state.employees.find((e) => e.name === l.person_name);
-        if (!employee || employee.wage_type !== "daily") return sum;
-        return sum + computeDriverWageValue(l, employee.rate);
-      }, 0);
+    const logs = state.daily_logs.filter(
+      (l) => l.equipment_id === equipmentId && l.role === "driver" && (month === null || l.date.startsWith(month))
+    );
+
+    let dailyWageSum = 0;
+    const monthlyEmployees = new Map<number, string>();
+    for (const l of logs) {
+      const employee = state.employees.find((e) => e.name === l.person_name);
+      if (!employee) continue;
+      if (employee.wage_type === "daily") {
+        dailyWageSum += computeDriverWageValue(l, employee.rate);
+      } else {
+        monthlyEmployees.set(employee.id, employee.name);
+      }
+    }
+
+    let monthlySum = 0;
+    if (monthlyEmployees.size > 0) {
+      const months = month ? [month] : [...new Set(logs.map((l) => l.date.slice(0, 7)))];
+      for (const [empId, empName] of monthlyEmployees) {
+        for (const m of months) {
+          const allocation = monthlySalaryAllocationForEmployeeMonth(empName, empId, m);
+          monthlySum += allocation.get(equipmentId) ?? 0;
+        }
+      }
+    }
+
+    return dailyWageSum + monthlySum;
   }
 
   // نفس حساب مرتب السائق بس مقسّم بالاسم — لو أكتر من سواق شغلوا على نفس
   // المعدة في نفس الشهر، كل واحد بيظهر في شيت المصروفات بمرتبه لوحده.
   function driverSalaryBreakdownForEquipment(equipmentId: number, month: string): { name: string; amount: number }[] {
     const byDriver = new Map<string, number>();
+    const monthlyEmployees = new Map<number, string>();
     for (const l of state.daily_logs) {
       if (l.equipment_id !== equipmentId || l.role !== "driver" || !l.date.startsWith(month)) continue;
       const employee = state.employees.find((e) => e.name === l.person_name);
-      if (!employee || employee.wage_type !== "daily") continue;
-      const amount = computeDriverWageValue(l, employee.rate);
-      byDriver.set(l.person_name, (byDriver.get(l.person_name) ?? 0) + amount);
+      if (!employee) continue;
+      if (employee.wage_type === "daily") {
+        const amount = computeDriverWageValue(l, employee.rate);
+        byDriver.set(l.person_name, (byDriver.get(l.person_name) ?? 0) + amount);
+      } else {
+        monthlyEmployees.set(employee.id, employee.name);
+      }
+    }
+    for (const [empId, empName] of monthlyEmployees) {
+      const allocation = monthlySalaryAllocationForEmployeeMonth(empName, empId, month);
+      const amount = allocation.get(equipmentId) ?? 0;
+      if (amount > 0) byDriver.set(empName, (byDriver.get(empName) ?? 0) + amount);
     }
     return [...byDriver.entries()].map(([name, amount]) => ({ name, amount }));
   }
@@ -541,6 +601,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
             bonuses_total: bonusesTotal,
             net_pay: netPay,
             paid_total: paidTotal,
+            taken_total: advancesTotal + bonusesTotal + paidTotal,
             remaining: netPay - paidTotal,
           };
         }
@@ -562,6 +623,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
           bonuses_total: bonusesTotal,
           net_pay: netPay,
           paid_total: paidTotal,
+          taken_total: advancesTotal + bonusesTotal + paidTotal,
           remaining: netPay - paidTotal,
         };
       });
@@ -610,6 +672,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
         advancesTotal,
         bonusesTotal,
         paidTotal,
+        takenTotal: advancesTotal + bonusesTotal + paidTotal,
         netPay,
         remaining: netPay - paidTotal,
       };
@@ -639,6 +702,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       advancesTotal,
       bonusesTotal,
       paidTotal,
+      takenTotal: advancesTotal + bonusesTotal + paidTotal,
       netPay,
       remaining: netPay - paidTotal,
     };
@@ -1079,6 +1143,77 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     });
   }
 
+  // بيرجع نص زي "مان لفت 42: 10 أيام، بوكيت: 5 أيام" لموظف اشتغل على أكتر من
+  // معدة في شهر معيّن — مستخدم في تفاصيل حركة الخزنة.
+  function equipmentDaysNote(employeeName: string, month: string): string | null {
+    const logs = state.daily_logs.filter((l) => l.role === "driver" && l.person_name === employeeName && l.date.startsWith(month));
+    if (logs.length === 0) return null;
+    const daysByEquipment = new Map<number, number>();
+    for (const l of logs) daysByEquipment.set(l.equipment_id, (daysByEquipment.get(l.equipment_id) ?? 0) + 1);
+    return [...daysByEquipment.entries()]
+      .map(([equipmentId, days]) => `${state.equipment.find((e) => e.id === equipmentId)?.name ?? "—"}: ${days} يوم`)
+      .join("، ");
+  }
+
+  if (channel === "treasury:accountTransactions") {
+    const { account_name, month } = payload;
+    const rows: { date: string; direction: "in" | "out"; label: string; amount: number }[] = [];
+
+    for (const e of state.monthly_expenses) {
+      if (e.payment_method !== account_name || e.month !== month) continue;
+      const equipmentName = state.equipment.find((eq) => eq.id === e.equipment_id)?.name ?? "—";
+      const categoryName = state.expense_categories.find((c) => c.id === e.category_id)?.name ?? "بدون نوع";
+      rows.push({ date: e.date ?? month, direction: "out", label: `مصروف ${categoryName} — ${equipmentName}`, amount: e.amount });
+    }
+
+    for (const a of state.employee_advances) {
+      if (a.payment_method !== account_name || !a.date.startsWith(month)) continue;
+      const employeeName = state.employees.find((e) => e.id === a.employee_id)?.name ?? "—";
+      const note = equipmentDaysNote(employeeName, month);
+      rows.push({ date: a.date, direction: "out", label: `سلفة: ${employeeName}${note ? ` (${note})` : ""}`, amount: a.amount });
+    }
+
+    for (const b of state.employee_bonuses) {
+      if (b.payment_method !== account_name || !b.date.startsWith(month)) continue;
+      const employeeName = state.employees.find((e) => e.id === b.employee_id)?.name ?? "—";
+      const note = equipmentDaysNote(employeeName, month);
+      rows.push({ date: b.date, direction: "out", label: `مكافأة: ${employeeName}${note ? ` (${note})` : ""}`, amount: b.amount });
+    }
+
+    for (const p of state.salary_payments) {
+      if (p.payment_method !== account_name || !p.date.startsWith(month)) continue;
+      const employeeName = state.employees.find((e) => e.id === p.employee_id)?.name ?? "—";
+      const note = equipmentDaysNote(employeeName, month);
+      rows.push({ date: p.date, direction: "out", label: `دفعة مرتب: ${employeeName}${note ? ` (${note})` : ""}`, amount: p.amount });
+    }
+
+    for (const p of state.partner_payments) {
+      if (p.method !== account_name || !p.date.startsWith(month)) continue;
+      const partnerName = state.partners.find((x) => x.id === p.partner_id)?.name ?? "—";
+      rows.push({ date: p.date, direction: "out", label: `دفعة للشريك: ${partnerName}`, amount: p.amount });
+    }
+
+    for (const p of state.supplier_payments) {
+      if (p.method !== account_name || !p.date.startsWith(month)) continue;
+      const supplierName = state.suppliers.find((x) => x.id === p.supplier_id)?.name ?? "—";
+      rows.push({ date: p.date, direction: "out", label: `دفعة للمورد: ${supplierName}`, amount: p.amount });
+    }
+
+    for (const w of state.waste_entries) {
+      if (w.payment_method !== account_name || !w.date.startsWith(month)) continue;
+      rows.push({ date: w.date, direction: "out", label: `هالك${w.note ? `: ${w.note}` : ""}`, amount: w.amount });
+    }
+
+    for (const p of state.contractor_payments) {
+      if (p.method !== account_name || !p.date.startsWith(month)) continue;
+      const contractorName = state.contractors.find((x) => x.id === p.contractor_id)?.name ?? "—";
+      rows.push({ date: p.date, direction: "in", label: `دفعة من المقاول: ${contractorName}`, amount: p.amount });
+    }
+
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    return rows;
+  }
+
   function findOrCreateSupplier(name: string): SupplierRow {
     const trimmed = name.trim();
     const existing = state.suppliers.find((s) => s.name === trimmed);
@@ -1368,7 +1503,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       .filter((b) => b.date.startsWith(month))
       .map((b) => ({ ...b, employee_name: state.employees.find((x) => x.id === b.employee_id)?.name ?? "—", kind: "bonus" as const }));
     const salaryPayments = state.salary_payments
-      .filter((p) => p.date.startsWith(month))
+      .filter((p) => p.month === month)
       .map((p) => ({ ...p, employee_name: state.employees.find((x) => x.id === p.employee_id)?.name ?? "—", kind: "salary" as const }));
     const payroll = [...advances, ...bonuses, ...salaryPayments].sort((a, b) => a.date.localeCompare(b.date));
     const payrollTotal = payroll.reduce((sum, r) => sum + r.amount, 0);

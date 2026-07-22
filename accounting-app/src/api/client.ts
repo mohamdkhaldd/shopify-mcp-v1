@@ -33,7 +33,9 @@ import {
   SupplierPayment,
   SupplierPurchase,
   TreasuryAccount,
+  TreasuryAccountName,
   TreasurySummaryRow,
+  TreasuryTransaction,
   WasteEntry,
 } from "./types";
 
@@ -187,6 +189,8 @@ export const treasuryApi = {
   updateBalance: (id: number, current_balance: number): Promise<TreasuryAccount> =>
     invoke("treasury:updateBalance", { id, current_balance }),
   summary: (month: string): Promise<TreasurySummaryRow[]> => invoke("treasury:summary", { month }),
+  accountTransactions: (account_name: TreasuryAccountName, month: string): Promise<TreasuryTransaction[]> =>
+    invoke("treasury:accountTransactions", { account_name, month }),
 };
 
 export const suppliersApi = {

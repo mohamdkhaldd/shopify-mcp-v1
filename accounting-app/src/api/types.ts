@@ -133,6 +133,7 @@ export interface PayrollRow {
   bonuses_total: number;
   net_pay: number;
   paid_total: number;
+  taken_total: number;
   remaining: number;
 }
 
@@ -155,6 +156,7 @@ export interface PayrollDetail {
   advancesTotal: number;
   bonusesTotal: number;
   paidTotal: number;
+  takenTotal: number;
   netPay: number;
   remaining: number;
 }
@@ -285,6 +287,13 @@ export interface TreasuryAccount {
   name: TreasuryAccountName;
   name_ar: string;
   current_balance: number;
+}
+
+export interface TreasuryTransaction {
+  date: string;
+  direction: "in" | "out";
+  label: string;
+  amount: number;
 }
 
 export interface TreasurySummaryRow {

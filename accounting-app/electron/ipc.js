@@ -55,20 +55,90 @@ function monthlyEmployeeGrossPay(db, emp, month) {
 }
 
 // مرتب السائق بيتحط كمصروف حقيقي على المعدة ("مرتب سائق") بدل الاعتماد على
-// دخل السركي المكتوب. month=null يحسب كل الوقت (مستخدم في equipmentAllTimeProfit).
-// بيشمل بس أصحاب الأجر اليومي — الشهري مرتبه مش مقسوم على المعدات، بيتحسب
-// كتكلفة شركة عامة في شيت المرتبات لوحده.
+// دخل السركي المكتوب. أصحاب الأجر اليومي بيتحسبوا بصيغة اليوم مباشرة. أصحاب
+// المرتب الشهري بيتقسّم إجمالي الفلوس الحقيقية الماخدوها الشهر ده (سلف +
+// مكافآت + دفعات مرتب فعلية) على المعدات اللي اشتغلوا عليها حسب عدد الأيام —
+// يعني لو اشتغل 15 يوم هنا و15 هناك يتقسم نص بنص، ولو مفيش فلوس اتاخدت لسه
+// (مفيش سلفة ولا دفعة) مفيش مصروف بيتسجل خالص.
+function monthlySalaryAllocationForEmployeeMonth(db, employeeName, employeeId, month) {
+  const logs = db
+    .prepare("SELECT equipment_id FROM daily_logs WHERE role = 'driver' AND person_name = ? AND date LIKE ?")
+    .all(employeeName, `${month}%`);
+  const result = new Map();
+  if (logs.length === 0) return result;
+
+  const daysByEquipment = new Map();
+  for (const l of logs) daysByEquipment.set(l.equipment_id, (daysByEquipment.get(l.equipment_id) ?? 0) + 1);
+
+  const advancesTotal = db
+    .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_advances WHERE employee_id = ? AND date LIKE ?")
+    .get(employeeId, `${month}%`).total;
+  const bonusesTotal = db
+    .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_bonuses WHERE employee_id = ? AND date LIKE ?")
+    .get(employeeId, `${month}%`).total;
+  const paidTotal = db
+    .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM salary_payments WHERE employee_id = ? AND month = ?")
+    .get(employeeId, month).total;
+  const totalTaken = advancesTotal + bonusesTotal + paidTotal;
+  if (totalTaken === 0) return result;
+
+  for (const [equipmentId, days] of daysByEquipment) {
+    result.set(equipmentId, totalTaken * (days / logs.length));
+  }
+  return result;
+}
+
+// بيرجع نص زي "مان لفت 42: 10 أيام، بوكيت: 5 أيام" لموظف اشتغل على أكتر من
+// معدة في شهر معيّن — مستخدم في تفاصيل حركة الخزنة عشان يوضّح مرتب/سلفة/
+// مكافأة أي سواق جت من شغله على أنهي معدات وقد إيه.
+function equipmentDaysNote(db, employeeName, month) {
+  const logs = db
+    .prepare("SELECT equipment_id FROM daily_logs WHERE role = 'driver' AND person_name = ? AND date LIKE ?")
+    .all(employeeName, `${month}%`);
+  if (logs.length === 0) return null;
+  const daysByEquipment = new Map();
+  for (const l of logs) daysByEquipment.set(l.equipment_id, (daysByEquipment.get(l.equipment_id) ?? 0) + 1);
+  return [...daysByEquipment.entries()]
+    .map(([equipmentId, days]) => {
+      const eq = db.prepare("SELECT name FROM equipment WHERE id = ?").get(equipmentId);
+      return `${eq?.name ?? "—"}: ${days} يوم`;
+    })
+    .join("، ");
+}
+
 function driverSalaryForEquipment(db, equipmentId, month) {
   const logs = month
     ? db
         .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
         .all(equipmentId, `${month}%`)
     : db.prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver'").all(equipmentId);
-  return logs.reduce((sum, l) => {
+
+  let dailyWageSum = 0;
+  const monthlyEmployees = new Map();
+  for (const l of logs) {
     const employee = db.prepare("SELECT * FROM employees WHERE name = ?").get(l.person_name);
-    if (!employee || employee.wage_type !== "daily") return sum;
-    return sum + computeDriverWageValue(l, employee.rate);
-  }, 0);
+    if (!employee) continue;
+    if (employee.wage_type === "daily") {
+      dailyWageSum += computeDriverWageValue(l, employee.rate);
+    } else {
+      monthlyEmployees.set(employee.id, employee.name);
+    }
+  }
+
+  // للموظفين الشهريين لازم نلف على كل شهر فيه سجلات لوحده — كل شهر له إجمالي
+  // مأخوذ مختلف، مينفعش نجمعهم كلهم في استعلام واحد زي اليومية.
+  let monthlySum = 0;
+  if (monthlyEmployees.size > 0) {
+    const months = month ? [month] : [...new Set(logs.map((l) => l.date.slice(0, 7)))];
+    for (const [empId, empName] of monthlyEmployees) {
+      for (const m of months) {
+        const allocation = monthlySalaryAllocationForEmployeeMonth(db, empName, empId, m);
+        monthlySum += allocation.get(equipmentId) ?? 0;
+      }
+    }
+  }
+
+  return dailyWageSum + monthlySum;
 }
 
 // نفس حساب مرتب السائق بس مقسّم بالاسم — لو أكتر من سواق شغلوا على نفس
@@ -79,11 +149,21 @@ function driverSalaryBreakdownForEquipment(db, equipmentId, month) {
     .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
     .all(equipmentId, `${month}%`);
   const byDriver = new Map();
+  const monthlyEmployees = new Map();
   for (const l of logs) {
     const employee = db.prepare("SELECT * FROM employees WHERE name = ?").get(l.person_name);
-    if (!employee || employee.wage_type !== "daily") continue;
-    const amount = computeDriverWageValue(l, employee.rate);
-    byDriver.set(l.person_name, (byDriver.get(l.person_name) ?? 0) + amount);
+    if (!employee) continue;
+    if (employee.wage_type === "daily") {
+      const amount = computeDriverWageValue(l, employee.rate);
+      byDriver.set(l.person_name, (byDriver.get(l.person_name) ?? 0) + amount);
+    } else {
+      monthlyEmployees.set(employee.id, employee.name);
+    }
+  }
+  for (const [empId, empName] of monthlyEmployees) {
+    const allocation = monthlySalaryAllocationForEmployeeMonth(db, empName, empId, month);
+    const amount = allocation.get(equipmentId) ?? 0;
+    if (amount > 0) byDriver.set(empName, (byDriver.get(empName) ?? 0) + amount);
   }
   return [...byDriver.entries()].map(([name, amount]) => ({ name, amount }));
 }
@@ -442,6 +522,7 @@ function registerIpcHandlers(db) {
           bonuses_total: bonusesTotal,
           net_pay: netPay,
           paid_total: paidTotal,
+          taken_total: advancesTotal + bonusesTotal + paidTotal,
           remaining: netPay - paidTotal,
         };
       }
@@ -460,6 +541,7 @@ function registerIpcHandlers(db) {
         bonuses_total: bonusesTotal,
         net_pay: netPay,
         paid_total: paidTotal,
+        taken_total: advancesTotal + bonusesTotal + paidTotal,
         remaining: netPay - paidTotal,
       };
     });
@@ -519,6 +601,7 @@ function registerIpcHandlers(db) {
         advancesTotal,
         bonusesTotal,
         paidTotal,
+        takenTotal: advancesTotal + bonusesTotal + paidTotal,
         netPay,
         remaining: netPay - paidTotal,
       };
@@ -553,6 +636,7 @@ function registerIpcHandlers(db) {
       advancesTotal,
       bonusesTotal,
       paidTotal,
+      takenTotal: advancesTotal + bonusesTotal + paidTotal,
       netPay,
       remaining: netPay - paidTotal,
     };
@@ -994,6 +1078,109 @@ function registerIpcHandlers(db) {
     });
   });
 
+  // --- كشف حساب كل وسيلة دفع لوحدها — كل حركة فعلية دخلت أو خرجت من الحساب
+  // ده الشهر ده، بتاريخها وبيان واضح بيها. بيستخدم نفس منطق treasury:summary
+  // (بتاريخ الدفع الحقيقي، مش شهر الدفاتر) عشان الأرقام تتطابق مع بعضها. ---
+  ipcMain.handle("treasury:accountTransactions", (_e, { account_name, month }) => {
+    const rows = [];
+
+    db.prepare(
+      `SELECT me.date, me.amount, e.name AS equipment_name, ec.name AS category_name
+       FROM monthly_expenses me
+       JOIN equipment e ON e.id = me.equipment_id
+       LEFT JOIN expense_categories ec ON ec.id = me.category_id
+       WHERE me.payment_method = ? AND me.month = ?`
+    )
+      .all(account_name, month)
+      .forEach((r) =>
+        rows.push({
+          date: r.date ?? month,
+          direction: "out",
+          label: `مصروف ${r.category_name ?? "بدون نوع"} — ${r.equipment_name}`,
+          amount: r.amount,
+        })
+      );
+
+    db.prepare(
+      `SELECT ea.date, ea.amount, e.name AS employee_name FROM employee_advances ea
+       JOIN employees e ON e.id = ea.employee_id
+       WHERE ea.payment_method = ? AND ea.date LIKE ?`
+    )
+      .all(account_name, `${month}%`)
+      .forEach((r) => {
+        const note = equipmentDaysNote(db, r.employee_name, month);
+        rows.push({
+          date: r.date,
+          direction: "out",
+          label: `سلفة: ${r.employee_name}${note ? ` (${note})` : ""}`,
+          amount: r.amount,
+        });
+      });
+
+    db.prepare(
+      `SELECT eb.date, eb.amount, e.name AS employee_name FROM employee_bonuses eb
+       JOIN employees e ON e.id = eb.employee_id
+       WHERE eb.payment_method = ? AND eb.date LIKE ?`
+    )
+      .all(account_name, `${month}%`)
+      .forEach((r) => {
+        const note = equipmentDaysNote(db, r.employee_name, month);
+        rows.push({
+          date: r.date,
+          direction: "out",
+          label: `مكافأة: ${r.employee_name}${note ? ` (${note})` : ""}`,
+          amount: r.amount,
+        });
+      });
+
+    db.prepare(
+      `SELECT sp.date, sp.amount, e.name AS employee_name FROM salary_payments sp
+       JOIN employees e ON e.id = sp.employee_id
+       WHERE sp.payment_method = ? AND sp.date LIKE ?`
+    )
+      .all(account_name, `${month}%`)
+      .forEach((r) => {
+        const note = equipmentDaysNote(db, r.employee_name, month);
+        rows.push({
+          date: r.date,
+          direction: "out",
+          label: `دفعة مرتب: ${r.employee_name}${note ? ` (${note})` : ""}`,
+          amount: r.amount,
+        });
+      });
+
+    db.prepare(
+      `SELECT pp.date, pp.amount, p.name AS partner_name FROM partner_payments pp
+       JOIN partners p ON p.id = pp.partner_id
+       WHERE pp.method = ? AND pp.date LIKE ?`
+    )
+      .all(account_name, `${month}%`)
+      .forEach((r) => rows.push({ date: r.date, direction: "out", label: `دفعة للشريك: ${r.partner_name}`, amount: r.amount }));
+
+    db.prepare(
+      `SELECT sp.date, sp.amount, s.name AS supplier_name FROM supplier_payments sp
+       JOIN suppliers s ON s.id = sp.supplier_id
+       WHERE sp.method = ? AND sp.date LIKE ?`
+    )
+      .all(account_name, `${month}%`)
+      .forEach((r) => rows.push({ date: r.date, direction: "out", label: `دفعة للمورد: ${r.supplier_name}`, amount: r.amount }));
+
+    db.prepare(`SELECT date, amount, note FROM waste_entries WHERE payment_method = ? AND date LIKE ?`)
+      .all(account_name, `${month}%`)
+      .forEach((r) => rows.push({ date: r.date, direction: "out", label: `هالك${r.note ? `: ${r.note}` : ""}`, amount: r.amount }));
+
+    db.prepare(
+      `SELECT cp.date, cp.amount, c.name AS contractor_name FROM contractor_payments cp
+       JOIN contractors c ON c.id = cp.contractor_id
+       WHERE cp.method = ? AND cp.date LIKE ?`
+    )
+      .all(account_name, `${month}%`)
+      .forEach((r) => rows.push({ date: r.date, direction: "in", label: `دفعة من المقاول: ${r.contractor_name}`, amount: r.amount }));
+
+    rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    return rows;
+  });
+
   // --- Suppliers (doc section 10) — no fixed list, created on first purchase/payment ---
   function findOrCreateSupplier(name) {
     const trimmed = name.trim();
@@ -1342,13 +1529,17 @@ function registerIpcHandlers(db) {
       )
       .all(`${month}%`)
       .map((r) => ({ ...r, kind: "bonus" }));
+    // دفعات المرتب هنا بتتحسب على الشهر اللي بتقفله (زي مصروفات المعدات)، مش
+    // تاريخ الدفع الحقيقي — لو دفعت مرتب يونيو في 5 يوليو يفضل يسمع في يونيو.
+    // الخزنة (treasury:summary) هي الوحيدة اللي بتفضل على التاريخ الحقيقي،
+    // عشان هي بتعكس رصيد الحساب الفعلي مش دفاتر الشهر.
     const salaryPayments = db
       .prepare(
         `SELECT sp.*, e.name AS employee_name FROM salary_payments sp
          JOIN employees e ON e.id = sp.employee_id
-         WHERE sp.date LIKE ? ORDER BY sp.date, sp.id`
+         WHERE sp.month = ? ORDER BY sp.date, sp.id`
       )
-      .all(`${month}%`)
+      .all(month)
       .map((r) => ({ ...r, kind: "salary" }));
     const payroll = [...advances, ...bonuses, ...salaryPayments].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     const payrollTotal = payroll.reduce((sum, r) => sum + r.amount, 0);
