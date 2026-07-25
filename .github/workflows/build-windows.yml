@@ -3,6 +3,9 @@ name: Build Windows Installer
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -18,7 +21,15 @@ jobs:
 
       - run: npm install
 
-      - run: npm run electron:build
+      # كل نسخة لازم رقمها يبقى أكبر من اللي قبلها عشان التحديث التلقائي في
+      # البرنامج يعرف إن في نسخة أحدث — رقم تشغيل الأكشن بيزيد لوحده كل مرة.
+      - run: npm version "0.1.${{ github.run_number }}" --no-git-tag-version
+
+      # --publish always بينشر إصدار على GitHub Releases (مش بس يبني الملف
+      # محليًا) — ده اللي البرنامج المُثبَّت بيراجعه لوحده عشان يكتشف تحديثات.
+      - run: npm run electron:build -- --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/upload-artifact@v4
         with:

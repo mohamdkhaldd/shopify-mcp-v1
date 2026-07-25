@@ -2,6 +2,7 @@ const { app, BrowserWindow } = require("electron");
 const path = require("path");
 const { initDatabase } = require("./db");
 const { registerIpcHandlers } = require("./ipc");
+const { autoUpdater } = require("electron-updater");
 
 const isDev = !app.isPackaged;
 
@@ -34,10 +35,29 @@ function createWindow() {
   }
 }
 
+// تحديث تلقائي: كل ما نصدر نسخة جديدة على GitHub Releases، البرنامج بيكتشفها
+// لوحده، بينزّلها في الخلفية من غير ما يوقف شغل المستخدم، وبيثبّتها تلقائيًا
+// أول ما يقفل البرنامج ويفتحه تاني — من غير ما يحتاج ينزّل حاجة بنفسه، ومن
+// غير ما داتاه (قاعدة البيانات) تتأثر خالص، لأنها متخزنة في مجلد منفصل تمامًا
+// عن ملفات البرنامج نفسها.
+function setupAutoUpdate() {
+  if (isDev) return;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on("error", () => {
+    // بيتجاهل بهدوء — لو مفيش إنترنت أو لسه مفيش نسخة أحدث، البرنامج يشتغل عادي
+  });
+  autoUpdater.checkForUpdates().catch(() => {});
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 4 * 60 * 60 * 1000);
+}
+
 app.whenReady().then(() => {
   const db = initDatabase();
   registerIpcHandlers(db);
   createWindow();
+  setupAutoUpdate();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
