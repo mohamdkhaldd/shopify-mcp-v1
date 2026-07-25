@@ -74,7 +74,8 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-4">توزيع الشغل على المعدات</h2>
+        <h2 className="font-bold text-slate-800 mb-1">توزيع المستحق على المعدات</h2>
+        <p className="text-xs text-slate-400 mb-4">اشتغل على أنهي معدة، وقيمة شغله عليها بالظبط — إجمالي الأعمدة دي هو نفسه "إجمالي المستحق عليه" فوق.</p>
         {detail.workByEquipment.length === 0 ? (
           <div className="text-sm text-slate-400">لسه ملوش شغل مسجل على أي معدة.</div>
         ) : (
@@ -83,7 +84,7 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
               <tr className="text-slate-400 border-b border-slate-100">
                 <th className="text-start font-semibold py-2">المعدة</th>
                 <th className="text-start font-semibold py-2">عدد الأيام</th>
-                <th className="text-start font-semibold py-2">القيمة</th>
+                <th className="text-start font-semibold py-2">المستحق من المعدة دي</th>
               </tr>
             </thead>
             <tbody>
@@ -95,6 +96,16 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={2} className="pt-2 text-sm font-bold text-slate-700">
+                  إجمالي كل المعدات
+                </td>
+                <td className="pt-2 text-sm font-bold text-primary-dark">
+                  {formatEGP(detail.workByEquipment.reduce((sum, w) => sum + w.totalValue, 0))}
+                </td>
+              </tr>
+            </tfoot>
           </table>
         )}
       </div>
