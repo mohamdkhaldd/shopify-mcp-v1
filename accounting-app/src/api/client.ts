@@ -62,7 +62,8 @@ export const partnersApi = {
 export const employeesApi = {
   list: (): Promise<Driver[]> => invoke("employees:list"),
   create: (data: Omit<Driver, "id">): Promise<Driver> => invoke("employees:create", data),
-  update: (id: number, data: Omit<Driver, "id">): Promise<Driver> => invoke("employees:update", { id, ...data }),
+  update: (id: number, data: Omit<Driver, "id">, effective_month?: string): Promise<Driver> =>
+    invoke("employees:update", { id, ...data, effective_month }),
   remove: (id: number): Promise<void> => invoke("employees:delete", { id }),
 };
 

@@ -9,6 +9,7 @@ function EditRow({ item, onSaved, onCancel }: { item: Driver; onSaved: () => voi
   const [wageType, setWageType] = useState<WageType>(item.wage_type);
   const [rate, setRate] = useState(String(item.rate));
   const [fixedSalary, setFixedSalary] = useState(item.fixed_salary);
+  const [effectiveMonth, setEffectiveMonth] = useState(new Date().toISOString().slice(0, 7));
   const { pushUndo } = useUndo();
 
   async function save(e: FormEvent) {
@@ -17,15 +18,14 @@ function EditRow({ item, onSaved, onCancel }: { item: Driver; onSaved: () => voi
     const rateValue = Number(rate);
     if (!trimmed || !rateValue) return;
     const previous = { name: item.name, wage_type: item.wage_type, rate: item.rate, fixed_salary: item.fixed_salary };
-    await employeesApi.update(item.id, {
-      name: trimmed,
-      wage_type: wageType,
-      rate: rateValue,
-      fixed_salary: wageType === "monthly" && fixedSalary,
-    });
+    await employeesApi.update(
+      item.id,
+      { name: trimmed, wage_type: wageType, rate: rateValue, fixed_salary: wageType === "monthly" && fixedSalary },
+      effectiveMonth
+    );
     onSaved();
     pushUndo(`اتغيرت بيانات "${item.name}"`, async () => {
-      await employeesApi.update(item.id, previous);
+      await employeesApi.update(item.id, previous, effectiveMonth);
       onSaved();
     });
   }
@@ -68,6 +68,16 @@ function EditRow({ item, onSaved, onCancel }: { item: Driver; onSaved: () => voi
           إلغاء
         </button>
       </div>
+      <label className="sm:col-span-4 flex items-center gap-2 text-xs text-slate-500">
+        ساري من شهر
+        <input
+          type="month"
+          value={effectiveMonth}
+          onChange={(e) => setEffectiveMonth(e.target.value)}
+          className="rounded-xl border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
+        />
+        <span className="text-slate-400">— الشهور اللي فاتت بتفضل محسوبة بالقيم القديمة</span>
+      </label>
       {wageType === "monthly" && (
         <label className="sm:col-span-4 flex items-center gap-2 text-xs text-slate-500">
           <input
@@ -141,7 +151,9 @@ export default function DriversTab() {
     <div className="bg-white rounded-card shadow-card p-5">
       <h2 className="font-bold text-slate-800 mb-1">السائقين والموظفين</h2>
       <p className="text-xs text-slate-400 mb-4">
-        عايز تزود مرتب حد؟ دوس "تعديل" جنب اسمه وغيّر الرقم — مش محتاج تحذفه وتضيفه من الأول.
+        عايز تزود مرتب حد أو تغيّر نوع أجره من يومي لشهري؟ دوس "تعديل" جنب اسمه وغيّر اللي محتاج — مش محتاج
+        تحذفه وتضيفه من الأول، ومش محتاج تدخل نفس البيانات كل شهر. أي تعديل بيسري من الشهر اللي تختاره
+        بس، والشهور اللي فاتت بتفضل محسوبة صح بالقيم اللي كانت سارية فيها.
       </p>
 
       <form onSubmit={handleAdd} className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-2">

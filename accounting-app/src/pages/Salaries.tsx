@@ -162,7 +162,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
             </div>
             <div className="text-center bg-primary rounded-xl py-2.5">
               <div className="text-xs text-white/80">الإجمالي</div>
-              <div className="font-extrabold text-white">{formatEGP(detail.netPay)}</div>
+              <div className="font-extrabold text-white">{formatEGP(detail.takenTotal)}</div>
             </div>
           </div>
 
@@ -405,7 +405,7 @@ export default function Salaries() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month]);
 
-  const totalNet = rows.reduce((sum, r) => sum + r.net_pay, 0);
+  const totalNet = rows.reduce((sum, r) => sum + r.taken_total, 0);
   const totalRemaining = rows.reduce((sum, r) => sum + r.remaining, 0);
 
   return (
@@ -461,7 +461,7 @@ export default function Salaries() {
                     <td className="py-2.5 text-emerald-600">
                       {row.bonuses_total > 0 ? `+ ${formatEGP(row.bonuses_total)}` : "—"}
                     </td>
-                    <td className="py-2.5 font-bold text-primary-dark">{formatEGP(row.net_pay)}</td>
+                    <td className="py-2.5 font-bold text-primary-dark">{formatEGP(row.taken_total)}</td>
                     <td className={`py-2.5 font-bold ${row.remaining > 0 ? "text-rose-600" : "text-slate-400"}`}>
                       {formatEGP(row.remaining)}
                     </td>

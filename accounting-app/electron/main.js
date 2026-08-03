@@ -1,5 +1,7 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const path = require("path");
+const fs = require("fs");
+const os = require("os");
 const { initDatabase } = require("./db");
 const { registerIpcHandlers } = require("./ipc");
 const { autoUpdater } = require("electron-updater");
@@ -12,6 +14,8 @@ const isDev = !app.isPackaged;
 const iconPath = isDev
   ? path.join(__dirname, "..", "public", "logo.png")
   : path.join(__dirname, "..", "dist", "logo.png");
+
+let mainWindow = null;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -27,6 +31,10 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
     },
   });
+  mainWindow = win;
+  win.on("closed", () => {
+    if (mainWindow === win) mainWindow = null;
+  });
 
   if (isDev) {
     win.loadURL("http://localhost:5173");
@@ -34,6 +42,24 @@ function createWindow() {
     win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
 }
+
+// Electron مفيهوش شاشة "معاينة قبل الطباعة" زي المتصفحات العادية —
+// لو استخدمنا window.print() هيحاول يفتح نافذة معاينة داخلية بتحتاج
+// إضافة plugin مش متاحة، فبتظهر رسالة خطأ. الحل: نولّد PDF فعلي من
+// نفس الصفحة وبنفس تنسيق الطباعة، ونفتحه في برنامج عرض PDF الافتراضي
+// عند المستخدم — ده بالظبط "المعاينة قبل الطباعة"، وبعدين هو يقدر
+// يطبع من هناك عادي.
+ipcMain.handle("print:preview", async () => {
+  if (!mainWindow) return;
+  const pdfBuffer = await mainWindow.webContents.printToPDF({
+    printBackground: true,
+    pageSize: "A4",
+    margins: { marginType: "default" },
+  });
+  const tmpPath = path.join(os.tmpdir(), `albunyan-print-${Date.now()}.pdf`);
+  fs.writeFileSync(tmpPath, pdfBuffer);
+  await shell.openPath(tmpPath);
+});
 
 // تحديث تلقائي: كل ما نصدر نسخة جديدة على GitHub Releases، البرنامج بيكتشفها
 // لوحده، بينزّلها في الخلفية من غير ما يوقف شغل المستخدم، وبيثبّتها تلقائيًا

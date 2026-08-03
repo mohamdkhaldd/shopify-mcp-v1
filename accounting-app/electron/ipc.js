@@ -9,8 +9,10 @@ function computeDayValue(log) {
   if (log.is_paid_leave) return 0;
   const dayRate = log.day_rate ?? 0;
   const hourlyRate = dayRate / 8;
-  const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - (log.base_hours ?? 0));
-  return dayRate + overtimeHours * hourlyRate;
+  // فوق ساعات الأساس بيزود، وتحتها بيخصم بنفس النسبة — قيمة المعدة (مش
+  // مرتب السائق نفسه) بتتناسب فعليًا مع عدد الساعات الحقيقي.
+  const diffHours = (log.actual_hours ?? 0) - (log.base_hours ?? 0);
+  return dayRate + diffHours * hourlyRate;
 }
 
 // مرتب السائق مبني على سعره الثابت المسجل في الإعدادات، مش على أي رقم متكتب
@@ -22,6 +24,21 @@ function computeDriverWageValue(log, employeeRate) {
   const hourlyRate = employeeRate / 8;
   const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - (log.base_hours ?? 0));
   return employeeRate + overtimeHours * hourlyRate;
+}
+
+// نوع الأجر والسعر بتاع أي موظف في شهر معيّن — بياخد أحدث سطر تاريخ ساري
+// وقت الشهر ده (مش أحدث تعديل عالإطلاق)، عشان تعديل المرتب دلوقتي ميغيرش
+// حساب شهور فاتت. لو مفيش تاريخ مسجل (حالة نادرة)، بيرجع القيم الحالية.
+function getEmployeeStateForMonth(db, employeeId, month) {
+  const row = db
+    .prepare(
+      `SELECT wage_type, rate, fixed_salary FROM employee_rate_history
+       WHERE employee_id = ? AND effective_month <= ? ORDER BY effective_month DESC LIMIT 1`
+    )
+    .get(employeeId, month);
+  if (row) return { wage_type: row.wage_type, rate: row.rate, fixed_salary: !!row.fixed_salary };
+  const emp = db.prepare("SELECT wage_type, rate, fixed_salary FROM employees WHERE id = ?").get(employeeId);
+  return { wage_type: emp.wage_type, rate: emp.rate, fixed_salary: !!emp.fixed_salary };
 }
 
 function daysInMonthList(monthKey) {
@@ -37,10 +54,11 @@ function daysInMonthList(monthKey) {
 // يوم تاني). أما الموظف اللي مرتبه ثابت مهما حصل (زي مكنيكي مش بيتسجل في
 // سركي أي معدة أصلًا) فبياخد مرتبه كامل من غير أي حساب حضور.
 function monthlyEmployeeGrossPay(db, emp, month) {
+  const state = getEmployeeStateForMonth(db, emp.id, month);
   const days = daysInMonthList(month);
-  const dailyRate = emp.rate / days.length;
-  if (emp.fixed_salary) {
-    return { grossPay: emp.rate, deductedDays: 0, dailyRate, logs: [] };
+  const dailyRate = state.rate / days.length;
+  if (state.fixed_salary) {
+    return { grossPay: state.rate, deductedDays: 0, dailyRate, logs: [] };
   }
   const logs = db
     .prepare("SELECT * FROM daily_logs WHERE role = 'driver' AND person_name = ? AND date LIKE ?")
@@ -51,7 +69,7 @@ function monthlyEmployeeGrossPay(db, emp, month) {
     if (accountedDates.has(date)) continue;
     deductedDays++;
   }
-  return { grossPay: emp.rate - deductedDays * dailyRate, deductedDays, dailyRate, logs };
+  return { grossPay: state.rate - deductedDays * dailyRate, deductedDays, dailyRate, logs };
 }
 
 // مرتب السائق بيتحط كمصروف حقيقي على المعدة ("مرتب سائق") بدل الاعتماد على
@@ -195,10 +213,19 @@ function registerIpcHandlers(db) {
   // --- Employees (drivers / salaried workers) ---
   ipcMain.handle("employees:list", () => db.prepare("SELECT * FROM employees ORDER BY name").all());
   ipcMain.handle("employees:create", (_e, { name, wage_type, rate, fixed_salary }) => {
-    const info = db
-      .prepare("INSERT INTO employees (name, wage_type, rate, fixed_salary) VALUES (?, ?, ?, ?)")
-      .run(name.trim(), wage_type, rate, fixed_salary ? 1 : 0);
-    return { id: info.lastInsertRowid, name: name.trim(), wage_type, rate, fixed_salary: !!fixed_salary };
+    const trimmedName = name.trim();
+    const tx = db.transaction(() => {
+      const info = db
+        .prepare("INSERT INTO employees (name, wage_type, rate, fixed_salary) VALUES (?, ?, ?, ?)")
+        .run(trimmedName, wage_type, rate, fixed_salary ? 1 : 0);
+      db.prepare(
+        `INSERT INTO employee_rate_history (employee_id, effective_month, wage_type, rate, fixed_salary)
+         VALUES (?, '0000-01', ?, ?, ?)`
+      ).run(info.lastInsertRowid, wage_type, rate, fixed_salary ? 1 : 0);
+      return info.lastInsertRowid;
+    });
+    const id = tx();
+    return { id, name: trimmedName, wage_type, rate, fixed_salary: !!fixed_salary };
   });
   ipcMain.handle("employees:delete", (_e, { id }) => {
     db.prepare("DELETE FROM employees WHERE id = ?").run(id);
@@ -206,10 +233,13 @@ function registerIpcHandlers(db) {
   });
   // بيسمح بتعديل السائق (زي زيادة مرتبه) من غير ما تحذفه وتضيفه تاني كسائق
   // جديد — لو اسمه اتغيّر، بنحدّث سجلات السركي القديمة اللي باسمه القديم
-  // عشان تفضل مربوطة بيه.
-  ipcMain.handle("employees:update", (_e, { id, name, wage_type, rate, fixed_salary }) => {
+  // عشان تفضل مربوطة بيه. التعديل بيتسجل كسطر تاريخ جديد ساري من الشهر
+  // المُختار (effective_month)، مش تعديل رجعي — الشهور اللي فاتت بتفضل
+  // محسوبة بالقيم اللي كانت سارية فيها فعلاً.
+  ipcMain.handle("employees:update", (_e, { id, name, wage_type, rate, fixed_salary, effective_month }) => {
     const trimmedName = name.trim();
     const existing = db.prepare("SELECT * FROM employees WHERE id = ?").get(id);
+    const month = effective_month || new Date().toISOString().slice(0, 7);
     const tx = db.transaction(() => {
       db.prepare("UPDATE employees SET name = ?, wage_type = ?, rate = ?, fixed_salary = ? WHERE id = ?").run(
         trimmedName,
@@ -224,6 +254,12 @@ function registerIpcHandlers(db) {
           existing.name
         );
       }
+      db.prepare(
+        `INSERT INTO employee_rate_history (employee_id, effective_month, wage_type, rate, fixed_salary)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(employee_id, effective_month) DO UPDATE SET
+           wage_type = excluded.wage_type, rate = excluded.rate, fixed_salary = excluded.fixed_salary`
+      ).run(id, month, wage_type, rate, fixed_salary ? 1 : 0);
     });
     tx();
     return db.prepare("SELECT * FROM employees WHERE id = ?").get(id);
@@ -512,15 +548,16 @@ function registerIpcHandlers(db) {
       const advancesTotal = advancesStmt.get(emp.id, month).total;
       const bonusesTotal = bonusesStmt.get(emp.id, month).total;
       const paidTotal = paidStmt.get(emp.id, month).total;
-      if (emp.wage_type === "monthly") {
+      const state = getEmployeeStateForMonth(db, emp.id, month);
+      if (state.wage_type === "monthly") {
         const { grossPay } = monthlyEmployeeGrossPay(db, emp, month);
-        const netPay = grossPay + bonusesTotal - advancesTotal;
+        const netPay = grossPay - advancesTotal;
         return {
           id: emp.id,
           name: emp.name,
-          wage_type: emp.wage_type,
-          rate: emp.rate,
-          fixed_salary: !!emp.fixed_salary,
+          wage_type: state.wage_type,
+          rate: state.rate,
+          fixed_salary: state.fixed_salary,
           days_worked: null,
           gross_pay: grossPay,
           advances_total: advancesTotal,
@@ -532,14 +569,14 @@ function registerIpcHandlers(db) {
         };
       }
       const logs = driverLogsStmt.all(emp.name, `${month}%`);
-      const grossPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
-      const netPay = grossPay + bonusesTotal - advancesTotal;
+      const grossPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, state.rate), 0);
+      const netPay = grossPay - advancesTotal;
       return {
         id: emp.id,
         name: emp.name,
-        wage_type: emp.wage_type,
-        rate: emp.rate,
-        fixed_salary: !!emp.fixed_salary,
+        wage_type: state.wage_type,
+        rate: state.rate,
+        fixed_salary: state.fixed_salary,
         days_worked: logs.length,
         gross_pay: grossPay,
         advances_total: advancesTotal,
@@ -573,11 +610,12 @@ function registerIpcHandlers(db) {
       .prepare("SELECT * FROM salary_payments WHERE employee_id = ? AND month = ? ORDER BY date")
       .all(employee_id, month);
     const paidTotal = payments.reduce((sum, p) => sum + p.amount, 0);
+    const state = getEmployeeStateForMonth(db, employee_id, month);
 
-    if (employee.wage_type === "monthly") {
+    if (state.wage_type === "monthly") {
       const { grossPay, dailyRate } = monthlyEmployeeGrossPay(db, employee, month);
       let days = [];
-      if (!employee.fixed_salary) {
+      if (!state.fixed_salary) {
         const logsWithEquipment = db
           .prepare(
             `SELECT dl.*, e.name AS equipment_name FROM daily_logs dl
@@ -595,7 +633,7 @@ function registerIpcHandlers(db) {
           day_value: dailyRate,
         }));
       }
-      const netPay = grossPay + bonusesTotal - advancesTotal;
+      const netPay = grossPay - advancesTotal;
       return {
         employee,
         days,
@@ -625,11 +663,11 @@ function registerIpcHandlers(db) {
       equipment_name: l.equipment_name,
       actual_hours: l.actual_hours,
       base_hours: l.base_hours,
-      day_rate: employee.rate,
-      day_value: computeDriverWageValue(l, employee.rate),
+      day_rate: state.rate,
+      day_value: computeDriverWageValue(l, state.rate),
     }));
     const grossPay = days.reduce((sum, d) => sum + d.day_value, 0);
-    const netPay = grossPay + bonusesTotal - advancesTotal;
+    const netPay = grossPay - advancesTotal;
 
     return {
       employee,
@@ -1329,15 +1367,16 @@ function registerIpcHandlers(db) {
       const bonuses = db
         .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM employee_bonuses WHERE employee_id = ? AND month = ?")
         .get(emp.id, month).total;
-      if (emp.wage_type === "monthly") {
+      const state = getEmployeeStateForMonth(db, emp.id, month);
+      if (state.wage_type === "monthly") {
         const { grossPay } = monthlyEmployeeGrossPay(db, emp, month);
-        payrollTotal += grossPay + bonuses - advances;
+        payrollTotal += grossPay - advances;
       } else {
         const gross = db
           .prepare("SELECT * FROM daily_logs WHERE role = 'driver' AND person_name = ? AND date LIKE ?")
           .all(emp.name, `${month}%`)
-          .reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
-        payrollTotal += gross + bonuses - advances;
+          .reduce((sum, l) => sum + computeDriverWageValue(l, state.rate), 0);
+        payrollTotal += gross - advances;
       }
     }
     const commissionRows = [];

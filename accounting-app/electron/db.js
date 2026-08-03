@@ -35,6 +35,19 @@ CREATE TABLE IF NOT EXISTS employees (
   fixed_salary INTEGER NOT NULL DEFAULT 0
 );
 
+-- بيسجل تاريخ الأجر/نوعه لكل موظف بدل ما يبقى رقم واحد بس — أي شهر بيتحسب
+-- بياخد السطر الساري وقتها (effective_month <= الشهر، أحدث واحد)، فتعديل
+-- المرتب دلوقتي مبيغيرش حساب الشهور اللي فاتت خالص.
+CREATE TABLE IF NOT EXISTS employee_rate_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  effective_month TEXT NOT NULL,
+  wage_type TEXT NOT NULL CHECK (wage_type IN ('daily', 'monthly')),
+  rate REAL NOT NULL,
+  fixed_salary INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (employee_id, effective_month)
+);
+
 CREATE TABLE IF NOT EXISTS employee_advances (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
@@ -320,6 +333,16 @@ function initDatabase() {
       db.exec(`ALTER TABLE ${table} ADD COLUMN month TEXT NOT NULL DEFAULT ''`);
     }
   }
+
+  // كل موظف ملوش أي سطر تاريخ لسه (إما موظف قديم قبل ما الميزة دي تتعمل، أو
+  // موظف جديد اتضاف من الإعدادات) بياخد سطر أساسي من "0000-01" بالقيم
+  // الحالية بتاعته، عشان أي شهر (فات أو جاي) يفضل بيحسب صح لحد ما حد يعدّل
+  // فعليًا من تاريخ معيّن.
+  db.exec(`
+    INSERT INTO employee_rate_history (employee_id, effective_month, wage_type, rate, fixed_salary)
+    SELECT id, '0000-01', wage_type, rate, fixed_salary FROM employees
+    WHERE id NOT IN (SELECT DISTINCT employee_id FROM employee_rate_history)
+  `);
 
   const accountCount = db.prepare("SELECT COUNT(*) AS c FROM treasury_accounts").get().c;
   if (accountCount === 0) {

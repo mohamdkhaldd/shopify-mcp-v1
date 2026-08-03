@@ -125,6 +125,15 @@ interface SalaryPaymentRow {
   note: string | null;
 }
 
+interface EmployeeRateHistoryRow {
+  id: number;
+  employee_id: number;
+  effective_month: string;
+  wage_type: "daily" | "monthly";
+  rate: number;
+  fixed_salary: boolean;
+}
+
 interface MockState {
   partners: { id: number; name: string; opening_balance: number }[];
   employees: { id: number; name: string; wage_type: "daily" | "monthly"; rate: number; fixed_salary: boolean }[];
@@ -144,6 +153,7 @@ interface MockState {
   supplier_payments: SupplierPaymentRow[];
   waste_entries: WasteEntryRow[];
   salary_payments: SalaryPaymentRow[];
+  employee_rate_history: EmployeeRateHistoryRow[];
   nextId: number;
 }
 
@@ -154,8 +164,8 @@ function computeDayValue(log: DailyLogRow): number {
   if (log.is_paid_leave) return 0;
   const dayRate = log.day_rate ?? 0;
   const hourlyRate = dayRate / 8;
-  const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - (log.base_hours ?? 0));
-  return dayRate + overtimeHours * hourlyRate;
+  const diffHours = (log.actual_hours ?? 0) - (log.base_hours ?? 0);
+  return dayRate + diffHours * hourlyRate;
 }
 
 // مرتب السائق مبني على سعره الثابت المسجل في الإعدادات، مش على أي رقم متكتب
@@ -257,6 +267,14 @@ function buildSeedState(): MockState {
     rate,
     fixed_salary,
   }));
+  const employee_rate_history: EmployeeRateHistoryRow[] = employees.map((emp) => ({
+    id: nextId++,
+    employee_id: emp.id,
+    effective_month: "0000-01",
+    wage_type: emp.wage_type,
+    rate: emp.rate,
+    fixed_salary: emp.fixed_salary,
+  }));
 
   const contractors = SEED_CONTRACTORS.map((name) => ({ id: nextId++, name, opening_balance: 0 }));
   const expense_categories = SEED_EXPENSE_CATEGORIES.map((name) => ({ id: nextId++, name }));
@@ -284,6 +302,7 @@ function buildSeedState(): MockState {
     supplier_payments: [],
     waste_entries: [],
     salary_payments: [],
+    employee_rate_history,
     nextId,
   };
 }
@@ -317,6 +336,19 @@ function loadState(): MockState {
     if (!state.waste_entries) state.waste_entries = [];
     if (!state.salary_payments) state.salary_payments = [];
     for (const p of state.salary_payments) if (p.month == null) p.month = p.date.slice(0, 7);
+    if (!state.employee_rate_history) state.employee_rate_history = [];
+    const employeesWithHistory = new Set(state.employee_rate_history.map((h) => h.employee_id));
+    for (const emp of state.employees) {
+      if (employeesWithHistory.has(emp.id)) continue;
+      state.employee_rate_history.push({
+        id: state.nextId++,
+        employee_id: emp.id,
+        effective_month: "0000-01",
+        wage_type: emp.wage_type,
+        rate: emp.rate,
+        fixed_salary: emp.fixed_salary,
+      });
+    }
     return state;
   }
   const seeded = buildSeedState();
@@ -330,6 +362,20 @@ function saveState(state: MockState) {
 
 export async function mockInvoke(channel: string, payload?: any): Promise<any> {
   const state = loadState();
+
+  // نوع الأجر والسعر بتاع أي موظف في شهر معيّن — بياخد أحدث سطر تاريخ ساري
+  // وقت الشهر ده، عشان تعديل المرتب دلوقتي ميغيرش حساب شهور فاتت.
+  function getEmployeeStateForMonth(employeeId: number, month: string) {
+    const rows = state.employee_rate_history
+      .filter((h) => h.employee_id === employeeId && h.effective_month <= month)
+      .sort((a, b) => b.effective_month.localeCompare(a.effective_month));
+    if (rows.length > 0) {
+      const row = rows[0];
+      return { wage_type: row.wage_type, rate: row.rate, fixed_salary: row.fixed_salary };
+    }
+    const emp = state.employees.find((e) => e.id === employeeId)!;
+    return { wage_type: emp.wage_type, rate: emp.rate, fixed_salary: emp.fixed_salary };
+  }
 
   if (channel === "dailyLogs:list") {
     return state.daily_logs
@@ -462,11 +508,12 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
   // بيتخصم من مرتبه — من غير أي استثناء تلقائي ليوم الجمعة، لازم المكتب
   // يعلّم بنفسه أي يوم عايز يتحسب مدفوع من غير شغل. أما الموظف اللي مرتبه
   // ثابت مهما حصل (زي مكنيكي مش بيتسجل في سركي أي معدة) فبياخد مرتبه كامل.
-  function monthlyEmployeeGrossPay(emp: { name: string; rate: number; fixed_salary?: boolean }, month: string) {
+  function monthlyEmployeeGrossPay(emp: { id: number; name: string; rate: number; fixed_salary?: boolean }, month: string) {
+    const rateState = getEmployeeStateForMonth(emp.id, month);
     const days = daysInMonthList(month);
-    const dailyRate = emp.rate / days.length;
-    if (emp.fixed_salary) {
-      return { grossPay: emp.rate, deductedDays: 0, dailyRate };
+    const dailyRate = rateState.rate / days.length;
+    if (rateState.fixed_salary) {
+      return { grossPay: rateState.rate, deductedDays: 0, dailyRate };
     }
     const logs = state.daily_logs.filter((l) => l.role === "driver" && l.person_name === emp.name && l.date.startsWith(month));
     const accountedDates = new Set(logs.map((l) => l.date));
@@ -475,7 +522,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       if (accountedDates.has(date)) continue;
       deductedDays++;
     }
-    return { grossPay: emp.rate - deductedDays * dailyRate, deductedDays, dailyRate };
+    return { grossPay: rateState.rate - deductedDays * dailyRate, deductedDays, dailyRate };
   }
 
   if (channel === "equipment:summary") {
@@ -577,15 +624,16 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
           .filter((p) => p.employee_id === emp.id && p.month === month)
           .reduce((sum, p) => sum + p.amount, 0);
 
-        if (emp.wage_type === "monthly") {
+        const rateState = getEmployeeStateForMonth(emp.id, month);
+        if (rateState.wage_type === "monthly") {
           const { grossPay } = monthlyEmployeeGrossPay(emp, month);
-          const netPay = grossPay + bonusesTotal - advancesTotal;
+          const netPay = grossPay - advancesTotal;
           return {
             id: emp.id,
             name: emp.name,
-            wage_type: emp.wage_type,
-            rate: emp.rate,
-            fixed_salary: !!emp.fixed_salary,
+            wage_type: rateState.wage_type,
+            rate: rateState.rate,
+            fixed_salary: rateState.fixed_salary,
             days_worked: null,
             gross_pay: grossPay,
             advances_total: advancesTotal,
@@ -600,14 +648,14 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
         const logs = state.daily_logs.filter(
           (l) => l.role === "driver" && l.person_name === emp.name && l.date.startsWith(month)
         );
-        const grossPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
-        const netPay = grossPay + bonusesTotal - advancesTotal;
+        const grossPay = logs.reduce((sum, l) => sum + computeDriverWageValue(l, rateState.rate), 0);
+        const netPay = grossPay - advancesTotal;
         return {
           id: emp.id,
           name: emp.name,
-          wage_type: emp.wage_type,
-          rate: emp.rate,
-          fixed_salary: !!emp.fixed_salary,
+          wage_type: rateState.wage_type,
+          rate: rateState.rate,
+          fixed_salary: rateState.fixed_salary,
           days_worked: logs.length,
           gross_pay: grossPay,
           advances_total: advancesTotal,
@@ -635,11 +683,12 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       .filter((p) => p.employee_id === employee_id && p.month === month)
       .sort((a, b) => a.date.localeCompare(b.date));
     const paidTotal = payments.reduce((sum, p) => sum + p.amount, 0);
+    const rateState = getEmployeeStateForMonth(employee_id, month);
 
-    if (employee.wage_type === "monthly") {
+    if (rateState.wage_type === "monthly") {
       const { grossPay, dailyRate } = monthlyEmployeeGrossPay(employee, month);
       let days: { date: string; equipment_name: string; actual_hours: number | null; base_hours: number | null; day_rate: number | null; day_value: number }[] = [];
-      if (!employee.fixed_salary) {
+      if (!rateState.fixed_salary) {
         const logs = state.daily_logs
           .filter((l) => l.role === "driver" && l.person_name === employee.name && l.date.startsWith(month))
           .sort((a, b) => a.date.localeCompare(b.date));
@@ -652,7 +701,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
           day_value: dailyRate,
         }));
       }
-      const netPay = grossPay + bonusesTotal - advancesTotal;
+      const netPay = grossPay - advancesTotal;
       return {
         employee,
         days,
@@ -677,11 +726,11 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       equipment_name: state.equipment.find((e) => e.id === l.equipment_id)?.name ?? "—",
       actual_hours: l.actual_hours,
       base_hours: l.base_hours,
-      day_rate: employee.rate,
-      day_value: computeDriverWageValue(l, employee.rate),
+      day_rate: rateState.rate,
+      day_value: computeDriverWageValue(l, rateState.rate),
     }));
     const grossPay = days.reduce((sum, d) => sum + d.day_value, 0);
-    const netPay = grossPay + bonusesTotal - advancesTotal;
+    const netPay = grossPay - advancesTotal;
 
     return {
       employee,
@@ -1339,17 +1388,15 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       const advances = state.employee_advances
         .filter((a) => a.employee_id === emp.id && a.month === month)
         .reduce((sum, a) => sum + a.amount, 0);
-      const bonuses = state.employee_bonuses
-        .filter((b) => b.employee_id === emp.id && b.month === month)
-        .reduce((sum, b) => sum + b.amount, 0);
-      if (emp.wage_type === "monthly") {
+      const rateState = getEmployeeStateForMonth(emp.id, month);
+      if (rateState.wage_type === "monthly") {
         const { grossPay } = monthlyEmployeeGrossPay(emp, month);
-        payrollTotal += grossPay + bonuses - advances;
+        payrollTotal += grossPay - advances;
       } else {
         const gross = state.daily_logs
           .filter((l) => l.role === "driver" && l.person_name === emp.name && l.date.startsWith(month))
-          .reduce((sum, l) => sum + computeDriverWageValue(l, emp.rate), 0);
-        payrollTotal += gross + bonuses - advances;
+          .reduce((sum, l) => sum + computeDriverWageValue(l, rateState.rate), 0);
+        payrollTotal += gross - advances;
       }
     }
 
@@ -1574,6 +1621,22 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { contractorPayments, totalIncoming };
   }
 
+  if (channel === "employees:create") {
+    const id = state.nextId++;
+    const record = { id, name: payload.name.trim(), wage_type: payload.wage_type, rate: payload.rate, fixed_salary: !!payload.fixed_salary };
+    state.employees.push(record);
+    state.employee_rate_history.push({
+      id: state.nextId++,
+      employee_id: id,
+      effective_month: "0000-01",
+      wage_type: record.wage_type,
+      rate: record.rate,
+      fixed_salary: record.fixed_salary,
+    });
+    saveState(state);
+    return record;
+  }
+
   if (channel === "employees:update") {
     const employee = state.employees.find((e) => e.id === payload.id)!;
     const trimmedName = payload.name.trim();
@@ -1586,6 +1649,25 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     employee.wage_type = payload.wage_type;
     employee.rate = payload.rate;
     employee.fixed_salary = !!payload.fixed_salary;
+
+    const effectiveMonth: string = payload.effective_month || new Date().toISOString().slice(0, 7);
+    const existingHistory = state.employee_rate_history.find(
+      (h) => h.employee_id === payload.id && h.effective_month === effectiveMonth
+    );
+    if (existingHistory) {
+      existingHistory.wage_type = employee.wage_type;
+      existingHistory.rate = employee.rate;
+      existingHistory.fixed_salary = employee.fixed_salary;
+    } else {
+      state.employee_rate_history.push({
+        id: state.nextId++,
+        employee_id: payload.id,
+        effective_month: effectiveMonth,
+        wage_type: employee.wage_type,
+        rate: employee.rate,
+        fixed_salary: employee.fixed_salary,
+      });
+    }
     saveState(state);
     return employee;
   }

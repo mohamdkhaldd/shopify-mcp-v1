@@ -1,7 +1,19 @@
 export default function PrintButton() {
+  async function handlePrint() {
+    if (window.api) {
+      try {
+        await window.api.invoke("print:preview");
+        return;
+      } catch {
+        // fall through to browser printing as a fallback
+      }
+    }
+    window.print();
+  }
+
   return (
     <button
-      onClick={() => window.print()}
+      onClick={handlePrint}
       className="no-print flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold bg-white text-slate-600 hover:bg-primary-light hover:text-primary-dark shadow-card transition-colors"
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
