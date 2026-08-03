@@ -27,6 +27,7 @@ interface RowDraft {
   person_name: string;
   actual_hours: string;
   base_hours: string;
+  overtime_hours: string;
   day_rate: string;
   is_paid_leave: boolean;
   fixed_value: string;
@@ -42,6 +43,7 @@ function emptyRow(): RowDraft {
     person_name: "",
     actual_hours: "",
     base_hours: "8",
+    overtime_hours: "",
     day_rate: "",
     is_paid_leave: false,
     fixed_value: "",
@@ -50,6 +52,16 @@ function emptyRow(): RowDraft {
     day_value: 0,
     saving: false,
   };
+}
+
+// عدد ساعات الأوفر تايم بيتحسب دايمًا من الفرق بين الساعات الفعلية والأساسية
+// — الخانة دي مجرد طريقة تانية أسهل لملء "الساعات الفعلية" (أساسي + إضافي)
+// بدل ما تجمعهم في دماغك، مش قيمة منفصلة متخزنة لوحدها.
+function overtimeFromHours(actualHours: string, baseHours: string): string {
+  const actual = Number(actualHours) || 0;
+  const base = Number(baseHours) || 0;
+  const overtime = actual - base;
+  return overtime > 0 ? String(overtime) : "";
 }
 
 export default function DailyLogTable({
@@ -97,11 +109,14 @@ export default function DailyLogTable({
   }, [dates]);
 
   function draftFromLog(log: DailyLog): RowDraft {
+    const actual_hours = log.actual_hours?.toString() ?? "";
+    const base_hours = log.base_hours?.toString() ?? "8";
     return {
       id: log.id,
       person_name: log.person_name,
-      actual_hours: log.actual_hours?.toString() ?? "",
-      base_hours: log.base_hours?.toString() ?? "8",
+      actual_hours,
+      base_hours,
+      overtime_hours: overtimeFromHours(actual_hours, base_hours),
       day_rate: log.day_rate?.toString() ?? "",
       is_paid_leave: log.is_paid_leave ?? false,
       fixed_value: log.fixed_value?.toString() ?? "",
@@ -118,6 +133,22 @@ export default function DailyLogTable({
 
   function updateRow(date: string, patch: Partial<RowDraft>) {
     setRows((prev) => ({ ...prev, [date]: { ...prev[date], ...patch } }));
+  }
+
+  // خانة الأوفر تايم بديل أسهل لكتابة "الساعات الفعلية" في يوم زاد فيه —
+  // بيحسب الساعات الفعلية = الأساسية + الإضافية تلقائيًا بدل ما تجمعهم بنفسك.
+  function handleOvertimeChange(date: string, value: string) {
+    const row = rows[date] ?? emptyRow();
+    const base = Number(row.base_hours) || 0;
+    const overtime = Number(value) || 0;
+    updateRow(date, { overtime_hours: value, actual_hours: String(base + overtime) });
+  }
+
+  // تعديل الساعات الفعلية مباشرة (يوم اشتغل أقل من الأساسي مثلاً) بيصفّر
+  // خانة الأوفر تايم عشان الاتنين ميفضلوش متناقضين.
+  function handleActualHoursChange(date: string, value: string) {
+    const row = rows[date] ?? emptyRow();
+    updateRow(date, { actual_hours: value, overtime_hours: overtimeFromHours(value, row.base_hours) });
   }
 
   function handlePersonChange(date: string, name: string) {
@@ -261,6 +292,7 @@ export default function DailyLogTable({
   }
 
   const monthTotal = Object.values(rows).reduce((sum, r) => sum + (r.id ? r.day_value : 0), 0);
+  const monthOvertimeHours = Object.values(rows).reduce((sum, r) => sum + (r.id ? Number(r.overtime_hours) || 0 : 0), 0);
 
   if (loading) {
     return <div className="bg-white rounded-card shadow-card p-5 text-sm text-slate-400">جاري التحميل...</div>;
@@ -367,6 +399,7 @@ export default function DailyLogTable({
               {mode === "hours" ? (
                 <>
                   <th className="text-start font-semibold py-2">الساعات الفعلية</th>
+                  <th className="text-start font-semibold py-2">أوفر تايم</th>
                   <th className="text-start font-semibold py-2">الساعات الأساسية</th>
                   <th className="text-start font-semibold py-2">اليومية</th>
                   {role === "driver" && (
@@ -438,9 +471,22 @@ export default function DailyLogTable({
                           min="0"
                           step="0.5"
                           value={row.actual_hours}
-                          onChange={(e) => updateRow(date, { actual_hours: e.target.value })}
+                          onChange={(e) => handleActualHoursChange(date, e.target.value)}
                           onBlur={() => saveRow(date)}
                           className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        />
+                      </td>
+                      <td className="py-1.5">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          placeholder="—"
+                          value={row.overtime_hours}
+                          onChange={(e) => handleOvertimeChange(date, e.target.value)}
+                          onBlur={() => saveRow(date)}
+                          disabled={row.is_paid_leave}
+                          className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       </td>
                       <td className="py-1.5">
@@ -524,6 +570,16 @@ export default function DailyLogTable({
             })}
           </tbody>
           <tfoot>
+            {mode === "hours" && (
+              <tr>
+                <td colSpan={2} className="pt-3 text-sm font-bold text-slate-700">
+                  إجمالي الأوفر تايم
+                </td>
+                <td colSpan={role === "driver" ? 5 : 4} className="pt-3 text-sm font-bold text-slate-600">
+                  {monthOvertimeHours} ساعة
+                </td>
+              </tr>
+            )}
             <tr>
               <td
                 colSpan={mode === "hours" ? (role === "driver" ? 7 : 6) : 4}
