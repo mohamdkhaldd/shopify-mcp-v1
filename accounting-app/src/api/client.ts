@@ -11,6 +11,7 @@ import {
   Equipment,
   EmployeeAdvance,
   EmployeeBonus,
+  EmployeeDeduction,
   EquipmentSummary,
   ExpenseCategory,
   HassanBalance,
@@ -127,6 +128,14 @@ export const employeeBonusesApi = {
   create: (bonus: Omit<EmployeeBonus, "id">): Promise<EmployeeBonus> =>
     invoke("employeeBonuses:create", bonus),
   remove: (id: number): Promise<void> => invoke("employeeBonuses:delete", { id }),
+};
+
+export const employeeDeductionsApi = {
+  list: (employee_id: number, month: string): Promise<EmployeeDeduction[]> =>
+    invoke("employeeDeductions:list", { employee_id, month }),
+  create: (deduction: Omit<EmployeeDeduction, "id">): Promise<EmployeeDeduction> =>
+    invoke("employeeDeductions:create", deduction),
+  remove: (id: number): Promise<void> => invoke("employeeDeductions:delete", { id }),
 };
 
 export const payrollApi = {

@@ -68,6 +68,17 @@ CREATE TABLE IF NOT EXISTS employee_bonuses (
   note TEXT
 );
 
+-- خصم من صافي المرتب المستحق (زي غرامة تأخير أو تلفية) — مفيش فلوس بتتحرك
+-- فعليًا زي السلفة، فمالوش أثر في الصادر ولا الخزنة، وبس بيقلل الباقي.
+CREATE TABLE IF NOT EXISTS employee_deductions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  month TEXT NOT NULL DEFAULT '',
+  date TEXT NOT NULL,
+  amount REAL NOT NULL,
+  reason TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS contractors (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,

@@ -3,7 +3,7 @@ import MonthPicker from "../components/equipment/MonthPicker";
 import Icon from "../components/Icon";
 import PrintButton from "../components/PrintButton";
 import { PrintSignoff } from "../components/PrintSignoff";
-import { employeeAdvancesApi, employeeBonusesApi, payrollApi, salaryPaymentsApi } from "../api/client";
+import { employeeAdvancesApi, employeeBonusesApi, employeeDeductionsApi, payrollApi, salaryPaymentsApi } from "../api/client";
 import { PaymentMethod, PayrollDetail, PayrollRow } from "../api/types";
 import { currentMonthKey, monthLabel } from "../utils/months";
 import { formatEGP } from "../utils/format";
@@ -34,6 +34,9 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
   const [bonusAmount, setBonusAmount] = useState("");
   const [bonusMethod, setBonusMethod] = useState<PaymentMethod>("cash");
   const [bonusNote, setBonusNote] = useState("");
+  const [deductionDate, setDeductionDate] = useState(new Date().toISOString().slice(0, 10));
+  const [deductionAmount, setDeductionAmount] = useState("");
+  const [deductionReason, setDeductionReason] = useState("");
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
@@ -98,6 +101,28 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
     onChanged();
   }
 
+  async function handleAddDeduction(e: FormEvent) {
+    e.preventDefault();
+    if (!deductionAmount || !deductionReason) return;
+    await employeeDeductionsApi.create({
+      employee_id: row.id,
+      month,
+      date: deductionDate,
+      amount: Number(deductionAmount),
+      reason: deductionReason,
+    });
+    setDeductionAmount("");
+    setDeductionReason("");
+    await refresh();
+    onChanged();
+  }
+
+  async function handleDeleteDeduction(id: number) {
+    await employeeDeductionsApi.remove(id);
+    await refresh();
+    onChanged();
+  }
+
   async function handleAddPayment(e: FormEvent) {
     e.preventDefault();
     if (!payAmount) return;
@@ -123,7 +148,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
   if (!detail) {
     return (
       <tr>
-        <td colSpan={8} className="px-4 py-4 text-sm text-slate-400">
+        <td colSpan={9} className="px-4 py-4 text-sm text-slate-400">
           جاري التحميل...
         </td>
       </tr>
@@ -132,7 +157,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
 
   return (
     <tr>
-      <td colSpan={8} className="bg-slate-50 px-4 py-5 rounded-xl">
+      <td colSpan={9} className="bg-slate-50 px-4 py-5 rounded-xl">
         <div className="bg-white rounded-card shadow-card p-5 max-w-2xl">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
             <div>
@@ -147,7 +172,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-2.5 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mb-4">
             <div className="text-center bg-primary-light rounded-xl py-2.5">
               <div className="text-xs text-slate-500">المرتب من العمل</div>
               <div className="font-bold text-slate-800">{formatEGP(detail.grossPay)}</div>
@@ -159,6 +184,10 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
             <div className="text-center bg-emerald-50 rounded-xl py-2.5">
               <div className="text-xs text-slate-500">الحافز</div>
               <div className="font-bold text-emerald-600">{formatEGP(detail.bonusesTotal)}</div>
+            </div>
+            <div className="text-center bg-rose-50 rounded-xl py-2.5">
+              <div className="text-xs text-slate-500">الخصم</div>
+              <div className="font-bold text-rose-600">{formatEGP(detail.deductionsTotal)}</div>
             </div>
             <div className="text-center bg-primary rounded-xl py-2.5">
               <div className="text-xs text-white/80">الإجمالي</div>
@@ -384,6 +413,51 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
             </form>
           </div>
 
+          <div className="mt-4">
+            <div className="text-xs font-bold text-slate-500 mb-1.5">الخصم</div>
+            {detail.deductions.length > 0 && (
+              <ul className="space-y-1 mb-2">
+                {detail.deductions.map((d) => (
+                  <li key={d.id} className="flex items-center justify-between text-sm">
+                    <span className="text-slate-600">
+                      {d.date} — {formatEGP(d.amount)} <span className="text-slate-400">({d.reason})</span>
+                    </span>
+                    <button onClick={() => handleDeleteDeduction(d.id)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
+                      حذف
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form onSubmit={handleAddDeduction} className="no-print flex flex-wrap items-end gap-2">
+              <input
+                type="date"
+                value={deductionDate}
+                onChange={(e) => setDeductionDate(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <input
+                type="number"
+                min="0"
+                step="any"
+                placeholder="القيمة"
+                value={deductionAmount}
+                onChange={(e) => setDeductionAmount(e.target.value)}
+                className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <input
+                type="text"
+                placeholder="سبب الخصم"
+                value={deductionReason}
+                onChange={(e) => setDeductionReason(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <button type="submit" className="bg-rose-600 text-white rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-rose-700">
+                إضافة خصم
+              </button>
+            </form>
+          </div>
+
           <PrintSignoff />
         </div>
       </td>
@@ -435,6 +509,7 @@ export default function Salaries() {
                 <th className="text-start font-semibold py-2">المرتب من العمل</th>
                 <th className="text-start font-semibold py-2">السلف</th>
                 <th className="text-start font-semibold py-2">الحافز</th>
+                <th className="text-start font-semibold py-2">الخصم</th>
                 <th className="text-start font-semibold py-2">الإجمالي</th>
                 <th className="text-start font-semibold py-2">الباقي</th>
               </tr>
@@ -461,6 +536,9 @@ export default function Salaries() {
                     <td className="py-2.5 text-emerald-600">
                       {row.bonuses_total > 0 ? `+ ${formatEGP(row.bonuses_total)}` : "—"}
                     </td>
+                    <td className="py-2.5 text-rose-500">
+                      {row.deductions_total > 0 ? `- ${formatEGP(row.deductions_total)}` : "—"}
+                    </td>
                     <td className="py-2.5 font-bold text-primary-dark">{formatEGP(row.taken_total)}</td>
                     <td className={`py-2.5 font-bold ${row.remaining > 0 ? "text-rose-600" : "text-slate-400"}`}>
                       {formatEGP(row.remaining)}
@@ -472,7 +550,7 @@ export default function Salaries() {
             </tbody>
             <tfoot className="no-print">
               <tr>
-                <td colSpan={6} className="pt-3 text-sm font-bold text-slate-700">
+                <td colSpan={7} className="pt-3 text-sm font-bold text-slate-700">
                   إجمالي صافي الرواتب
                 </td>
                 <td className="pt-3 text-sm font-bold text-primary-dark">{formatEGP(totalNet)}</td>

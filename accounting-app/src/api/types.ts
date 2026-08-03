@@ -113,6 +113,15 @@ export interface EmployeeBonus {
   note: string | null;
 }
 
+export interface EmployeeDeduction {
+  id: number;
+  employee_id: number;
+  month: string;
+  date: string;
+  amount: number;
+  reason: string;
+}
+
 export interface SalaryPayment {
   id: number;
   employee_id: number;
@@ -133,6 +142,7 @@ export interface PayrollRow {
   gross_pay: number;
   advances_total: number;
   bonuses_total: number;
+  deductions_total: number;
   net_pay: number;
   paid_total: number;
   taken_total: number;
@@ -153,10 +163,12 @@ export interface PayrollDetail {
   days: PayrollDayEntry[];
   advances: EmployeeAdvance[];
   bonuses: EmployeeBonus[];
+  deductions: EmployeeDeduction[];
   payments: SalaryPayment[];
   grossPay: number;
   advancesTotal: number;
   bonusesTotal: number;
+  deductionsTotal: number;
   paidTotal: number;
   takenTotal: number;
   netPay: number;
