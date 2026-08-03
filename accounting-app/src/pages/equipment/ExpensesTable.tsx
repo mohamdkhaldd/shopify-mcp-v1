@@ -28,6 +28,9 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [date, setDate] = useState(() => defaultDateForMonth(month));
+  const [note, setNote] = useState("");
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const refresh = () => monthlyExpensesApi.list(equipmentId, month).then(setExpenses);
   const refreshDriverSalary = () =>
@@ -56,10 +59,26 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
       category_id: Number(categoryId),
       amount: Number(amount),
       payment_method: paymentMethod,
+      note: note.trim() || null,
+      receipt_image: receiptImage,
     });
     setAmount("");
+    setNote("");
+    setReceiptImage(null);
     await refresh();
     onChanged?.();
+  }
+
+  // بيحول صورة الفاتورة لنص (data URL) عشان تتخزن مع بيانات المصروف في نفس
+  // القاعدة، من غير ما نحتاج نتعامل مع ملفات منفصلة على الجهاز.
+  function handleImageSelect(file: File | null) {
+    if (!file) {
+      setReceiptImage(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setReceiptImage(reader.result as string);
+    reader.readAsDataURL(file);
   }
 
   async function handleDelete(id: number) {
@@ -125,6 +144,25 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
             ))}
           </select>
         </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">بيان</label>
+          <input
+            type="text"
+            placeholder="مثلاً: قطعة الغيار اللي اتشترت"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">صورة الفاتورة (اختياري)</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => handleImageSelect(e.target.files?.[0] ?? null)}
+            className="text-xs w-40"
+          />
+        </div>
         <button
           type="submit"
           className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold hover:bg-primary-dark transition-colors"
@@ -132,6 +170,12 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
           إضافة
         </button>
       </form>
+
+      {previewImage && (
+        <div className="no-print fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setPreviewImage(null)}>
+          <img src={previewImage} alt="صورة الفاتورة" className="max-w-full max-h-full rounded-xl shadow-2xl" />
+        </div>
+      )}
 
       {loading ? (
         <div className="text-sm text-slate-400">جاري التحميل...</div>
@@ -146,6 +190,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
                 <th className="text-start font-semibold py-2">نوع المصروف</th>
                 <th className="text-start font-semibold py-2">القيمة</th>
                 <th className="text-start font-semibold py-2">طريقة الدفع</th>
+                <th className="text-start font-semibold py-2">بيان</th>
                 <th></th>
               </tr>
             </thead>
@@ -156,6 +201,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
                   <td className="py-2 font-semibold text-slate-700">مرتب سائق: {d.name}</td>
                   <td className="py-2 text-slate-600">{formatEGP(d.amount)}</td>
                   <td className="py-2 text-slate-400">—</td>
+                  <td className="py-2 text-slate-400">—</td>
                   <td className="py-2"></td>
                 </tr>
               ))}
@@ -165,6 +211,18 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
                   <td className="py-2 font-semibold text-slate-700">{exp.category_name ?? "—"}</td>
                   <td className="py-2 text-slate-600">{formatEGP(exp.amount)}</td>
                   <td className="py-2 text-slate-500">{paymentMethodLabel(exp.payment_method)}</td>
+                  <td className="py-2 text-slate-500">
+                    {exp.note && <span>{exp.note}</span>}
+                    {exp.receipt_image && (
+                      <button
+                        onClick={() => setPreviewImage(exp.receipt_image)}
+                        className="no-print text-primary hover:text-primary-dark font-semibold ms-1.5 underline"
+                      >
+                        عرض الفاتورة
+                      </button>
+                    )}
+                    {!exp.note && !exp.receipt_image && "—"}
+                  </td>
                   <td className="py-2">
                     <button
                       onClick={() => handleDelete(exp.id)}
@@ -180,7 +238,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
               <tr>
                 <td className="pt-3 text-sm font-bold text-slate-700" colSpan={2}>إجمالي الشهر</td>
                 <td className="pt-3 text-sm font-bold text-rose-600">{formatEGP(total)}</td>
-                <td colSpan={2}></td>
+                <td colSpan={3}></td>
               </tr>
             </tfoot>
           </table>

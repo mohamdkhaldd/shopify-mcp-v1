@@ -66,6 +66,8 @@ export interface MonthlyExpense {
   category_name: string | null;
   amount: number;
   payment_method: string | null;
+  note: string | null;
+  receipt_image: string | null;
 }
 
 export interface PartnerDistributionRow {

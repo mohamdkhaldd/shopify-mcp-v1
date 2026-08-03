@@ -29,6 +29,8 @@ interface MonthlyExpenseRow {
   category_id: number | null;
   amount: number;
   payment_method: string | null;
+  note: string | null;
+  receipt_image: string | null;
 }
 
 interface EmployeeAdvanceRow {
@@ -327,6 +329,10 @@ function loadState(): MockState {
     for (const c of state.contractors) if (c.opening_balance == null) c.opening_balance = 0;
     for (const e of state.employees) if (e.fixed_salary == null) e.fixed_salary = false;
     for (const e of state.monthly_expenses) if (e.date === undefined) e.date = null;
+    for (const e of state.monthly_expenses) {
+      if (e.note === undefined) e.note = null;
+      if (e.receipt_image === undefined) e.receipt_image = null;
+    }
     for (const l of state.daily_logs) if (l.note === undefined) l.note = null;
     for (const eq of state.equipment) if (eq.purchase_price == null) eq.purchase_price = 0;
     if (!state.employee_advances) state.employee_advances = [];

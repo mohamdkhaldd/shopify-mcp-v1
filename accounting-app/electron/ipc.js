@@ -420,10 +420,10 @@ function registerIpcHandlers(db) {
   ipcMain.handle("monthlyExpenses:create", (_e, expense) => {
     const info = db
       .prepare(
-        `INSERT INTO monthly_expenses (equipment_id, month, date, category_id, amount, payment_method)
-         VALUES (@equipment_id, @month, @date, @category_id, @amount, @payment_method)`
+        `INSERT INTO monthly_expenses (equipment_id, month, date, category_id, amount, payment_method, note, receipt_image)
+         VALUES (@equipment_id, @month, @date, @category_id, @amount, @payment_method, @note, @receipt_image)`
       )
-      .run({ ...expense, date: expense.date ?? null });
+      .run({ ...expense, date: expense.date ?? null, note: expense.note ?? null, receipt_image: expense.receipt_image ?? null });
     return db
       .prepare(
         `SELECT me.*, ec.name AS category_name FROM monthly_expenses me

@@ -141,7 +141,9 @@ CREATE TABLE IF NOT EXISTS monthly_expenses (
   date TEXT,
   category_id INTEGER REFERENCES expense_categories(id),
   amount REAL NOT NULL,
-  payment_method TEXT
+  payment_method TEXT,
+  note TEXT,
+  receipt_image TEXT
 );
 
 CREATE TABLE IF NOT EXISTS treasury_accounts (
@@ -331,6 +333,14 @@ function initDatabase() {
     .some((col) => col.name === "date");
   if (!monthlyExpensesHasDate) {
     db.exec("ALTER TABLE monthly_expenses ADD COLUMN date TEXT");
+  }
+
+  const monthlyExpensesColumns = db.prepare("PRAGMA table_info(monthly_expenses)").all();
+  if (!monthlyExpensesColumns.some((col) => col.name === "note")) {
+    db.exec("ALTER TABLE monthly_expenses ADD COLUMN note TEXT");
+  }
+  if (!monthlyExpensesColumns.some((col) => col.name === "receipt_image")) {
+    db.exec("ALTER TABLE monthly_expenses ADD COLUMN receipt_image TEXT");
   }
 
   const equipmentHasPurchasePrice = db
