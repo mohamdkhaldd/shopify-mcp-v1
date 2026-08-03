@@ -53,6 +53,7 @@ export interface DailyLog {
   is_paid_leave: boolean;
   fixed_value: number | null;
   hassan_commission: number | null;
+  note: string | null;
   day_value: number;
 }
 

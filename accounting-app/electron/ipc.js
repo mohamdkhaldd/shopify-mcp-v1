@@ -380,10 +380,11 @@ function registerIpcHandlers(db) {
       is_paid_leave: log.is_paid_leave ? 1 : 0,
       fixed_value: log.fixed_value ?? null,
       hassan_commission: log.hassan_commission ?? null,
+      note: log.note ?? null,
     };
     db.prepare(
-      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, fixed_value, hassan_commission)
-       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @fixed_value, @hassan_commission)
+      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, fixed_value, hassan_commission, note)
+       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @fixed_value, @hassan_commission, @note)
        ON CONFLICT(equipment_id, date, role) DO UPDATE SET
          person_name = excluded.person_name,
          actual_hours = excluded.actual_hours,
@@ -391,7 +392,8 @@ function registerIpcHandlers(db) {
          day_rate = excluded.day_rate,
          is_paid_leave = excluded.is_paid_leave,
          fixed_value = excluded.fixed_value,
-         hassan_commission = excluded.hassan_commission`
+         hassan_commission = excluded.hassan_commission,
+         note = excluded.note`
     ).run(params);
     const row = db
       .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ?")

@@ -31,6 +31,7 @@ interface RowDraft {
   is_paid_leave: boolean;
   fixed_value: string;
   hassan_commission: string;
+  note: string;
   day_value: number;
   saving: boolean;
 }
@@ -45,6 +46,7 @@ function emptyRow(): RowDraft {
     is_paid_leave: false,
     fixed_value: "",
     hassan_commission: "",
+    note: "",
     day_value: 0,
     saving: false,
   };
@@ -104,6 +106,7 @@ export default function DailyLogTable({
       is_paid_leave: log.is_paid_leave ?? false,
       fixed_value: log.fixed_value?.toString() ?? "",
       hassan_commission: log.hassan_commission?.toString() ?? "",
+      note: log.note ?? "",
       day_value: log.day_value,
       saving: false,
     };
@@ -131,10 +134,13 @@ export default function DailyLogTable({
     const row = { ...(rows[date] ?? emptyRow()), ...override };
     if (!row) return;
 
+    // بيان لوحده (يوم مشتغلش خالص، بس لازم السبب يتسجل) كافي يخلي الصف يتحفظ
+    // من غير ما يحتاج اسم أو سعر — مفيد بس في شيتي السركي والمقاول.
+    const hasNote = mode === "hours" && row.note.trim().length > 0;
     const hasContent =
       mode === "hours"
-        ? row.person_name && (row.day_rate || row.is_paid_leave)
-        : row.person_name && row.fixed_value;
+        ? Boolean(row.person_name && (row.day_rate || row.is_paid_leave)) || hasNote
+        : Boolean(row.person_name && row.fixed_value);
 
     if (!hasContent) {
       if (row.id) {
@@ -157,6 +163,7 @@ export default function DailyLogTable({
       is_paid_leave: row.is_paid_leave,
       fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
       hassan_commission: mode === "fixed" && row.hassan_commission ? Number(row.hassan_commission) : null,
+      note: row.note.trim() || null,
     });
     updateRow(date, { id: saved.id, day_value: saved.day_value, saving: false });
     onChanged?.();
@@ -199,6 +206,7 @@ export default function DailyLogTable({
         is_paid_leave: false,
         fixed_value: null,
         hassan_commission: null,
+        note: rows[date]?.note.trim() || null,
       });
     }
 
@@ -244,6 +252,7 @@ export default function DailyLogTable({
           is_paid_leave: row.is_paid_leave,
           fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
           hassan_commission: mode === "fixed" && row.hassan_commission ? Number(row.hassan_commission) : null,
+          note: row.note.trim() || null,
         });
       }
       await refresh();
@@ -365,6 +374,7 @@ export default function DailyLogTable({
                       <span className="no-print">إجازة مدفوعة</span>
                     </th>
                   )}
+                  <th className="text-start font-semibold py-2 min-w-[140px]">بيان</th>
                 </>
               ) : (
                 // القيمة والكوميشن قبل الخصم يفضلوا مخفيين وقت الطباعة — الشيت
@@ -469,6 +479,16 @@ export default function DailyLogTable({
                           )}
                         </td>
                       )}
+                      <td className="py-1.5">
+                        <input
+                          type="text"
+                          placeholder="لو مشتغلش، ليه؟"
+                          value={row.note}
+                          onChange={(e) => updateRow(date, { note: e.target.value })}
+                          onBlur={() => saveRow(date)}
+                          className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        />
+                      </td>
                     </>
                   ) : (
                     <>
@@ -506,7 +526,7 @@ export default function DailyLogTable({
           <tfoot>
             <tr>
               <td
-                colSpan={mode === "hours" ? (role === "driver" ? 6 : 5) : 4}
+                colSpan={mode === "hours" ? (role === "driver" ? 7 : 6) : 4}
                 className="pt-3 text-sm font-bold text-slate-700"
               >
                 إجمالي الشهر

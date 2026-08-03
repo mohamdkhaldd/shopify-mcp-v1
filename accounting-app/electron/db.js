@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS daily_logs (
   is_paid_leave INTEGER NOT NULL DEFAULT 0,
   fixed_value REAL,
   hassan_commission REAL,
+  note TEXT,
   UNIQUE (equipment_id, date, role)
 );
 
@@ -306,6 +307,14 @@ function initDatabase() {
     .some((col) => col.name === "is_paid_leave");
   if (!dailyLogsHasPaidLeave) {
     db.exec("ALTER TABLE daily_logs ADD COLUMN is_paid_leave INTEGER NOT NULL DEFAULT 0");
+  }
+
+  const dailyLogsHasNote = db
+    .prepare("PRAGMA table_info(daily_logs)")
+    .all()
+    .some((col) => col.name === "note");
+  if (!dailyLogsHasNote) {
+    db.exec("ALTER TABLE daily_logs ADD COLUMN note TEXT");
   }
 
   const employeesHasFixedSalary = db

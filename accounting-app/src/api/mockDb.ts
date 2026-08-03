@@ -18,6 +18,7 @@ interface DailyLogRow {
   is_paid_leave: boolean;
   fixed_value: number | null;
   hassan_commission: number | null;
+  note: string | null;
 }
 
 interface MonthlyExpenseRow {
@@ -326,6 +327,7 @@ function loadState(): MockState {
     for (const c of state.contractors) if (c.opening_balance == null) c.opening_balance = 0;
     for (const e of state.employees) if (e.fixed_salary == null) e.fixed_salary = false;
     for (const e of state.monthly_expenses) if (e.date === undefined) e.date = null;
+    for (const l of state.daily_logs) if (l.note === undefined) l.note = null;
     for (const eq of state.equipment) if (eq.purchase_price == null) eq.purchase_price = 0;
     if (!state.employee_advances) state.employee_advances = [];
     if (!state.employee_bonuses) state.employee_bonuses = [];
