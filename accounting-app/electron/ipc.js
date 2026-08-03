@@ -9,9 +9,13 @@ function computeDayValue(log) {
   if (log.is_paid_leave) return 0;
   const dayRate = log.day_rate ?? 0;
   const hourlyRate = dayRate / 8;
-  // فوق ساعات الأساس بيزود، وتحتها بيخصم بنفس النسبة — قيمة المعدة (مش
-  // مرتب السائق نفسه) بتتناسب فعليًا مع عدد الساعات الحقيقي.
-  const diffHours = (log.actual_hours ?? 0) - (log.base_hours ?? 0);
+  const baseHours = log.base_hours ?? 0;
+  // لو الساعات الفعلية متكتبتش خالص (لسه فاضية)، معناها يوم عادي كامل —
+  // نعتبرها زي الساعات الأساسية بالظبط (فرق = صفر)، مش صفر ساعة عمل (اللي
+  // كان هيصفّر القيمة بالغلط). فوق ساعات الأساس بيزود، وتحتها بيخصم بنفس
+  // النسبة — بس لما الساعات الفعلية تتكتب فعلاً.
+  const actualHours = log.actual_hours ?? baseHours;
+  const diffHours = actualHours - baseHours;
   return dayRate + diffHours * hourlyRate;
 }
 
@@ -377,6 +381,43 @@ function registerIpcHandlers(db) {
     return rows.map((row) => ({ ...row, day_value: computeDayValue(row) }));
   });
 
+  const OTHER_HOURS_ROLE = { driver: "contractor", contractor: "driver" };
+
+  // السركي والمقاول نفس اليوم ونفس الساعات فعليًا — الفرق بس السعر والشخص.
+  // فأي تعديل على الساعات/الأساسية/البيان في شيت السائق بينسخ نفسه على شيت
+  // المقاول لنفس المعدة واليوم من غير ما تدخلهم مرتين (ولو صف المقاول
+  // مالوش شخص/سعر لسه بيتعمله واحد فاضي جاهز يتحدد بس)، والعكس صحيح — من
+  // غير ما نلمس اسم الشخص ولا سعر اليوم بتاعه، ومن غير ما نمس إجازة السائق
+  // المدفوعة لأنها مفهوم خاص بمرتبه الشهري ومالهاش معنى عند المقاول.
+  function syncHoursToOtherRole(db, log) {
+    const otherRole = OTHER_HOURS_ROLE[log.role];
+    if (!otherRole) return;
+    const existing = db
+      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ?")
+      .get(log.equipment_id, log.date, otherRole);
+    const params = {
+      equipment_id: log.equipment_id,
+      date: log.date,
+      role: otherRole,
+      person_name: existing?.person_name ?? "",
+      actual_hours: log.actual_hours ?? null,
+      base_hours: log.base_hours ?? null,
+      day_rate: existing?.day_rate ?? null,
+      is_paid_leave: existing?.is_paid_leave ?? 0,
+      fixed_value: existing?.fixed_value ?? null,
+      hassan_commission: existing?.hassan_commission ?? null,
+      note: log.note ?? null,
+    };
+    db.prepare(
+      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, fixed_value, hassan_commission, note)
+       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @fixed_value, @hassan_commission, @note)
+       ON CONFLICT(equipment_id, date, role) DO UPDATE SET
+         actual_hours = excluded.actual_hours,
+         base_hours = excluded.base_hours,
+         note = excluded.note`
+    ).run(params);
+  }
+
   // One row per equipment/date/role — matches the spreadsheet's "one line per
   // day of the month" layout, so saving a day's cells overwrites that day's
   // row instead of appending a new one.
@@ -407,6 +448,7 @@ function registerIpcHandlers(db) {
          hassan_commission = excluded.hassan_commission,
          note = excluded.note`
     ).run(params);
+    syncHoursToOtherRole(db, log);
     const row = db
       .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ?")
       .get(log.equipment_id, log.date, log.role);
@@ -414,7 +456,17 @@ function registerIpcHandlers(db) {
   });
 
   ipcMain.handle("dailyLogs:delete", (_e, { id }) => {
+    const log = db.prepare("SELECT * FROM daily_logs WHERE id = ?").get(id);
     db.prepare("DELETE FROM daily_logs WHERE id = ?").run(id);
+    // يوم مشتغلش خالص في شيت — يبقى مشتغلش في التاني بردو (نفس اليوم بيتحذف
+    // من الاتنين، مش بس واحد).
+    if (log && OTHER_HOURS_ROLE[log.role]) {
+      db.prepare("DELETE FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ?").run(
+        log.equipment_id,
+        log.date,
+        OTHER_HOURS_ROLE[log.role]
+      );
+    }
     return { ok: true };
   });
 

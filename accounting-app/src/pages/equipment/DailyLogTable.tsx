@@ -22,6 +22,14 @@ interface DailyLogTableProps {
   onChanged?: () => void;
 }
 
+// الساعات مشتركة بين السركي والمقاول لنفس المعدة واليوم — لو يوم اتمسح من
+// شيت، بيتمسح من التاني بردو (السيرفر بيعمل ده تلقائيًا)، فلازم نحفظ نسخة
+// من الاتنين قبل المسح عشان Ctrl+Z يرجّعهم مع بعض بدل ما يرجّع نص الصورة.
+const OTHER_HOURS_ROLE: Partial<Record<DailyLogRole, DailyLogRole>> = {
+  driver: "contractor",
+  contractor: "driver",
+};
+
 interface RowDraft {
   id: number | null;
   person_name: string;
@@ -62,6 +70,12 @@ function overtimeFromHours(actualHours: string, baseHours: string): string {
   const base = Number(baseHours) || 0;
   const overtime = actual - base;
   return overtime > 0 ? String(overtime) : "";
+}
+
+// خانة فاضية معناها "الساعات متكتبتش" (يوم عادي كامل) — مش صفر ساعة عمل،
+// عشان محسوب القيمة يفضل يعتبرها يوم كامل لحد ما تتكتب فعلاً، مش يصفّرها.
+function hoursOrNull(value: string): number | null {
+  return value.trim() === "" ? null : Number(value) || 0;
 }
 
 export default function DailyLogTable({
@@ -135,6 +149,22 @@ export default function DailyLogTable({
     setRows((prev) => ({ ...prev, [date]: { ...prev[date], ...patch } }));
   }
 
+  function restoreDailyLog(log: DailyLog) {
+    return dailyLogsApi.upsert({
+      equipment_id: log.equipment_id,
+      date: log.date,
+      role: log.role,
+      person_name: log.person_name,
+      actual_hours: log.actual_hours,
+      base_hours: log.base_hours,
+      day_rate: log.day_rate,
+      is_paid_leave: log.is_paid_leave,
+      fixed_value: log.fixed_value,
+      hassan_commission: log.hassan_commission,
+      note: log.note,
+    });
+  }
+
   // خانة الأوفر تايم بديل أسهل لكتابة "الساعات الفعلية" في يوم زاد فيه —
   // بيحسب الساعات الفعلية = الأساسية + الإضافية تلقائيًا بدل ما تجمعهم بنفسك.
   function handleOvertimeChange(date: string, value: string) {
@@ -166,18 +196,38 @@ export default function DailyLogTable({
     if (!row) return;
 
     // بيان لوحده (يوم مشتغلش خالص، بس لازم السبب يتسجل) كافي يخلي الصف يتحفظ
-    // من غير ما يحتاج اسم أو سعر — مفيد بس في شيتي السركي والمقاول.
+    // من غير ما يحتاج اسم أو سعر — مفيد بس في شيتي السركي والمقاول. وكمان
+    // الساعات الفعلية لوحدها (اتكتبت مباشرة أو عن طريق خانة الأوفر تايم)
+    // كافية تحفظ الصف من غير شخص، عشان تقدر تدخل الساعات مرة واحدة وتسمع
+    // في الشيت التاني قبل ما تحدد السواق/المقاول وسعره.
     const hasNote = mode === "hours" && row.note.trim().length > 0;
+    const hasHours = mode === "hours" && row.actual_hours.trim() !== "";
     const hasContent =
       mode === "hours"
-        ? Boolean(row.person_name && (row.day_rate || row.is_paid_leave)) || hasNote
+        ? Boolean(row.person_name && (row.day_rate || row.is_paid_leave)) || hasNote || hasHours
         : Boolean(row.person_name && row.fixed_value);
 
     if (!hasContent) {
       if (row.id) {
+        // بيقرا الصف الأصلي من السيرفر قبل المسح — مش من الدرافت المحلي، لأنه
+        // ممكن يكون اتمسح منه الاسم فعلاً (زي هنا بالظبط) قبل ما onBlur يشتغل.
+        // الساعات مشتركة مع الشيت التاني (سركي/مقاول) — مسح اليوم هنا بيمسحه
+        // هناك بردو من السيرفر تلقائيًا، فلازم نحفظ نسخة من صف الشيت التاني
+        // قبل المسح عشان Ctrl+Z يرجّع الاتنين مع بعض.
+        const original = (await dailyLogsApi.list(equipmentId, month, role)).find((l) => l.date === date) ?? null;
+        const otherRole = OTHER_HOURS_ROLE[role];
+        const counterpart = otherRole
+          ? (await dailyLogsApi.list(equipmentId, month, otherRole)).find((l) => l.date === date) ?? null
+          : null;
         await dailyLogsApi.remove(row.id);
         updateRow(date, { id: null, day_value: 0 });
         onChanged?.();
+        pushUndo(`اتمسح يوم ${date.slice(-2)}`, async () => {
+          if (original) await restoreDailyLog(original);
+          if (counterpart) await restoreDailyLog(counterpart);
+          await refresh();
+          onChanged?.();
+        });
       }
       return;
     }
@@ -188,8 +238,8 @@ export default function DailyLogTable({
       date,
       role,
       person_name: row.person_name,
-      actual_hours: mode === "hours" && !row.is_paid_leave ? Number(row.actual_hours) || 0 : null,
-      base_hours: mode === "hours" && !row.is_paid_leave ? Number(row.base_hours) || 0 : null,
+      actual_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.actual_hours) : null,
+      base_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.base_hours) : null,
       day_rate: mode === "hours" ? Number(row.day_rate) || 0 : null,
       is_paid_leave: row.is_paid_leave,
       fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
@@ -260,6 +310,15 @@ export default function DailyLogTable({
     });
     if (targetDates.length === 0) return;
 
+    // الأيام دي هتتمسح من الشيت التاني (سركي/مقاول) بردو تلقائيًا، فلازم
+    // نحفظ نسخة من صفوفه هو كمان قبل المسح عشان Ctrl+Z يرجّع الاتنين.
+    const otherRole = OTHER_HOURS_ROLE[role];
+    const otherLogs = otherRole ? await dailyLogsApi.list(equipmentId, month, otherRole) : [];
+    const otherByDate = new Map(otherLogs.map((l) => [l.date, l]));
+    const counterpartSnapshot = targetDates
+      .map((date) => otherByDate.get(date))
+      .filter((l): l is DailyLog => !!l);
+
     const snapshot = targetDates.map((date) => ({ date, row: rows[date] }));
     setBulkClearing(true);
     for (const date of targetDates) {
@@ -277,8 +336,8 @@ export default function DailyLogTable({
           date,
           role,
           person_name: row.person_name,
-          actual_hours: mode === "hours" && !row.is_paid_leave ? Number(row.actual_hours) || 0 : null,
-          base_hours: mode === "hours" && !row.is_paid_leave ? Number(row.base_hours) || 0 : null,
+          actual_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.actual_hours) : null,
+          base_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.base_hours) : null,
           day_rate: mode === "hours" ? Number(row.day_rate) || 0 : null,
           is_paid_leave: row.is_paid_leave,
           fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
@@ -286,6 +345,7 @@ export default function DailyLogTable({
           note: row.note.trim() || null,
         });
       }
+      for (const log of counterpartSnapshot) await restoreDailyLog(log);
       await refresh();
       onChanged?.();
     });
@@ -385,7 +445,7 @@ export default function DailyLogTable({
             </button>
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
-            "تطبيق على الأيام" بيملأ الاسم وسعر اليوم والساعات الأساسية لكل الأيام في المدى ده (من غير أوفر تايم). "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده من غير ما تحتاج اسم أو سعر — يعني الشخص مشتغلش الأيام دي، وتقدر ترجعها بـ Ctrl+Z لو غلطت.
+            "تطبيق على الأيام" بيملأ الاسم وسعر اليوم والساعات الأساسية لكل الأيام في المدى ده (من غير أوفر تايم). "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده من غير ما تحتاج اسم أو سعر — يعني الشخص مشتغلش الأيام دي، وتقدر ترجعها بـ Ctrl+Z لو غلطت. الساعات والأساسية والبيان بتتسجل في شيت {role === "driver" ? "المقاول" : "السركي"} تلقائيًا لنفس الأيام — تدخلها هنا مرة واحدة بس، وبعدين تحدد {role === "driver" ? "المقاول وسعره" : "السواق وسعره"} من هناك.
           </div>
         </div>
       )}

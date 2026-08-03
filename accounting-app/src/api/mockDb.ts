@@ -177,7 +177,9 @@ function computeDayValue(log: DailyLogRow): number {
   if (log.is_paid_leave) return 0;
   const dayRate = log.day_rate ?? 0;
   const hourlyRate = dayRate / 8;
-  const diffHours = (log.actual_hours ?? 0) - (log.base_hours ?? 0);
+  const baseHours = log.base_hours ?? 0;
+  const actualHours = log.actual_hours ?? baseHours;
+  const diffHours = actualHours - baseHours;
   return dayRate + diffHours * hourlyRate;
 }
 
@@ -398,6 +400,42 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { wage_type: emp.wage_type, rate: emp.rate, fixed_salary: emp.fixed_salary };
   }
 
+  const OTHER_HOURS_ROLE: Partial<Record<string, "driver" | "contractor">> = {
+    driver: "contractor",
+    contractor: "driver",
+  };
+
+  // السركي والمقاول نفس اليوم ونفس الساعات فعليًا — أي تعديل على الساعات في
+  // شيت بينسخ نفسه على شيت التاني لنفس المعدة واليوم، من غير ما يلمس اسم
+  // الشخص ولا سعره ولا إجازة السائق المدفوعة (مفهوم خاص بيه بس).
+  function syncHoursToOtherRole(log: DailyLogRow) {
+    const otherRole = OTHER_HOURS_ROLE[log.role];
+    if (!otherRole) return;
+    const existing = state.daily_logs.find(
+      (l) => l.equipment_id === log.equipment_id && l.date === log.date && l.role === otherRole
+    );
+    if (existing) {
+      existing.actual_hours = log.actual_hours ?? null;
+      existing.base_hours = log.base_hours ?? null;
+      existing.note = log.note ?? null;
+    } else {
+      state.daily_logs.push({
+        id: state.nextId++,
+        equipment_id: log.equipment_id,
+        date: log.date,
+        role: otherRole,
+        person_name: "",
+        actual_hours: log.actual_hours ?? null,
+        base_hours: log.base_hours ?? null,
+        day_rate: null,
+        is_paid_leave: false,
+        fixed_value: null,
+        hassan_commission: null,
+        note: log.note ?? null,
+      });
+    }
+  }
+
   if (channel === "dailyLogs:list") {
     return state.daily_logs
       .filter((l) => l.equipment_id === payload.equipment_id && l.role === payload.role && l.date.startsWith(payload.month))
@@ -416,11 +454,22 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       record = { id: state.nextId++, ...payload };
       state.daily_logs.push(record);
     }
+    syncHoursToOtherRole(record);
     saveState(state);
     return { ...record, day_value: computeDayValue(record) };
   }
   if (channel === "dailyLogs:delete") {
+    const log = state.daily_logs.find((l) => l.id === payload.id);
     state.daily_logs = state.daily_logs.filter((l) => l.id !== payload.id);
+    // يوم مشتغلش خالص في شيت — يبقى مشتغلش في التاني بردو.
+    if (log) {
+      const otherRole = OTHER_HOURS_ROLE[log.role];
+      if (otherRole) {
+        state.daily_logs = state.daily_logs.filter(
+          (l) => !(l.equipment_id === log.equipment_id && l.date === log.date && l.role === otherRole)
+        );
+      }
+    }
     saveState(state);
     return { ok: true };
   }
