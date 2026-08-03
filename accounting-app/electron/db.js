@@ -96,7 +96,8 @@ CREATE TABLE IF NOT EXISTS contractor_payments (
 
 CREATE TABLE IF NOT EXISTS expense_categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE
+  name TEXT NOT NULL UNIQUE,
+  counts_as_commission INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS daily_logs (
@@ -333,6 +334,14 @@ function initDatabase() {
     .some((col) => col.name === "date");
   if (!monthlyExpensesHasDate) {
     db.exec("ALTER TABLE monthly_expenses ADD COLUMN date TEXT");
+  }
+
+  const expenseCategoriesHasCommissionFlag = db
+    .prepare("PRAGMA table_info(expense_categories)")
+    .all()
+    .some((col) => col.name === "counts_as_commission");
+  if (!expenseCategoriesHasCommissionFlag) {
+    db.exec("ALTER TABLE expense_categories ADD COLUMN counts_as_commission INTEGER NOT NULL DEFAULT 0");
   }
 
   const monthlyExpensesColumns = db.prepare("PRAGMA table_info(monthly_expenses)").all();

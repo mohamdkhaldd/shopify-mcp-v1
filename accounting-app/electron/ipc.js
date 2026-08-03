@@ -286,9 +286,21 @@ function registerIpcHandlers(db) {
   ipcMain.handle("expenseCategories:list", () =>
     db.prepare("SELECT * FROM expense_categories ORDER BY name").all()
   );
-  ipcMain.handle("expenseCategories:create", (_e, { name }) => {
-    const info = db.prepare("INSERT INTO expense_categories (name) VALUES (?)").run(name.trim());
-    return { id: info.lastInsertRowid, name: name.trim() };
+  ipcMain.handle("expenseCategories:create", (_e, { name, counts_as_commission }) => {
+    const info = db
+      .prepare("INSERT INTO expense_categories (name, counts_as_commission) VALUES (?, ?)")
+      .run(name.trim(), counts_as_commission ? 1 : 0);
+    return { id: info.lastInsertRowid, name: name.trim(), counts_as_commission: !!counts_as_commission };
+  });
+  // بيسمح تحدد نوع مصروف زي "مكنيكي" أو "سكن" إن قيمته على كل معدة تتحسب
+  // تلقائيًا ضمن كوميشن حسن — مفيش داعي تسجلها مرتين.
+  ipcMain.handle("expenseCategories:update", (_e, { id, name, counts_as_commission }) => {
+    db.prepare("UPDATE expense_categories SET name = ?, counts_as_commission = ? WHERE id = ?").run(
+      name.trim(),
+      counts_as_commission ? 1 : 0,
+      id
+    );
+    return db.prepare("SELECT * FROM expense_categories WHERE id = ?").get(id);
   });
   ipcMain.handle("expenseCategories:delete", (_e, { id }) => {
     db.prepare("DELETE FROM expense_categories WHERE id = ?").run(id);
@@ -782,6 +794,15 @@ function registerIpcHandlers(db) {
           "SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND date LIKE ? AND hassan_commission IS NOT NULL"
         )
         .all(equipment.id, `${month}%`);
+      // مصروفات زي المكنيكي والسكن — أي نوع مصروف اتحدد إنه يحسب في الكوميشن
+      // (من الإعدادات)، قيمته على المعدة دي بتضاف كاملة لكوميشن حسن.
+      const commissionExpenses = db
+        .prepare(
+          `SELECT me.*, ec.name AS category_name FROM monthly_expenses me
+           JOIN expense_categories ec ON ec.id = me.category_id
+           WHERE me.equipment_id = ? AND me.month = ? AND ec.counts_as_commission = 1`
+        )
+        .all(equipment.id, month);
 
       const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
       for (const contractorLog of contractorLogs) {
@@ -802,6 +823,16 @@ function registerIpcHandlers(db) {
           date: marketLog.date,
           source: "market",
           commission: marketLog.hassan_commission ?? 0,
+        });
+      }
+      for (const expense of commissionExpenses) {
+        rows.push({
+          equipment_id: equipment.id,
+          equipment_name: equipment.name,
+          date: expense.date ?? `${month}-01`,
+          source: "expense",
+          category_name: expense.category_name,
+          commission: expense.amount,
         });
       }
     }
@@ -830,6 +861,13 @@ function registerIpcHandlers(db) {
         "SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND date LIKE ? AND hassan_commission IS NOT NULL"
       )
       .all(equipment_id, `${year}-%`);
+    const commissionExpenses = db
+      .prepare(
+        `SELECT me.*, ec.name AS category_name FROM monthly_expenses me
+         JOIN expense_categories ec ON ec.id = me.category_id
+         WHERE me.equipment_id = ? AND me.month LIKE ? AND ec.counts_as_commission = 1`
+      )
+      .all(equipment_id, `${year}-%`);
 
     const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
     const allRows = [];
@@ -851,6 +889,16 @@ function registerIpcHandlers(db) {
         contractor_rate: marketLog.fixed_value ?? 0,
         driver_rate: null,
         commission: marketLog.hassan_commission ?? 0,
+      });
+    }
+    for (const expense of commissionExpenses) {
+      allRows.push({
+        date: expense.date ?? `${expense.month}-01`,
+        source: "expense",
+        category_name: expense.category_name,
+        contractor_rate: null,
+        driver_rate: null,
+        commission: expense.amount,
       });
     }
     allRows.sort((a, b) => a.date.localeCompare(b.date));

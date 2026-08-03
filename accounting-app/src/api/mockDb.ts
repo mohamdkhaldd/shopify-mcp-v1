@@ -150,7 +150,7 @@ interface MockState {
   partners: { id: number; name: string; opening_balance: number }[];
   employees: { id: number; name: string; wage_type: "daily" | "monthly"; rate: number; fixed_salary: boolean }[];
   contractors: { id: number; name: string; opening_balance: number }[];
-  expense_categories: { id: number; name: string }[];
+  expense_categories: { id: number; name: string; counts_as_commission: boolean }[];
   equipment: { id: number; name: string; purchase_price: number; shares: { partner_id: number; percentage: number }[] }[];
   daily_logs: DailyLogRow[];
   monthly_expenses: MonthlyExpenseRow[];
@@ -290,7 +290,7 @@ function buildSeedState(): MockState {
   }));
 
   const contractors = SEED_CONTRACTORS.map((name) => ({ id: nextId++, name, opening_balance: 0 }));
-  const expense_categories = SEED_EXPENSE_CATEGORIES.map((name) => ({ id: nextId++, name }));
+  const expense_categories = SEED_EXPENSE_CATEGORIES.map((name) => ({ id: nextId++, name, counts_as_commission: false }));
 
   return {
     partners,
@@ -328,6 +328,7 @@ function loadState(): MockState {
     for (const p of state.partners) if (p.opening_balance == null) p.opening_balance = 0;
     for (const c of state.contractors) if (c.opening_balance == null) c.opening_balance = 0;
     for (const e of state.employees) if (e.fixed_salary == null) e.fixed_salary = false;
+    for (const c of state.expense_categories) if (c.counts_as_commission == null) c.counts_as_commission = false;
     for (const e of state.monthly_expenses) if (e.date === undefined) e.date = null;
     for (const e of state.monthly_expenses) {
       if (e.note === undefined) e.note = null;
@@ -825,7 +826,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
 
   if (channel === "hassan:commissionSummary") {
     const { month } = payload;
-    const rows: { equipment_id: number; equipment_name: string; date: string; source: string; commission: number }[] = [];
+    const rows: { equipment_id: number; equipment_name: string; date: string; source: string; category_name?: string | null; commission: number }[] = [];
 
     for (const equipment of state.equipment) {
       const driverLogs = state.daily_logs.filter(
@@ -841,6 +842,11 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
           l.date.startsWith(month) &&
           l.hassan_commission != null
       );
+      const commissionExpenses = state.monthly_expenses.filter((e) => {
+        if (e.equipment_id !== equipment.id || e.month !== month) return false;
+        const category = state.expense_categories.find((c) => c.id === e.category_id);
+        return category?.counts_as_commission;
+      });
 
       const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
       for (const contractorLog of contractorLogs) {
@@ -861,6 +867,16 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
           date: marketLog.date,
           source: "market",
           commission: marketLog.hassan_commission ?? 0,
+        });
+      }
+      for (const expense of commissionExpenses) {
+        rows.push({
+          equipment_id: equipment.id,
+          equipment_name: equipment.name,
+          date: expense.date ?? `${month}-01`,
+          source: "expense",
+          category_name: state.expense_categories.find((c) => c.id === expense.category_id)?.name ?? null,
+          commission: expense.amount,
         });
       }
     }
@@ -888,9 +904,14 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
         l.date.startsWith(`${year}-`) &&
         l.hassan_commission != null
     );
+    const commissionExpenses = state.monthly_expenses.filter((e) => {
+      if (e.equipment_id !== equipment_id || !e.month.startsWith(`${year}-`)) return false;
+      const category = state.expense_categories.find((c) => c.id === e.category_id);
+      return category?.counts_as_commission;
+    });
 
     const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
-    const allRows: { date: string; source: "paired" | "market"; contractor_rate: number; driver_rate: number | null; commission: number }[] = [];
+    const allRows: { date: string; source: "paired" | "market" | "expense"; category_name?: string | null; contractor_rate: number | null; driver_rate: number | null; commission: number }[] = [];
     for (const contractorLog of contractorLogs) {
       const driverLog = driverByDate.get(contractorLog.date);
       if (!driverLog) continue;
@@ -909,6 +930,16 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
         contractor_rate: marketLog.fixed_value ?? 0,
         driver_rate: null,
         commission: marketLog.hassan_commission ?? 0,
+      });
+    }
+    for (const expense of commissionExpenses) {
+      allRows.push({
+        date: expense.date ?? `${expense.month}-01`,
+        source: "expense",
+        category_name: state.expense_categories.find((c) => c.id === expense.category_id)?.name ?? null,
+        contractor_rate: null,
+        driver_rate: null,
+        commission: expense.amount,
       });
     }
     allRows.sort((a, b) => a.date.localeCompare(b.date));
@@ -1744,6 +1775,14 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     for (const acc of state.treasury_accounts) acc.current_balance = 0;
     saveState(state);
     return { ok: true };
+  }
+
+  if (channel === "expenseCategories:update") {
+    const category = state.expense_categories.find((c) => c.id === payload.id)!;
+    category.name = payload.name.trim();
+    category.counts_as_commission = !!payload.counts_as_commission;
+    saveState(state);
+    return category;
   }
 
   const [entity, action] = channel.split(":");

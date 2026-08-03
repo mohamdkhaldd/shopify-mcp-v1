@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { expenseCategoriesApi, systemApi } from "../api/client";
-import SimpleEntityManager from "../components/settings/SimpleEntityManager";
+import { systemApi } from "../api/client";
 import Icon from "../components/Icon";
 import DriversTab from "./settings/DriversTab";
 import EquipmentTab from "./settings/EquipmentTab";
 import ContractorsTab from "./settings/ContractorsTab";
 import PartnersTab from "./settings/PartnersTab";
+import ExpenseCategoriesTab from "./settings/ExpenseCategoriesTab";
 
 type TabId = "partners" | "drivers" | "equipment" | "contractors" | "expenseCategories";
 
@@ -71,16 +71,7 @@ export default function Settings() {
 
       {active === "contractors" && <ContractorsTab />}
 
-      {active === "expenseCategories" && (
-        <SimpleEntityManager
-          title="أنواع المصروفات"
-          addLabel="إضافة نوع"
-          namePlaceholder="اسم نوع المصروف (زي: صيانة، وقود)"
-          emptyMessage="لسه مفيش أنواع مصروفات مسجلة."
-          icon="treasury"
-          api={expenseCategoriesApi}
-        />
-      )}
+      {active === "expenseCategories" && <ExpenseCategoriesTab />}
 
       <div className="bg-white rounded-card shadow-card p-5 border border-rose-100">
         <h2 className="font-bold text-rose-600 mb-1">منطقة الخطر</h2>

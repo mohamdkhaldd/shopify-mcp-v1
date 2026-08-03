@@ -79,7 +79,10 @@ export const contractorsApi = {
 
 export const expenseCategoriesApi = {
   list: (): Promise<ExpenseCategory[]> => invoke("expenseCategories:list"),
-  create: (name: string): Promise<ExpenseCategory> => invoke("expenseCategories:create", { name }),
+  create: (name: string, counts_as_commission = false): Promise<ExpenseCategory> =>
+    invoke("expenseCategories:create", { name, counts_as_commission }),
+  update: (id: number, name: string, counts_as_commission: boolean): Promise<ExpenseCategory> =>
+    invoke("expenseCategories:update", { id, name, counts_as_commission }),
   remove: (id: number): Promise<void> => invoke("expenseCategories:delete", { id }),
 };
 

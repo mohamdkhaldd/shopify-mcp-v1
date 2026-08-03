@@ -37,6 +37,7 @@ export interface Contractor {
 export interface ExpenseCategory {
   id: number;
   name: string;
+  counts_as_commission: boolean;
 }
 
 export type DailyLogRole = "driver" | "contractor" | "market";
@@ -182,7 +183,8 @@ export interface HassanCommissionRow {
   equipment_id: number;
   equipment_name: string;
   date: string;
-  source: "paired" | "market";
+  source: "paired" | "market" | "expense";
+  category_name?: string | null;
   commission: number;
 }
 
@@ -193,8 +195,9 @@ export interface HassanCommissionSummary {
 
 export interface HassanEquipmentCommissionDay {
   date: string;
-  source: "paired" | "market";
-  contractor_rate: number;
+  source: "paired" | "market" | "expense";
+  category_name?: string | null;
+  contractor_rate: number | null;
   driver_rate: number | null;
   commission: number;
 }
