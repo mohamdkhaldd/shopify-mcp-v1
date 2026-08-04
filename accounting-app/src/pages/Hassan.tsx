@@ -9,6 +9,8 @@ import {
   HassanLedgerEntry,
   HassanLedgerType,
   HassanPartyBalance,
+  HassanTreasuryBalance,
+  HassanTreasuryExpense,
 } from "../api/types";
 import { currentMonthKey } from "../utils/months";
 import { formatEGP } from "../utils/format";
@@ -173,7 +175,123 @@ function CommissionTab({ month }: { month: string }) {
   );
 }
 
-const COMPANY_PARTY_NAME = "الشركة";
+// خزنة حسن: كوميشنه المتراكم من كل مصادر الكوميشن (السركي/المقاول والسركي
+// سوق والمصروفات اللي بتتحسب كوميشن زي المكنيكي) ناقص أي فلوس دفعها هو من
+// الخزنة دي — رصيد شخصي بحت، مالوش أي علاقة بخزنة الشركة.
+function TreasuryTab({ month }: { month: string }) {
+  const [balance, setBalance] = useState<HassanTreasuryBalance | null>(null);
+  const [entries, setEntries] = useState<HassanTreasuryExpense[]>([]);
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+
+  const refresh = () => {
+    hassanApi.treasuryBalance(month).then(setBalance);
+    hassanApi.treasuryList(month).then(setEntries);
+  };
+
+  useEffect(refresh, [month]);
+
+  async function handleAdd(e: FormEvent) {
+    e.preventDefault();
+    if (!amount || !description) return;
+    await hassanApi.treasuryCreate({ date, amount: Number(amount), description });
+    setAmount("");
+    setDescription("");
+    refresh();
+  }
+
+  async function handleDelete(id: number) {
+    await hassanApi.treasuryRemove(id);
+    refresh();
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-card shadow-card p-5">
+        <div className="text-sm text-slate-500 font-semibold">رصيد خزنة حسن (كل الوقت)</div>
+        <div className="mt-2 text-2xl font-extrabold text-primary">{formatEGP(balance?.balance ?? 0)}</div>
+        <p className="text-xs text-slate-400 mt-1">بيزيد بكوميشنه كل شهر، وبيقل بس لما هو يدفع منه — مالوش علاقة بخزنة الشركة.</p>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="text-center bg-primary-light rounded-xl py-2.5">
+          <div className="text-xs text-slate-500">كوميشن الشهر</div>
+          <div className="font-bold text-slate-800">{formatEGP(balance?.monthCommission ?? 0)}</div>
+        </div>
+        <div className="text-center bg-rose-50 rounded-xl py-2.5">
+          <div className="text-xs text-slate-500">دفع الشهر</div>
+          <div className="font-bold text-rose-600">{formatEGP(balance?.monthSpent ?? 0)}</div>
+        </div>
+        <div className="text-center bg-slate-50 rounded-xl py-2.5">
+          <div className="text-xs text-slate-500">إجمالي الكوميشن (كل الوقت)</div>
+          <div className="font-bold text-slate-700">{formatEGP(balance?.allTimeCommission ?? 0)}</div>
+        </div>
+        <div className="text-center bg-slate-50 rounded-xl py-2.5">
+          <div className="text-xs text-slate-500">إجمالي المدفوع (كل الوقت)</div>
+          <div className="font-bold text-slate-700">{formatEGP(balance?.allTimeSpent ?? 0)}</div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-card shadow-card p-5">
+        <h2 className="font-bold text-slate-800 mb-1">دفع حسن من خزنته — {month}</h2>
+        <p className="text-xs text-slate-400 mb-4">زي قسط أو إيجار — بتتخصم من فلوس حسن نفسها، مش من خزنة الشركة.</p>
+        <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">التاريخ</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">القيمة</label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">بيان</label>
+            <input
+              type="text"
+              placeholder="زي: قسط عربية، إيجار"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+            />
+          </div>
+          <button type="submit" className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold hover:bg-primary-dark">
+            إضافة
+          </button>
+        </form>
+
+        {entries.length === 0 ? (
+          <div className="text-sm text-slate-400">لسه مفيش حاجة اتدفعت من خزنة حسن الشهر ده.</div>
+        ) : (
+          <ul className="space-y-1">
+            {entries.map((e) => (
+              <li key={e.id} className="flex items-center justify-between text-sm">
+                <span className="text-slate-600">
+                  {e.date} — {formatEGP(e.amount)} <span className="text-slate-400">({e.description})</span>
+                </span>
+                <button onClick={() => handleDelete(e.id)} className="text-xs text-rose-500 hover:text-rose-700 font-semibold">
+                  حذف
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function LedgerTab({ month }: { month: string }) {
   const [entries, setEntries] = useState<HassanLedgerEntry[]>([]);
@@ -184,11 +302,6 @@ function LedgerTab({ month }: { month: string }) {
   const [amount, setAmount] = useState("");
   const [partyName, setPartyName] = useState("");
   const [description, setDescription] = useState("");
-
-  const [companyDate, setCompanyDate] = useState(new Date().toISOString().slice(0, 10));
-  const [companyType, setCompanyType] = useState<"loan" | "repayment">("loan");
-  const [companyAmount, setCompanyAmount] = useState("");
-  const [companyDescription, setCompanyDescription] = useState("");
 
   const refresh = () => {
     hassanApi.ledgerList(month).then(setEntries);
@@ -215,30 +328,10 @@ function LedgerTab({ month }: { month: string }) {
     refresh();
   }
 
-  async function handleAddCompanyEntry(e: FormEvent) {
-    e.preventDefault();
-    if (!companyAmount) return;
-    await hassanApi.ledgerCreate({
-      date: companyDate,
-      type: companyType,
-      amount: Number(companyAmount),
-      party_name: COMPANY_PARTY_NAME,
-      description: companyDescription || null,
-      note: null,
-    });
-    setCompanyAmount("");
-    setCompanyDescription("");
-    refresh();
-  }
-
   async function handleDelete(id: number) {
     await hassanApi.ledgerRemove(id);
     refresh();
   }
-
-  const companyBalance = partyBalances.find((p) => p.party_name === COMPANY_PARTY_NAME);
-  const companyEntries = entries.filter((e) => e.party_name === COMPANY_PARTY_NAME);
-  const otherPartyBalances = partyBalances.filter((p) => p.party_name !== COMPANY_PARTY_NAME);
 
   return (
     <div className="space-y-4">
@@ -255,7 +348,7 @@ function LedgerTab({ month }: { month: string }) {
 
       <div className="bg-white rounded-card shadow-card p-5">
         <h2 className="font-bold text-slate-800 mb-4">الرصيد بالتفصيل — لكل شخص/جهة</h2>
-        {otherPartyBalances.length === 0 ? (
+        {partyBalances.length === 0 ? (
           <div className="text-sm text-slate-400">مفيش أرصدة مفتوحة دلوقتي — كل الحركات المسجلة اتقفلت.</div>
         ) : (
           <table className="w-full text-sm">
@@ -267,7 +360,7 @@ function LedgerTab({ month }: { month: string }) {
               </tr>
             </thead>
             <tbody>
-              {otherPartyBalances.map((p) => (
+              {partyBalances.map((p) => (
                 <tr key={p.party_name} className="border-b border-slate-50 last:border-0">
                   <td className="py-2 font-semibold text-slate-700">{p.party_name}</td>
                   <td className="py-2 text-rose-600 font-semibold">{p.netDebt > 0 ? formatEGP(p.netDebt) : "—"}</td>
@@ -276,91 +369,6 @@ function LedgerTab({ month }: { month: string }) {
               ))}
             </tbody>
           </table>
-        )}
-      </div>
-
-      <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-1">حسن والشركة</h2>
-        <p className="text-xs text-slate-400 mb-4">
-          فلوس حسن أخدها من الشركة نفسها غير الكوميشن (زي سلفة)، وفلوس دفعها هو للشركة — منفصلة عن حساباته مع أي
-          شخص أو جهة تانية.
-        </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <div className="text-center bg-rose-50 rounded-xl py-2.5">
-            <div className="text-xs text-slate-500">أخد من الشركة (صافي، كل الوقت)</div>
-            <div className="font-bold text-rose-600">{formatEGP(companyBalance?.netDebt ?? 0)}</div>
-          </div>
-          <div className="text-center bg-primary-light rounded-xl py-2.5">
-            <div className="text-xs text-slate-500">دفع للشركة (صافي، كل الوقت)</div>
-            <div className="font-bold text-primary-dark">
-              {formatEGP(companyBalance ? Math.max(0, -companyBalance.netDebt) : 0)}
-            </div>
-          </div>
-        </div>
-
-        <form onSubmit={handleAddCompanyEntry} className="flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">التاريخ</label>
-            <input
-              type="date"
-              value={companyDate}
-              onChange={(e) => setCompanyDate(e.target.value)}
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">النوع</label>
-            <select
-              value={companyType}
-              onChange={(e) => setCompanyType(e.target.value as "loan" | "repayment")}
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            >
-              <option value="loan">حسن أخد من الشركة</option>
-              <option value="repayment">حسن دفع للشركة</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">القيمة</label>
-            <input
-              type="number"
-              min="0"
-              step="any"
-              value={companyAmount}
-              onChange={(e) => setCompanyAmount(e.target.value)}
-              className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">بيان</label>
-            <input
-              type="text"
-              value={companyDescription}
-              onChange={(e) => setCompanyDescription(e.target.value)}
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            />
-          </div>
-          <button type="submit" className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold hover:bg-primary-dark">
-            إضافة
-          </button>
-        </form>
-
-        {companyEntries.length === 0 ? (
-          <div className="text-sm text-slate-400">لسه مفيش حركات بين حسن والشركة الشهر ده.</div>
-        ) : (
-          <ul className="space-y-1">
-            {companyEntries.map((e) => (
-              <li key={e.id} className="flex items-center justify-between text-sm">
-                <span className="text-slate-600">
-                  {e.date} — {e.type === "loan" ? "أخد" : "دفع"} {formatEGP(e.amount)}{" "}
-                  {e.description && <span className="text-slate-400">({e.description})</span>}
-                </span>
-                <button onClick={() => handleDelete(e.id)} className="text-xs text-rose-500 hover:text-rose-700 font-semibold">
-                  حذف
-                </button>
-              </li>
-            ))}
-          </ul>
         )}
       </div>
 
@@ -463,7 +471,7 @@ function LedgerTab({ month }: { month: string }) {
 
 export default function Hassan() {
   const [month, setMonth] = useState(currentMonthKey());
-  const [tab, setTab] = useState<"commission" | "ledger">("commission");
+  const [tab, setTab] = useState<"commission" | "treasury" | "ledger">("commission");
 
   return (
     <div className="space-y-6">
@@ -487,6 +495,16 @@ export default function Hassan() {
           الكوميشن
         </button>
         <button
+          onClick={() => setTab("treasury")}
+          className={[
+            "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors",
+            tab === "treasury" ? "bg-primary text-white shadow-sm" : "bg-white text-slate-600 hover:bg-primary-light hover:text-primary-dark shadow-card",
+          ].join(" ")}
+        >
+          <Icon name="treasury" className="w-4 h-4" />
+          الخزنة
+        </button>
+        <button
           onClick={() => setTab("ledger")}
           className={[
             "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors",
@@ -498,7 +516,9 @@ export default function Hassan() {
         </button>
       </div>
 
-      {tab === "commission" ? <CommissionTab month={month} /> : <LedgerTab month={month} />}
+      {tab === "commission" && <CommissionTab month={month} />}
+      {tab === "treasury" && <TreasuryTab month={month} />}
+      {tab === "ledger" && <LedgerTab month={month} />}
     </div>
   );
 }

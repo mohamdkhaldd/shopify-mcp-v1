@@ -72,6 +72,13 @@ interface HassanLedgerRow {
   note: string | null;
 }
 
+interface HassanTreasuryExpenseRow {
+  id: number;
+  date: string;
+  amount: number;
+  description: string;
+}
+
 interface ContractorPaymentRow {
   id: number;
   contractor_id: number;
@@ -158,6 +165,7 @@ interface MockState {
   employee_bonuses: EmployeeBonusRow[];
   employee_deductions: EmployeeDeductionRow[];
   hassan_ledger: HassanLedgerRow[];
+  hassan_treasury_expenses: HassanTreasuryExpenseRow[];
   contractor_payments: ContractorPaymentRow[];
   partner_payments: PartnerPaymentRow[];
   treasury_accounts: TreasuryAccountRow[];
@@ -306,6 +314,7 @@ function buildSeedState(): MockState {
     employee_bonuses: [],
     employee_deductions: [],
     hassan_ledger: [],
+    hassan_treasury_expenses: [],
     contractor_payments: [],
     partner_payments: [],
     treasury_accounts: [
@@ -344,6 +353,7 @@ function loadState(): MockState {
     for (const a of state.employee_advances) if (a.month == null) a.month = a.date.slice(0, 7);
     for (const b of state.employee_bonuses) if (b.month == null) b.month = b.date.slice(0, 7);
     if (!state.hassan_ledger) state.hassan_ledger = [];
+    if (!state.hassan_treasury_expenses) state.hassan_treasury_expenses = [];
     if (!state.contractor_payments) state.contractor_payments = [];
     if (!state.partner_payments) state.partner_payments = [];
     if (!state.treasury_accounts) {
@@ -873,26 +883,27 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { ok: true };
   }
 
-  if (channel === "hassan:commissionSummary") {
-    const { month } = payload;
+  // كوميشن حسن كله — لو month اتبعت بيتفلتر عليه بس، لو من غيره (null) بيحسب
+  // كل الوقت — مستخدمة في شيت الكوميشن الشهري وفي رصيد "خزنة حسن" الكلي.
+  function computeCommissionRows(month: string | null) {
     const rows: { equipment_id: number; equipment_name: string; date: string; source: string; category_name?: string | null; commission: number }[] = [];
 
     for (const equipment of state.equipment) {
       const driverLogs = state.daily_logs.filter(
-        (l) => l.equipment_id === equipment.id && l.role === "driver" && l.date.startsWith(month)
+        (l) => l.equipment_id === equipment.id && l.role === "driver" && (!month || l.date.startsWith(month))
       );
       const contractorLogs = state.daily_logs.filter(
-        (l) => l.equipment_id === equipment.id && l.role === "contractor" && l.date.startsWith(month)
+        (l) => l.equipment_id === equipment.id && l.role === "contractor" && (!month || l.date.startsWith(month))
       );
       const marketLogs = state.daily_logs.filter(
         (l) =>
           l.equipment_id === equipment.id &&
           l.role === "market" &&
-          l.date.startsWith(month) &&
+          (!month || l.date.startsWith(month)) &&
           l.hassan_commission != null
       );
       const commissionExpenses = state.monthly_expenses.filter((e) => {
-        if (e.equipment_id !== equipment.id || e.month !== month) return false;
+        if (e.equipment_id !== equipment.id || (month && e.month !== month)) return false;
         const category = state.expense_categories.find((c) => c.id === e.category_id);
         return category?.counts_as_commission;
       });
@@ -922,7 +933,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
         rows.push({
           equipment_id: equipment.id,
           equipment_name: equipment.name,
-          date: expense.date ?? `${month}-01`,
+          date: expense.date ?? `${month ?? expense.month}-01`,
           source: "expense",
           category_name: state.expense_categories.find((c) => c.id === expense.category_id)?.name ?? null,
           commission: expense.amount,
@@ -933,6 +944,44 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     rows.sort((a, b) => a.date.localeCompare(b.date));
     const total = rows.reduce((sum, r) => sum + r.commission, 0);
     return { rows, total };
+  }
+
+  if (channel === "hassan:commissionSummary") {
+    return computeCommissionRows(payload.month);
+  }
+
+  if (channel === "hassan:treasuryBalance") {
+    const { month } = payload;
+    const allTimeCommission = computeCommissionRows(null).total;
+    const monthCommission = computeCommissionRows(month).total;
+    const allTimeSpent = state.hassan_treasury_expenses.reduce((sum, e) => sum + e.amount, 0);
+    const monthSpent = state.hassan_treasury_expenses
+      .filter((e) => e.date.startsWith(month))
+      .reduce((sum, e) => sum + e.amount, 0);
+    return {
+      balance: allTimeCommission - allTimeSpent,
+      allTimeCommission,
+      allTimeSpent,
+      monthCommission,
+      monthSpent,
+    };
+  }
+
+  if (channel === "hassanTreasury:list") {
+    return state.hassan_treasury_expenses
+      .filter((e) => e.date.startsWith(payload.month))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+  if (channel === "hassanTreasury:create") {
+    const record: HassanTreasuryExpenseRow = { id: state.nextId++, ...payload };
+    state.hassan_treasury_expenses.push(record);
+    saveState(state);
+    return record;
+  }
+  if (channel === "hassanTreasury:delete") {
+    state.hassan_treasury_expenses = state.hassan_treasury_expenses.filter((e) => e.id !== payload.id);
+    saveState(state);
+    return { ok: true };
   }
 
   if (channel === "hassan:equipmentCommission") {
@@ -1816,6 +1865,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     state.employee_deductions = [];
     state.salary_payments = [];
     state.hassan_ledger = [];
+    state.hassan_treasury_expenses = [];
     state.contractor_payments = [];
     state.partner_payments = [];
     state.supplier_purchases = [];

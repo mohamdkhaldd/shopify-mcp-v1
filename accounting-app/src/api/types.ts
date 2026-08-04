@@ -233,6 +233,21 @@ export interface HassanPartyBalance {
   netDue: number;
 }
 
+export interface HassanTreasuryExpense {
+  id: number;
+  date: string;
+  amount: number;
+  description: string;
+}
+
+export interface HassanTreasuryBalance {
+  balance: number;
+  allTimeCommission: number;
+  allTimeSpent: number;
+  monthCommission: number;
+  monthSpent: number;
+}
+
 export interface ContractorPayment {
   id: number;
   contractor_id: number;

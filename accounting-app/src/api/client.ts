@@ -19,6 +19,8 @@ import {
   HassanEquipmentCommissionDetail,
   HassanLedgerEntry,
   HassanPartyBalance,
+  HassanTreasuryBalance,
+  HassanTreasuryExpense,
   IncomingSummary,
   MonthlyExpense,
   MonthlyReport,
@@ -169,6 +171,11 @@ export const hassanApi = {
   ledgerRemove: (id: number): Promise<void> => invoke("hassanLedger:delete", { id }),
   balance: (): Promise<HassanBalance> => invoke("hassanLedger:balance"),
   balanceByParty: (): Promise<HassanPartyBalance[]> => invoke("hassanLedger:balanceByParty"),
+  treasuryBalance: (month: string): Promise<HassanTreasuryBalance> => invoke("hassan:treasuryBalance", { month }),
+  treasuryList: (month: string): Promise<HassanTreasuryExpense[]> => invoke("hassanTreasury:list", { month }),
+  treasuryCreate: (expense: Omit<HassanTreasuryExpense, "id">): Promise<HassanTreasuryExpense> =>
+    invoke("hassanTreasury:create", expense),
+  treasuryRemove: (id: number): Promise<void> => invoke("hassanTreasury:delete", { id }),
 };
 
 export const contractorPaymentsApi = {

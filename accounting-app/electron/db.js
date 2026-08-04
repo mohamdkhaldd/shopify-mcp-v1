@@ -126,6 +126,15 @@ CREATE TABLE IF NOT EXISTS hassan_ledger (
   note TEXT
 );
 
+-- فلوس حسن دفعها من خزنته الشخصية (اللي بتتغذى من الكوميشن) — زي قسط أو
+-- إيجار. مالوش أي علاقة بخزنة الشركة (treasury_accounts).
+CREATE TABLE IF NOT EXISTS hassan_treasury_expenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  amount REAL NOT NULL,
+  description TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS partner_payments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   partner_id INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,

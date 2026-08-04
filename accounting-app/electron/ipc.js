@@ -830,31 +830,44 @@ function registerIpcHandlers(db) {
     return (k - h) + overtimeHours * (k / 8 - h / 8);
   }
 
-  ipcMain.handle("hassan:commissionSummary", (_e, { month }) => {
+  // كوميشن حسن كله — لو month اتبعت بيتفلتر عليه بس، لو من غيره (null) بيحسب
+  // كل الوقت من أول ما اتسجلت أي بيانات — مستخدمة في شيت الكوميشن الشهري
+  // وفي رصيد "خزنة حسن" الكلي.
+  function computeCommissionRows(month) {
     const equipmentList = db.prepare("SELECT * FROM equipment ORDER BY name").all();
     const rows = [];
 
     for (const equipment of equipmentList) {
-      const driverLogs = db
-        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
-        .all(equipment.id, `${month}%`);
-      const contractorLogs = db
-        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'contractor' AND date LIKE ?")
-        .all(equipment.id, `${month}%`);
-      const marketLogs = db
-        .prepare(
-          "SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND date LIKE ? AND hassan_commission IS NOT NULL"
-        )
-        .all(equipment.id, `${month}%`);
+      const driverLogs = month
+        ? db.prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?").all(equipment.id, `${month}%`)
+        : db.prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver'").all(equipment.id);
+      const contractorLogs = month
+        ? db.prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'contractor' AND date LIKE ?").all(equipment.id, `${month}%`)
+        : db.prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'contractor'").all(equipment.id);
+      const marketLogs = month
+        ? db
+            .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND date LIKE ? AND hassan_commission IS NOT NULL")
+            .all(equipment.id, `${month}%`)
+        : db
+            .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND hassan_commission IS NOT NULL")
+            .all(equipment.id);
       // مصروفات زي المكنيكي والسكن — أي نوع مصروف اتحدد إنه يحسب في الكوميشن
       // (من الإعدادات)، قيمته على المعدة دي بتضاف كاملة لكوميشن حسن.
-      const commissionExpenses = db
-        .prepare(
-          `SELECT me.*, ec.name AS category_name FROM monthly_expenses me
-           JOIN expense_categories ec ON ec.id = me.category_id
-           WHERE me.equipment_id = ? AND me.month = ? AND ec.counts_as_commission = 1`
-        )
-        .all(equipment.id, month);
+      const commissionExpenses = month
+        ? db
+            .prepare(
+              `SELECT me.*, ec.name AS category_name FROM monthly_expenses me
+               JOIN expense_categories ec ON ec.id = me.category_id
+               WHERE me.equipment_id = ? AND me.month = ? AND ec.counts_as_commission = 1`
+            )
+            .all(equipment.id, month)
+        : db
+            .prepare(
+              `SELECT me.*, ec.name AS category_name FROM monthly_expenses me
+               JOIN expense_categories ec ON ec.id = me.category_id
+               WHERE me.equipment_id = ? AND ec.counts_as_commission = 1`
+            )
+            .all(equipment.id);
 
       const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
       for (const contractorLog of contractorLogs) {
@@ -881,7 +894,7 @@ function registerIpcHandlers(db) {
         rows.push({
           equipment_id: equipment.id,
           equipment_name: equipment.name,
-          date: expense.date ?? `${month}-01`,
+          date: expense.date ?? `${(month ?? expense.month)}-01`,
           source: "expense",
           category_name: expense.category_name,
           commission: expense.amount,
@@ -892,6 +905,41 @@ function registerIpcHandlers(db) {
     rows.sort((a, b) => a.date.localeCompare(b.date));
     const total = rows.reduce((sum, r) => sum + r.commission, 0);
     return { rows, total };
+  }
+
+  ipcMain.handle("hassan:commissionSummary", (_e, { month }) => computeCommissionRows(month));
+
+  // --- خزنة حسن: كوميشنه المتراكم من أول ما اتسجلت أي بيانات، ناقص أي فلوس
+  // دفعها هو من الخزنة دي (زي قسط أو إيجار) — رصيد شخصي بحت، مالوش أي علاقة
+  // بخزنة الشركة (الكاش/المحفظة/انستا باي) خالص. ---
+  ipcMain.handle("hassan:treasuryBalance", (_e, { month }) => {
+    const allTimeCommission = computeCommissionRows(null).total;
+    const monthCommission = computeCommissionRows(month).total;
+    const allTimeSpent = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_treasury_expenses").get().total;
+    const monthSpent = db
+      .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_treasury_expenses WHERE date LIKE ?")
+      .get(`${month}%`).total;
+    return {
+      balance: allTimeCommission - allTimeSpent,
+      allTimeCommission,
+      allTimeSpent,
+      monthCommission,
+      monthSpent,
+    };
+  });
+
+  ipcMain.handle("hassanTreasury:list", (_e, { month }) =>
+    db.prepare("SELECT * FROM hassan_treasury_expenses WHERE date LIKE ? ORDER BY date DESC").all(`${month}%`)
+  );
+  ipcMain.handle("hassanTreasury:create", (_e, expense) => {
+    const info = db
+      .prepare("INSERT INTO hassan_treasury_expenses (date, amount, description) VALUES (@date, @amount, @description)")
+      .run(expense);
+    return db.prepare("SELECT * FROM hassan_treasury_expenses WHERE id = ?").get(info.lastInsertRowid);
+  });
+  ipcMain.handle("hassanTreasury:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM hassan_treasury_expenses WHERE id = ?").run(id);
+    return { ok: true };
   });
 
   // --- Hassan: per-equipment commission sheet — every day this equipment had
@@ -1805,6 +1853,7 @@ function registerIpcHandlers(db) {
       db.prepare("DELETE FROM employee_deductions").run();
       db.prepare("DELETE FROM salary_payments").run();
       db.prepare("DELETE FROM hassan_ledger").run();
+      db.prepare("DELETE FROM hassan_treasury_expenses").run();
       db.prepare("DELETE FROM contractor_payments").run();
       db.prepare("DELETE FROM partner_payments").run();
       db.prepare("DELETE FROM supplier_purchases").run();
