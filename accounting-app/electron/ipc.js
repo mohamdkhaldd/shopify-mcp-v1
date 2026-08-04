@@ -1271,7 +1271,7 @@ function registerIpcHandlers(db) {
   // partner payments, equipment expenses, supplier payments, employee
   // advances — each already carries a payment_method/method tying it to
   // one of the three accounts.
-  const ACCOUNT_NAME_AR = { wallet: "محفظة", instapay: "انستا باي", cash: "كاش" };
+  const ACCOUNT_NAME_AR = { wallet: "اكسيس باي", instapay: "انستا باي", cash: "كاش", vodafone_cash: "فودفون كاش" };
 
   ipcMain.handle("treasury:list", () => {
     const rows = db.prepare("SELECT * FROM treasury_accounts ORDER BY id").all();

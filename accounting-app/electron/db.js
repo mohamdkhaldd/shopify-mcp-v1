@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS employee_advances (
   month TEXT NOT NULL DEFAULT '',
   date TEXT NOT NULL,
   amount REAL NOT NULL,
-  payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('wallet', 'instapay', 'cash')),
+  payment_method TEXT NOT NULL DEFAULT 'cash',
   note TEXT
 );
 
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS employee_bonuses (
   month TEXT NOT NULL DEFAULT '',
   date TEXT NOT NULL,
   amount REAL NOT NULL,
-  payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('wallet', 'instapay', 'cash')),
+  payment_method TEXT NOT NULL DEFAULT 'cash',
   note TEXT
 );
 
@@ -158,7 +158,7 @@ CREATE TABLE IF NOT EXISTS monthly_expenses (
 
 CREATE TABLE IF NOT EXISTS treasury_accounts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE CHECK (name IN ('wallet', 'instapay', 'cash')),
+  name TEXT NOT NULL UNIQUE,
   current_balance REAL NOT NULL DEFAULT 0
 );
 
@@ -199,7 +199,7 @@ CREATE TABLE IF NOT EXISTS salary_payments (
   month TEXT NOT NULL DEFAULT '',
   date TEXT NOT NULL,
   amount REAL NOT NULL,
-  payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('wallet', 'instapay', 'cash')),
+  payment_method TEXT NOT NULL DEFAULT 'cash',
   note TEXT
 );
 `;
@@ -392,6 +392,57 @@ function initDatabase() {
     WHERE id NOT IN (SELECT DISTINCT employee_id FROM employee_rate_history)
   `);
 
+  // القيود القديمة كانت بتحصر وسيلة الدفع على wallet/instapay/cash بس — عشان
+  // نضيف وسايل جديدة (زي فودفون كاش) من غير قيد تاني في المستقبل، لازم نشيل
+  // القيد ده. SQLite ما بيدعمش تعديل CHECK مباشرة، فبنعيد بناء الجدول بنفس
+  // بياناته بالظبط (مفيش أي داتا بتتفقد).
+  function loosenPaymentMethodCheck(table) {
+    const row = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(table);
+    if (!row || !row.sql.includes("CHECK (payment_method IN")) return;
+    const tx = db.transaction(() => {
+      db.exec(`ALTER TABLE ${table} RENAME TO ${table}_migrate_old`);
+      db.exec(`
+        CREATE TABLE ${table} (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+          month TEXT NOT NULL DEFAULT '',
+          date TEXT NOT NULL,
+          amount REAL NOT NULL,
+          payment_method TEXT NOT NULL DEFAULT 'cash',
+          note TEXT
+        )
+      `);
+      db.exec(`
+        INSERT INTO ${table} (id, employee_id, month, date, amount, payment_method, note)
+        SELECT id, employee_id, month, date, amount, payment_method, note FROM ${table}_migrate_old
+      `);
+      db.exec(`DROP TABLE ${table}_migrate_old`);
+    });
+    tx();
+  }
+  for (const table of ["employee_advances", "employee_bonuses", "salary_payments"]) {
+    loosenPaymentMethodCheck(table);
+  }
+
+  const treasuryAccountsRow = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='treasury_accounts'").get();
+  if (treasuryAccountsRow && treasuryAccountsRow.sql.includes("CHECK (name IN")) {
+    const tx = db.transaction(() => {
+      db.exec("ALTER TABLE treasury_accounts RENAME TO treasury_accounts_migrate_old");
+      db.exec(`
+        CREATE TABLE treasury_accounts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          current_balance REAL NOT NULL DEFAULT 0
+        )
+      `);
+      db.exec(
+        "INSERT INTO treasury_accounts (id, name, current_balance) SELECT id, name, current_balance FROM treasury_accounts_migrate_old"
+      );
+      db.exec("DROP TABLE treasury_accounts_migrate_old");
+    });
+    tx();
+  }
+
   const accountCount = db.prepare("SELECT COUNT(*) AS c FROM treasury_accounts").get().c;
   if (accountCount === 0) {
     const insertAccount = db.prepare(
@@ -400,6 +451,11 @@ function initDatabase() {
     insertAccount.run("wallet");
     insertAccount.run("instapay");
     insertAccount.run("cash");
+    insertAccount.run("vodafone_cash");
+  }
+  const hasVodafoneCash = db.prepare("SELECT COUNT(*) AS c FROM treasury_accounts WHERE name = 'vodafone_cash'").get().c;
+  if (!hasVodafoneCash) {
+    db.prepare("INSERT INTO treasury_accounts (name, current_balance) VALUES ('vodafone_cash', 0)").run();
   }
 
   seedIfEmpty(db);

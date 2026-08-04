@@ -99,7 +99,7 @@ interface PartnerPaymentRow {
 
 interface TreasuryAccountRow {
   id: number;
-  name: "wallet" | "instapay" | "cash";
+  name: "wallet" | "instapay" | "cash" | "vodafone_cash";
   current_balance: number;
 }
 
@@ -178,7 +178,7 @@ interface MockState {
   nextId: number;
 }
 
-const ACCOUNT_NAME_AR: Record<string, string> = { wallet: "محفظة", instapay: "انستا باي", cash: "كاش" };
+const ACCOUNT_NAME_AR: Record<string, string> = { wallet: "اكسيس باي", instapay: "انستا باي", cash: "كاش", vodafone_cash: "فودفون كاش" };
 
 function computeDayValue(log: DailyLogRow): number {
   if (log.role === "market") return (log.fixed_value ?? 0) - (log.hassan_commission ?? 0);
@@ -321,6 +321,7 @@ function buildSeedState(): MockState {
       { id: nextId++, name: "wallet", current_balance: 0 },
       { id: nextId++, name: "instapay", current_balance: 0 },
       { id: nextId++, name: "cash", current_balance: 0 },
+      { id: nextId++, name: "vodafone_cash", current_balance: 0 },
     ],
     suppliers: [],
     supplier_purchases: [],
@@ -362,6 +363,9 @@ function loadState(): MockState {
         { id: state.nextId++, name: "instapay", current_balance: 0 },
         { id: state.nextId++, name: "cash", current_balance: 0 },
       ];
+    }
+    if (!state.treasury_accounts.some((a) => a.name === "vodafone_cash")) {
+      state.treasury_accounts.push({ id: state.nextId++, name: "vodafone_cash", current_balance: 0 });
     }
     if (!state.suppliers) state.suppliers = [];
     if (!state.supplier_purchases) state.supplier_purchases = [];

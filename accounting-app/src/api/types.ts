@@ -95,7 +95,7 @@ export interface EquipmentSummary {
   distribution: PartnerDistributionRow[];
 }
 
-export type PaymentMethod = "wallet" | "instapay" | "cash";
+export type PaymentMethod = "wallet" | "instapay" | "cash" | "vodafone_cash";
 
 export interface EmployeeAdvance {
   id: number;
@@ -324,7 +324,7 @@ export interface PartnerDetail {
   payments: PartnerPayment[];
 }
 
-export type TreasuryAccountName = "wallet" | "instapay" | "cash";
+export type TreasuryAccountName = "wallet" | "instapay" | "cash" | "vodafone_cash";
 
 export interface TreasuryAccount {
   id: number;
