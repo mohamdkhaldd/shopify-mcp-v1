@@ -80,6 +80,30 @@ function hoursOrNull(value: string): number | null {
   return value.trim() === "" ? null : Number(value) || 0;
 }
 
+// بيقرا لستة أيام مكتوبة زي "3, 7, 15" أو مدى زي "14-31" أو خليط بينهم زي
+// "1-5, 7-10" — كل جزء بعد الفاصلة إما رقم لوحده أو "من-لحد" فبيتحوّل
+// لمجموعة أرقام أيام.
+function parseDayNumbers(spec: string): Set<number> {
+  const result = new Set<number>();
+  const tokens = spec.split(/[,،]+/).map((s) => s.trim()).filter(Boolean);
+  for (const token of tokens) {
+    const rangeMatch = token.match(/^(\d+)\s*-\s*(\d+)$/);
+    if (rangeMatch) {
+      const from = Number(rangeMatch[1]);
+      const to = Number(rangeMatch[2]);
+      const lo = Math.min(from, to);
+      const hi = Math.max(from, to);
+      for (let n = lo; n <= hi; n++) result.add(n);
+      continue;
+    }
+    for (const part of token.split(/\s+/).filter(Boolean)) {
+      const n = Number(part);
+      if (!Number.isNaN(n)) result.add(n);
+    }
+  }
+  return result;
+}
+
 export default function DailyLogTable({
   equipmentId,
   month,
@@ -459,13 +483,7 @@ export default function DailyLogTable({
   async function applyBulkOvertime() {
     const overtime = Number(overtimeValue);
     if (!overtimeValue || Number.isNaN(overtime)) return;
-    const dayNumbers = new Set(
-      overtimeDays
-        .split(/[,،\s]+/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map(Number)
-    );
+    const dayNumbers = parseDayNumbers(overtimeDays);
     const targetDates = dates.filter(
       (date) => dayNumbers.has(Number(date.slice(-2))) && rows[date]?.id && !rows[date]?.is_day_off
     );
@@ -673,16 +691,16 @@ export default function DailyLogTable({
 
       {mode === "hours" && role === "driver" && (
         <div className="no-print bg-slate-50 rounded-xl p-3 mb-4">
-          <div className="text-xs font-bold text-slate-500 mb-2">طبّق أوفر تايم على أيام معيّنة (مش مدى متصل)</div>
+          <div className="text-xs font-bold text-slate-500 mb-2">طبّق أوفر تايم على أيام معيّنة</div>
           <div className="flex flex-wrap items-end gap-2">
             <div>
-              <label className="block text-[11px] text-slate-400 mb-1">الأيام (مثلاً: 3, 7, 15)</label>
+              <label className="block text-[11px] text-slate-400 mb-1">الأيام (مثلاً: 3, 7, 15 أو 14-31)</label>
               <input
                 type="text"
                 value={overtimeDays}
                 onChange={(e) => setOvertimeDays(e.target.value)}
-                placeholder="3, 7, 15"
-                className="w-40 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                placeholder="1-5, 7-10, 15"
+                className="w-48 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
               />
             </div>
             <div>
@@ -705,8 +723,9 @@ export default function DailyLogTable({
             </button>
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
-            بيطبّق نفس عدد ساعات الأوفر تايم على الأيام المكتوبة بس (اكتب أرقام الأيام مفصولة بفاصلة) — الأيام اللي
-            لسه فاضية أو متعلّمة "مشتغلش" بيتجاهلوا. تقدر ترجع الأصل بـ Ctrl+Z لو غلطت.
+            بيطبّق نفس عدد ساعات الأوفر تايم على الأيام المكتوبة بس — تقدر تكتب أرقام أيام مفصولة بفاصلة (3, 7, 15)،
+            أو مدى بشرطة (14-31)، أو خليط بينهم (1-5, 7-10). الأيام اللي لسه فاضية أو متعلّمة "مشتغلش" بيتجاهلوا. تقدر
+            ترجع الأصل بـ Ctrl+Z لو غلطت.
           </div>
         </div>
       )}
