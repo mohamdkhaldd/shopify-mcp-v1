@@ -371,6 +371,27 @@ export default function DailyLogTable({
   const monthTotal = Object.values(rows).reduce((sum, r) => sum + (r.id ? r.day_value : 0), 0);
   const monthOvertimeHours = Object.values(rows).reduce((sum, r) => sum + (r.id ? Number(r.overtime_hours) || 0 : 0), 0);
 
+  // ملخص أيام الشهر: كام يوم اشتغل كامل، وكام يوم اشتغل جزء بس من ساعاته
+  // الأساسية (مجمّعين بعدد الساعات اللي اشتغلوها، زي "3 أيام اشتغلوا 4
+  // ساعات بس") — الأيام اللي معلّمة "مشتغلش" أو لسه فاضية متحسبش خالص.
+  const workDaysSummary = useMemo(() => {
+    let fullDays = 0;
+    const partialGroups = new Map<number, string[]>();
+    for (const date of dates) {
+      const row = rows[date];
+      if (!row?.id || row.is_day_off) continue;
+      const base = Number(row.base_hours) || 0;
+      const actual = row.actual_hours.trim() === "" ? base : Number(row.actual_hours) || 0;
+      if (base <= 0 || actual >= base) {
+        fullDays++;
+      } else {
+        if (!partialGroups.has(actual)) partialGroups.set(actual, []);
+        partialGroups.get(actual)!.push(date.slice(-2));
+      }
+    }
+    return { fullDays, partialGroups };
+  }, [rows, dates]);
+
   if (loading) {
     return <div className="bg-white rounded-card shadow-card p-5 text-sm text-slate-400">جاري التحميل...</div>;
   }
@@ -681,6 +702,26 @@ export default function DailyLogTable({
           </tfoot>
         </table>
       </div>
+
+      {mode === "hours" && role === "driver" && (
+        <div className="mt-4 bg-slate-50 rounded-xl p-3 text-sm">
+          <div className="font-bold text-slate-600 mb-1">أيام الشغل في الشهر</div>
+          <div className="text-slate-600">
+            عدد الأيام اللي اشتغلت كامل: <span className="font-semibold text-primary-dark">{workDaysSummary.fullDays}</span> يوم
+          </div>
+          {workDaysSummary.partialGroups.size > 0 && (
+            <div className="mt-1 space-y-0.5">
+              {[...workDaysSummary.partialGroups.entries()]
+                .sort((a, b) => b[0] - a[0])
+                .map(([hours, days]) => (
+                  <div key={hours} className="text-slate-500">
+                    {days.length} {days.length === 1 ? "يوم اشتغل" : "أيام اشتغلوا"} {hours} {hours === 1 ? "ساعة" : "ساعات"} بس (يوم {days.join("، ")})
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
