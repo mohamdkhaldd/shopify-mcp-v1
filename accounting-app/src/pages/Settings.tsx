@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { systemApi } from "../api/client";
+import { useEffect, useState } from "react";
+import { appApi, systemApi } from "../api/client";
+import { AppUpdateStatus } from "../api/types";
 import Icon from "../components/Icon";
 import DriversTab from "./settings/DriversTab";
 import EquipmentTab from "./settings/EquipmentTab";
@@ -20,6 +21,28 @@ const tabs: { id: TabId; label: string; icon: string }[] = [
 export default function Settings() {
   const [active, setActive] = useState<TabId>("partners");
   const [resetting, setResetting] = useState(false);
+
+  const [version, setVersion] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [updateResult, setUpdateResult] = useState<AppUpdateStatus | null>(null);
+  const [installing, setInstalling] = useState(false);
+
+  useEffect(() => {
+    appApi.getVersion().then(setVersion);
+  }, []);
+
+  async function handleCheckForUpdate() {
+    setChecking(true);
+    setUpdateResult(null);
+    const result = await appApi.checkForUpdate();
+    setUpdateResult(result);
+    setChecking(false);
+  }
+
+  async function handleInstallUpdate() {
+    setInstalling(true);
+    await appApi.installUpdate();
+  }
 
   async function handleResetAll() {
     const step1 = window.confirm(
@@ -72,6 +95,46 @@ export default function Settings() {
       {active === "contractors" && <ContractorsTab />}
 
       {active === "expenseCategories" && <ExpenseCategoriesTab />}
+
+      <div className="bg-white rounded-card shadow-card p-5">
+        <h2 className="font-bold text-slate-700 mb-1">الإصدار والتحديثات</h2>
+        <p className="text-xs text-slate-400 mb-3">
+          النسخة الحالية: <span className="font-semibold text-slate-600">{version || "..."}</span>
+        </p>
+
+        {updateResult?.state === "downloaded" ? (
+          <div className="space-y-2">
+            <p className="text-sm text-primary-dark font-semibold">
+              فيه تحديث جاهز (نسخة {updateResult.version}) — دوس عشان يقفل البرنامج ويفتح تاني بالنسخة الجديدة.
+            </p>
+            <button
+              onClick={handleInstallUpdate}
+              disabled={installing}
+              className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
+            >
+              {installing ? "جاري إعادة التشغيل..." : "ثبّت وأعد التشغيل الآن"}
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleCheckForUpdate}
+            disabled={checking}
+            className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {checking ? "جاري التحقق..." : "تحقق من وجود تحديث"}
+          </button>
+        )}
+
+        {updateResult?.state === "not-available" && (
+          <p className="text-xs text-slate-400 mt-2">البرنامج عندك أحدث نسخة متاحة.</p>
+        )}
+        {updateResult?.state === "error" && (
+          <p className="text-xs text-rose-500 mt-2">حصل خطأ وقت التحقق — تأكد من الاتصال بالإنترنت وحاول تاني.</p>
+        )}
+        {updateResult?.state === "dev" && (
+          <p className="text-xs text-slate-400 mt-2">التحديث التلقائي شغال بس في النسخة المثبّتة فعليًا على الجهاز.</p>
+        )}
+      </div>
 
       <div className="bg-white rounded-card shadow-card p-5 border border-rose-100">
         <h2 className="font-bold text-rose-600 mb-1">منطقة الخطر</h2>

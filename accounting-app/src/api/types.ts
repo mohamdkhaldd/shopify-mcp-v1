@@ -509,3 +509,9 @@ export interface IncomingSummary {
   contractorPayments: IncomingContractorPaymentRow[];
   totalIncoming: number;
 }
+
+export interface AppUpdateStatus {
+  state: "dev" | "not-available" | "downloaded" | "error";
+  version?: string;
+  message?: string;
+}

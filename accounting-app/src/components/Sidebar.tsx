@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { navItems, SectionId } from "../nav";
+import { appApi } from "../api/client";
 import CompanyLogo from "./CompanyLogo";
 import Icon from "./Icon";
 import { useTheme } from "../theme";
@@ -10,6 +12,11 @@ interface SidebarProps {
 
 export default function Sidebar({ active, onSelect }: SidebarProps) {
   const { theme, toggle } = useTheme();
+  const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    appApi.getVersion().then(setVersion);
+  }, []);
 
   return (
     <aside className="no-print w-64 shrink-0 h-screen sticky top-0 bg-white border-s border-slate-200 flex flex-col">
@@ -52,7 +59,9 @@ export default function Sidebar({ active, onSelect }: SidebarProps) {
           <Icon name={theme === "dark" ? "sun" : "moon"} className="w-5 h-5" />
           <span>{theme === "dark" ? "الوضع العادي" : "الوضع الليلي"}</span>
         </button>
-        <div className="text-xs text-slate-400">الإصدار ٠.١ — يعمل بالكامل بدون إنترنت</div>
+        <div className="text-xs text-slate-400">
+          {version ? `الإصدار ${version}` : "..."} — يعمل بالكامل بدون إنترنت
+        </div>
       </div>
     </aside>
   );

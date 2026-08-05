@@ -101,6 +101,38 @@ function setupAutoUpdate() {
   }, 4 * 60 * 60 * 1000);
 }
 
+// من صفحة الإعدادات: زرار "تحقق من التحديثات" بيدوس على الفحص التلقائي يدويًا
+// (مفيد لو النسخة قديمة أوي ومفيهاش تحديث تلقائي أصلًا)، وبيستنى النتيجة
+// النهائية — لو فيه تحديث بينزله كامل قبل ما يرد، عشان الزرار التاني
+// "تثبيت وإعادة التشغيل" يبقى جاهز يشتغل على طول من غير استنى تاني.
+ipcMain.handle("app:getVersion", () => app.getVersion());
+
+ipcMain.handle("app:checkForUpdate", () => {
+  if (isDev) return Promise.resolve({ state: "dev" });
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      autoUpdater.removeListener("update-not-available", onNotAvailable);
+      autoUpdater.removeListener("update-downloaded", onDownloaded);
+      autoUpdater.removeListener("error", onError);
+      resolve(result);
+    };
+    const onNotAvailable = () => finish({ state: "not-available", version: app.getVersion() });
+    const onDownloaded = (info) => finish({ state: "downloaded", version: info.version });
+    const onError = (err) => finish({ state: "error", message: String((err && err.message) || err) });
+    autoUpdater.once("update-not-available", onNotAvailable);
+    autoUpdater.once("update-downloaded", onDownloaded);
+    autoUpdater.once("error", onError);
+    autoUpdater.checkForUpdates().catch(onError);
+  });
+});
+
+ipcMain.handle("app:installUpdate", () => {
+  autoUpdater.quitAndInstall();
+});
+
 app.whenReady().then(() => {
   const db = initDatabase();
   registerIpcHandlers(db);

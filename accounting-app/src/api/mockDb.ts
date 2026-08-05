@@ -1922,6 +1922,12 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { ok: true };
   }
 
+  // التحديث التلقائي مفهوم خاص بالبرنامج المثبّت فعليًا (Electron) —
+  // في المعاينة بالمتصفح (npm run dev) مفيش نسخة حقيقية نتحقق منها.
+  if (channel === "app:getVersion") return "معاينة متصفح";
+  if (channel === "app:checkForUpdate") return { state: "dev" };
+  if (channel === "app:installUpdate") return { ok: true };
+
   if (channel === "expenseCategories:update") {
     const category = state.expense_categories.find((c) => c.id === payload.id)!;
     category.name = payload.name.trim();

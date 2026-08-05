@@ -1,5 +1,6 @@
 import { mockInvoke } from "./mockDb";
 import {
+  AppUpdateStatus,
   Contractor,
   ContractorDetail,
   ContractorPayment,
@@ -164,6 +165,12 @@ export const salaryPaymentsApi = {
 
 export const systemApi = {
   resetAll: (): Promise<void> => invoke("system:resetAll"),
+};
+
+export const appApi = {
+  getVersion: (): Promise<string> => invoke("app:getVersion"),
+  checkForUpdate: (): Promise<AppUpdateStatus> => invoke("app:checkForUpdate"),
+  installUpdate: (): Promise<void> => invoke("app:installUpdate"),
 };
 
 export const hassanApi = {
