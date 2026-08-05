@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { dailyLogsApi } from "../../api/client";
+import { dailyLogsApi, equipmentApi } from "../../api/client";
 import { DailyLog, DailyLogRole, WageType } from "../../api/types";
 import { daysInMonth, weekdayLabel } from "../../utils/months";
 import { formatEGP } from "../../utils/format";
@@ -101,6 +101,15 @@ export default function DailyLogTable({
   const [bulkApplying, setBulkApplying] = useState(false);
   const [bulkClearing, setBulkClearing] = useState(false);
   const { pushUndo } = useUndo();
+
+  const [otherEquipment, setOtherEquipment] = useState<{ id: number; name: string }[]>([]);
+  const [copySourceId, setCopySourceId] = useState("");
+  const [copying, setCopying] = useState(false);
+
+  useEffect(() => {
+    if (mode !== "hours" || role !== "driver") return;
+    equipmentApi.list().then((list) => setOtherEquipment(list.filter((eq) => eq.id !== equipmentId)));
+  }, [mode, role, equipmentId]);
 
   const refresh = () =>
     dailyLogsApi.list(equipmentId, month, role).then((logs) => {
@@ -372,6 +381,38 @@ export default function DailyLogTable({
     });
   }
 
+  // بينسخ الساعات/الأساسية/الأوفر تايم/علامة "مشتغلش" من معدة تانية لنفس
+  // الشهر — مفيد لما تضيف معدة جديدة بنفس مواعيد وردية معدة موجودة، فتنسخها
+  // بدل ما تكتب كل يوم من الأول. الاسم وسعر اليوم (سركي ومقاول) مش بيتغيروا،
+  // لازم تحددهم بنفسك بعد النسخ. بتاخد نسخة من بيانات المعدة الهدف قبل
+  // النسخ عشان Ctrl+Z يرجّعها لو غلطت.
+  async function applyCopyFromEquipment() {
+    if (!copySourceId) return;
+    const sourceId = Number(copySourceId);
+    const sourceName = otherEquipment.find((eq) => eq.id === sourceId)?.name ?? "";
+
+    const beforeDriver = await dailyLogsApi.list(equipmentId, month, "driver");
+    const beforeContractor = await dailyLogsApi.list(equipmentId, month, "contractor");
+    const beforeDates = new Set([...beforeDriver, ...beforeContractor].map((l) => `${l.role}:${l.date}`));
+
+    setCopying(true);
+    await dailyLogsApi.copyFromEquipment(equipmentId, sourceId, month);
+    await refresh();
+    setCopying(false);
+    onChanged?.();
+
+    pushUndo(`اتنسخت بيانات ${sourceName} في شهر ${month}`, async () => {
+      for (const log of [...beforeDriver, ...beforeContractor]) await restoreDailyLog(log);
+      const afterDriver = await dailyLogsApi.list(equipmentId, month, "driver");
+      const afterContractor = await dailyLogsApi.list(equipmentId, month, "contractor");
+      for (const log of [...afterDriver, ...afterContractor]) {
+        if (!beforeDates.has(`${log.role}:${log.date}`)) await dailyLogsApi.remove(log.id);
+      }
+      await refresh();
+      onChanged?.();
+    });
+  }
+
   const monthTotal = Object.values(rows).reduce((sum, r) => sum + (r.id ? r.day_value : 0), 0);
   const monthOvertimeHours = Object.values(rows).reduce((sum, r) => sum + (r.id ? Number(r.overtime_hours) || 0 : 0), 0);
 
@@ -402,6 +443,39 @@ export default function DailyLogTable({
 
   return (
     <div className="bg-white rounded-card shadow-card p-5">
+      {mode === "hours" && role === "driver" && otherEquipment.length > 0 && (
+        <div className="no-print bg-slate-50 rounded-xl p-3 mb-4">
+          <div className="text-xs font-bold text-slate-500 mb-2">انسخ ساعات وأوفر تايم الشهر ده من معدة تانية</div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1">انسخ من معدة</label>
+              <select
+                value={copySourceId}
+                onChange={(e) => setCopySourceId(e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white min-w-[160px]"
+              >
+                <option value=""></option>
+                {otherEquipment.map((eq) => (
+                  <option key={eq.id} value={eq.id}>
+                    {eq.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={applyCopyFromEquipment}
+              disabled={copying || !copySourceId}
+              className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
+            >
+              {copying ? "جاري النسخ..." : "انسخ"}
+            </button>
+          </div>
+          <div className="text-[11px] text-slate-400 mt-2">
+            بينسخ الساعات والأساسية والأوفر تايم وأيام "مشتغلش" بس لنفس الشهر — بيستبدل أي بيانات ساعات موجودة هنا. الاسم وسعر اليوم (هنا وفي شيت المقاول) بيفضلوا زي ما هم، لازم تحددهم بنفسك بعد النسخ. تقدر ترجع الأصل بـ Ctrl+Z لو غلطت.
+          </div>
+        </div>
+      )}
+
       {mode === "hours" && (
         <div className="no-print bg-slate-50 rounded-xl p-3 mb-4">
           <div className="text-xs font-bold text-slate-500 mb-2">تعبئة سريعة لمجموعة أيام دفعة واحدة</div>

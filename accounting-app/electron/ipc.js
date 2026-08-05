@@ -481,6 +481,52 @@ function registerIpcHandlers(db) {
     return { ok: true };
   });
 
+  // معدة جديدة غالبًا هتشتغل بنفس ساعات ودوام معدة قديمة (نفس مواعيد الورديات
+  // والأوفر تايم) — بننسخ الساعات/الأساسية/الأوفر تايم/علامة "مشتغلش"/البيان
+  // بس من شيت السركي بتاع المعدة المصدر لنفس الشهر، وبيتزامنوا لشيت المقاول
+  // تلقائيًا زي أي تعديل عادي. الاسم وسعر اليوم (في السركي والمقاول) بيفضلوا
+  // زي ما هما عند المعدة الهدف من غير ما نلمسهم — لازم يتحددوا يدويًا بعد
+  // النسخ لأن السواق/المقاول وسعره مختلفين عن المعدة التانية.
+  ipcMain.handle("dailyLogs:copyFromEquipment", (_e, { target_equipment_id, source_equipment_id, month }) => {
+    const sourceLogs = db
+      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
+      .all(source_equipment_id, `${month}%`);
+    const upsertHours = db.prepare(
+      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
+       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
+       ON CONFLICT(equipment_id, date, role) DO UPDATE SET
+         actual_hours = excluded.actual_hours,
+         base_hours = excluded.base_hours,
+         is_day_off = excluded.is_day_off,
+         note = excluded.note`
+    );
+    const copy = db.transaction((logs) => {
+      for (const src of logs) {
+        for (const targetRole of ["driver", "contractor"]) {
+          const existing = db
+            .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ?")
+            .get(target_equipment_id, src.date, targetRole);
+          upsertHours.run({
+            equipment_id: target_equipment_id,
+            date: src.date,
+            role: targetRole,
+            person_name: existing?.person_name ?? "",
+            actual_hours: src.actual_hours,
+            base_hours: src.base_hours,
+            day_rate: existing?.day_rate ?? null,
+            is_paid_leave: existing?.is_paid_leave ?? 0,
+            is_day_off: src.is_day_off ? 1 : 0,
+            fixed_value: existing?.fixed_value ?? null,
+            hassan_commission: existing?.hassan_commission ?? null,
+            note: src.note,
+          });
+        }
+      }
+    });
+    copy(sourceLogs);
+    return { count: sourceLogs.length };
+  });
+
   // --- Monthly expenses ---
   ipcMain.handle("monthlyExpenses:list", (_e, { equipment_id, month }) =>
     db

@@ -109,6 +109,12 @@ export const dailyLogsApi = {
     invoke("dailyLogs:list", { equipment_id, month, role }),
   upsert: (log: Omit<DailyLog, "id" | "day_value">): Promise<DailyLog> => invoke("dailyLogs:upsert", log),
   remove: (id: number): Promise<void> => invoke("dailyLogs:delete", { id }),
+  copyFromEquipment: (
+    target_equipment_id: number,
+    source_equipment_id: number,
+    month: string
+  ): Promise<{ count: number }> =>
+    invoke("dailyLogs:copyFromEquipment", { target_equipment_id, source_equipment_id, month }),
 };
 
 export const monthlyExpensesApi = {

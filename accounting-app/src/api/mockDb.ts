@@ -493,6 +493,42 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     saveState(state);
     return { ok: true };
   }
+  if (channel === "dailyLogs:copyFromEquipment") {
+    const sourceLogs = state.daily_logs.filter(
+      (l) => l.equipment_id === payload.source_equipment_id && l.role === "driver" && l.date.startsWith(payload.month)
+    );
+    for (const src of sourceLogs) {
+      for (const targetRole of ["driver", "contractor"] as const) {
+        const existing = state.daily_logs.find(
+          (l) => l.equipment_id === payload.target_equipment_id && l.date === src.date && l.role === targetRole
+        );
+        if (existing) {
+          existing.actual_hours = src.actual_hours;
+          existing.base_hours = src.base_hours;
+          existing.is_day_off = src.is_day_off;
+          existing.note = src.note;
+        } else {
+          state.daily_logs.push({
+            id: state.nextId++,
+            equipment_id: payload.target_equipment_id,
+            date: src.date,
+            role: targetRole,
+            person_name: "",
+            actual_hours: src.actual_hours,
+            base_hours: src.base_hours,
+            day_rate: null,
+            is_paid_leave: false,
+            is_day_off: src.is_day_off,
+            fixed_value: null,
+            hassan_commission: null,
+            note: src.note,
+          });
+        }
+      }
+    }
+    saveState(state);
+    return { count: sourceLogs.length };
+  }
 
   if (channel === "monthlyExpenses:list") {
     return state.monthly_expenses
