@@ -5,6 +5,7 @@ const { ipcMain } = require("electron");
 // day value = day_rate + overtime_hours * hourly_rate. سركي سوق has no
 // hours at all — the day value is just whatever fixed amount was entered.
 function computeDayValue(log) {
+  if (log.is_day_off) return 0;
   if (log.role === "market") return (log.fixed_value ?? 0) - (log.hassan_commission ?? 0);
   if (log.is_paid_leave) return 0;
   const dayRate = log.day_rate ?? 0;
@@ -26,7 +27,7 @@ function computeDayValue(log) {
 // بيتطبق على أصحاب الأجر اليومي بس — مفيش أوفر تايم ولا إجازة جمعة تلقائية،
 // بيتحسب بس من الأيام المسجلة فعليًا.
 function computeDriverWageValue(log, employeeRate) {
-  if (log.is_paid_leave) return 0;
+  if (log.is_paid_leave || log.is_day_off) return 0;
   const baseHours = log.base_hours ?? 0;
   const hourlyRate = employeeRate / (baseHours || 8);
   const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - baseHours);
@@ -391,7 +392,10 @@ function registerIpcHandlers(db) {
   // المقاول لنفس المعدة واليوم من غير ما تدخلهم مرتين (ولو صف المقاول
   // مالوش شخص/سعر لسه بيتعمله واحد فاضي جاهز يتحدد بس)، والعكس صحيح — من
   // غير ما نلمس اسم الشخص ولا سعر اليوم بتاعه، ومن غير ما نمس إجازة السائق
-  // المدفوعة لأنها مفهوم خاص بمرتبه الشهري ومالهاش معنى عند المقاول.
+  // المدفوعة لأنها مفهوم خاص بمرتبه الشهري ومالهاش معنى عند المقاول. علامة
+  // "اليوم مشتغلش" (is_day_off) بتتزامن هي كمان زي الساعات بالظبط — لو
+  // اليوم مشتغلش في شيت، بيبقى مشتغلش في التاني بردو، من غير ما نمسح
+  // بيانات الاسم والسعر (تفضل موجودة لو رجع يشتغل تاني).
   function syncHoursToOtherRole(db, log) {
     const otherRole = OTHER_HOURS_ROLE[log.role];
     if (!otherRole) return;
@@ -407,16 +411,18 @@ function registerIpcHandlers(db) {
       base_hours: log.base_hours ?? null,
       day_rate: existing?.day_rate ?? null,
       is_paid_leave: existing?.is_paid_leave ?? 0,
+      is_day_off: log.is_day_off ? 1 : 0,
       fixed_value: existing?.fixed_value ?? null,
       hassan_commission: existing?.hassan_commission ?? null,
       note: log.note ?? null,
     };
     db.prepare(
-      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, fixed_value, hassan_commission, note)
-       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @fixed_value, @hassan_commission, @note)
+      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
+       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
        ON CONFLICT(equipment_id, date, role) DO UPDATE SET
          actual_hours = excluded.actual_hours,
          base_hours = excluded.base_hours,
+         is_day_off = excluded.is_day_off,
          note = excluded.note`
     ).run(params);
   }
@@ -434,19 +440,21 @@ function registerIpcHandlers(db) {
       base_hours: log.base_hours ?? null,
       day_rate: log.day_rate ?? null,
       is_paid_leave: log.is_paid_leave ? 1 : 0,
+      is_day_off: log.is_day_off ? 1 : 0,
       fixed_value: log.fixed_value ?? null,
       hassan_commission: log.hassan_commission ?? null,
       note: log.note ?? null,
     };
     db.prepare(
-      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, fixed_value, hassan_commission, note)
-       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @fixed_value, @hassan_commission, @note)
+      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
+       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
        ON CONFLICT(equipment_id, date, role) DO UPDATE SET
          person_name = excluded.person_name,
          actual_hours = excluded.actual_hours,
          base_hours = excluded.base_hours,
          day_rate = excluded.day_rate,
          is_paid_leave = excluded.is_paid_leave,
+         is_day_off = excluded.is_day_off,
          fixed_value = excluded.fixed_value,
          hassan_commission = excluded.hassan_commission,
          note = excluded.note`

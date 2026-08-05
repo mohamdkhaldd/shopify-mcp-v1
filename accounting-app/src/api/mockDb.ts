@@ -16,6 +16,7 @@ interface DailyLogRow {
   base_hours: number | null;
   day_rate: number | null;
   is_paid_leave: boolean;
+  is_day_off: boolean;
   fixed_value: number | null;
   hassan_commission: number | null;
   note: string | null;
@@ -181,6 +182,7 @@ interface MockState {
 const ACCOUNT_NAME_AR: Record<string, string> = { wallet: "اكسيس باي", instapay: "انستا باي", cash: "كاش", vodafone_cash: "فودفون كاش" };
 
 function computeDayValue(log: DailyLogRow): number {
+  if (log.is_day_off) return 0;
   if (log.role === "market") return (log.fixed_value ?? 0) - (log.hassan_commission ?? 0);
   if (log.is_paid_leave) return 0;
   const dayRate = log.day_rate ?? 0;
@@ -195,7 +197,7 @@ function computeDayValue(log: DailyLogRow): number {
 // في شيت السركي (ده بقى بيمثل قد إيه المعدة اشتغلت بيه، رقم مختلف تمامًا).
 // بيتطبق على أصحاب الأجر اليومي بس — بيتحسب من الأيام المسجلة فعليًا فقط.
 function computeDriverWageValue(log: DailyLogRow, employeeRate: number): number {
-  if (log.is_paid_leave) return 0;
+  if (log.is_paid_leave || log.is_day_off) return 0;
   const baseHours = log.base_hours ?? 0;
   const hourlyRate = employeeRate / (baseHours || 8);
   const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - baseHours);
@@ -434,6 +436,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       existing.actual_hours = log.actual_hours ?? null;
       existing.base_hours = log.base_hours ?? null;
       existing.note = log.note ?? null;
+      existing.is_day_off = !!log.is_day_off;
     } else {
       state.daily_logs.push({
         id: state.nextId++,
@@ -445,6 +448,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
         base_hours: log.base_hours ?? null,
         day_rate: null,
         is_paid_leave: false,
+        is_day_off: !!log.is_day_off,
         fixed_value: null,
         hassan_commission: null,
         note: log.note ?? null,

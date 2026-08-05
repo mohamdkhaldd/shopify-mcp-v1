@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS daily_logs (
   base_hours REAL,
   day_rate REAL,
   is_paid_leave INTEGER NOT NULL DEFAULT 0,
+  is_day_off INTEGER NOT NULL DEFAULT 0,
   fixed_value REAL,
   hassan_commission REAL,
   note TEXT,
@@ -327,6 +328,14 @@ function initDatabase() {
     .some((col) => col.name === "note");
   if (!dailyLogsHasNote) {
     db.exec("ALTER TABLE daily_logs ADD COLUMN note TEXT");
+  }
+
+  const dailyLogsHasDayOff = db
+    .prepare("PRAGMA table_info(daily_logs)")
+    .all()
+    .some((col) => col.name === "is_day_off");
+  if (!dailyLogsHasDayOff) {
+    db.exec("ALTER TABLE daily_logs ADD COLUMN is_day_off INTEGER NOT NULL DEFAULT 0");
   }
 
   const employeesHasFixedSalary = db

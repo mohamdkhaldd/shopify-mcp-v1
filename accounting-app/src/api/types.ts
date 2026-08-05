@@ -52,6 +52,7 @@ export interface DailyLog {
   base_hours: number | null;
   day_rate: number | null;
   is_paid_leave: boolean;
+  is_day_off: boolean;
   fixed_value: number | null;
   hassan_commission: number | null;
   note: string | null;

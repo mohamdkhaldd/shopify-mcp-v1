@@ -38,6 +38,7 @@ interface RowDraft {
   overtime_hours: string;
   day_rate: string;
   is_paid_leave: boolean;
+  is_day_off: boolean;
   fixed_value: string;
   hassan_commission: string;
   note: string;
@@ -54,6 +55,7 @@ function emptyRow(): RowDraft {
     overtime_hours: "",
     day_rate: "",
     is_paid_leave: false,
+    is_day_off: false,
     fixed_value: "",
     hassan_commission: "",
     note: "",
@@ -133,6 +135,7 @@ export default function DailyLogTable({
       overtime_hours: overtimeFromHours(actual_hours, base_hours),
       day_rate: log.day_rate?.toString() ?? "",
       is_paid_leave: log.is_paid_leave ?? false,
+      is_day_off: log.is_day_off ?? false,
       fixed_value: log.fixed_value?.toString() ?? "",
       hassan_commission: log.hassan_commission?.toString() ?? "",
       note: log.note ?? "",
@@ -159,6 +162,7 @@ export default function DailyLogTable({
       base_hours: log.base_hours,
       day_rate: log.day_rate,
       is_paid_leave: log.is_paid_leave,
+      is_day_off: log.is_day_off,
       fixed_value: log.fixed_value,
       hassan_commission: log.hassan_commission,
       note: log.note,
@@ -204,7 +208,7 @@ export default function DailyLogTable({
     const hasHours = mode === "hours" && row.actual_hours.trim() !== "";
     const hasContent =
       mode === "hours"
-        ? Boolean(row.person_name && (row.day_rate || row.is_paid_leave)) || hasNote || hasHours
+        ? Boolean(row.person_name && (row.day_rate || row.is_paid_leave)) || hasNote || hasHours || row.is_day_off
         : Boolean(row.person_name && row.fixed_value);
 
     if (!hasContent) {
@@ -242,6 +246,7 @@ export default function DailyLogTable({
       base_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.base_hours) : null,
       day_rate: mode === "hours" ? Number(row.day_rate) || 0 : null,
       is_paid_leave: row.is_paid_leave,
+      is_day_off: row.is_day_off,
       fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
       hassan_commission: mode === "fixed" && row.hassan_commission ? Number(row.hassan_commission) : null,
       note: row.note.trim() || null,
@@ -253,6 +258,16 @@ export default function DailyLogTable({
   function toggleLeave(date: string, checked: boolean) {
     updateRow(date, { is_paid_leave: checked });
     saveRow(date, { is_paid_leave: checked });
+  }
+
+  // زرار "مشتغلش" — بيعلّم اليوم إنه معدة/سائق ما اشتغلوش من غير ما يمسح أي
+  // بيانات مكتوبة (لو رجع يشتغل تاني تقدر تشيل العلامة والبيانات ترجع زي
+  // ما هي). العلامة بتتزامن مع الشيت التاني (سركي/مقاول) تلقائيًا من السيرفر.
+  function toggleDayOff(date: string) {
+    const row = rows[date] ?? emptyRow();
+    const next = !row.is_day_off;
+    updateRow(date, { is_day_off: next });
+    saveRow(date, { is_day_off: next });
   }
 
   function handleBulkPersonChange(name: string) {
@@ -285,6 +300,7 @@ export default function DailyLogTable({
         base_hours: Number(bulkBaseHours) || 0,
         day_rate: Number(bulkRate) || 0,
         is_paid_leave: false,
+        is_day_off: false,
         fixed_value: null,
         hassan_commission: null,
         note: rows[date]?.note.trim() || null,
@@ -340,6 +356,7 @@ export default function DailyLogTable({
           base_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.base_hours) : null,
           day_rate: mode === "hours" ? Number(row.day_rate) || 0 : null,
           is_paid_leave: row.is_paid_leave,
+          is_day_off: row.is_day_off,
           fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
           hassan_commission: mode === "fixed" && row.hassan_commission ? Number(row.hassan_commission) : null,
           note: row.note.trim() || null,
@@ -494,15 +511,27 @@ export default function DailyLogTable({
                   key={date}
                   className={[
                     "border-b border-slate-50 last:border-0",
-                    row.id ? "bg-white" : "bg-slate-50/40",
+                    row.is_day_off ? "bg-rose-50" : row.id ? "bg-white" : "bg-slate-50/40",
                   ].join(" ")}
                 >
                   <td className="py-1.5 text-slate-500 whitespace-nowrap">
+                    {mode === "hours" && (
+                      <button
+                        type="button"
+                        onClick={() => toggleDayOff(date)}
+                        title={row.is_day_off ? "اتعلّم إن اليوم ده مشتغلش — دوس تاني عشان تشيل العلامة" : "علّم إن اليوم ده مشتغلش"}
+                        className={[
+                          "no-print inline-block w-3.5 h-3.5 rounded-full border align-middle me-1.5",
+                          row.is_day_off ? "bg-rose-500 border-rose-500" : "border-rose-300 hover:bg-rose-100",
+                        ].join(" ")}
+                      />
+                    )}
                     {isFlagged && (
                       <span className="inline-block w-2 h-2 rounded-full bg-rose-500 align-middle me-1.5" title="الساعات مش متطابقة بين السركي والمقاول" />
                     )}
                     {dayNum}
                     <span className="text-xs text-slate-400"> ({weekdayLabel(date)})</span>
+                    {row.is_day_off && <span className="print-only">مشتغلش</span>}
                   </td>
                   <td className="py-1.5">
                     <select
