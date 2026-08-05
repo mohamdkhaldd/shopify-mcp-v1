@@ -184,8 +184,8 @@ function computeDayValue(log: DailyLogRow): number {
   if (log.role === "market") return (log.fixed_value ?? 0) - (log.hassan_commission ?? 0);
   if (log.is_paid_leave) return 0;
   const dayRate = log.day_rate ?? 0;
-  const hourlyRate = dayRate / 8;
   const baseHours = log.base_hours ?? 0;
+  const hourlyRate = dayRate / (baseHours || 8);
   const actualHours = log.actual_hours ?? baseHours;
   const diffHours = actualHours - baseHours;
   return dayRate + diffHours * hourlyRate;
@@ -196,8 +196,9 @@ function computeDayValue(log: DailyLogRow): number {
 // بيتطبق على أصحاب الأجر اليومي بس — بيتحسب من الأيام المسجلة فعليًا فقط.
 function computeDriverWageValue(log: DailyLogRow, employeeRate: number): number {
   if (log.is_paid_leave) return 0;
-  const hourlyRate = employeeRate / 8;
-  const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - (log.base_hours ?? 0));
+  const baseHours = log.base_hours ?? 0;
+  const hourlyRate = employeeRate / (baseHours || 8);
+  const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - baseHours);
   return employeeRate + overtimeHours * hourlyRate;
 }
 
@@ -216,8 +217,9 @@ function computePairedCommission(equipmentName: string, driverLog: DailyLogRow, 
   }
   const k = contractorLog.day_rate ?? 0;
   const h = driverLog.day_rate ?? 0;
+  const baseHours = contractorLog.base_hours || 8;
   const overtimeHours = Math.max(0, (contractorLog.actual_hours ?? 0) - (contractorLog.base_hours ?? 0));
-  return k - h + overtimeHours * (k / 8 - h / 8);
+  return k - h + overtimeHours * (k / baseHours - h / baseHours);
 }
 
 const STORAGE_KEY = "al-bunyan-mock-db-v6";

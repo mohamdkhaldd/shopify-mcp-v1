@@ -8,8 +8,10 @@ function computeDayValue(log) {
   if (log.role === "market") return (log.fixed_value ?? 0) - (log.hassan_commission ?? 0);
   if (log.is_paid_leave) return 0;
   const dayRate = log.day_rate ?? 0;
-  const hourlyRate = dayRate / 8;
   const baseHours = log.base_hours ?? 0;
+  // سعر الساعة بيتحسب من ساعات الأساس المسجلة لليوم ده نفسه، مش رقم ثابت —
+  // لو الأساسي 9 ساعات مثلاً، الساعة بتتحسب على أساس 9 مش 8.
+  const hourlyRate = dayRate / (baseHours || 8);
   // لو الساعات الفعلية متكتبتش خالص (لسه فاضية)، معناها يوم عادي كامل —
   // نعتبرها زي الساعات الأساسية بالظبط (فرق = صفر)، مش صفر ساعة عمل (اللي
   // كان هيصفّر القيمة بالغلط). فوق ساعات الأساس بيزود، وتحتها بيخصم بنفس
@@ -25,8 +27,9 @@ function computeDayValue(log) {
 // بيتحسب بس من الأيام المسجلة فعليًا.
 function computeDriverWageValue(log, employeeRate) {
   if (log.is_paid_leave) return 0;
-  const hourlyRate = employeeRate / 8;
-  const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - (log.base_hours ?? 0));
+  const baseHours = log.base_hours ?? 0;
+  const hourlyRate = employeeRate / (baseHours || 8);
+  const overtimeHours = Math.max(0, (log.actual_hours ?? 0) - baseHours);
   return employeeRate + overtimeHours * hourlyRate;
 }
 
@@ -814,8 +817,8 @@ function registerIpcHandlers(db) {
 
   // --- Hassan: commission (doc section 4) ---
   // Regular equipment: commission = (contractor day_rate - driver day_rate)
-  // + overtime_hours * (contractor_rate/8 - driver_rate/8), paired by date.
-  // The two winches use a flat % of the contractor's day_rate instead.
+  // + overtime_hours * (contractor_rate/base_hours - driver_rate/base_hours),
+  // paired by date. The two winches use a flat % of the contractor's day_rate instead.
   // سركي سوق has no formula — whatever commission was typed in on that row.
   const WINCH_PERCENTAGE_EQUIPMENT = ["ونش 5 طن دبوسة", "ونش 3 وصلة"];
 
@@ -826,8 +829,9 @@ function registerIpcHandlers(db) {
     }
     const k = contractorLog.day_rate ?? 0;
     const h = driverLog.day_rate ?? 0;
+    const baseHours = contractorLog.base_hours || 8;
     const overtimeHours = Math.max(0, (contractorLog.actual_hours ?? 0) - (contractorLog.base_hours ?? 0));
-    return (k - h) + overtimeHours * (k / 8 - h / 8);
+    return (k - h) + overtimeHours * (k / baseHours - h / baseHours);
   }
 
   // كوميشن حسن كله — لو month اتبعت بيتفلتر عليه بس، لو من غيره (null) بيحسب
@@ -1565,7 +1569,6 @@ function registerIpcHandlers(db) {
       }
     }
     const commissionRows = [];
-    const winchList = ["ونش 5 طن دبوسة", "ونش 3 وصلة"];
     for (const eq of equipmentList) {
       const driverLogs = db
         .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
@@ -1582,15 +1585,7 @@ function registerIpcHandlers(db) {
       for (const cl of contractorLogs) {
         const dl = driverByDate.get(cl.date);
         if (!dl) continue;
-        const isWinch = winchList.includes(eq.name);
-        const k = cl.day_rate ?? 0;
-        const h = dl.day_rate ?? 0;
-        const commission = isWinch
-          ? k <= 2500
-            ? k * 0.2
-            : k * 0.175
-          : k - h + Math.max(0, (cl.actual_hours ?? 0) - (cl.base_hours ?? 0)) * (k / 8 - h / 8);
-        commissionRows.push(commission);
+        commissionRows.push(computePairedCommission(eq.name, dl, cl));
       }
       for (const ml of marketLogs) commissionRows.push(ml.hassan_commission ?? 0);
     }
