@@ -425,7 +425,8 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
 
   // السركي والمقاول نفس اليوم ونفس الساعات فعليًا — أي تعديل على الساعات في
   // شيت بينسخ نفسه على شيت التاني لنفس المعدة واليوم، من غير ما يلمس اسم
-  // الشخص ولا سعره ولا إجازة السائق المدفوعة (مفهوم خاص بيه بس).
+  // الشخص ولا سعره ولا إجازة السائق المدفوعة (مفهوم خاص بيه بس) — إلا لو
+  // اليوم اتعلّم "مشتغلش"، ساعتها بيتمسح الاسم والسعر من الشيتين خالص.
   function syncHoursToOtherRole(log: DailyLogRow) {
     const otherRole = OTHER_HOURS_ROLE[log.role];
     if (!otherRole) return;
@@ -437,6 +438,10 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       existing.base_hours = log.base_hours ?? null;
       existing.note = log.note ?? null;
       existing.is_day_off = !!log.is_day_off;
+      if (log.is_day_off) {
+        existing.person_name = "";
+        existing.day_rate = null;
+      }
     } else {
       state.daily_logs.push({
         id: state.nextId++,
@@ -507,6 +512,10 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
           existing.base_hours = src.base_hours;
           existing.is_day_off = src.is_day_off;
           existing.note = src.note;
+          if (src.is_day_off) {
+            existing.person_name = "";
+            existing.day_rate = null;
+          }
         } else {
           state.daily_logs.push({
             id: state.nextId++,

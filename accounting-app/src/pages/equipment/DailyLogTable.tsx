@@ -106,6 +106,10 @@ export default function DailyLogTable({
   const [copySourceId, setCopySourceId] = useState("");
   const [copying, setCopying] = useState(false);
 
+  const [overtimeDays, setOvertimeDays] = useState("");
+  const [overtimeValue, setOvertimeValue] = useState("");
+  const [applyingOvertime, setApplyingOvertime] = useState(false);
+
   useEffect(() => {
     if (mode !== "hours" || role !== "driver") return;
     equipmentApi.list().then((list) => setOtherEquipment(list.filter((eq) => eq.id !== equipmentId)));
@@ -135,7 +139,7 @@ export default function DailyLogTable({
 
   function draftFromLog(log: DailyLog): RowDraft {
     const actual_hours = log.actual_hours?.toString() ?? "";
-    const base_hours = log.base_hours?.toString() ?? "8";
+    const base_hours = log.is_day_off ? "" : log.base_hours?.toString() ?? "8";
     return {
       id: log.id,
       person_name: log.person_name,
@@ -250,10 +254,10 @@ export default function DailyLogTable({
       equipment_id: equipmentId,
       date,
       role,
-      person_name: row.person_name,
+      person_name: row.is_day_off ? "" : row.person_name,
       actual_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.actual_hours) : null,
       base_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.base_hours) : null,
-      day_rate: mode === "hours" ? Number(row.day_rate) || 0 : null,
+      day_rate: row.is_day_off ? null : mode === "hours" ? Number(row.day_rate) || 0 : null,
       is_paid_leave: row.is_paid_leave,
       is_day_off: row.is_day_off,
       fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
@@ -272,11 +276,46 @@ export default function DailyLogTable({
   // زرار "مشتغلش" — بيعلّم اليوم إنه معدة/سائق ما اشتغلوش من غير ما يمسح أي
   // بيانات مكتوبة (لو رجع يشتغل تاني تقدر تشيل العلامة والبيانات ترجع زي
   // ما هي). العلامة بتتزامن مع الشيت التاني (سركي/مقاول) تلقائيًا من السيرفر.
-  function toggleDayOff(date: string) {
+  // زرار "مشتغلش" بقى بيمسح اسم السواق وسعر اليوم والساعات خالص لما يتعلّم،
+  // وبيقفل الخانات دي لحد ما تشيل العلامة تاني (مفيش داعي تفضل بيانات ليوم
+  // اتعلّم إنه مشتغلش أصلًا). بياخد نسخة من الصف الأصلي (والشيت التاني) قبل
+  // المسح عشان Ctrl+Z يرجّعهم لو غلطت.
+  async function toggleDayOff(date: string) {
     const row = rows[date] ?? emptyRow();
     const next = !row.is_day_off;
-    updateRow(date, { is_day_off: next });
-    saveRow(date, { is_day_off: next });
+
+    if (!next) {
+      updateRow(date, { is_day_off: false });
+      await saveRow(date, { is_day_off: false });
+      return;
+    }
+
+    const original = row.id ? (await dailyLogsApi.list(equipmentId, month, role)).find((l) => l.date === date) ?? null : null;
+    const otherRole = OTHER_HOURS_ROLE[role];
+    const counterpart = otherRole
+      ? (await dailyLogsApi.list(equipmentId, month, otherRole)).find((l) => l.date === date) ?? null
+      : null;
+
+    const cleared: Partial<RowDraft> = {
+      is_day_off: true,
+      person_name: "",
+      day_rate: "",
+      actual_hours: "",
+      overtime_hours: "",
+      base_hours: "",
+      is_paid_leave: false,
+    };
+    updateRow(date, cleared);
+    await saveRow(date, cleared);
+
+    if (original || counterpart) {
+      pushUndo(`اتعلّم يوم ${date.slice(-2)} إنه مشتغلش`, async () => {
+        if (original) await restoreDailyLog(original);
+        if (counterpart) await restoreDailyLog(counterpart);
+        await refresh();
+        onChanged?.();
+      });
+    }
   }
 
   function handleBulkPersonChange(name: string) {
@@ -364,10 +403,10 @@ export default function DailyLogTable({
           equipment_id: equipmentId,
           date,
           role,
-          person_name: row.person_name,
+          person_name: row.is_day_off ? "" : row.person_name,
           actual_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.actual_hours) : null,
           base_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.base_hours) : null,
-          day_rate: mode === "hours" ? Number(row.day_rate) || 0 : null,
+          day_rate: row.is_day_off ? null : mode === "hours" ? Number(row.day_rate) || 0 : null,
           is_paid_leave: row.is_paid_leave,
           is_day_off: row.is_day_off,
           fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
@@ -407,6 +446,68 @@ export default function DailyLogTable({
       const afterContractor = await dailyLogsApi.list(equipmentId, month, "contractor");
       for (const log of [...afterDriver, ...afterContractor]) {
         if (!beforeDates.has(`${log.role}:${log.date}`)) await dailyLogsApi.remove(log.id);
+      }
+      await refresh();
+      onChanged?.();
+    });
+  }
+
+  // بيطبّق نفس عدد ساعات الأوفر تايم على مجموعة أيام مختارة بالاسم مش بالمدى
+  // (زي يوم 3 و7 و15 مع بعض)، لأيام فيها بيانات محفوظة فعلاً بس — الأيام
+  // الفاضية بتتجاهل. بياخد نسخة من الأيام المتأثرة قبل التعديل عشان Ctrl+Z
+  // يرجّعها.
+  async function applyBulkOvertime() {
+    const overtime = Number(overtimeValue);
+    if (!overtimeValue || Number.isNaN(overtime)) return;
+    const dayNumbers = new Set(
+      overtimeDays
+        .split(/[,،\s]+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map(Number)
+    );
+    const targetDates = dates.filter(
+      (date) => dayNumbers.has(Number(date.slice(-2))) && rows[date]?.id && !rows[date]?.is_day_off
+    );
+    if (targetDates.length === 0) return;
+
+    const otherRole = OTHER_HOURS_ROLE[role];
+    const otherLogs = otherRole ? await dailyLogsApi.list(equipmentId, month, otherRole) : [];
+    const otherByDate = new Map(otherLogs.map((l) => [l.date, l]));
+    const snapshot = targetDates.map((date) => ({
+      date,
+      row: rows[date],
+      counterpart: otherByDate.get(date) ?? null,
+    }));
+
+    setApplyingOvertime(true);
+    for (const date of targetDates) {
+      const row = rows[date];
+      const base = Number(row.base_hours) || 0;
+      const patch = { actual_hours: String(base + overtime), overtime_hours: String(overtime) };
+      updateRow(date, patch);
+      await saveRow(date, patch);
+    }
+    setApplyingOvertime(false);
+    onChanged?.();
+
+    pushUndo(`اتطبّق أوفر تايم ${overtime} ساعة على ${targetDates.length} يوم`, async () => {
+      for (const { date, row, counterpart } of snapshot) {
+        await dailyLogsApi.upsert({
+          equipment_id: equipmentId,
+          date,
+          role,
+          person_name: row.is_day_off ? "" : row.person_name,
+          actual_hours: !row.is_paid_leave ? hoursOrNull(row.actual_hours) : null,
+          base_hours: !row.is_paid_leave ? hoursOrNull(row.base_hours) : null,
+          day_rate: row.is_day_off ? null : Number(row.day_rate) || 0,
+          is_paid_leave: row.is_paid_leave,
+          is_day_off: row.is_day_off,
+          fixed_value: null,
+          hassan_commission: null,
+          note: row.note.trim() || null,
+        });
+        if (counterpart) await restoreDailyLog(counterpart);
       }
       await refresh();
       onChanged?.();
@@ -570,6 +671,46 @@ export default function DailyLogTable({
         </div>
       )}
 
+      {mode === "hours" && role === "driver" && (
+        <div className="no-print bg-slate-50 rounded-xl p-3 mb-4">
+          <div className="text-xs font-bold text-slate-500 mb-2">طبّق أوفر تايم على أيام معيّنة (مش مدى متصل)</div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1">الأيام (مثلاً: 3, 7, 15)</label>
+              <input
+                type="text"
+                value={overtimeDays}
+                onChange={(e) => setOvertimeDays(e.target.value)}
+                placeholder="3, 7, 15"
+                className="w-40 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1">عدد ساعات الأوفر تايم</label>
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={overtimeValue}
+                onChange={(e) => setOvertimeValue(e.target.value)}
+                className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+            </div>
+            <button
+              onClick={applyBulkOvertime}
+              disabled={applyingOvertime || !overtimeDays.trim() || !overtimeValue}
+              className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
+            >
+              {applyingOvertime ? "جاري التطبيق..." : "طبّق"}
+            </button>
+          </div>
+          <div className="text-[11px] text-slate-400 mt-2">
+            بيطبّق نفس عدد ساعات الأوفر تايم على الأيام المكتوبة بس (اكتب أرقام الأيام مفصولة بفاصلة) — الأيام اللي
+            لسه فاضية أو متعلّمة "مشتغلش" بيتجاهلوا. تقدر ترجع الأصل بـ Ctrl+Z لو غلطت.
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -641,8 +782,10 @@ export default function DailyLogTable({
                       value={row.person_name}
                       onChange={(e) => handlePersonChange(date, e.target.value)}
                       onBlur={() => saveRow(date)}
+                      disabled={row.is_day_off}
+                      title={row.is_day_off ? "اليوم ده متعلّم إنه مشتغلش" : undefined}
                       className={[
-                        "w-full rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 bg-white",
+                        "w-full rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 bg-white disabled:bg-slate-100 disabled:text-slate-400",
                         row.is_paid_leave ? "no-print" : "",
                       ].join(" ")}
                     >
@@ -665,8 +808,8 @@ export default function DailyLogTable({
                           value={row.actual_hours}
                           onChange={(e) => handleActualHoursChange(date, e.target.value)}
                           onBlur={() => saveRow(date)}
-                          disabled={role === "contractor"}
-                          title={role === "contractor" ? "الساعات بتتسجل من شيت السركي" : undefined}
+                          disabled={role === "contractor" || row.is_day_off}
+                          title={role === "contractor" ? "الساعات بتتسجل من شيت السركي" : row.is_day_off ? "اليوم ده متعلّم إنه مشتغلش" : undefined}
                           className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       </td>
@@ -679,8 +822,8 @@ export default function DailyLogTable({
                           value={row.overtime_hours}
                           onChange={(e) => handleOvertimeChange(date, e.target.value)}
                           onBlur={() => saveRow(date)}
-                          disabled={row.is_paid_leave || role === "contractor"}
-                          title={role === "contractor" ? "الساعات بتتسجل من شيت السركي" : undefined}
+                          disabled={row.is_paid_leave || role === "contractor" || row.is_day_off}
+                          title={role === "contractor" ? "الساعات بتتسجل من شيت السركي" : row.is_day_off ? "اليوم ده متعلّم إنه مشتغلش" : undefined}
                           className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       </td>
@@ -692,8 +835,8 @@ export default function DailyLogTable({
                           value={row.base_hours}
                           onChange={(e) => updateRow(date, { base_hours: e.target.value })}
                           onBlur={() => saveRow(date)}
-                          disabled={role === "contractor"}
-                          title={role === "contractor" ? "الساعات بتتسجل من شيت السركي" : undefined}
+                          disabled={role === "contractor" || row.is_day_off}
+                          title={role === "contractor" ? "الساعات بتتسجل من شيت السركي" : row.is_day_off ? "اليوم ده متعلّم إنه مشتغلش" : undefined}
                           className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       </td>
@@ -705,7 +848,8 @@ export default function DailyLogTable({
                           value={row.day_rate}
                           onChange={(e) => updateRow(date, { day_rate: e.target.value })}
                           onBlur={() => saveRow(date)}
-                          disabled={row.is_paid_leave}
+                          disabled={row.is_paid_leave || row.is_day_off}
+                          title={row.is_day_off ? "اليوم ده متعلّم إنه مشتغلش" : undefined}
                           className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       </td>
@@ -716,6 +860,7 @@ export default function DailyLogTable({
                               type="checkbox"
                               checked={row.is_paid_leave}
                               onChange={(e) => toggleLeave(date, e.target.checked)}
+                              disabled={row.is_day_off}
                               className="w-4 h-4 accent-primary"
                               title="إجازة مدفوعة — مش هيتخصم من مرتبه الشهري"
                             />

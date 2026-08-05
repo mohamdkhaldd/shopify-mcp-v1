@@ -393,9 +393,9 @@ function registerIpcHandlers(db) {
   // مالوش شخص/سعر لسه بيتعمله واحد فاضي جاهز يتحدد بس)، والعكس صحيح — من
   // غير ما نلمس اسم الشخص ولا سعر اليوم بتاعه، ومن غير ما نمس إجازة السائق
   // المدفوعة لأنها مفهوم خاص بمرتبه الشهري ومالهاش معنى عند المقاول. علامة
-  // "اليوم مشتغلش" (is_day_off) بتتزامن هي كمان زي الساعات بالظبط — لو
-  // اليوم مشتغلش في شيت، بيبقى مشتغلش في التاني بردو، من غير ما نمسح
-  // بيانات الاسم والسعر (تفضل موجودة لو رجع يشتغل تاني).
+  // "اليوم مشتغلش" (is_day_off) بتتزامن هي كمان — لو اليوم مشتغلش في شيت،
+  // بيبقى مشتغلش في التاني بردو، وبيتمسح الاسم والسعر من الشيتين خالص (مفيش
+  // داعي يفضلوا موجودين ليوم متعلّم إنه مشتغلش أصلًا).
   function syncHoursToOtherRole(db, log) {
     const otherRole = OTHER_HOURS_ROLE[log.role];
     if (!otherRole) return;
@@ -406,10 +406,10 @@ function registerIpcHandlers(db) {
       equipment_id: log.equipment_id,
       date: log.date,
       role: otherRole,
-      person_name: existing?.person_name ?? "",
+      person_name: log.is_day_off ? "" : existing?.person_name ?? "",
       actual_hours: log.actual_hours ?? null,
       base_hours: log.base_hours ?? null,
-      day_rate: existing?.day_rate ?? null,
+      day_rate: log.is_day_off ? null : existing?.day_rate ?? null,
       is_paid_leave: existing?.is_paid_leave ?? 0,
       is_day_off: log.is_day_off ? 1 : 0,
       fixed_value: existing?.fixed_value ?? null,
@@ -420,8 +420,10 @@ function registerIpcHandlers(db) {
       `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
        VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
        ON CONFLICT(equipment_id, date, role) DO UPDATE SET
+         person_name = excluded.person_name,
          actual_hours = excluded.actual_hours,
          base_hours = excluded.base_hours,
+         day_rate = excluded.day_rate,
          is_day_off = excluded.is_day_off,
          note = excluded.note`
     ).run(params);
@@ -495,8 +497,10 @@ function registerIpcHandlers(db) {
       `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
        VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
        ON CONFLICT(equipment_id, date, role) DO UPDATE SET
+         person_name = excluded.person_name,
          actual_hours = excluded.actual_hours,
          base_hours = excluded.base_hours,
+         day_rate = excluded.day_rate,
          is_day_off = excluded.is_day_off,
          note = excluded.note`
     );
@@ -510,10 +514,10 @@ function registerIpcHandlers(db) {
             equipment_id: target_equipment_id,
             date: src.date,
             role: targetRole,
-            person_name: existing?.person_name ?? "",
+            person_name: src.is_day_off ? "" : existing?.person_name ?? "",
             actual_hours: src.actual_hours,
             base_hours: src.base_hours,
-            day_rate: existing?.day_rate ?? null,
+            day_rate: src.is_day_off ? null : existing?.day_rate ?? null,
             is_paid_leave: existing?.is_paid_leave ?? 0,
             is_day_off: src.is_day_off ? 1 : 0,
             fixed_value: existing?.fixed_value ?? null,
