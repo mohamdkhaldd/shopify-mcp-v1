@@ -291,16 +291,20 @@ export default function DailyLogTable({
     });
 
     for (const date of targetDates) {
+      const existing = rows[date];
+      // في شيت المقاول الساعات ثابتة جاية من السركي — التعبئة السريعة هنا
+      // بتحدد بس الاسم والسعر، ومسيبتش الساعات المتزامنة زي ما هي.
+      const preserveHours = role === "contractor";
       await dailyLogsApi.upsert({
         equipment_id: equipmentId,
         date,
         role,
         person_name: bulkPerson,
-        actual_hours: Number(bulkBaseHours) || 0,
-        base_hours: Number(bulkBaseHours) || 0,
+        actual_hours: preserveHours ? hoursOrNull(existing?.actual_hours ?? "") : Number(bulkBaseHours) || 0,
+        base_hours: preserveHours ? hoursOrNull(existing?.base_hours ?? "") : Number(bulkBaseHours) || 0,
         day_rate: Number(bulkRate) || 0,
         is_paid_leave: false,
-        is_day_off: false,
+        is_day_off: existing?.is_day_off ?? false,
         fixed_value: null,
         hassan_commission: null,
         note: rows[date]?.note.trim() || null,
@@ -456,17 +460,19 @@ export default function DailyLogTable({
                 className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
               />
             </div>
-            <div>
-              <label className="block text-[11px] text-slate-400 mb-1">الساعات الأساسية</label>
-              <input
-                type="number"
-                min="0"
-                step="0.5"
-                value={bulkBaseHours}
-                onChange={(e) => setBulkBaseHours(e.target.value)}
-                className="w-20 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-              />
-            </div>
+            {role === "driver" && (
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">الساعات الأساسية</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={bulkBaseHours}
+                  onChange={(e) => setBulkBaseHours(e.target.value)}
+                  className="w-20 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                />
+              </div>
+            )}
             <button
               onClick={applyBulkFill}
               disabled={bulkApplying || !bulkPerson || !bulkRate}
@@ -483,7 +489,9 @@ export default function DailyLogTable({
             </button>
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
-            "تطبيق على الأيام" بيملأ الاسم وسعر اليوم والساعات الأساسية لكل الأيام في المدى ده (من غير أوفر تايم). "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده من غير ما تحتاج اسم أو سعر — يعني الشخص مشتغلش الأيام دي، وتقدر ترجعها بـ Ctrl+Z لو غلطت. الساعات والأساسية والبيان بتتسجل في شيت {role === "driver" ? "المقاول" : "السركي"} تلقائيًا لنفس الأيام — تدخلها هنا مرة واحدة بس، وبعدين تحدد {role === "driver" ? "المقاول وسعره" : "السواق وسعره"} من هناك.
+            {role === "driver"
+              ? '"تطبيق على الأيام" بيملأ الاسم وسعر اليوم والساعات الأساسية لكل الأيام في المدى ده (من غير أوفر تايم). "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده من غير ما تحتاج اسم أو سعر — يعني الشخص مشتغلش الأيام دي، وتقدر ترجعها بـ Ctrl+Z لو غلطت. الساعات والأساسية والبيان بتتسجل في شيت المقاول تلقائيًا لنفس الأيام — تدخلها هنا مرة واحدة بس، وبعدين تحدد المقاول وسعره من هناك.'
+              : '"تطبيق على الأيام" بيملأ الاسم وسعر اليوم بس لكل الأيام في المدى ده — الساعات ثابتة جاية من شيت السركي ومبتتغيرش من هنا. "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده، وتقدر ترجعها بـ Ctrl+Z لو غلطت.'}
           </div>
         </div>
       )}
@@ -536,7 +544,7 @@ export default function DailyLogTable({
                   ].join(" ")}
                 >
                   <td className="py-1.5 text-slate-500 whitespace-nowrap">
-                    {mode === "hours" && (
+                    {mode === "hours" && role === "driver" && (
                       <button
                         type="button"
                         onClick={() => toggleDayOff(date)}
@@ -583,7 +591,9 @@ export default function DailyLogTable({
                           value={row.actual_hours}
                           onChange={(e) => handleActualHoursChange(date, e.target.value)}
                           onBlur={() => saveRow(date)}
-                          className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          disabled={role === "contractor"}
+                          title={role === "contractor" ? "الساعات بتتسجل من شيت السركي" : undefined}
+                          className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       </td>
                       <td className="py-1.5">
@@ -595,7 +605,8 @@ export default function DailyLogTable({
                           value={row.overtime_hours}
                           onChange={(e) => handleOvertimeChange(date, e.target.value)}
                           onBlur={() => saveRow(date)}
-                          disabled={row.is_paid_leave}
+                          disabled={row.is_paid_leave || role === "contractor"}
+                          title={role === "contractor" ? "الساعات بتتسجل من شيت السركي" : undefined}
                           className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       </td>
@@ -607,7 +618,9 @@ export default function DailyLogTable({
                           value={row.base_hours}
                           onChange={(e) => updateRow(date, { base_hours: e.target.value })}
                           onBlur={() => saveRow(date)}
-                          className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          disabled={role === "contractor"}
+                          title={role === "contractor" ? "الساعات بتتسجل من شيت السركي" : undefined}
+                          className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       </td>
                       <td className="py-1.5">
