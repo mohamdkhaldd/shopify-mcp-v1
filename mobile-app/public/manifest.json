@@ -1,0 +1,14 @@
+{
+  "name": "دفتر البنيان",
+  "short_name": "دفتر البنيان",
+  "description": "تسجيل السركي والمقاول ومصروفات المعدات والمرتبات من الموبايل، من غير نت",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#F5F7F6",
+  "theme_color": "#2F8F63",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    { "src": "./logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
