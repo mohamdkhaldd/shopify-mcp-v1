@@ -9,6 +9,7 @@ import {
   Partner,
   PayrollEntry,
   PayrollKind,
+  SalaryPayment,
 } from "./types";
 import {
   SEED_CONTRACTORS,
@@ -18,7 +19,7 @@ import {
   SEED_PARTNERS,
 } from "./seed";
 
-const STORAGE_KEY = "al-bunyan-mobile-v1";
+const STORAGE_KEY = "al-bunyan-mobile-v2";
 
 interface State {
   partners: Partner[];
@@ -29,6 +30,7 @@ interface State {
   daily_logs: DailyLog[];
   monthly_expenses: MonthlyExpense[];
   payroll_entries: PayrollEntry[];
+  salary_payments: SalaryPayment[];
   nextId: number;
 }
 
@@ -72,6 +74,7 @@ function buildSeedState(): State {
     daily_logs: [],
     monthly_expenses: [],
     payroll_entries: [],
+    salary_payments: [],
     nextId,
   };
 }
@@ -245,9 +248,9 @@ export function deleteMonthlyExpense(id: number) {
 }
 
 // --- Payroll (سلفة / حافز / خصم) ---
-export function listPayrollEntries(month: string, kind?: PayrollKind): PayrollEntry[] {
+export function listPayrollEntries(employee_id: number, month: string, kind?: PayrollKind): PayrollEntry[] {
   return state.payroll_entries
-    .filter((e) => e.month === month && (!kind || e.kind === kind))
+    .filter((e) => e.employee_id === employee_id && e.month === month && (!kind || e.kind === kind))
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 export function addPayrollEntry(entry: Omit<PayrollEntry, "id">): PayrollEntry {
@@ -258,6 +261,23 @@ export function addPayrollEntry(entry: Omit<PayrollEntry, "id">): PayrollEntry {
 }
 export function deletePayrollEntry(id: number) {
   state.payroll_entries = state.payroll_entries.filter((e) => e.id !== id);
+  save();
+}
+
+// --- دفع المرتب (تسوية فعلية، منفصلة عن السلف/الحافز/الخصم) ---
+export function listSalaryPayments(employee_id: number, month: string): SalaryPayment[] {
+  return state.salary_payments
+    .filter((p) => p.employee_id === employee_id && p.month === month)
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+export function addSalaryPayment(payment: Omit<SalaryPayment, "id">): SalaryPayment {
+  const record: SalaryPayment = { id: state.nextId++, ...payment };
+  state.salary_payments.push(record);
+  save();
+  return record;
+}
+export function deleteSalaryPayment(id: number) {
+  state.salary_payments = state.salary_payments.filter((p) => p.id !== id);
   save();
 }
 

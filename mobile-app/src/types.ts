@@ -72,6 +72,8 @@ export interface MonthlyExpense {
   note: string | null;
 }
 
+export type PaymentMethodLike = "cash" | "wallet" | "instapay" | "vodafone_cash";
+
 export type PayrollKind = "advance" | "bonus" | "deduction";
 
 export interface PayrollEntry {
@@ -83,4 +85,14 @@ export interface PayrollEntry {
   amount: number;
   payment_method: string | null;
   reason: string | null;
+}
+
+export interface SalaryPayment {
+  id: number;
+  employee_id: number;
+  month: string;
+  date: string;
+  amount: number;
+  payment_method: string;
+  note: string | null;
 }
