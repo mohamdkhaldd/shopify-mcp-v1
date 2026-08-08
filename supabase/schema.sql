@@ -205,3 +205,154 @@ begin
   where eps.partner_id = v_partner_id;
 end;
 $$;
+
+-- ============ دفعات الشركاء (فلوس فعليًا اتدفعت للشريك) — بتتبعت من اللاب
+-- بس، عشان نحسب "الباقي لسه مدفعش". ============
+create table if not exists partner_payments (
+  id bigint generated always as identity primary key,
+  partner_id bigint not null references partners(id) on delete cascade,
+  date text not null,
+  amount numeric not null default 0,
+  method text,
+  note text,
+  sync_key text unique
+);
+
+alter table partner_payments enable row level security;
+drop policy if exists "staff full access" on partner_payments;
+create policy "staff full access" on partner_payments for all using (is_staff()) with check (is_staff());
+
+-- ============ شيت السركي بتاع الشريك — أيام العمل الخام للمعدات اللي ليه
+-- نصيب فيها بس (اسم السائق، الساعات، القيمة المحسوبة لكل يوم). ============
+create or replace function get_partner_daily_logs(p_month text)
+returns table (
+  equipment_name text,
+  log_date text,
+  person_name text,
+  actual_hours numeric,
+  base_hours numeric,
+  day_rate numeric,
+  is_day_off boolean,
+  day_value numeric
+)
+language plpgsql security definer stable as $$
+declare
+  v_partner_id bigint;
+begin
+  select partner_id into v_partner_id from profiles where id = auth.uid() and role = 'partner';
+  if v_partner_id is null then
+    raise exception 'الحساب ده مش شريك مسجل';
+  end if;
+
+  return query
+  select e.name,
+         dl.date,
+         dl.person_name,
+         dl.actual_hours,
+         dl.base_hours,
+         dl.day_rate,
+         dl.is_day_off,
+         case
+           when dl.is_day_off then 0
+           else coalesce(dl.day_rate,0)
+                + (coalesce(dl.actual_hours, dl.base_hours, 0) - coalesce(dl.base_hours, 0))
+                  * (coalesce(dl.day_rate,0) / nullif(coalesce(dl.base_hours,8),0))
+         end as day_value
+  from daily_logs dl
+  join equipment e on e.id = dl.equipment_id
+  join equipment_partner_shares eps on eps.equipment_id = dl.equipment_id and eps.partner_id = v_partner_id
+  where dl.role = 'driver' and dl.date like p_month || '%'
+  order by dl.date;
+end;
+$$;
+
+-- ============ تفصيل مصروفات الشهر بتاعة معدات الشريك. ============
+create or replace function get_partner_expenses(p_month text)
+returns table (
+  equipment_name text,
+  expense_date text,
+  category_name text,
+  amount numeric,
+  payment_method text,
+  note text
+)
+language plpgsql security definer stable as $$
+declare
+  v_partner_id bigint;
+begin
+  select partner_id into v_partner_id from profiles where id = auth.uid() and role = 'partner';
+  if v_partner_id is null then
+    raise exception 'الحساب ده مش شريك مسجل';
+  end if;
+
+  return query
+  select e.name,
+         me.date,
+         coalesce(c.name, ''),
+         me.amount,
+         me.payment_method,
+         me.note
+  from monthly_expenses me
+  join equipment e on e.id = me.equipment_id
+  join equipment_partner_shares eps on eps.equipment_id = me.equipment_id and eps.partner_id = v_partner_id
+  left join expense_categories c on c.id = me.category_id
+  where me.month = p_month
+  order by me.date;
+end;
+$$;
+
+-- ============ الباقي للشريك من كل الشهور (مش بس الشهر الحالي) — نفس منطق
+-- اللاب بالظبط: كل الأرباح المستحقة من الأول لحد دلوقتي ناقص كل الدفعات
+-- الفعلية اللي استلمها. ============
+create or replace function get_partner_balance()
+returns table (
+  total_due numeric,
+  total_paid numeric,
+  remaining numeric
+)
+language plpgsql security definer stable as $$
+declare
+  v_partner_id bigint;
+  v_opening numeric;
+  v_due numeric;
+  v_paid numeric;
+begin
+  select partner_id into v_partner_id from profiles where id = auth.uid() and role = 'partner';
+  if v_partner_id is null then
+    raise exception 'الحساب ده مش شريك مسجل';
+  end if;
+
+  select p.opening_balance into v_opening from partners p where p.id = v_partner_id;
+
+  with income as (
+    select dl.equipment_id,
+           sum(
+             case
+               when dl.is_day_off then 0
+               when dl.role = 'market' then coalesce(dl.fixed_value,0) - coalesce(dl.hassan_commission,0)
+               else coalesce(dl.day_rate,0)
+                    + (coalesce(dl.actual_hours, dl.base_hours, 0) - coalesce(dl.base_hours, 0))
+                      * (coalesce(dl.day_rate,0) / nullif(coalesce(dl.base_hours,8),0))
+             end
+           ) as total_income
+    from daily_logs dl
+    where dl.role in ('driver','market')
+    group by dl.equipment_id
+  ),
+  expense as (
+    select me.equipment_id, sum(me.amount) as total_expense
+    from monthly_expenses me
+    group by me.equipment_id
+  )
+  select coalesce(v_opening, 0) + coalesce(sum((coalesce(i.total_income,0) - coalesce(x.total_expense,0)) * eps.percentage / 100), 0)
+  into v_due
+  from equipment_partner_shares eps
+  left join income i on i.equipment_id = eps.equipment_id
+  left join expense x on x.equipment_id = eps.equipment_id
+  where eps.partner_id = v_partner_id;
+
+  select coalesce(sum(amount), 0) into v_paid from partner_payments where partner_id = v_partner_id;
+
+  return query select v_due, v_paid, v_due - v_paid;
+end;
+$$;
