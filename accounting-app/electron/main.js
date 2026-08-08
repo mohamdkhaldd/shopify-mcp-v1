@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const { initDatabase } = require("./db");
 const { registerIpcHandlers } = require("./ipc");
+const { startCloudSync } = require("./sync");
 const { autoUpdater } = require("electron-updater");
 
 const isDev = !app.isPackaged;
@@ -136,6 +137,7 @@ ipcMain.handle("app:installUpdate", () => {
 app.whenReady().then(() => {
   const db = initDatabase();
   registerIpcHandlers(db);
+  startCloudSync(db);
   createWindow();
   setupAutoUpdate();
 

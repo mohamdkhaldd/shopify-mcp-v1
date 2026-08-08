@@ -10,6 +10,7 @@ import {
   listEquipment,
   listExpenseCategories,
   listPartners,
+  pushAllToCloud,
 } from "../store";
 import { WageType } from "../types";
 
@@ -27,6 +28,7 @@ export default function Settings() {
   const [kind, setKind] = useState<Kind>("drivers");
   const [, forceRefresh] = useState(0);
   const refresh = () => forceRefresh((n) => n + 1);
+  const [syncing, setSyncing] = useState(false);
 
   return (
     <div>
@@ -36,6 +38,18 @@ export default function Settings() {
       </div>
 
       <div className="p-4">
+        <button
+          onClick={() => {
+            setSyncing(true);
+            pushAllToCloud();
+            setTimeout(() => setSyncing(false), 1200);
+          }}
+          disabled={syncing}
+          className="w-full mb-4 bg-primary-light border border-primary/30 text-primary-dark rounded-xl py-2.5 text-sm font-bold disabled:opacity-60"
+        >
+          {syncing ? "جاري الإرسال..." : "🔄 ابعت كل البيانات للسحابة دلوقتي"}
+        </button>
+
         <div className="grid grid-cols-3 gap-1.5 mb-4">
           {KINDS.map((k) => (
             <button

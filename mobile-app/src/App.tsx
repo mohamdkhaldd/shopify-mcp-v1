@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { currentMonthKey } from "./utils/months";
 import Home from "./pages/Home";
 import EquipmentDetail from "./pages/EquipmentDetail";
 import Payroll from "./pages/Payroll";
 import Settings from "./pages/Settings";
 import { Equipment } from "./types";
+import { initCloudSync, subscribeRemoteChanges } from "./store";
 
 type Screen = "home" | "payroll" | "settings";
 
@@ -12,6 +13,14 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
   const [month, setMonth] = useState(currentMonthKey());
+  const [remoteVersion, setRemoteVersion] = useState(0);
+
+  useEffect(() => {
+    initCloudSync();
+    // لما تعديل يوصل من موبايل تاني، نجدد الشاشة الحالية عشان تظهر الداتا
+    // الجديدة على طول من غير ما المستخدم يعمل أي حاجة.
+    return subscribeRemoteChanges(() => setRemoteVersion((v) => v + 1));
+  }, []);
 
   function goHome() {
     setSelectedEquipment(null);
@@ -20,7 +29,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F7F6] flex flex-col max-w-md mx-auto">
-      <main className="flex-1 overflow-y-auto pb-20">
+      <main className="flex-1 overflow-y-auto pb-20" key={remoteVersion}>
         {screen === "home" && !selectedEquipment && (
           <Home month={month} onChangeMonth={setMonth} onOpenEquipment={setSelectedEquipment} />
         )}

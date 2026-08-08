@@ -467,6 +467,20 @@ function initDatabase() {
     db.prepare("INSERT INTO treasury_accounts (name, current_balance) VALUES ('vodafone_cash', 0)").run();
   }
 
+  // مزامنة الموبايل: كل قيد جاي من السحابة بيحمل sync_key فريد (جهاز+رقمه
+  // المحلي)، وبنستخدمه كمفتاح فريد عشان لو نفس القيد وصل تاني (مثلاً بعد
+  // إعادة فتح البرنامج) ميتكررش. NULL مسموح يتكرر عادي (قيود اللاب القديمة).
+  for (const table of ["monthly_expenses", "employee_advances", "employee_bonuses", "employee_deductions", "salary_payments"]) {
+    const hasSyncKey = db
+      .prepare(`PRAGMA table_info(${table})`)
+      .all()
+      .some((col) => col.name === "sync_key");
+    if (!hasSyncKey) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN sync_key TEXT`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${table}_sync_key ON ${table}(sync_key)`);
+    }
+  }
+
   seedIfEmpty(db);
 
   return db;
