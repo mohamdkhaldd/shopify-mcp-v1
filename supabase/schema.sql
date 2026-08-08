@@ -120,19 +120,34 @@ $$;
 
 -- staff (حسن + المحاسبين) بس هو اللي يشوف/يعدّل الجداول التشغيلية دي —
 -- الشركاء بياخدوا أرقامهم من فانكشن get_partner_summary تحت، مش من هنا.
+-- (drop if exists قبل كل create عشان تقدر تشغّل السكريبت أكتر من مرة
+-- من غير ما يطلع خطأ "already exists".)
+drop policy if exists "staff full access" on partners;
 create policy "staff full access" on partners for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on contractors;
 create policy "staff full access" on contractors for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on employees;
 create policy "staff full access" on employees for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on expense_categories;
 create policy "staff full access" on expense_categories for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on equipment;
 create policy "staff full access" on equipment for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on equipment_partner_shares;
 create policy "staff full access" on equipment_partner_shares for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on daily_logs;
 create policy "staff full access" on daily_logs for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on monthly_expenses;
 create policy "staff full access" on monthly_expenses for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on payroll_entries;
 create policy "staff full access" on payroll_entries for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on salary_payments;
 create policy "staff full access" on salary_payments for all using (is_staff()) with check (is_staff());
 
+drop policy if exists "see own profile or staff sees all" on profiles;
 create policy "see own profile or staff sees all" on profiles for select using (id = auth.uid() or is_staff());
+drop policy if exists "staff creates profiles" on profiles;
 create policy "staff creates profiles" on profiles for insert with check (is_staff());
+drop policy if exists "staff updates profiles" on profiles;
 create policy "staff updates profiles" on profiles for update using (is_staff());
 
 -- ============ رقم الشريك الشهري — الشريك بياخد أرقامه هو بس، محسوبة
