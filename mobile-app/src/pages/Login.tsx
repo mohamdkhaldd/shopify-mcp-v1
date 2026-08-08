@@ -13,7 +13,7 @@ export default function Login() {
     setError(null);
     const err = await signIn(email.trim(), password);
     setLoading(false);
-    if (err) setError("الإيميل أو الباسورد غلط");
+    if (err) setError(err);
   }
 
   return (
