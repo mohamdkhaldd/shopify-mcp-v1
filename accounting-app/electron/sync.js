@@ -1,14 +1,13 @@
-const { initializeApp } = require("firebase/app");
-const { getFirestore, collection, onSnapshot } = require("firebase/firestore");
+const { createClient } = require("@supabase/supabase-js");
+const WebSocket = require("ws");
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAYtgH5ZwqWPMTLFIgUT2_w5lH9iUbohYk",
-  authDomain: "bonyan-9d419.firebaseapp.com",
-  projectId: "bonyan-9d419",
-  storageBucket: "bonyan-9d419.firebasestorage.app",
-  messagingSenderId: "590186239301",
-  appId: "1:590186239301:web:2f8510fbbf98a330455a2c",
-};
+const SUPABASE_URL = "https://xpnkwmpzwvcfezimklwa.supabase.co";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhwbmt3bXB6d3ZjZmV6aW1rbHdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxODg2OTIsImV4cCI6MjEwMTc2NDY5Mn0.J76_zFG4UuycVYsG4rXbfkux1KUnACizTYbZ6JF7ZEA";
+// حساب مخصص للاب بس، بيسجل دخول في الخلفية عشان يقدر يقرا تحت نفس نظام
+// الحماية (RLS) اللي بيحمي بيانات الموبايل والشركاء.
+const DESKTOP_EMAIL = "mkh@elbonyan.app";
+const DESKTOP_PASSWORD = "mkh123";
 
 const COLLECTIONS = [
   "partners",
@@ -196,37 +195,105 @@ function mergeDoc(db, collectionName, docId, data) {
   }
 }
 
+// كل الجداول المرجعية (معدات/موظفين/شركاء/أنواع مصروفات) بترجع من Supabase
+// برقم (equipment_id وهكذا) مش اسم — بنسيب كاش بسيط في الذاكرة يترجم الرقم
+// لاسم قبل ما نبعته لـ mergeDoc (اللي بيتوقع أسماء زي بالظبط بيانات الموبايل).
+const equipmentNames = new Map();
+const employeeNames = new Map();
+const categoryNames = new Map();
+
+async function primeNameCaches(supabase) {
+  const [{ data: eq }, { data: emp }, { data: cat }] = await Promise.all([
+    supabase.from("equipment").select("id,name"),
+    supabase.from("employees").select("id,name"),
+    supabase.from("expense_categories").select("id,name"),
+  ]);
+  for (const r of eq ?? []) equipmentNames.set(r.id, r.name);
+  for (const r of emp ?? []) employeeNames.set(r.id, r.name);
+  for (const r of cat ?? []) categoryNames.set(r.id, r.name);
+}
+
+function translateRow(table, row) {
+  switch (table) {
+    case "partners":
+    case "contractors":
+      return { name: row.name };
+    case "employees":
+      employeeNames.set(row.id, row.name);
+      return { name: row.name, wage_type: row.wage_type, rate: row.rate, fixed_salary: row.fixed_salary };
+    case "expense_categories":
+      categoryNames.set(row.id, row.name);
+      return { name: row.name, counts_as_commission: row.counts_as_commission };
+    case "equipment":
+      equipmentNames.set(row.id, row.name);
+      return { name: row.name, purchase_price: row.purchase_price, shares: [] };
+    case "daily_logs": {
+      const equipment_name = equipmentNames.get(row.equipment_id);
+      if (!equipment_name) return null;
+      return { ...row, equipment_name };
+    }
+    case "monthly_expenses": {
+      const equipment_name = equipmentNames.get(row.equipment_id);
+      if (!equipment_name) return null;
+      const category_name = row.category_id ? categoryNames.get(row.category_id) || "" : "";
+      return { ...row, equipment_name, category_name };
+    }
+    case "payroll_entries":
+    case "salary_payments": {
+      const employee_name = employeeNames.get(row.employee_id);
+      if (!employee_name) return null;
+      return { ...row, employee_name };
+    }
+    default:
+      return null;
+  }
+}
+
 // بيسمع لأي حاجة بتتسجل من أي موبايل ويحطها في قاعدة بيانات اللاب أوتوماتيك
 // أول ما يكون فيه نت — من غير ما المستخدم يعمل استيراد يدوي. مفيش أي حذف
 // بيتنفذ من هنا عمدًا: لو قيد اتمسح من الموبايل، بيفضل موجود في اللاب لحد
 // ما حد يمسحه يدويًا — أأمن من حذف تلقائي ممكن يمسح حاجة غلط.
-function startCloudSync(db) {
-  let app;
-  try {
-    app = initializeApp(firebaseConfig);
-  } catch (err) {
-    console.error("Firebase init failed", err);
+async function startCloudSync(db) {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: true },
+    realtime: { transport: WebSocket },
+  });
+
+  const { error: authError } = await supabase.auth.signInWithPassword({
+    email: DESKTOP_EMAIL,
+    password: DESKTOP_PASSWORD,
+  });
+  if (authError) {
+    console.error("Supabase sync sign-in failed", authError.message);
     return;
   }
-  const firestore = getFirestore(app);
 
-  for (const name of COLLECTIONS) {
-    onSnapshot(
-      collection(firestore, name),
-      (snapshot) => {
-        for (const change of snapshot.docChanges()) {
-          if (change.type === "removed") continue;
-          try {
-            mergeDoc(db, name, change.doc.id, change.doc.data());
-          } catch (err) {
-            console.error(`sync merge failed for ${name}/${change.doc.id}`, err);
-          }
+  await primeNameCaches(supabase);
+
+  for (const table of COLLECTIONS) {
+    supabase
+      .channel(`sync-${table}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table }, (payload) => {
+        const translated = translateRow(table, payload.new);
+        if (!translated) return;
+        try {
+          mergeDoc(db, table, payload.new.sync_key || String(payload.new.id), translated);
+        } catch (err) {
+          console.error(`sync merge failed for ${table}/${payload.new.id}`, err);
         }
-      },
-      (err) => {
-        console.error(`sync listener failed for ${name}`, err);
-      }
-    );
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table }, (payload) => {
+        const translated = translateRow(table, payload.new);
+        if (!translated) return;
+        try {
+          mergeDoc(db, table, payload.new.sync_key || String(payload.new.id), translated);
+        } catch (err) {
+          console.error(`sync merge failed for ${table}/${payload.new.id}`, err);
+        }
+      })
+      .subscribe((status, err) => {
+        if (err) console.error(`sync listener failed for ${table}`, err);
+      });
   }
 }
 
