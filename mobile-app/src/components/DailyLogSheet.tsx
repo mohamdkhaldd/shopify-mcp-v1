@@ -80,6 +80,8 @@ export default function DailyLogSheet({ equipmentId, month, role, people, onChan
   const [fillBaseHours, setFillBaseHours] = useState("8");
   const [overtimeDays, setOvertimeDays] = useState("");
   const [overtimeValue, setOvertimeValue] = useState("");
+  const [clearDays, setClearDays] = useState("");
+  const [clearing, setClearing] = useState(false);
 
   const refresh = () => {
     const logs = listDailyLogs(equipmentId, month, role);
@@ -208,6 +210,22 @@ export default function DailyLogSheet({ equipmentId, month, role, people, onChan
     setOvertimeValue("");
   }
 
+  function applyClear() {
+    const dayNumbers = parseDayNumbers(clearDays);
+    if (dayNumbers.size === 0) return;
+    const targetDates = dates.filter((date) => dayNumbers.has(Number(date.slice(-2))) && rows[date]?.id);
+    if (targetDates.length === 0) return;
+    setClearing(true);
+    for (const date of targetDates) {
+      const id = rows[date].id;
+      if (id) deleteDailyLog(id);
+    }
+    refresh();
+    onChanged?.();
+    setClearing(false);
+    setClearDays("");
+  }
+
   // ملخص أيام الشهر: كام يوم اشتغل كامل، وكام يوم اشتغل جزء بس من ساعاته
   // الأساسية (مجمّعين بعدد الساعات اللي اشتغلوها) — الأيام اللي معلّمة
   // "مشتغلش" أو لسه فاضية متحسبش خالص.
@@ -325,6 +343,28 @@ export default function DailyLogSheet({ equipmentId, month, role, people, onChan
           </div>
         </div>
       )}
+
+      <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3">
+        <div className="text-xs font-extrabold text-rose-600 mb-2">امسح أيام (تفريغ)</div>
+        <div className="space-y-2">
+          <div>
+            <label className="block text-[11px] text-slate-500 mb-1">الأيام (مثلاً: 1-3, 4-7)</label>
+            <input
+              value={clearDays}
+              onChange={(e) => setClearDays(e.target.value)}
+              placeholder="1-3, 4-7"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm bg-white"
+            />
+          </div>
+          <button
+            onClick={applyClear}
+            disabled={!clearDays.trim() || clearing}
+            className="w-full bg-white border border-rose-300 text-rose-600 rounded-xl py-2.5 text-sm font-bold disabled:opacity-50"
+          >
+            {clearing ? "جاري المسح..." : "امسح الأيام دي"}
+          </button>
+        </div>
+      </div>
 
       <div className="space-y-2">
         {dates.map((date) => {
