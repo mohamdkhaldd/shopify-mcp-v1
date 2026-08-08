@@ -300,36 +300,156 @@ async function startCloudSync(db) {
   }
 }
 
-// بيبعت دفعة شريك للسحابة عشان حساب "الباقي" بتاعه في الموبايل يبقى محدّث.
-// partnerName لازم اسم الشريك (مش الـ id المحلي بتاع اللاب — ده رقم تاني
-// خالص عن رقمه في Supabase)، عشان نلاقي/ننشئ نفس الصف هناك بالاسم زي باقي
-// أنواع البيانات. لو المزامنة لسه ملحقتش تسجل دخول (أو مفيش نت)، بيتجاهلها
-// بهدوء — الدفعة اتسجلت في اللاب بالفعل، ده تحديث إضافي بس مش أساسي.
-async function pushPartnerPayment(localId, partnerName, payment) {
+async function getOrCreateByName(table, name, extra = {}) {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return null;
+  const { data, error } = await activeClient.from(table).upsert({ name: trimmed, ...extra }, { onConflict: "name" }).select("id").single();
+  if (error || !data) {
+    const { data: existing } = await activeClient.from(table).select("id").eq("name", trimmed).maybeSingle();
+    return existing?.id ?? null;
+  }
+  return data.id;
+}
+
+async function findIdByName(table, name) {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return null;
+  const { data } = await activeClient.from(table).select("id").eq("name", trimmed).maybeSingle();
+  return data?.id ?? null;
+}
+
+// بيبعت أي حاجة اتسجلت في اللاب مباشرة (مش جايه من الموبايل) للسحابة —
+// لازم ده يحصل لكل حاجة بتتسجل من اللاب، مش بس دفعات الشركاء، عشان أي حد
+// شايف الأرقام من الموبايل (شركاء أو ستاف) يشوف كل الداتا مش بس اللي
+// اتسجلت من التليفون. localId بيتحول لـ sync_key فريد للجداول اللي معندهاش
+// مفتاح طبيعي (زي equipment_id+date+role) أو اسم UNIQUE. لو المزامنة لسه
+// ملحقتش تسجل دخول (أو مفيش نت)، بيتجاهل بهدوء — الداتا اتسجلت في اللاب
+// بالفعل، ده تحديث إضافي بس مش أساسي.
+async function pushToCloud(table, localId, data) {
   if (!activeClient) return;
   try {
-    const trimmed = (partnerName || "").trim();
-    if (!trimmed) return;
-    const { data: partnerRow, error: partnerErr } = await activeClient
-      .from("partners")
-      .upsert({ name: trimmed, opening_balance: 0 }, { onConflict: "name" })
-      .select("id")
-      .single();
-    if (partnerErr || !partnerRow) return;
-    await activeClient.from("partner_payments").upsert(
-      {
-        partner_id: partnerRow.id,
-        date: payment.date,
-        amount: payment.amount,
-        method: payment.method,
-        note: payment.note,
-        sync_key: `desktop_${localId}`,
-      },
-      { onConflict: "sync_key" }
-    );
+    switch (table) {
+      case "partners":
+      case "contractors":
+        await activeClient.from(table).upsert({ name: (data.name || "").trim(), opening_balance: data.opening_balance ?? 0 }, { onConflict: "name" });
+        return;
+      case "employees":
+        await activeClient
+          .from("employees")
+          .upsert({ name: (data.name || "").trim(), wage_type: data.wage_type, rate: data.rate, fixed_salary: !!data.fixed_salary }, { onConflict: "name" });
+        return;
+      case "expense_categories":
+        await activeClient
+          .from("expense_categories")
+          .upsert({ name: (data.name || "").trim(), counts_as_commission: !!data.counts_as_commission }, { onConflict: "name" });
+        return;
+      case "equipment": {
+        const equipmentId = await getOrCreateByName("equipment", data.name, { purchase_price: data.purchase_price ?? 0 });
+        if (!equipmentId) return;
+        for (const share of data.shares ?? []) {
+          const partnerId = await getOrCreateByName("partners", share.partner_name);
+          if (!partnerId) continue;
+          await activeClient
+            .from("equipment_partner_shares")
+            .upsert({ equipment_id: equipmentId, partner_id: partnerId, percentage: share.percentage }, { onConflict: "equipment_id,partner_id" });
+        }
+        return;
+      }
+      case "daily_logs": {
+        const equipmentId = await getOrCreateByName("equipment", data.equipment_name);
+        if (!equipmentId) return;
+        await activeClient.from("daily_logs").upsert(
+          {
+            equipment_id: equipmentId,
+            date: data.date,
+            role: data.role,
+            person_name: data.person_name ?? "",
+            actual_hours: data.actual_hours,
+            base_hours: data.base_hours,
+            day_rate: data.day_rate,
+            is_day_off: !!data.is_day_off,
+            fixed_value: data.fixed_value,
+            hassan_commission: data.hassan_commission,
+            note: data.note,
+          },
+          { onConflict: "equipment_id,date,role" }
+        );
+        return;
+      }
+      case "monthly_expenses": {
+        const equipmentId = await getOrCreateByName("equipment", data.equipment_name);
+        if (!equipmentId) return;
+        const categoryId = data.category_name ? await getOrCreateByName("expense_categories", data.category_name) : null;
+        await activeClient.from("monthly_expenses").upsert(
+          {
+            equipment_id: equipmentId,
+            month: data.month,
+            date: data.date,
+            category_id: categoryId,
+            amount: data.amount,
+            payment_method: data.payment_method,
+            note: data.note,
+            sync_key: `desktop_${localId}`,
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "payroll_entries": {
+        const employeeId = await findIdByName("employees", data.employee_name);
+        if (!employeeId) return;
+        await activeClient.from("payroll_entries").upsert(
+          {
+            employee_id: employeeId,
+            kind: data.kind,
+            month: data.month,
+            date: data.date,
+            amount: data.amount,
+            payment_method: data.payment_method,
+            reason: data.reason,
+            sync_key: `desktop_${localId}`,
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "salary_payments": {
+        const employeeId = await findIdByName("employees", data.employee_name);
+        if (!employeeId) return;
+        await activeClient.from("salary_payments").upsert(
+          {
+            employee_id: employeeId,
+            month: data.month,
+            date: data.date,
+            amount: data.amount,
+            payment_method: data.payment_method,
+            note: data.note,
+            sync_key: `desktop_${localId}`,
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "partner_payments": {
+        const partnerId = await getOrCreateByName("partners", data.partner_name);
+        if (!partnerId) return;
+        await activeClient.from("partner_payments").upsert(
+          {
+            partner_id: partnerId,
+            date: data.date,
+            amount: data.amount,
+            method: data.method,
+            note: data.note,
+            sync_key: `desktop_${localId}`,
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+    }
   } catch (err) {
-    console.error("pushPartnerPayment failed", err);
+    console.error(`pushToCloud failed for ${table}`, err);
   }
 }
 
-module.exports = { startCloudSync, pushPartnerPayment };
+module.exports = { startCloudSync, pushToCloud };

@@ -1,5 +1,5 @@
 const { ipcMain } = require("electron");
-const { pushPartnerPayment } = require("./sync");
+const { pushToCloud } = require("./sync");
 
 // Overtime rule (doc section 3), applied identically to السركي and المقاول:
 // hourly rate = day_rate / 8, overtime = MAX(0, actual - base) hours,
@@ -208,7 +208,9 @@ function registerIpcHandlers(db) {
     const info = db
       .prepare("INSERT INTO partners (name, opening_balance) VALUES (?, ?)")
       .run(name.trim(), opening_balance ?? 0);
-    return { id: info.lastInsertRowid, name: name.trim(), opening_balance: opening_balance ?? 0 };
+    const created = { id: info.lastInsertRowid, name: name.trim(), opening_balance: opening_balance ?? 0 };
+    pushToCloud("partners", created.id, created);
+    return created;
   });
   ipcMain.handle("partners:delete", (_e, { id }) => {
     db.prepare("DELETE FROM partners WHERE id = ?").run(id);
@@ -234,7 +236,9 @@ function registerIpcHandlers(db) {
       return info.lastInsertRowid;
     });
     const id = tx();
-    return { id, name: trimmedName, wage_type, rate, fixed_salary: !!fixed_salary };
+    const created = { id, name: trimmedName, wage_type, rate, fixed_salary: !!fixed_salary };
+    pushToCloud("employees", id, created);
+    return created;
   });
   ipcMain.handle("employees:delete", (_e, { id }) => {
     db.prepare("DELETE FROM employees WHERE id = ?").run(id);
@@ -280,7 +284,9 @@ function registerIpcHandlers(db) {
     const info = db
       .prepare("INSERT INTO contractors (name, opening_balance) VALUES (?, ?)")
       .run(name.trim(), opening_balance ?? 0);
-    return { id: info.lastInsertRowid, name: name.trim(), opening_balance: opening_balance ?? 0 };
+    const created = { id: info.lastInsertRowid, name: name.trim(), opening_balance: opening_balance ?? 0 };
+    pushToCloud("contractors", created.id, created);
+    return created;
   });
   ipcMain.handle("contractors:delete", (_e, { id }) => {
     db.prepare("DELETE FROM contractors WHERE id = ?").run(id);
@@ -299,7 +305,9 @@ function registerIpcHandlers(db) {
     const info = db
       .prepare("INSERT INTO expense_categories (name, counts_as_commission) VALUES (?, ?)")
       .run(name.trim(), counts_as_commission ? 1 : 0);
-    return { id: info.lastInsertRowid, name: name.trim(), counts_as_commission: !!counts_as_commission };
+    const created = { id: info.lastInsertRowid, name: name.trim(), counts_as_commission: !!counts_as_commission };
+    pushToCloud("expense_categories", created.id, created);
+    return created;
   });
   // بيسمح تحدد نوع مصروف زي "مكنيكي" أو "سكن" إن قيمته على كل معدة تتحسب
   // تلقائيًا ضمن كوميشن حسن — مفيش داعي تسجلها مرتين.
@@ -348,7 +356,14 @@ function registerIpcHandlers(db) {
       return equipmentId;
     });
     const equipmentId = tx();
-    return getEquipmentWithShares().find((e) => e.id === equipmentId);
+    const created = getEquipmentWithShares().find((e) => e.id === equipmentId);
+    const partnerNameStmt = db.prepare("SELECT name FROM partners WHERE id = ?");
+    pushToCloud("equipment", equipmentId, {
+      name: created.name,
+      purchase_price: created.purchase_price,
+      shares: created.shares.map((s) => ({ partner_name: partnerNameStmt.get(s.partner_id)?.name ?? "", percentage: s.percentage })),
+    });
+    return created;
   });
 
   // بيسمح بتعديل سعر الشراء ونسب الشركاء من غير ما تحذف المعدة وتضيفها تاني
@@ -466,6 +481,17 @@ function registerIpcHandlers(db) {
     const row = db
       .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ?")
       .get(log.equipment_id, log.date, log.role);
+    const equipmentName = db.prepare("SELECT name FROM equipment WHERE id = ?").get(log.equipment_id)?.name;
+    if (equipmentName) {
+      pushToCloud("daily_logs", row.id, { ...row, equipment_name: equipmentName });
+      const otherRole = OTHER_HOURS_ROLE[log.role];
+      if (otherRole) {
+        const counterpart = db
+          .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ?")
+          .get(log.equipment_id, log.date, otherRole);
+        if (counterpart) pushToCloud("daily_logs", counterpart.id, { ...counterpart, equipment_name: equipmentName });
+      }
+    }
     return { ...row, day_value: computeDayValue(row) };
   });
 
@@ -550,12 +576,15 @@ function registerIpcHandlers(db) {
          VALUES (@equipment_id, @month, @date, @category_id, @amount, @payment_method, @note, @receipt_image)`
       )
       .run({ ...expense, date: expense.date ?? null, note: expense.note ?? null, receipt_image: expense.receipt_image ?? null });
-    return db
+    const created = db
       .prepare(
         `SELECT me.*, ec.name AS category_name FROM monthly_expenses me
          LEFT JOIN expense_categories ec ON ec.id = me.category_id WHERE me.id = ?`
       )
       .get(info.lastInsertRowid);
+    const equipmentName = db.prepare("SELECT name FROM equipment WHERE id = ?").get(expense.equipment_id)?.name;
+    if (equipmentName) pushToCloud("monthly_expenses", created.id, { ...created, equipment_name: equipmentName });
+    return created;
   });
 
   ipcMain.handle("monthlyExpenses:delete", (_e, { id }) => {
@@ -624,7 +653,10 @@ function registerIpcHandlers(db) {
          VALUES (@employee_id, @month, @date, @amount, @payment_method, @note)`
       )
       .run({ ...advance, payment_method: advance.payment_method || "cash", note: advance.note ?? null });
-    return db.prepare("SELECT * FROM employee_advances WHERE id = ?").get(info.lastInsertRowid);
+    const created = db.prepare("SELECT * FROM employee_advances WHERE id = ?").get(info.lastInsertRowid);
+    const employeeName = db.prepare("SELECT name FROM employees WHERE id = ?").get(advance.employee_id)?.name;
+    if (employeeName) pushToCloud("payroll_entries", `advance-${created.id}`, { ...created, kind: "advance", employee_name: employeeName });
+    return created;
   });
   ipcMain.handle("employeeAdvances:delete", (_e, { id }) => {
     db.prepare("DELETE FROM employee_advances WHERE id = ?").run(id);
@@ -644,7 +676,10 @@ function registerIpcHandlers(db) {
          VALUES (@employee_id, @month, @date, @amount, @payment_method, @note)`
       )
       .run({ ...bonus, payment_method: bonus.payment_method || "cash", note: bonus.note ?? null });
-    return db.prepare("SELECT * FROM employee_bonuses WHERE id = ?").get(info.lastInsertRowid);
+    const created = db.prepare("SELECT * FROM employee_bonuses WHERE id = ?").get(info.lastInsertRowid);
+    const employeeName = db.prepare("SELECT name FROM employees WHERE id = ?").get(bonus.employee_id)?.name;
+    if (employeeName) pushToCloud("payroll_entries", `bonus-${created.id}`, { ...created, kind: "bonus", employee_name: employeeName });
+    return created;
   });
   ipcMain.handle("employeeBonuses:delete", (_e, { id }) => {
     db.prepare("DELETE FROM employee_bonuses WHERE id = ?").run(id);
@@ -665,7 +700,10 @@ function registerIpcHandlers(db) {
          VALUES (@employee_id, @month, @date, @amount, @reason)`
       )
       .run(deduction);
-    return db.prepare("SELECT * FROM employee_deductions WHERE id = ?").get(info.lastInsertRowid);
+    const created = db.prepare("SELECT * FROM employee_deductions WHERE id = ?").get(info.lastInsertRowid);
+    const employeeName = db.prepare("SELECT name FROM employees WHERE id = ?").get(deduction.employee_id)?.name;
+    if (employeeName) pushToCloud("payroll_entries", `deduction-${created.id}`, { ...created, kind: "deduction", employee_name: employeeName });
+    return created;
   });
   ipcMain.handle("employeeDeductions:delete", (_e, { id }) => {
     db.prepare("DELETE FROM employee_deductions WHERE id = ?").run(id);
@@ -867,7 +905,10 @@ function registerIpcHandlers(db) {
         payment_method: payment.payment_method || "cash",
         note: payment.note ?? null,
       });
-    return db.prepare("SELECT * FROM salary_payments WHERE id = ?").get(info.lastInsertRowid);
+    const created = db.prepare("SELECT * FROM salary_payments WHERE id = ?").get(info.lastInsertRowid);
+    const employeeName = db.prepare("SELECT name FROM employees WHERE id = ?").get(payment.employee_id)?.name;
+    if (employeeName) pushToCloud("salary_payments", created.id, { ...created, employee_name: employeeName });
+    return created;
   });
   ipcMain.handle("salaryPayments:delete", (_e, { id }) => {
     db.prepare("DELETE FROM salary_payments WHERE id = ?").run(id);
@@ -1221,7 +1262,7 @@ function registerIpcHandlers(db) {
       .run({ ...payment, method: payment.method || "cash", note: payment.note ?? null });
     const created = db.prepare("SELECT * FROM partner_payments WHERE id = ?").get(info.lastInsertRowid);
     const partner = db.prepare("SELECT name FROM partners WHERE id = ?").get(payment.partner_id);
-    if (partner) pushPartnerPayment(created.id, partner.name, created);
+    if (partner) pushToCloud("partner_payments", created.id, { partner_name: partner.name, ...created });
     return created;
   });
   ipcMain.handle("partnerPayments:delete", (_e, { id }) => {
