@@ -6,11 +6,12 @@ import Payroll from "./pages/Payroll";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import PartnerSummary from "./pages/PartnerSummary";
+import Dashboard from "./pages/Dashboard";
 import { Equipment } from "./types";
 import { initCloudSync, subscribeRemoteChanges } from "./store";
 import { Profile, fetchProfile, getSession, onAuthChange } from "./auth";
 
-type Screen = "home" | "payroll" | "settings";
+type Screen = "dashboard" | "home" | "payroll" | "settings";
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -51,7 +52,7 @@ export default function App() {
 }
 
 function StaffApp() {
-  const [screen, setScreen] = useState<Screen>("home");
+  const [screen, setScreen] = useState<Screen>("dashboard");
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
   const [month, setMonth] = useState(currentMonthKey());
   const [remoteVersion, setRemoteVersion] = useState(0);
@@ -71,6 +72,7 @@ function StaffApp() {
   return (
     <div className="min-h-screen bg-[#F5F7F6] flex flex-col max-w-md mx-auto">
       <main className="flex-1 overflow-y-auto pb-20" key={remoteVersion}>
+        {screen === "dashboard" && <Dashboard />}
         {screen === "home" && !selectedEquipment && (
           <Home month={month} onChangeMonth={setMonth} onOpenEquipment={setSelectedEquipment} />
         )}
@@ -82,6 +84,7 @@ function StaffApp() {
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white border-t border-slate-200 flex px-2 py-2">
+        <NavButton icon="📊" label="الداشبورد" active={screen === "dashboard"} onClick={() => { setSelectedEquipment(null); setScreen("dashboard"); }} />
         <NavButton icon="🏗️" label="المعدات" active={screen === "home"} onClick={goHome} />
         <NavButton icon="👥" label="المرتبات" active={screen === "payroll"} onClick={() => { setSelectedEquipment(null); setScreen("payroll"); }} />
         <NavButton icon="⚙️" label="الإعدادات" active={screen === "settings"} onClick={() => { setSelectedEquipment(null); setScreen("settings"); }} />
