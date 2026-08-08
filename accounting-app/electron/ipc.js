@@ -1,4 +1,5 @@
 const { ipcMain } = require("electron");
+const { pushPartnerPayment } = require("./sync");
 
 // Overtime rule (doc section 3), applied identically to السركي and المقاول:
 // hourly rate = day_rate / 8, overtime = MAX(0, actual - base) hours,
@@ -1218,7 +1219,10 @@ function registerIpcHandlers(db) {
          VALUES (@partner_id, @date, @amount, @method, @note)`
       )
       .run({ ...payment, method: payment.method || "cash", note: payment.note ?? null });
-    return db.prepare("SELECT * FROM partner_payments WHERE id = ?").get(info.lastInsertRowid);
+    const created = db.prepare("SELECT * FROM partner_payments WHERE id = ?").get(info.lastInsertRowid);
+    const partner = db.prepare("SELECT name FROM partners WHERE id = ?").get(payment.partner_id);
+    if (partner) pushPartnerPayment(created.id, partner.name, created);
+    return created;
   });
   ipcMain.handle("partnerPayments:delete", (_e, { id }) => {
     db.prepare("DELETE FROM partner_payments WHERE id = ?").run(id);

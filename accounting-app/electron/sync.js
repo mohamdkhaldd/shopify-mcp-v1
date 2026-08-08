@@ -253,6 +253,8 @@ function translateRow(table, row) {
 // أول ما يكون فيه نت — من غير ما المستخدم يعمل استيراد يدوي. مفيش أي حذف
 // بيتنفذ من هنا عمدًا: لو قيد اتمسح من الموبايل، بيفضل موجود في اللاب لحد
 // ما حد يمسحه يدويًا — أأمن من حذف تلقائي ممكن يمسح حاجة غلط.
+let activeClient = null;
+
 async function startCloudSync(db) {
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: true },
@@ -267,6 +269,7 @@ async function startCloudSync(db) {
     console.error("Supabase sync sign-in failed", authError.message);
     return;
   }
+  activeClient = supabase;
 
   await primeNameCaches(supabase);
 
@@ -297,4 +300,36 @@ async function startCloudSync(db) {
   }
 }
 
-module.exports = { startCloudSync };
+// بيبعت دفعة شريك للسحابة عشان حساب "الباقي" بتاعه في الموبايل يبقى محدّث.
+// partnerName لازم اسم الشريك (مش الـ id المحلي بتاع اللاب — ده رقم تاني
+// خالص عن رقمه في Supabase)، عشان نلاقي/ننشئ نفس الصف هناك بالاسم زي باقي
+// أنواع البيانات. لو المزامنة لسه ملحقتش تسجل دخول (أو مفيش نت)، بيتجاهلها
+// بهدوء — الدفعة اتسجلت في اللاب بالفعل، ده تحديث إضافي بس مش أساسي.
+async function pushPartnerPayment(localId, partnerName, payment) {
+  if (!activeClient) return;
+  try {
+    const trimmed = (partnerName || "").trim();
+    if (!trimmed) return;
+    const { data: partnerRow, error: partnerErr } = await activeClient
+      .from("partners")
+      .upsert({ name: trimmed, opening_balance: 0 }, { onConflict: "name" })
+      .select("id")
+      .single();
+    if (partnerErr || !partnerRow) return;
+    await activeClient.from("partner_payments").upsert(
+      {
+        partner_id: partnerRow.id,
+        date: payment.date,
+        amount: payment.amount,
+        method: payment.method,
+        note: payment.note,
+        sync_key: `desktop_${localId}`,
+      },
+      { onConflict: "sync_key" }
+    );
+  } catch (err) {
+    console.error("pushPartnerPayment failed", err);
+  }
+}
+
+module.exports = { startCloudSync, pushPartnerPayment };
