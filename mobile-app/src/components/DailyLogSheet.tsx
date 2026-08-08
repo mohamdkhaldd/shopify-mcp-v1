@@ -3,6 +3,7 @@ import { DailyLog, DailyLogRole } from "../types";
 import { daysInMonth, weekdayLabel } from "../utils/months";
 import { parseDayNumbers } from "../utils/dayNumbers";
 import { deleteDailyLog, listDailyLogs, upsertDailyLog } from "../store";
+import { pushUndo } from "../undo";
 
 interface Person {
   id: number;
@@ -215,6 +216,9 @@ export default function DailyLogSheet({ equipmentId, month, role, people, onChan
     if (dayNumbers.size === 0) return;
     const targetDates = dates.filter((date) => dayNumbers.has(Number(date.slice(-2))) && rows[date]?.id);
     if (targetDates.length === 0) return;
+    const currentLogs = listDailyLogs(equipmentId, month, role);
+    const byDate = new Map(currentLogs.map((l) => [l.date, l]));
+    const snapshot = targetDates.map((date) => byDate.get(date)).filter((l): l is DailyLog => !!l);
     setClearing(true);
     for (const date of targetDates) {
       const id = rows[date].id;
@@ -224,6 +228,14 @@ export default function DailyLogSheet({ equipmentId, month, role, people, onChan
     onChanged?.();
     setClearing(false);
     setClearDays("");
+    pushUndo(`اتمسحت ${snapshot.length} يوم`, () => {
+      for (const log of snapshot) {
+        const { id: _id, ...rest } = log;
+        upsertDailyLog(rest);
+      }
+      refresh();
+      onChanged?.();
+    });
   }
 
   // ملخص أيام الشهر: كام يوم اشتغل كامل، وكام يوم اشتغل جزء بس من ساعاته

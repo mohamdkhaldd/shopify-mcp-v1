@@ -7,6 +7,7 @@ import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import PartnerSummary from "./pages/PartnerSummary";
 import Dashboard from "./pages/Dashboard";
+import UndoToast from "./components/UndoToast";
 import { Equipment } from "./types";
 import { initCloudSync, subscribeRemoteChanges } from "./store";
 import { Profile, fetchProfile, getSession, onAuthChange } from "./auth";
@@ -89,6 +90,7 @@ function StaffApp() {
         <NavButton icon="👥" label="المرتبات" active={screen === "payroll"} onClick={() => { setSelectedEquipment(null); setScreen("payroll"); }} />
         <NavButton icon="⚙️" label="الإعدادات" active={screen === "settings"} onClick={() => { setSelectedEquipment(null); setScreen("settings"); }} />
       </nav>
+      <UndoToast />
     </div>
   );
 }

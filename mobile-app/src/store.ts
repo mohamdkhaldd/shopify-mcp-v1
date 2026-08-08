@@ -5,11 +5,18 @@ import {
   Driver,
   Equipment,
   ExpenseCategory,
+  HassanLedgerEntry,
+  HassanLedgerType,
+  HassanTreasuryExpense,
   MonthlyExpense,
   Partner,
   PayrollEntry,
   PayrollKind,
   SalaryPayment,
+  Supplier,
+  SupplierPayment,
+  SupplierPurchase,
+  WasteEntry,
 } from "./types";
 import {
   SEED_CONTRACTORS,
@@ -33,6 +40,12 @@ interface State {
   monthly_expenses: MonthlyExpense[];
   payroll_entries: PayrollEntry[];
   salary_payments: SalaryPayment[];
+  hassan_ledger: HassanLedgerEntry[];
+  hassan_treasury_expenses: HassanTreasuryExpense[];
+  waste_entries: WasteEntry[];
+  suppliers: Supplier[];
+  supplier_purchases: SupplierPurchase[];
+  supplier_payments: SupplierPayment[];
   nextId: number;
 }
 
@@ -77,6 +90,12 @@ function buildSeedState(): State {
     monthly_expenses: [],
     payroll_entries: [],
     salary_payments: [],
+    hassan_ledger: [],
+    hassan_treasury_expenses: [],
+    waste_entries: [],
+    suppliers: [],
+    supplier_purchases: [],
+    supplier_payments: [],
     nextId,
   };
 }
@@ -91,7 +110,16 @@ function loadState(): State {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
     return seeded;
   }
-  return JSON.parse(raw);
+  const parsed = JSON.parse(raw);
+  // نسخ أقدم من التخزين معندهاش الحقول دي — نضيفها فاضية عشان الكود الجديد
+  // ميكسرش لو لقاها undefined.
+  parsed.hassan_ledger ??= [];
+  parsed.hassan_treasury_expenses ??= [];
+  parsed.waste_entries ??= [];
+  parsed.suppliers ??= [];
+  parsed.supplier_purchases ??= [];
+  parsed.supplier_payments ??= [];
+  return parsed;
 }
 
 function loadSeenRemoteKeys(): Set<string> {
@@ -291,7 +319,8 @@ export function deleteDailyLog(id: number) {
   const log = state.daily_logs.find((l) => l.id === id);
   state.daily_logs = state.daily_logs.filter((l) => l.id !== id);
   if (log) {
-    deleteFromCloud("daily_logs", id);
+    const eqName = equipmentName(log.equipment_id);
+    deleteFromCloud("daily_logs", id, { equipment_name: eqName, date: log.date, role: log.role });
     const otherRole = OTHER_HOURS_ROLE[log.role];
     if (otherRole) {
       const counterpart = state.daily_logs.find(
@@ -300,7 +329,7 @@ export function deleteDailyLog(id: number) {
       state.daily_logs = state.daily_logs.filter(
         (l) => !(l.equipment_id === log.equipment_id && l.date === log.date && l.role === otherRole)
       );
-      if (counterpart) deleteFromCloud("daily_logs", counterpart.id);
+      if (counterpart) deleteFromCloud("daily_logs", counterpart.id, { equipment_name: eqName, date: log.date, role: otherRole });
     }
   }
   save();

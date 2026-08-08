@@ -172,10 +172,30 @@ export async function pushToCloud(collectionName: string, localId: number, data:
   }
 }
 
-export function deleteFromCloud(_collectionName: string, _localId: number) {
-  // بالتصميم: حذف من الموبايل مبيتمسحش من السحابة/اللاب تلقائي، عشان حذف
-  // تلقائي في الاتجاهين خطر لو حصل غلط. لو محتاج تمسح فعليًا، امسحها يدوي
-  // من اللاب.
+// بيمسح من السحابة فعليًا (مش بس محليًا) — عشان أرقام الشريك (اللي بتتحسب
+// من السحابة مباشرة) تتحدث فورًا. daily_logs ليه مفتاح طبيعي
+// (equipment_id+date+role) فمحتاجينش sync_key، لازم بس نمرر match. جداول
+// القيود التانية بتتمسح بمفتاح sync_key بتاعها.
+export async function deleteFromCloud(collectionName: string, localId: number, match?: Record<string, unknown>) {
+  try {
+    switch (collectionName) {
+      case "daily_logs": {
+        if (!match) return;
+        const equipmentId = await findIdByName("equipment", match.equipment_name as string);
+        if (!equipmentId) return;
+        await supabase.from("daily_logs").delete().eq("equipment_id", equipmentId).eq("date", match.date as string).eq("role", match.role as string);
+        return;
+      }
+      case "monthly_expenses":
+      case "payroll_entries":
+      case "salary_payments": {
+        await supabase.from(collectionName).delete().eq("sync_key", syncKeyFor(localId));
+        return;
+      }
+    }
+  } catch {
+    // مفيش نت — اتمسحت محليًا بس دلوقتي، هتتمسح من السحابة تاني مرة يبقى فيه نت
+  }
 }
 
 type RemoteDocHandler = (collectionName: string, docId: string, data: Record<string, unknown>) => void;

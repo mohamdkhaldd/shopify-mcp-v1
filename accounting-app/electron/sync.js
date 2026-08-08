@@ -274,7 +274,7 @@ async function startCloudSync(db) {
   await primeNameCaches(supabase);
 
   for (const table of COLLECTIONS) {
-    supabase
+    let channel = supabase
       .channel(`sync-${table}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table }, (payload) => {
         const translated = translateRow(table, payload.new);
@@ -293,10 +293,27 @@ async function startCloudSync(db) {
         } catch (err) {
           console.error(`sync merge failed for ${table}/${payload.new.id}`, err);
         }
-      })
-      .subscribe((status, err) => {
-        if (err) console.error(`sync listener failed for ${table}`, err);
       });
+    // السركي/المقاول بس بيتمسحوا من اللاب لو اتمسحوا من الموبايل — عندهم
+    // مفتاح طبيعي (equipment_id+date+role) يضمن إننا بنمسح الصف الصح بالظبط.
+    // باقي الجداول بتفضل زي ما هي عمدًا (راجع الملاحظة فوق).
+    if (table === "daily_logs") {
+      channel = channel.on("postgres_changes", { event: "DELETE", schema: "public", table }, (payload) => {
+        const old = payload.old || {};
+        const equipmentName = equipmentNames.get(old.equipment_id);
+        if (!equipmentName || !old.date || !old.role) return;
+        try {
+          db.prepare(
+            "DELETE FROM daily_logs WHERE equipment_id = (SELECT id FROM equipment WHERE name = ?) AND date = ? AND role = ?"
+          ).run(equipmentName, old.date, old.role);
+        } catch (err) {
+          console.error("sync delete failed for daily_logs", err);
+        }
+      });
+    }
+    channel.subscribe((status, err) => {
+      if (err) console.error(`sync listener failed for ${table}`, err);
+    });
   }
 }
 

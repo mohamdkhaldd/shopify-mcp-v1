@@ -96,3 +96,53 @@ export interface SalaryPayment {
   payment_method: string;
   note: string | null;
 }
+
+export type HassanLedgerType = "loan" | "repayment" | "due" | "collection";
+
+export interface HassanLedgerEntry {
+  id: number;
+  date: string;
+  type: HassanLedgerType;
+  amount: number;
+  party_name: string | null;
+  description: string | null;
+  note: string | null;
+}
+
+export interface HassanTreasuryExpense {
+  id: number;
+  date: string;
+  amount: number;
+  description: string;
+}
+
+export interface WasteEntry {
+  id: number;
+  date: string;
+  amount: number;
+  payment_method: string | null;
+  note: string | null;
+}
+
+export interface Supplier {
+  id: number;
+  name: string;
+}
+
+export interface SupplierPurchase {
+  id: number;
+  supplier_id: number;
+  date: string;
+  description: string | null;
+  amount: number;
+  note: string | null;
+}
+
+export interface SupplierPayment {
+  id: number;
+  supplier_id: number;
+  date: string;
+  amount: number;
+  method: string | null;
+  note: string | null;
+}

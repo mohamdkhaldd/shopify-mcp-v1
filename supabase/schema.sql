@@ -356,3 +356,82 @@ begin
   return query select v_due, v_paid, v_due - v_paid;
 end;
 $$;
+
+-- ============ باقي جداول اللاب: خزنة حسن، الهالك، الموردين — staff بس
+-- (مش داتا شركاء)، بنفس نمط sync_key للجداول اللي معندهاش مفتاح طبيعي. ============
+create table if not exists hassan_ledger (
+  id bigint generated always as identity primary key,
+  date text not null,
+  type text not null check (type in ('loan','repayment','due','collection')),
+  amount numeric not null default 0,
+  party_name text,
+  description text,
+  note text,
+  sync_key text unique
+);
+
+create table if not exists hassan_treasury_expenses (
+  id bigint generated always as identity primary key,
+  date text not null,
+  amount numeric not null default 0,
+  description text not null,
+  sync_key text unique
+);
+
+create table if not exists waste_entries (
+  id bigint generated always as identity primary key,
+  date text not null,
+  amount numeric not null default 0,
+  payment_method text,
+  note text,
+  sync_key text unique
+);
+
+create table if not exists suppliers (
+  id bigint generated always as identity primary key,
+  name text not null unique
+);
+
+create table if not exists supplier_purchases (
+  id bigint generated always as identity primary key,
+  supplier_id bigint not null references suppliers(id) on delete cascade,
+  date text not null,
+  description text,
+  amount numeric not null default 0,
+  note text,
+  sync_key text unique
+);
+
+create table if not exists supplier_payments (
+  id bigint generated always as identity primary key,
+  supplier_id bigint not null references suppliers(id) on delete cascade,
+  date text not null,
+  amount numeric not null default 0,
+  method text,
+  note text,
+  sync_key text unique
+);
+
+alter table hassan_ledger enable row level security;
+alter table hassan_treasury_expenses enable row level security;
+alter table waste_entries enable row level security;
+alter table suppliers enable row level security;
+alter table supplier_purchases enable row level security;
+alter table supplier_payments enable row level security;
+
+drop policy if exists "staff full access" on hassan_ledger;
+create policy "staff full access" on hassan_ledger for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on hassan_treasury_expenses;
+create policy "staff full access" on hassan_treasury_expenses for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on waste_entries;
+create policy "staff full access" on waste_entries for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on suppliers;
+create policy "staff full access" on suppliers for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on supplier_purchases;
+create policy "staff full access" on supplier_purchases for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on supplier_payments;
+create policy "staff full access" on supplier_payments for all using (is_staff()) with check (is_staff());
+
+-- بيخلي Postgres يبعت الصف كامل (مش الـ id بس) في إشعارات الحذف —
+-- محتاجينها عشان اللاب يعرف يمسح صف السركي الصح لما يتمسح من الموبايل.
+alter table daily_logs replica identity full;
