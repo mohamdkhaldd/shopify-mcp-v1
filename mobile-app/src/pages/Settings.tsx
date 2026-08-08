@@ -13,6 +13,7 @@ import {
   pushAllToCloud,
 } from "../store";
 import { WageType } from "../types";
+import { signOut } from "../auth";
 
 type Kind = "drivers" | "contractors" | "partners" | "equipment" | "categories";
 
@@ -48,6 +49,10 @@ export default function Settings() {
           className="w-full mb-4 bg-primary-light border border-primary/30 text-primary-dark rounded-xl py-2.5 text-sm font-bold disabled:opacity-60"
         >
           {syncing ? "جاري الإرسال..." : "🔄 ابعت كل البيانات للسحابة دلوقتي"}
+        </button>
+
+        <button onClick={() => signOut()} className="w-full mb-4 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl py-2.5 text-sm font-bold">
+          تسجيل الخروج
         </button>
 
         <div className="grid grid-cols-3 gap-1.5 mb-4">

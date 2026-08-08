@@ -1,5 +1,5 @@
-import { collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
-import { firestore } from "./firebase";
+import { RealtimeChannel } from "@supabase/supabase-js";
+import { supabase } from "./supabaseClient";
 
 const DEVICE_ID_KEY = "al-bunyan-device-id";
 
@@ -16,59 +16,248 @@ function syncKeyFor(localId: number): string {
   return `${getDeviceId()}_${localId}`;
 }
 
-// بيكتب في السحابة — لو مفيش نت دلوقتي، Firestore بيخزنها محليًا ويبعتها
-// لوحده أول ما النت يرجع (من غير ما نعمل أي حاجة إضافية هنا).
-export function pushToCloud(collectionName: string, localId: number, data: Record<string, unknown>) {
-  const key = syncKeyFor(localId);
-  setDoc(doc(collection(firestore, collectionName), key), {
-    ...data,
-    sync_key: key,
-    updated_at: serverTimestamp(),
-  }).catch(() => {});
+// --- كاش أسماء بسيط: بنسيب الجداول المرجعية (معدات/موظفين/شركاء/أنواع
+// مصروفات) في الذاكرة عشان لما نستقبل صف من daily_logs/monthly_expenses/...
+// (بيحمل equipment_id رقم حقيقي مش اسم) نقدر نترجمه لاسم ونبعته لـ store.ts
+// اللي بيتوقع الاسم مش الرقم (نفس شكل بيانات الموبايل تمامًا). ---
+const equipmentNames = new Map<number, string>();
+const employeeNames = new Map<number, string>();
+const partnerNames = new Map<number, string>();
+const categoryNames = new Map<number, string>();
+
+async function getOrCreateByName(table: string, name: string, extra: Record<string, unknown> = {}): Promise<number | null> {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const { data, error } = await supabase
+    .from(table)
+    .upsert({ name: trimmed, ...extra }, { onConflict: "name", ignoreDuplicates: false })
+    .select("id")
+    .single();
+  if (error || !data) {
+    // فشل الـ upsert (زي مشكلة صلاحيات مؤقتة) — نجرب نقرا الصف لو موجود أصلًا
+    const { data: existing } = await supabase.from(table).select("id").eq("name", trimmed).maybeSingle();
+    return existing?.id ?? null;
+  }
+  return data.id as number;
 }
 
-export function deleteFromCloud(collectionName: string, localId: number) {
-  const key = syncKeyFor(localId);
-  deleteDoc(doc(collection(firestore, collectionName), key)).catch(() => {});
+async function findIdByName(table: string, name: string): Promise<number | null> {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return null;
+  const { data } = await supabase.from(table).select("id").eq("name", trimmed).maybeSingle();
+  return data?.id ?? null;
 }
 
-export const SYNCED_COLLECTIONS = [
-  "partners",
-  "contractors",
-  "employees",
-  "expense_categories",
-  "equipment",
-  "daily_logs",
-  "monthly_expenses",
-  "payroll_entries",
-  "salary_payments",
-] as const;
+// --- بعت للسحابة. الجداول المرجعية (اسمها UNIQUE) بتتعمل upsert بالاسم —
+// نفس الاسم من أي جهاز بيبقى نفس الصف دايمًا. جداول القيود (مصروفات/سلف/
+// حوافز/خصومات/دفعات مرتب) بتتعمل upsert بمفتاح sync_key فريد لكل جهاز
+// عشان القيد ميتكررش. السركي/المقاول/سركي سوق ليهم مفتاح طبيعي
+// (equipment_id + date + role) فمحتاجينش sync_key خالص. ---
+export async function pushToCloud(collectionName: string, localId: number, data: Record<string, unknown>) {
+  try {
+    switch (collectionName) {
+      case "partners":
+      case "contractors": {
+        await supabase.from(collectionName).upsert({ name: (data.name as string).trim(), opening_balance: 0 }, { onConflict: "name" });
+        return;
+      }
+      case "employees": {
+        await supabase
+          .from("employees")
+          .upsert(
+            { name: (data.name as string).trim(), wage_type: data.wage_type, rate: data.rate, fixed_salary: data.fixed_salary },
+            { onConflict: "name" }
+          );
+        return;
+      }
+      case "expense_categories": {
+        await supabase
+          .from("expense_categories")
+          .upsert({ name: (data.name as string).trim(), counts_as_commission: data.counts_as_commission }, { onConflict: "name" });
+        return;
+      }
+      case "equipment": {
+        const equipmentId = await getOrCreateByName("equipment", data.name as string, { purchase_price: data.purchase_price ?? 0 });
+        if (!equipmentId) return;
+        const shares = Array.isArray(data.shares) ? (data.shares as { partner_name: string; percentage: number }[]) : [];
+        for (const share of shares) {
+          const partnerId = await getOrCreateByName("partners", share.partner_name);
+          if (!partnerId) continue;
+          await supabase
+            .from("equipment_partner_shares")
+            .upsert({ equipment_id: equipmentId, partner_id: partnerId, percentage: share.percentage }, { onConflict: "equipment_id,partner_id" });
+        }
+        return;
+      }
+      case "daily_logs": {
+        const equipmentId = await getOrCreateByName("equipment", data.equipment_name as string);
+        if (!equipmentId) return;
+        await supabase.from("daily_logs").upsert(
+          {
+            equipment_id: equipmentId,
+            date: data.date,
+            role: data.role,
+            person_name: data.person_name ?? "",
+            actual_hours: data.actual_hours,
+            base_hours: data.base_hours,
+            day_rate: data.day_rate,
+            is_day_off: data.is_day_off,
+            fixed_value: data.fixed_value,
+            hassan_commission: data.hassan_commission,
+            note: data.note,
+          },
+          { onConflict: "equipment_id,date,role" }
+        );
+        return;
+      }
+      case "monthly_expenses": {
+        const equipmentId = await getOrCreateByName("equipment", data.equipment_name as string);
+        if (!equipmentId) return;
+        const categoryId = data.category_name ? await getOrCreateByName("expense_categories", data.category_name as string) : null;
+        await supabase.from("monthly_expenses").upsert(
+          {
+            equipment_id: equipmentId,
+            month: data.month,
+            date: data.date,
+            category_id: categoryId,
+            amount: data.amount,
+            payment_method: data.payment_method,
+            note: data.note,
+            sync_key: syncKeyFor(localId),
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "payroll_entries": {
+        const employeeId = await findIdByName("employees", data.employee_name as string);
+        if (!employeeId) return;
+        await supabase.from("payroll_entries").upsert(
+          {
+            employee_id: employeeId,
+            kind: data.kind,
+            month: data.month,
+            date: data.date,
+            amount: data.amount,
+            payment_method: data.payment_method,
+            reason: data.reason,
+            sync_key: syncKeyFor(localId),
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "salary_payments": {
+        const employeeId = await findIdByName("employees", data.employee_name as string);
+        if (!employeeId) return;
+        await supabase.from("salary_payments").upsert(
+          {
+            employee_id: employeeId,
+            month: data.month,
+            date: data.date,
+            amount: data.amount,
+            payment_method: data.payment_method,
+            note: data.note,
+            sync_key: syncKeyFor(localId),
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+    }
+  } catch {
+    // مفيش نت أو حصل خطأ مؤقت — التعديل محفوظ محليًا وهيتحاول يتبعت تاني
+    // المرة الجاية اللي بيانات بتتغير فيها (Supabase مالوش طابور تلقائي زي
+    // Firestore، فلو محتاج ضمان تام لازم تدوس "ابعت كل البيانات" من الإعدادات).
+  }
+}
+
+export function deleteFromCloud(_collectionName: string, _localId: number) {
+  // بالتصميم: حذف من الموبايل مبيتمسحش من السحابة/اللاب تلقائي، عشان حذف
+  // تلقائي في الاتجاهين خطر لو حصل غلط. لو محتاج تمسح فعليًا، امسحها يدوي
+  // من اللاب.
+}
 
 type RemoteDocHandler = (collectionName: string, docId: string, data: Record<string, unknown>) => void;
 
 let started = false;
+const channels: RealtimeChannel[] = [];
 
-// بيسمع لأي تغيير بيحصل من أي جهاز تاني (موبايل تاني أو أي حاجة بتكتب في
-// نفس القاعدة) ويطبّقه محليًا فورًا — ده اللي بيخلي الموبايلات "تسمع" بعض.
-export function startCloudSync(onRemoteChange: RemoteDocHandler) {
+async function primeNameCaches() {
+  const [{ data: eq }, { data: emp }, { data: pt }, { data: cat }] = await Promise.all([
+    supabase.from("equipment").select("id,name"),
+    supabase.from("employees").select("id,name"),
+    supabase.from("partners").select("id,name"),
+    supabase.from("expense_categories").select("id,name"),
+  ]);
+  for (const r of eq ?? []) equipmentNames.set(r.id, r.name);
+  for (const r of emp ?? []) employeeNames.set(r.id, r.name);
+  for (const r of pt ?? []) partnerNames.set(r.id, r.name);
+  for (const r of cat ?? []) categoryNames.set(r.id, r.name);
+}
+
+export async function startCloudSync(onRemoteChange: RemoteDocHandler) {
   if (started) return;
   started = true;
+  await primeNameCaches();
   const ownDeviceId = getDeviceId();
-  for (const name of SYNCED_COLLECTIONS) {
-    onSnapshot(
-      collection(firestore, name),
-      (snapshot) => {
-        for (const change of snapshot.docChanges()) {
-          if (change.type === "removed") continue;
-          const data = change.doc.data();
-          const key = typeof data.sync_key === "string" ? data.sync_key : "";
-          if (key.startsWith(`${ownDeviceId}_`)) continue; // كتابة جاية من نفس الجهاز، متطبقتش تاني
-          onRemoteChange(name, change.doc.id, data);
-        }
-      },
-      () => {
-        // فشل الاتصال — هيحاول يتصل لوحده تاني أول ما النت يرجع
-      }
-    );
+
+  function subscribe(table: string, translate: (row: Record<string, unknown>) => Record<string, unknown> | null) {
+    const channel = supabase
+      .channel(`sync-${table}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table }, (payload) => {
+        const row = payload.new as Record<string, unknown>;
+        const syncKey = typeof row.sync_key === "string" ? row.sync_key : "";
+        if (syncKey.startsWith(`${ownDeviceId}_`)) return;
+        const translated = translate(row);
+        if (translated) onRemoteChange(table, syncKey || String(row.id), translated);
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table }, (payload) => {
+        const row = payload.new as Record<string, unknown>;
+        const syncKey = typeof row.sync_key === "string" ? row.sync_key : "";
+        const translated = translate(row);
+        if (translated) onRemoteChange(table, syncKey || String(row.id), translated);
+      })
+      .subscribe();
+    channels.push(channel);
   }
+
+  subscribe("partners", (row) => {
+    partnerNames.set(row.id as number, row.name as string);
+    return { name: row.name };
+  });
+  subscribe("contractors", (row) => ({ name: row.name }));
+  subscribe("employees", (row) => {
+    employeeNames.set(row.id as number, row.name as string);
+    return { name: row.name, wage_type: row.wage_type, rate: row.rate, fixed_salary: row.fixed_salary };
+  });
+  subscribe("expense_categories", (row) => {
+    categoryNames.set(row.id as number, row.name as string);
+    return { name: row.name, counts_as_commission: row.counts_as_commission };
+  });
+  subscribe("equipment", (row) => {
+    equipmentNames.set(row.id as number, row.name as string);
+    return { name: row.name, purchase_price: row.purchase_price, shares: [] };
+  });
+  subscribe("daily_logs", (row) => {
+    const equipmentName = equipmentNames.get(row.equipment_id as number);
+    if (!equipmentName) return null;
+    return { ...row, equipment_name: equipmentName };
+  });
+  subscribe("monthly_expenses", (row) => {
+    const equipmentName = equipmentNames.get(row.equipment_id as number);
+    if (!equipmentName) return null;
+    const categoryName = row.category_id ? categoryNames.get(row.category_id as number) ?? "" : "";
+    return { ...row, equipment_name: equipmentName, category_name: categoryName };
+  });
+  subscribe("payroll_entries", (row) => {
+    const employeeName = employeeNames.get(row.employee_id as number);
+    if (!employeeName) return null;
+    return { ...row, employee_name: employeeName };
+  });
+  subscribe("salary_payments", (row) => {
+    const employeeName = employeeNames.get(row.employee_id as number);
+    if (!employeeName) return null;
+    return { ...row, employee_name: employeeName };
+  });
 }

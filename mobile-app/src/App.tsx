@@ -4,12 +4,53 @@ import Home from "./pages/Home";
 import EquipmentDetail from "./pages/EquipmentDetail";
 import Payroll from "./pages/Payroll";
 import Settings from "./pages/Settings";
+import Login from "./pages/Login";
+import PartnerSummary from "./pages/PartnerSummary";
 import { Equipment } from "./types";
 import { initCloudSync, subscribeRemoteChanges } from "./store";
+import { Profile, fetchProfile, getSession, onAuthChange } from "./auth";
 
 type Screen = "home" | "payroll" | "settings";
 
 export default function App() {
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    getSession().then((session) => setUserId(session?.user.id ?? null));
+    return onAuthChange((session) => setUserId(session?.user.id ?? null));
+  }, []);
+
+  useEffect(() => {
+    if (!userId) {
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetchProfile(userId).then((p) => {
+      setProfile(p);
+      setLoading(false);
+    });
+  }, [userId]);
+
+  if (loading) {
+    return <div className="min-h-screen bg-[#F5F7F6] flex items-center justify-center text-sm text-slate-400">جاري التحميل...</div>;
+  }
+  if (!userId) return <Login />;
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-[#F5F7F6] flex items-center justify-center text-sm text-slate-400 text-center px-6">
+        الحساب ده مش مربوط بصلاحية لسه. كلّم حسن يضيفلك واحدة من الإعدادات.
+      </div>
+    );
+  }
+  if (profile.role === "partner") return <PartnerSummary displayName={profile.display_name} />;
+  return <StaffApp />;
+}
+
+function StaffApp() {
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
   const [month, setMonth] = useState(currentMonthKey());

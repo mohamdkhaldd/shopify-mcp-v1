@@ -569,11 +569,19 @@ export function mergeRemoteRecord(collectionName: string, docId: string, data: a
   notifyRemoteChange();
 }
 
+const BOOTSTRAPPED_KEY = "al-bunyan-cloud-bootstrapped";
 let cloudSyncStarted = false;
 export function initCloudSync() {
   if (cloudSyncStarted) return;
   cloudSyncStarted = true;
   startCloudSync((collectionName, docId, data) => mergeRemoteRecord(collectionName, docId, data));
+  // أول مرة بس: ابعت كل حاجة موجودة محليًا (زي الداتا الأساسية للمعدات
+  // والسواقين) عشان اللاب والموبايلات التانية يلاقوا نفس المرجع من غير ما
+  // ننتظر تعديل يدوي عليها.
+  if (!localStorage.getItem(BOOTSTRAPPED_KEY)) {
+    localStorage.setItem(BOOTSTRAPPED_KEY, "1");
+    pushAllToCloud();
+  }
 }
 
 // --- ابعت كل البيانات الموجودة دلوقتي للسحابة (لداتا اتسجلت قبل ما
