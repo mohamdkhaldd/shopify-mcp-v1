@@ -3,16 +3,18 @@ import MonthBar from "../components/MonthBar";
 import DailyLogSheet from "../components/DailyLogSheet";
 import MarketSheet from "../components/MarketSheet";
 import ExpensesSheet from "../components/ExpensesSheet";
+import ProfitSheet from "../components/ProfitSheet";
 import { listContractors, listEmployees } from "../store";
 import { Equipment } from "../types";
 
-type Tab = "driver" | "contractor" | "market" | "expense";
+type Tab = "driver" | "contractor" | "market" | "expense" | "profit";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "driver", label: "السركي" },
   { id: "contractor", label: "المقاول" },
   { id: "market", label: "سركي سوق" },
   { id: "expense", label: "المصروفات" },
+  { id: "profit", label: "الأرباح" },
 ];
 
 export default function EquipmentDetail({
@@ -63,6 +65,7 @@ export default function EquipmentDetail({
         {tab === "contractor" && <DailyLogSheet equipmentId={equipment.id} month={month} role="contractor" people={contractors} />}
         {tab === "market" && <MarketSheet equipmentId={equipment.id} month={month} />}
         {tab === "expense" && <ExpensesSheet equipmentId={equipment.id} month={month} />}
+        {tab === "profit" && <ProfitSheet equipment={equipment} month={month} />}
       </div>
     </div>
   );

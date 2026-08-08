@@ -72,6 +72,7 @@ export default function DailyLogSheet({ equipmentId, month, role, people, onChan
   const dates = useMemo(() => daysInMonth(month), [month]);
   const [rows, setRows] = useState<Record<string, RowDraft>>({});
   const isContractor = role === "contractor";
+  const isDriver = role === "driver";
 
   const [fillDays, setFillDays] = useState("");
   const [fillPerson, setFillPerson] = useState("");
@@ -206,6 +207,27 @@ export default function DailyLogSheet({ equipmentId, month, role, people, onChan
     setOvertimeDays("");
     setOvertimeValue("");
   }
+
+  // ملخص أيام الشهر: كام يوم اشتغل كامل، وكام يوم اشتغل جزء بس من ساعاته
+  // الأساسية (مجمّعين بعدد الساعات اللي اشتغلوها) — الأيام اللي معلّمة
+  // "مشتغلش" أو لسه فاضية متحسبش خالص.
+  const workDaysSummary = useMemo(() => {
+    let fullDays = 0;
+    const partialGroups = new Map<number, string[]>();
+    for (const date of dates) {
+      const row = rows[date];
+      if (!row?.id || row.is_day_off) continue;
+      const base = Number(row.base_hours) || 0;
+      const actual = row.actual_hours.trim() === "" ? base : Number(row.actual_hours) || 0;
+      if (base <= 0 || actual >= base) {
+        fullDays++;
+      } else {
+        if (!partialGroups.has(actual)) partialGroups.set(actual, []);
+        partialGroups.get(actual)!.push(date.slice(-2));
+      }
+    }
+    return { fullDays, partialGroups };
+  }, [rows, dates]);
 
   return (
     <div className="space-y-3">
@@ -431,6 +453,26 @@ export default function DailyLogSheet({ equipmentId, month, role, people, onChan
           );
         })}
       </div>
+
+      {isDriver && (
+        <div className="bg-slate-50 rounded-2xl p-3 text-sm">
+          <div className="font-bold text-slate-600 mb-1">أيام الشغل في الشهر</div>
+          <div className="text-slate-600">
+            عدد الأيام اللي اشتغلت كامل: <span className="font-semibold text-primary-dark">{workDaysSummary.fullDays}</span> يوم
+          </div>
+          {workDaysSummary.partialGroups.size > 0 && (
+            <div className="mt-1 space-y-0.5">
+              {[...workDaysSummary.partialGroups.entries()]
+                .sort((a, b) => b[0] - a[0])
+                .map(([hours, days]) => (
+                  <div key={hours} className="text-slate-500">
+                    {days.length} {days.length === 1 ? "يوم اشتغل" : "أيام اشتغلوا"} {hours} {hours === 1 ? "ساعة" : "ساعات"} بس (يوم {days.join("، ")})
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
