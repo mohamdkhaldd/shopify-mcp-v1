@@ -415,6 +415,105 @@ export function deleteSalaryPayment(id: number) {
   deleteFromCloud("salary_payments", id);
 }
 
+// --- خزنة حسن (شخصية) ---
+export function listHassanLedger(month: string): HassanLedgerEntry[] {
+  return state.hassan_ledger.filter((e) => e.date.startsWith(month)).sort((a, b) => b.date.localeCompare(a.date));
+}
+export function addHassanLedgerEntry(entry: Omit<HassanLedgerEntry, "id">): HassanLedgerEntry {
+  const record: HassanLedgerEntry = { id: state.nextId++, ...entry };
+  state.hassan_ledger.push(record);
+  save();
+  pushToCloud("hassan_ledger", record.id, { ...record });
+  return record;
+}
+export function deleteHassanLedgerEntry(id: number) {
+  state.hassan_ledger = state.hassan_ledger.filter((e) => e.id !== id);
+  save();
+  deleteFromCloud("hassan_ledger", id);
+}
+
+export function listHassanTreasuryExpenses(month: string): HassanTreasuryExpense[] {
+  return state.hassan_treasury_expenses.filter((e) => e.date.startsWith(month)).sort((a, b) => b.date.localeCompare(a.date));
+}
+export function addHassanTreasuryExpense(expense: Omit<HassanTreasuryExpense, "id">): HassanTreasuryExpense {
+  const record: HassanTreasuryExpense = { id: state.nextId++, ...expense };
+  state.hassan_treasury_expenses.push(record);
+  save();
+  pushToCloud("hassan_treasury_expenses", record.id, { ...record });
+  return record;
+}
+export function deleteHassanTreasuryExpense(id: number) {
+  state.hassan_treasury_expenses = state.hassan_treasury_expenses.filter((e) => e.id !== id);
+  save();
+  deleteFromCloud("hassan_treasury_expenses", id);
+}
+
+// --- الهالك ---
+export function listWasteEntries(month: string): WasteEntry[] {
+  return state.waste_entries.filter((e) => e.date.startsWith(month)).sort((a, b) => b.date.localeCompare(a.date));
+}
+export function addWasteEntry(entry: Omit<WasteEntry, "id">): WasteEntry {
+  const record: WasteEntry = { id: state.nextId++, ...entry };
+  state.waste_entries.push(record);
+  save();
+  pushToCloud("waste_entries", record.id, { ...record });
+  return record;
+}
+export function deleteWasteEntry(id: number) {
+  state.waste_entries = state.waste_entries.filter((e) => e.id !== id);
+  save();
+  deleteFromCloud("waste_entries", id);
+}
+
+// --- الموردين ---
+export function listSuppliers(): Supplier[] {
+  return [...state.suppliers];
+}
+function findOrCreateSupplierByName(name: string): Supplier {
+  const trimmed = name.trim();
+  let s = state.suppliers.find((x) => x.name === trimmed);
+  if (!s) {
+    s = { id: state.nextId++, name: trimmed };
+    state.suppliers.push(s);
+  }
+  return s;
+}
+function supplierName(id: number): string {
+  return state.suppliers.find((s) => s.id === id)?.name ?? "";
+}
+export function listSupplierPurchases(supplier_id: number): SupplierPurchase[] {
+  return state.supplier_purchases.filter((p) => p.supplier_id === supplier_id).sort((a, b) => b.date.localeCompare(a.date));
+}
+export function listSupplierPayments(supplier_id: number): SupplierPayment[] {
+  return state.supplier_payments.filter((p) => p.supplier_id === supplier_id).sort((a, b) => b.date.localeCompare(a.date));
+}
+export function addSupplierPurchase(supplierName: string, purchase: Omit<SupplierPurchase, "id" | "supplier_id">): SupplierPurchase {
+  const supplier = findOrCreateSupplierByName(supplierName);
+  const record: SupplierPurchase = { id: state.nextId++, supplier_id: supplier.id, ...purchase };
+  state.supplier_purchases.push(record);
+  save();
+  pushToCloud("supplier_purchases", record.id, { ...record, supplier_name: supplier.name });
+  return record;
+}
+export function addSupplierPayment(supplierNameArg: string, payment: Omit<SupplierPayment, "id" | "supplier_id">): SupplierPayment {
+  const supplier = findOrCreateSupplierByName(supplierNameArg);
+  const record: SupplierPayment = { id: state.nextId++, supplier_id: supplier.id, ...payment };
+  state.supplier_payments.push(record);
+  save();
+  pushToCloud("supplier_payments", record.id, { ...record, supplier_name: supplier.name });
+  return record;
+}
+export function deleteSupplierPurchase(id: number) {
+  state.supplier_purchases = state.supplier_purchases.filter((p) => p.id !== id);
+  save();
+  deleteFromCloud("supplier_purchases", id);
+}
+export function deleteSupplierPayment(id: number) {
+  state.supplier_payments = state.supplier_payments.filter((p) => p.id !== id);
+  save();
+  deleteFromCloud("supplier_payments", id);
+}
+
 // --- Export bookkeeping: كل حاجة اتصدّرت قبل كده بتتعلّم عشان التصدير
 // الجاي يجيب بس الجديد، مش يكرر كل حاجة تاني.
 export function markAllExported() {
@@ -591,6 +690,83 @@ export function mergeRemoteRecord(collectionName: string, docId: string, data: a
       });
       break;
     }
+    case "hassan_ledger": {
+      if (seenRemoteKeys.has(docId)) break;
+      seenRemoteKeys.add(docId);
+      saveSeenRemoteKeys();
+      if (!data.date || !data.type) break;
+      state.hassan_ledger.push({
+        id: state.nextId++,
+        date: data.date,
+        type: data.type,
+        amount: Number(data.amount) || 0,
+        party_name: data.party_name ?? null,
+        description: data.description ?? null,
+        note: data.note ?? null,
+      });
+      break;
+    }
+    case "hassan_treasury_expenses": {
+      if (seenRemoteKeys.has(docId)) break;
+      seenRemoteKeys.add(docId);
+      saveSeenRemoteKeys();
+      if (!data.date) break;
+      state.hassan_treasury_expenses.push({
+        id: state.nextId++,
+        date: data.date,
+        amount: Number(data.amount) || 0,
+        description: data.description ?? "",
+      });
+      break;
+    }
+    case "waste_entries": {
+      if (seenRemoteKeys.has(docId)) break;
+      seenRemoteKeys.add(docId);
+      saveSeenRemoteKeys();
+      if (!data.date) break;
+      state.waste_entries.push({
+        id: state.nextId++,
+        date: data.date,
+        amount: Number(data.amount) || 0,
+        payment_method: data.payment_method ?? null,
+        note: data.note ?? null,
+      });
+      break;
+    }
+    case "supplier_purchases": {
+      if (seenRemoteKeys.has(docId)) break;
+      seenRemoteKeys.add(docId);
+      saveSeenRemoteKeys();
+      const supplierNameVal = (data.supplier_name ?? "").trim();
+      if (!supplierNameVal || !data.date) break;
+      const supplier = findOrCreateSupplierByName(supplierNameVal);
+      state.supplier_purchases.push({
+        id: state.nextId++,
+        supplier_id: supplier.id,
+        date: data.date,
+        description: data.description ?? null,
+        amount: Number(data.amount) || 0,
+        note: data.note ?? null,
+      });
+      break;
+    }
+    case "supplier_payments": {
+      if (seenRemoteKeys.has(docId)) break;
+      seenRemoteKeys.add(docId);
+      saveSeenRemoteKeys();
+      const supplierNameVal = (data.supplier_name ?? "").trim();
+      if (!supplierNameVal || !data.date) break;
+      const supplier = findOrCreateSupplierByName(supplierNameVal);
+      state.supplier_payments.push({
+        id: state.nextId++,
+        supplier_id: supplier.id,
+        date: data.date,
+        amount: Number(data.amount) || 0,
+        method: data.method ?? null,
+        note: data.note ?? null,
+      });
+      break;
+    }
     default:
       return;
   }
@@ -658,4 +834,9 @@ export function pushAllToCloud() {
       payment_method: payment.payment_method,
       note: payment.note,
     });
+  for (const entry of state.hassan_ledger) pushToCloud("hassan_ledger", entry.id, { ...entry });
+  for (const exp of state.hassan_treasury_expenses) pushToCloud("hassan_treasury_expenses", exp.id, { ...exp });
+  for (const w of state.waste_entries) pushToCloud("waste_entries", w.id, { ...w });
+  for (const p of state.supplier_purchases) pushToCloud("supplier_purchases", p.id, { ...p, supplier_name: supplierName(p.supplier_id) });
+  for (const p of state.supplier_payments) pushToCloud("supplier_payments", p.id, { ...p, supplier_name: supplierName(p.supplier_id) });
 }

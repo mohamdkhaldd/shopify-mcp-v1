@@ -24,6 +24,7 @@ const equipmentNames = new Map<number, string>();
 const employeeNames = new Map<number, string>();
 const partnerNames = new Map<number, string>();
 const categoryNames = new Map<number, string>();
+const supplierNames = new Map<number, string>();
 
 async function getOrCreateByName(table: string, name: string, extra: Record<string, unknown> = {}): Promise<number | null> {
   const trimmed = name.trim();
@@ -164,6 +165,67 @@ export async function pushToCloud(collectionName: string, localId: number, data:
         );
         return;
       }
+      case "hassan_ledger": {
+        await supabase.from("hassan_ledger").upsert(
+          {
+            date: data.date,
+            type: data.type,
+            amount: data.amount,
+            party_name: data.party_name,
+            description: data.description,
+            note: data.note,
+            sync_key: syncKeyFor(localId),
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "hassan_treasury_expenses": {
+        await supabase.from("hassan_treasury_expenses").upsert(
+          { date: data.date, amount: data.amount, description: data.description, sync_key: syncKeyFor(localId) },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "waste_entries": {
+        await supabase.from("waste_entries").upsert(
+          { date: data.date, amount: data.amount, payment_method: data.payment_method, note: data.note, sync_key: syncKeyFor(localId) },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "supplier_purchases": {
+        const supplierId = await getOrCreateByName("suppliers", data.supplier_name as string);
+        if (!supplierId) return;
+        await supabase.from("supplier_purchases").upsert(
+          {
+            supplier_id: supplierId,
+            date: data.date,
+            description: data.description,
+            amount: data.amount,
+            note: data.note,
+            sync_key: syncKeyFor(localId),
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "supplier_payments": {
+        const supplierId = await getOrCreateByName("suppliers", data.supplier_name as string);
+        if (!supplierId) return;
+        await supabase.from("supplier_payments").upsert(
+          {
+            supplier_id: supplierId,
+            date: data.date,
+            amount: data.amount,
+            method: data.method,
+            note: data.note,
+            sync_key: syncKeyFor(localId),
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
     }
   } catch {
     // مفيش نت أو حصل خطأ مؤقت — التعديل محفوظ محليًا وهيتحاول يتبعت تاني
@@ -204,16 +266,18 @@ let started = false;
 const channels: RealtimeChannel[] = [];
 
 async function primeNameCaches() {
-  const [{ data: eq }, { data: emp }, { data: pt }, { data: cat }] = await Promise.all([
+  const [{ data: eq }, { data: emp }, { data: pt }, { data: cat }, { data: sup }] = await Promise.all([
     supabase.from("equipment").select("id,name"),
     supabase.from("employees").select("id,name"),
     supabase.from("partners").select("id,name"),
     supabase.from("expense_categories").select("id,name"),
+    supabase.from("suppliers").select("id,name"),
   ]);
   for (const r of eq ?? []) equipmentNames.set(r.id, r.name);
   for (const r of emp ?? []) employeeNames.set(r.id, r.name);
   for (const r of pt ?? []) partnerNames.set(r.id, r.name);
   for (const r of cat ?? []) categoryNames.set(r.id, r.name);
+  for (const r of sup ?? []) supplierNames.set(r.id, r.name);
 }
 
 export async function startCloudSync(onRemoteChange: RemoteDocHandler) {
@@ -279,5 +343,22 @@ export async function startCloudSync(onRemoteChange: RemoteDocHandler) {
     const employeeName = employeeNames.get(row.employee_id as number);
     if (!employeeName) return null;
     return { ...row, employee_name: employeeName };
+  });
+  subscribe("hassan_ledger", (row) => ({ ...row }));
+  subscribe("hassan_treasury_expenses", (row) => ({ ...row }));
+  subscribe("waste_entries", (row) => ({ ...row }));
+  subscribe("suppliers", (row) => {
+    supplierNames.set(row.id as number, row.name as string);
+    return { name: row.name };
+  });
+  subscribe("supplier_purchases", (row) => {
+    const supplierNameVal = supplierNames.get(row.supplier_id as number);
+    if (!supplierNameVal) return null;
+    return { ...row, supplier_name: supplierNameVal };
+  });
+  subscribe("supplier_payments", (row) => {
+    const supplierNameVal = supplierNames.get(row.supplier_id as number);
+    if (!supplierNameVal) return null;
+    return { ...row, supplier_name: supplierNameVal };
   });
 }

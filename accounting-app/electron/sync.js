@@ -19,6 +19,12 @@ const COLLECTIONS = [
   "monthly_expenses",
   "payroll_entries",
   "salary_payments",
+  "hassan_ledger",
+  "hassan_treasury_expenses",
+  "waste_entries",
+  "suppliers",
+  "supplier_purchases",
+  "supplier_payments",
 ];
 
 function findOrCreateEquipmentId(db, name) {
@@ -53,6 +59,15 @@ function findEmployeeId(db, name) {
   if (!trimmed) return null;
   const row = db.prepare("SELECT id FROM employees WHERE name = ?").get(trimmed);
   return row ? row.id : null;
+}
+
+function findOrCreateSupplierId(db, name) {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return null;
+  const existing = db.prepare("SELECT id FROM suppliers WHERE name = ?").get(trimmed);
+  if (existing) return existing.id;
+  const info = db.prepare("INSERT INTO suppliers (name) VALUES (?)").run(trimmed);
+  return info.lastInsertRowid;
 }
 
 function mergePartner(db, data) {
@@ -170,6 +185,54 @@ function mergeSalaryPayment(db, data, docId) {
   ).run(employeeId, data.month, data.date, Number(data.amount) || 0, data.payment_method || "cash", data.note ?? null, docId);
 }
 
+function mergeHassanLedger(db, data, docId) {
+  if (!data.date || !data.type) return;
+  db.prepare(
+    `INSERT INTO hassan_ledger (date, type, amount, party_name, description, note, sync_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(sync_key) DO NOTHING`
+  ).run(data.date, data.type, Number(data.amount) || 0, data.party_name ?? null, data.description ?? null, data.note ?? null, docId);
+}
+
+function mergeHassanTreasuryExpense(db, data, docId) {
+  if (!data.date) return;
+  db.prepare(
+    `INSERT INTO hassan_treasury_expenses (date, amount, description, sync_key)
+     VALUES (?, ?, ?, ?) ON CONFLICT(sync_key) DO NOTHING`
+  ).run(data.date, Number(data.amount) || 0, data.description ?? "", docId);
+}
+
+function mergeWasteEntry(db, data, docId) {
+  if (!data.date) return;
+  db.prepare(
+    `INSERT INTO waste_entries (date, amount, payment_method, note, sync_key)
+     VALUES (?, ?, ?, ?, ?) ON CONFLICT(sync_key) DO NOTHING`
+  ).run(data.date, Number(data.amount) || 0, data.payment_method ?? null, data.note ?? null, docId);
+}
+
+function mergeSupplier(db, data) {
+  const name = (data.name || "").trim();
+  if (!name) return;
+  db.prepare("INSERT INTO suppliers (name) VALUES (?) ON CONFLICT(name) DO NOTHING").run(name);
+}
+
+function mergeSupplierPurchase(db, data, docId) {
+  const supplierId = findOrCreateSupplierId(db, data.supplier_name);
+  if (!supplierId || !data.date) return;
+  db.prepare(
+    `INSERT INTO supplier_purchases (supplier_id, date, description, amount, note, sync_key)
+     VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(sync_key) DO NOTHING`
+  ).run(supplierId, data.date, data.description ?? null, Number(data.amount) || 0, data.note ?? null, docId);
+}
+
+function mergeSupplierPayment(db, data, docId) {
+  const supplierId = findOrCreateSupplierId(db, data.supplier_name);
+  if (!supplierId || !data.date) return;
+  db.prepare(
+    `INSERT INTO supplier_payments (supplier_id, date, amount, method, note, sync_key)
+     VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(sync_key) DO NOTHING`
+  ).run(supplierId, data.date, Number(data.amount) || 0, data.method ?? null, data.note ?? null, docId);
+}
+
 function mergeDoc(db, collectionName, docId, data) {
   switch (collectionName) {
     case "partners":
@@ -186,6 +249,18 @@ function mergeDoc(db, collectionName, docId, data) {
       return mergeDailyLog(db, data);
     case "monthly_expenses":
       return mergeMonthlyExpense(db, data, docId);
+    case "hassan_ledger":
+      return mergeHassanLedger(db, data, docId);
+    case "hassan_treasury_expenses":
+      return mergeHassanTreasuryExpense(db, data, docId);
+    case "waste_entries":
+      return mergeWasteEntry(db, data, docId);
+    case "suppliers":
+      return mergeSupplier(db, data);
+    case "supplier_purchases":
+      return mergeSupplierPurchase(db, data, docId);
+    case "supplier_payments":
+      return mergeSupplierPayment(db, data, docId);
     case "payroll_entries":
       return mergePayrollEntry(db, data, docId);
     case "salary_payments":
@@ -201,16 +276,19 @@ function mergeDoc(db, collectionName, docId, data) {
 const equipmentNames = new Map();
 const employeeNames = new Map();
 const categoryNames = new Map();
+const supplierNames = new Map();
 
 async function primeNameCaches(supabase) {
-  const [{ data: eq }, { data: emp }, { data: cat }] = await Promise.all([
+  const [{ data: eq }, { data: emp }, { data: cat }, { data: sup }] = await Promise.all([
     supabase.from("equipment").select("id,name"),
     supabase.from("employees").select("id,name"),
     supabase.from("expense_categories").select("id,name"),
+    supabase.from("suppliers").select("id,name"),
   ]);
   for (const r of eq ?? []) equipmentNames.set(r.id, r.name);
   for (const r of emp ?? []) employeeNames.set(r.id, r.name);
   for (const r of cat ?? []) categoryNames.set(r.id, r.name);
+  for (const r of sup ?? []) supplierNames.set(r.id, r.name);
 }
 
 function translateRow(table, row) {
@@ -243,6 +321,19 @@ function translateRow(table, row) {
       const employee_name = employeeNames.get(row.employee_id);
       if (!employee_name) return null;
       return { ...row, employee_name };
+    }
+    case "hassan_ledger":
+    case "hassan_treasury_expenses":
+    case "waste_entries":
+      return { ...row };
+    case "suppliers":
+      supplierNames.set(row.id, row.name);
+      return { name: row.name };
+    case "supplier_purchases":
+    case "supplier_payments": {
+      const supplier_name = supplierNames.get(row.supplier_id);
+      if (!supplier_name) return null;
+      return { ...row, supplier_name };
     }
     default:
       return null;
@@ -463,6 +554,67 @@ async function pushToCloud(table, localId, data) {
         );
         return;
       }
+      case "hassan_ledger": {
+        await activeClient.from("hassan_ledger").upsert(
+          {
+            date: data.date,
+            type: data.type,
+            amount: data.amount,
+            party_name: data.party_name,
+            description: data.description,
+            note: data.note,
+            sync_key: `desktop_${localId}`,
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "hassan_treasury_expenses": {
+        await activeClient.from("hassan_treasury_expenses").upsert(
+          { date: data.date, amount: data.amount, description: data.description, sync_key: `desktop_${localId}` },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "waste_entries": {
+        await activeClient.from("waste_entries").upsert(
+          { date: data.date, amount: data.amount, payment_method: data.payment_method, note: data.note, sync_key: `desktop_${localId}` },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "supplier_purchases": {
+        const supplierId = await getOrCreateByName("suppliers", data.supplier_name);
+        if (!supplierId) return;
+        await activeClient.from("supplier_purchases").upsert(
+          {
+            supplier_id: supplierId,
+            date: data.date,
+            description: data.description,
+            amount: data.amount,
+            note: data.note,
+            sync_key: `desktop_${localId}`,
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "supplier_payments": {
+        const supplierId = await getOrCreateByName("suppliers", data.supplier_name);
+        if (!supplierId) return;
+        await activeClient.from("supplier_payments").upsert(
+          {
+            supplier_id: supplierId,
+            date: data.date,
+            amount: data.amount,
+            method: data.method,
+            note: data.note,
+            sync_key: `desktop_${localId}`,
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
     }
   } catch (err) {
     console.error(`pushToCloud failed for ${table}`, err);
@@ -546,6 +698,31 @@ async function pushAllToCloud(db) {
     .prepare("SELECT pp.*, p.name AS partner_name FROM partner_payments pp JOIN partners p ON p.id = pp.partner_id")
     .all()) {
     await pushToCloud("partner_payments", pp.id, pp);
+    pushed++;
+  }
+
+  for (const entry of db.prepare("SELECT * FROM hassan_ledger").all()) {
+    await pushToCloud("hassan_ledger", entry.id, entry);
+    pushed++;
+  }
+  for (const exp of db.prepare("SELECT * FROM hassan_treasury_expenses").all()) {
+    await pushToCloud("hassan_treasury_expenses", exp.id, exp);
+    pushed++;
+  }
+  for (const w of db.prepare("SELECT * FROM waste_entries").all()) {
+    await pushToCloud("waste_entries", w.id, w);
+    pushed++;
+  }
+  for (const p of db
+    .prepare("SELECT sp.*, s.name AS supplier_name FROM supplier_purchases sp JOIN suppliers s ON s.id = sp.supplier_id")
+    .all()) {
+    await pushToCloud("supplier_purchases", p.id, p);
+    pushed++;
+  }
+  for (const p of db
+    .prepare("SELECT sp.*, s.name AS supplier_name FROM supplier_payments sp JOIN suppliers s ON s.id = sp.supplier_id")
+    .all()) {
+    await pushToCloud("supplier_payments", p.id, p);
     pushed++;
   }
 

@@ -1039,7 +1039,9 @@ function registerIpcHandlers(db) {
     const info = db
       .prepare("INSERT INTO hassan_treasury_expenses (date, amount, description) VALUES (@date, @amount, @description)")
       .run(expense);
-    return db.prepare("SELECT * FROM hassan_treasury_expenses WHERE id = ?").get(info.lastInsertRowid);
+    const created = db.prepare("SELECT * FROM hassan_treasury_expenses WHERE id = ?").get(info.lastInsertRowid);
+    pushToCloud("hassan_treasury_expenses", created.id, created);
+    return created;
   });
   ipcMain.handle("hassanTreasury:delete", (_e, { id }) => {
     db.prepare("DELETE FROM hassan_treasury_expenses WHERE id = ?").run(id);
@@ -1132,7 +1134,9 @@ function registerIpcHandlers(db) {
         description: entry.description ?? null,
         note: entry.note ?? null,
       });
-    return db.prepare("SELECT * FROM hassan_ledger WHERE id = ?").get(info.lastInsertRowid);
+    const created = db.prepare("SELECT * FROM hassan_ledger WHERE id = ?").get(info.lastInsertRowid);
+    pushToCloud("hassan_ledger", created.id, created);
+    return created;
   });
   ipcMain.handle("hassanLedger:delete", (_e, { id }) => {
     db.prepare("DELETE FROM hassan_ledger WHERE id = ?").run(id);
@@ -1571,7 +1575,9 @@ function registerIpcHandlers(db) {
         amount: purchase.amount,
         note: purchase.note ?? null,
       });
-    return { ...db.prepare("SELECT * FROM supplier_purchases WHERE id = ?").get(info.lastInsertRowid), supplier_name: supplier.name };
+    const created = { ...db.prepare("SELECT * FROM supplier_purchases WHERE id = ?").get(info.lastInsertRowid), supplier_name: supplier.name };
+    pushToCloud("supplier_purchases", created.id, created);
+    return created;
   });
 
   ipcMain.handle("supplierPayments:create", (_e, payment) => {
@@ -1588,7 +1594,9 @@ function registerIpcHandlers(db) {
         method: payment.method || "cash",
         note: payment.note ?? null,
       });
-    return { ...db.prepare("SELECT * FROM supplier_payments WHERE id = ?").get(info.lastInsertRowid), supplier_name: supplier.name };
+    const created = { ...db.prepare("SELECT * FROM supplier_payments WHERE id = ?").get(info.lastInsertRowid), supplier_name: supplier.name };
+    pushToCloud("supplier_payments", created.id, created);
+    return created;
   });
 
   ipcMain.handle("supplierPurchases:delete", (_e, { id }) => {
@@ -1821,7 +1829,9 @@ function registerIpcHandlers(db) {
     const info = db
       .prepare(`INSERT INTO waste_entries (date, amount, payment_method, note) VALUES (@date, @amount, @payment_method, @note)`)
       .run({ date: entry.date, amount: entry.amount, payment_method: entry.payment_method || "cash", note: entry.note ?? null });
-    return db.prepare("SELECT * FROM waste_entries WHERE id = ?").get(info.lastInsertRowid);
+    const created = db.prepare("SELECT * FROM waste_entries WHERE id = ?").get(info.lastInsertRowid);
+    pushToCloud("waste_entries", created.id, created);
+    return created;
   });
   ipcMain.handle("waste:delete", (_e, { id }) => {
     db.prepare("DELETE FROM waste_entries WHERE id = ?").run(id);
