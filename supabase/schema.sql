@@ -452,3 +452,12 @@ create table if not exists contractor_payments (
 alter table contractor_payments enable row level security;
 drop policy if exists "staff full access" on contractor_payments;
 create policy "staff full access" on contractor_payments for all using (is_staff()) with check (is_staff());
+
+-- بيخلي Postgres يبعت الصف القديم كامل (مش الـ id بس) في إشعارات التعديل —
+-- محتاجينها عشان أي جهاز يعرف "اتغيّر اسم مين" لما حد يعيد تسمية سائق أو نوع
+-- مصروف، فيعدّل نفس السجل محليًا بدل ما يعمل واحد جديد مكرر بالاسم الجديد.
+alter table partners replica identity full;
+alter table contractors replica identity full;
+alter table employees replica identity full;
+alter table equipment replica identity full;
+alter table expense_categories replica identity full;

@@ -218,7 +218,9 @@ function registerIpcHandlers(db) {
   });
   ipcMain.handle("partners:updateOpeningBalance", (_e, { id, opening_balance }) => {
     db.prepare("UPDATE partners SET opening_balance = ? WHERE id = ?").run(opening_balance, id);
-    return db.prepare("SELECT * FROM partners WHERE id = ?").get(id);
+    const updated = db.prepare("SELECT * FROM partners WHERE id = ?").get(id);
+    pushToCloud("partners", id, { name: updated.name, opening_balance: updated.opening_balance });
+    return updated;
   });
 
   // --- Employees (drivers / salaried workers) ---
@@ -275,6 +277,7 @@ function registerIpcHandlers(db) {
       ).run(id, month, wage_type, rate, fixed_salary ? 1 : 0);
     });
     tx();
+    pushToCloud("employees", id, { name: trimmedName, wage_type, rate, fixed_salary: !!fixed_salary, old_name: existing?.name });
     return db.prepare("SELECT * FROM employees WHERE id = ?").get(id);
   });
 
@@ -294,7 +297,9 @@ function registerIpcHandlers(db) {
   });
   ipcMain.handle("contractors:updateOpeningBalance", (_e, { id, opening_balance }) => {
     db.prepare("UPDATE contractors SET opening_balance = ? WHERE id = ?").run(opening_balance, id);
-    return db.prepare("SELECT * FROM contractors WHERE id = ?").get(id);
+    const updated = db.prepare("SELECT * FROM contractors WHERE id = ?").get(id);
+    pushToCloud("contractors", id, { name: updated.name, opening_balance: updated.opening_balance });
+    return updated;
   });
 
   // --- Expense categories ---
@@ -312,11 +317,14 @@ function registerIpcHandlers(db) {
   // بيسمح تحدد نوع مصروف زي "مكنيكي" أو "سكن" إن قيمته على كل معدة تتحسب
   // تلقائيًا ضمن كوميشن حسن — مفيش داعي تسجلها مرتين.
   ipcMain.handle("expenseCategories:update", (_e, { id, name, counts_as_commission }) => {
+    const existing = db.prepare("SELECT * FROM expense_categories WHERE id = ?").get(id);
+    const trimmedName = name.trim();
     db.prepare("UPDATE expense_categories SET name = ?, counts_as_commission = ? WHERE id = ?").run(
-      name.trim(),
+      trimmedName,
       counts_as_commission ? 1 : 0,
       id
     );
+    pushToCloud("expense_categories", id, { name: trimmedName, counts_as_commission: !!counts_as_commission, old_name: existing?.name });
     return db.prepare("SELECT * FROM expense_categories WHERE id = ?").get(id);
   });
   ipcMain.handle("expenseCategories:delete", (_e, { id }) => {
@@ -383,6 +391,12 @@ function registerIpcHandlers(db) {
       }
     });
     tx();
+    const equipmentRow = db.prepare("SELECT * FROM equipment WHERE id = ?").get(id);
+    const shareNames = (shares ?? []).map((s) => ({
+      partner_name: db.prepare("SELECT name FROM partners WHERE id = ?").get(s.partner_id)?.name,
+      percentage: s.percentage,
+    }));
+    pushToCloud("equipment", id, { name: equipmentRow.name, purchase_price: equipmentRow.purchase_price, shares: shareNames });
     return getEquipmentWithShares().find((e) => e.id === id);
   });
 

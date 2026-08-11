@@ -113,7 +113,6 @@ export default function ExpensesSheet({ equipmentId, month }: { equipmentId: num
             <input
               type="file"
               accept="image/*"
-              capture="environment"
               onChange={(e) => handleImageSelect(e.target.files?.[0] ?? null, setReceiptImage)}
               className="w-full text-xs text-slate-500"
             />

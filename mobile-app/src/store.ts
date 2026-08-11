@@ -192,12 +192,12 @@ export function addPartner(name: string, opening_balance: number): Partner {
   pushToCloud("partners", partner.id, { name: partner.name });
   return partner;
 }
-// تعديل محلي بس — زي اللاب بالظبط (تعديلات البيانات الأساسية مش متزامنة
-// حاليًا، الإضافة الأولى بس اللي بتتبعت للسحابة).
 export function updatePartnerBalance(id: number, opening_balance: number) {
   const partner = state.partners.find((p) => p.id === id);
-  if (partner) partner.opening_balance = opening_balance;
+  if (!partner) return;
+  partner.opening_balance = opening_balance;
   save();
+  pushToCloud("partners", id, { name: partner.name, opening_balance });
 }
 
 // --- Contractors ---
@@ -213,8 +213,10 @@ export function addContractor(name: string, opening_balance: number): Contractor
 }
 export function updateContractorBalance(id: number, opening_balance: number) {
   const contractor = state.contractors.find((c) => c.id === id);
-  if (contractor) contractor.opening_balance = opening_balance;
+  if (!contractor) return;
+  contractor.opening_balance = opening_balance;
   save();
+  pushToCloud("contractors", id, { name: contractor.name, opening_balance });
 }
 
 // --- Employees (drivers) ---
@@ -229,8 +231,8 @@ export function addEmployee(name: string, wage_type: Driver["wage_type"], rate: 
   return employee;
 }
 // بيحدّث سجلات السركي القديمة كمان لو الاسم اتغيّر، زي اللاب بالظبط — عشان
-// شيت المعدة يفضل عارف الأيام دي بتاعة مين. ملحوظة: التعديل ده محلي بس،
-// زي اللاب، مش بيتزامن مع السحابة حاليًا.
+// شيت المعدة يفضل عارف الأيام دي بتاعة مين. بيتبعت للسحابة بالاسم القديم
+// عشان يحدّث نفس الصف هناك، مش يعمل واحد جديد مكرر.
 export function updateEmployee(id: number, patch: { name: string; wage_type: Driver["wage_type"]; rate: number; fixed_salary: boolean }) {
   const employee = state.employees.find((e) => e.id === id);
   if (!employee) return;
@@ -246,6 +248,13 @@ export function updateEmployee(id: number, patch: { name: string; wage_type: Dri
     }
   }
   save();
+  pushToCloud("employees", id, {
+    name: trimmed,
+    wage_type: patch.wage_type,
+    rate: patch.rate,
+    fixed_salary: patch.fixed_salary,
+    old_name: oldName,
+  });
 }
 
 // --- Expense categories ---
@@ -262,9 +271,12 @@ export function addExpenseCategory(name: string, counts_as_commission: boolean):
 export function updateExpenseCategory(id: number, name: string, counts_as_commission: boolean) {
   const category = state.expense_categories.find((c) => c.id === id);
   if (!category) return;
-  category.name = name.trim();
+  const oldName = category.name;
+  const trimmed = name.trim();
+  category.name = trimmed;
   category.counts_as_commission = counts_as_commission;
   save();
+  pushToCloud("expense_categories", id, { name: trimmed, counts_as_commission, old_name: oldName });
 }
 
 // --- Equipment ---
@@ -288,6 +300,11 @@ export function updateEquipment(id: number, purchase_price: number, shares: { pa
   equipment.purchase_price = purchase_price;
   equipment.shares = shares;
   save();
+  pushToCloud("equipment", id, {
+    name: equipment.name,
+    purchase_price,
+    shares: shares.map((s) => ({ partner_name: partnerName(s.partner_id), percentage: s.percentage })),
+  });
 }
 
 // --- Daily logs (السركي / المقاول / سركي سوق) ---
@@ -767,21 +784,37 @@ export function mergeRemoteRecord(collectionName: string, docId: string, data: a
   switch (collectionName) {
     case "partners": {
       const name = (data.name ?? "").trim();
-      if (name && !state.partners.find((p) => p.name === name)) {
-        state.partners.push({ id: state.nextId++, name, opening_balance: 0 });
-      }
+      if (!name) break;
+      const existing = state.partners.find((p) => p.name === name);
+      if (existing) existing.opening_balance = Number(data.opening_balance) || 0;
+      else state.partners.push({ id: state.nextId++, name, opening_balance: Number(data.opening_balance) || 0 });
       break;
     }
     case "contractors": {
       const name = (data.name ?? "").trim();
-      if (name && !state.contractors.find((c) => c.name === name)) {
-        state.contractors.push({ id: state.nextId++, name, opening_balance: 0 });
-      }
+      if (!name) break;
+      const existing = state.contractors.find((c) => c.name === name);
+      if (existing) existing.opening_balance = Number(data.opening_balance) || 0;
+      else state.contractors.push({ id: state.nextId++, name, opening_balance: Number(data.opening_balance) || 0 });
       break;
     }
     case "employees": {
       const name = (data.name ?? "").trim();
-      if (name && !state.employees.find((e) => e.name === name)) {
+      const oldName = (data.old_name ?? "").trim();
+      if (!name) break;
+      const existing = state.employees.find((e) => e.name === (oldName || name)) ?? state.employees.find((e) => e.name === name);
+      if (existing) {
+        const previousName = existing.name;
+        existing.name = name;
+        existing.wage_type = data.wage_type === "monthly" ? "monthly" : "daily";
+        existing.rate = Number(data.rate) || 0;
+        existing.fixed_salary = Boolean(data.fixed_salary);
+        if (previousName !== name) {
+          for (const log of state.daily_logs) {
+            if (log.role === "driver" && log.person_name === previousName) log.person_name = name;
+          }
+        }
+      } else {
         state.employees.push({
           id: state.nextId++,
           name,
@@ -794,20 +827,31 @@ export function mergeRemoteRecord(collectionName: string, docId: string, data: a
     }
     case "expense_categories": {
       const name = (data.name ?? "").trim();
-      if (name && !state.expense_categories.find((c) => c.name === name)) {
+      const oldName = (data.old_name ?? "").trim();
+      if (!name) break;
+      const existing = state.expense_categories.find((c) => c.name === (oldName || name)) ?? state.expense_categories.find((c) => c.name === name);
+      if (existing) {
+        existing.name = name;
+        existing.counts_as_commission = Boolean(data.counts_as_commission);
+      } else {
         state.expense_categories.push({ id: state.nextId++, name, counts_as_commission: Boolean(data.counts_as_commission) });
       }
       break;
     }
     case "equipment": {
       const name = (data.name ?? "").trim();
-      if (name && !state.equipment.find((e) => e.name === name)) {
-        const shares = Array.isArray(data.shares)
-          ? data.shares.map((s: { partner_name?: string; percentage?: number }) => ({
-              partner_id: findOrCreatePartnerByName(s.partner_name ?? ""),
-              percentage: Number(s.percentage) || 0,
-            }))
-          : [];
+      if (!name) break;
+      const shares = Array.isArray(data.shares)
+        ? data.shares.map((s: { partner_name?: string; percentage?: number }) => ({
+            partner_id: findOrCreatePartnerByName(s.partner_name ?? ""),
+            percentage: Number(s.percentage) || 0,
+          }))
+        : [];
+      const existing = state.equipment.find((e) => e.name === name);
+      if (existing) {
+        existing.purchase_price = Number(data.purchase_price) || 0;
+        existing.shares = shares;
+      } else {
         state.equipment.push({ id: state.nextId++, name, purchase_price: Number(data.purchase_price) || 0, shares });
       }
       break;

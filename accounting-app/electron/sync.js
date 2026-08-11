@@ -88,39 +88,69 @@ function findOrCreateContractorId(db, name) {
 function mergePartner(db, data) {
   const name = (data.name || "").trim();
   if (!name) return;
-  db.prepare("INSERT INTO partners (name, opening_balance) VALUES (?, 0) ON CONFLICT(name) DO NOTHING").run(name);
+  const openingBalance = Number(data.opening_balance) || 0;
+  db.prepare(
+    "INSERT INTO partners (name, opening_balance) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET opening_balance = excluded.opening_balance"
+  ).run(name, openingBalance);
 }
 
 function mergeContractor(db, data) {
   const name = (data.name || "").trim();
   if (!name) return;
-  db.prepare("INSERT INTO contractors (name, opening_balance) VALUES (?, 0) ON CONFLICT(name) DO NOTHING").run(name);
+  const openingBalance = Number(data.opening_balance) || 0;
+  db.prepare(
+    "INSERT INTO contractors (name, opening_balance) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET opening_balance = excluded.opening_balance"
+  ).run(name, openingBalance);
 }
 
+// لو data.old_name موجود وغير عن الاسم الجديد، ده معناه إعادة تسمية —
+// بندور على الموظف بالاسم القديم عشان نعدّل نفس الصف، مش نعمل واحد جديد.
 function mergeEmployee(db, data) {
   const name = (data.name || "").trim();
   if (!name) return;
-  db.prepare(
-    "INSERT INTO employees (name, wage_type, rate, fixed_salary) VALUES (?, ?, ?, ?) ON CONFLICT(name) DO NOTHING"
-  ).run(name, data.wage_type === "monthly" ? "monthly" : "daily", Number(data.rate) || 0, data.fixed_salary ? 1 : 0);
+  const oldName = (data.old_name || "").trim();
+  const wageType = data.wage_type === "monthly" ? "monthly" : "daily";
+  const rate = Number(data.rate) || 0;
+  const fixedSalary = data.fixed_salary ? 1 : 0;
+  const existing = db.prepare("SELECT * FROM employees WHERE name = ?").get(oldName || name);
+  if (existing) {
+    db.prepare("UPDATE employees SET name = ?, wage_type = ?, rate = ?, fixed_salary = ? WHERE id = ?").run(name, wageType, rate, fixedSalary, existing.id);
+    if (existing.name !== name) {
+      db.prepare("UPDATE daily_logs SET person_name = ? WHERE role = 'driver' AND person_name = ?").run(name, existing.name);
+    }
+  } else {
+    db.prepare("INSERT INTO employees (name, wage_type, rate, fixed_salary) VALUES (?, ?, ?, ?)").run(name, wageType, rate, fixedSalary);
+  }
 }
 
 function mergeExpenseCategory(db, data) {
   const name = (data.name || "").trim();
   if (!name) return;
-  db.prepare(
-    "INSERT INTO expense_categories (name, counts_as_commission) VALUES (?, ?) ON CONFLICT(name) DO NOTHING"
-  ).run(name, data.counts_as_commission ? 1 : 0);
+  const oldName = (data.old_name || "").trim();
+  const countsAsCommission = data.counts_as_commission ? 1 : 0;
+  const existing = db.prepare("SELECT * FROM expense_categories WHERE name = ?").get(oldName || name);
+  if (existing) {
+    db.prepare("UPDATE expense_categories SET name = ?, counts_as_commission = ? WHERE id = ?").run(name, countsAsCommission, existing.id);
+  } else {
+    db.prepare("INSERT INTO expense_categories (name, counts_as_commission) VALUES (?, ?)").run(name, countsAsCommission);
+  }
 }
 
 function mergeEquipment(db, data) {
   const name = (data.name || "").trim();
   if (!name) return;
-  const existing = db.prepare("SELECT id FROM equipment WHERE name = ?").get(name);
-  if (existing) return;
-  const info = db.prepare("INSERT INTO equipment (name, purchase_price) VALUES (?, ?)").run(name, Number(data.purchase_price) || 0);
-  const equipmentId = info.lastInsertRowid;
+  const purchasePrice = Number(data.purchase_price) || 0;
   const shares = Array.isArray(data.shares) ? data.shares : [];
+  const existing = db.prepare("SELECT id FROM equipment WHERE name = ?").get(name);
+  let equipmentId;
+  if (existing) {
+    db.prepare("UPDATE equipment SET purchase_price = ? WHERE id = ?").run(purchasePrice, existing.id);
+    equipmentId = existing.id;
+  } else {
+    const info = db.prepare("INSERT INTO equipment (name, purchase_price) VALUES (?, ?)").run(name, purchasePrice);
+    equipmentId = info.lastInsertRowid;
+  }
+  db.prepare("DELETE FROM equipment_partner_shares WHERE equipment_id = ?").run(equipmentId);
   const insertShare = db.prepare("INSERT INTO equipment_partner_shares (equipment_id, partner_id, percentage) VALUES (?, ?, ?)");
   for (const share of shares) {
     const partnerId = findOrCreatePartnerId(db, share.partner_name);
@@ -334,23 +364,40 @@ async function primeNameCaches(supabase) {
   for (const r of con ?? []) contractorNames.set(r.id, r.name);
 }
 
-function translateRow(table, row) {
+// لو الصف اتغيّر اسمه فعلًا (مش مجرد رقم زي الرصيد)، بنرجّع old_name عشان
+// mergeDoc يلاقي نفس الصف محليًا بدل ما يعمل واحد جديد مكرر. old هنا جاي من
+// payload.old بتاع Postgres، ومحتاج الجدول يكون replica identity full وإلا
+// هيفضل فاضي دايمًا.
+function renameInfo(row, old) {
+  const oldName = old && old.name;
+  return oldName && oldName !== row.name ? { old_name: oldName } : {};
+}
+
+async function translateRow(supabase, table, row, old) {
   switch (table) {
     case "partners":
       partnerNames.set(row.id, row.name);
-      return { name: row.name };
+      return { name: row.name, opening_balance: row.opening_balance };
     case "contractors":
       contractorNames.set(row.id, row.name);
-      return { name: row.name };
+      return { name: row.name, opening_balance: row.opening_balance };
     case "employees":
       employeeNames.set(row.id, row.name);
-      return { name: row.name, wage_type: row.wage_type, rate: row.rate, fixed_salary: row.fixed_salary };
+      return { name: row.name, wage_type: row.wage_type, rate: row.rate, fixed_salary: row.fixed_salary, ...renameInfo(row, old) };
     case "expense_categories":
       categoryNames.set(row.id, row.name);
-      return { name: row.name, counts_as_commission: row.counts_as_commission };
-    case "equipment":
+      return { name: row.name, counts_as_commission: row.counts_as_commission, ...renameInfo(row, old) };
+    case "equipment": {
       equipmentNames.set(row.id, row.name);
-      return { name: row.name, purchase_price: row.purchase_price, shares: [] };
+      const { data: shareRows } = await supabase
+        .from("equipment_partner_shares")
+        .select("percentage, partners(name)")
+        .eq("equipment_id", row.id);
+      const shares = (shareRows ?? [])
+        .map((s) => ({ partner_name: s.partners?.name, percentage: s.percentage }))
+        .filter((s) => s.partner_name);
+      return { name: row.name, purchase_price: row.purchase_price, shares };
+    }
     case "daily_logs": {
       const equipment_name = equipmentNames.get(row.equipment_id);
       if (!equipment_name) return null;
@@ -469,8 +516,8 @@ async function startCloudSync(db) {
   for (const table of COLLECTIONS) {
     let channel = supabase
       .channel(`sync-${table}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table }, (payload) => {
-        const translated = translateRow(table, payload.new);
+      .on("postgres_changes", { event: "INSERT", schema: "public", table }, async (payload) => {
+        const translated = await translateRow(supabase, table, payload.new);
         if (!translated) return;
         try {
           mergeDoc(db, table, payload.new.sync_key || String(payload.new.id), translated);
@@ -478,8 +525,8 @@ async function startCloudSync(db) {
           console.error(`sync merge failed for ${table}/${payload.new.id}`, err);
         }
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table }, (payload) => {
-        const translated = translateRow(table, payload.new);
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table }, async (payload) => {
+        const translated = await translateRow(supabase, table, payload.new, payload.old);
         if (!translated) return;
         try {
           mergeDoc(db, table, payload.new.sync_key || String(payload.new.id), translated);
@@ -535,34 +582,49 @@ async function findIdByName(table, name) {
 // مفتاح طبيعي (زي equipment_id+date+role) أو اسم UNIQUE. لو المزامنة لسه
 // ملحقتش تسجل دخول (أو مفيش نت)، بيتجاهل بهدوء — الداتا اتسجلت في اللاب
 // بالفعل، ده تحديث إضافي بس مش أساسي.
+// بيبعت تعديل على جدول مرجعي (اسمه UNIQUE). لو فيه oldName وغير عن الاسم
+// الجديد (إعادة تسمية)، بيعمل تحديث على نفس الصف بالاسم القديم عشان الصف
+// يفضل واحد بس، مش يتكرر تحت الاسم الجديد. لو مفيش صف بالاسم القديم أصلًا
+// (لسه ما اتبعتش قبل كده)، بيرجع لـ upsert عادي بالاسم الجديد.
+async function upsertByName(table, newName, fields, oldName) {
+  const trimmed = (newName || "").trim();
+  if (oldName && oldName.trim() && oldName.trim() !== trimmed) {
+    const { data, error } = await activeClient.from(table).update({ name: trimmed, ...fields }).eq("name", oldName.trim()).select("id");
+    if (!error && data && data.length > 0) return;
+  }
+  await activeClient.from(table).upsert({ name: trimmed, ...fields }, { onConflict: "name" });
+}
+
 async function pushToCloud(table, localId, data) {
   if (!activeClient) return;
   try {
     switch (table) {
       case "partners":
       case "contractors":
-        await activeClient.from(table).upsert({ name: (data.name || "").trim(), opening_balance: data.opening_balance ?? 0 }, { onConflict: "name" });
+        await upsertByName(table, data.name, { opening_balance: data.opening_balance ?? 0 });
         return;
       case "employees":
-        await activeClient
-          .from("employees")
-          .upsert({ name: (data.name || "").trim(), wage_type: data.wage_type, rate: data.rate, fixed_salary: !!data.fixed_salary }, { onConflict: "name" });
+        await upsertByName("employees", data.name, { wage_type: data.wage_type, rate: data.rate, fixed_salary: !!data.fixed_salary }, data.old_name);
         return;
       case "expense_categories":
-        await activeClient
-          .from("expense_categories")
-          .upsert({ name: (data.name || "").trim(), counts_as_commission: !!data.counts_as_commission }, { onConflict: "name" });
+        await upsertByName("expense_categories", data.name, { counts_as_commission: !!data.counts_as_commission }, data.old_name);
         return;
       case "equipment": {
-        const equipmentId = await getOrCreateByName("equipment", data.name, { purchase_price: data.purchase_price ?? 0 });
+        await upsertByName("equipment", data.name, { purchase_price: data.purchase_price ?? 0 });
+        const equipmentId = await findIdByName("equipment", data.name);
         if (!equipmentId) return;
+        const keptPartnerIds = [];
         for (const share of data.shares ?? []) {
           const partnerId = await getOrCreateByName("partners", share.partner_name);
           if (!partnerId) continue;
+          keptPartnerIds.push(partnerId);
           await activeClient
             .from("equipment_partner_shares")
             .upsert({ equipment_id: equipmentId, partner_id: partnerId, percentage: share.percentage }, { onConflict: "equipment_id,partner_id" });
         }
+        let deleteQuery = activeClient.from("equipment_partner_shares").delete().eq("equipment_id", equipmentId);
+        if (keptPartnerIds.length > 0) deleteQuery = deleteQuery.not("partner_id", "in", `(${keptPartnerIds.join(",")})`);
+        await deleteQuery;
         return;
       }
       case "daily_logs": {
