@@ -4,7 +4,7 @@ import { supabase } from "./supabaseClient";
 export interface Profile {
   id: string;
   display_name: string;
-  role: "staff" | "partner";
+  role: "staff" | "partner" | "hassan";
   partner_id: number | null;
 }
 

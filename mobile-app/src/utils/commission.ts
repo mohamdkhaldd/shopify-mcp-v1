@@ -1,15 +1,9 @@
 import { getState } from "../store";
 import { DailyLog } from "../types";
 
-// معدات بتاخد نسبة مئوية من قيمة اليوم بدل فرق سعر المقاول عن السركي —
-// نفس القائمة والنسب اللي في اللاب بالظبط.
-const WINCH_PERCENTAGE_EQUIPMENT = ["ونش 5 طن دبوسة", "ونش 3 وصلة"];
-
-function computePairedCommission(equipmentName: string, driverLog: DailyLog, contractorLog: DailyLog): number {
-  if (WINCH_PERCENTAGE_EQUIPMENT.includes(equipmentName)) {
-    const k = contractorLog.day_rate ?? 0;
-    return k <= 2500 ? k * 0.2 : k * 0.175;
-  }
+// كوميشن حسن على أي معدة = الفرق بين سعر المقاول وسعر السركي، بنفس المنطق
+// لكل المعدات من غير استثناء.
+function computePairedCommission(driverLog: DailyLog, contractorLog: DailyLog): number {
   const k = contractorLog.day_rate ?? 0;
   const h = driverLog.day_rate ?? 0;
   const baseHours = contractorLog.base_hours || 8;
@@ -54,7 +48,7 @@ export function computeCommissionRows(month: string | null): { rows: CommissionR
         equipment_name: equipment.name,
         date: contractorLog.date,
         source: "paired",
-        commission: computePairedCommission(equipment.name, driverLog, contractorLog),
+        commission: computePairedCommission(driverLog, contractorLog),
       });
     }
     for (const marketLog of marketLogs) {
@@ -122,7 +116,7 @@ export function computeEquipmentCommissionDetail(equipmentId: number, month: str
       source: "paired",
       contractor_rate: contractorLog.day_rate ?? 0,
       driver_rate: driverLog.day_rate ?? 0,
-      commission: computePairedCommission(equipment?.name ?? "", driverLog, contractorLog),
+      commission: computePairedCommission(driverLog, contractorLog),
     });
   }
   for (const marketLog of marketLogs) {

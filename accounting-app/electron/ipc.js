@@ -930,17 +930,10 @@ function registerIpcHandlers(db) {
   });
 
   // --- Hassan: commission (doc section 4) ---
-  // Regular equipment: commission = (contractor day_rate - driver day_rate)
-  // + overtime_hours * (contractor_rate/base_hours - driver_rate/base_hours),
-  // paired by date. The two winches use a flat % of the contractor's day_rate instead.
-  // سركي سوق has no formula — whatever commission was typed in on that row.
-  const WINCH_PERCENTAGE_EQUIPMENT = ["ونش 5 طن دبوسة", "ونش 3 وصلة"];
-
-  function computePairedCommission(equipmentName, driverLog, contractorLog) {
-    if (WINCH_PERCENTAGE_EQUIPMENT.includes(equipmentName)) {
-      const k = contractorLog.day_rate ?? 0;
-      return k <= 2500 ? k * 0.2 : k * 0.175;
-    }
+  // كل المعدات بنفس المنطق: كوميشن حسن = (سعر المقاول - سعر السركي) +
+  // ساعات أوفر تايم × الفرق بينهم بالساعة، متزاوجين بنفس التاريخ. سركي
+  // السوق مالوش معادلة — أي رقم كوميشن اتكتب في الصف ده بالظبط.
+  function computePairedCommission(_equipmentName, driverLog, contractorLog) {
     const k = contractorLog.day_rate ?? 0;
     const h = driverLog.day_rate ?? 0;
     const baseHours = contractorLog.base_hours || 8;

@@ -6,6 +6,7 @@ import Payroll from "./pages/Payroll";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import PartnerSummary from "./pages/PartnerSummary";
+import HassanSummary from "./pages/HassanSummary";
 import Dashboard from "./pages/Dashboard";
 import More, { MoreScreen } from "./pages/More";
 import HassanLedger from "./pages/HassanLedger";
@@ -58,6 +59,7 @@ export default function App() {
     );
   }
   if (profile.role === "partner") return <PartnerSummary displayName={profile.display_name} />;
+  if (profile.role === "hassan") return <HassanSummary displayName={profile.display_name} />;
   return <StaffApp />;
 }
 

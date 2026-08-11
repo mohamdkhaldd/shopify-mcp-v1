@@ -461,3 +461,98 @@ alter table contractors replica identity full;
 alter table employees replica identity full;
 alter table equipment replica identity full;
 alter table expense_categories replica identity full;
+
+-- ============ حساب دخول محصور لحسن بس (زي حساب الشريك بالظبط) — بيشوف
+-- كوميشنه مقسّم لكل معدة وخزنته الشخصية، من غير أي وصول لباقي بيانات
+-- الشركة. كوميشن أي معدة = فرق سعر المقاول عن السركي، بنفس اليوم، + أي
+-- أوفر تايم، بلا استثناءات — زي ما بقى في اللاب والموبايل بالظبط. ============
+alter table profiles drop constraint if exists profiles_role_check;
+alter table profiles add constraint profiles_role_check check (role in ('staff', 'partner', 'hassan'));
+
+create or replace function get_hassan_commission_by_equipment(p_month text)
+returns table (equipment_name text, commission numeric)
+language plpgsql security definer stable as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and role = 'hassan') then
+    raise exception 'الحساب ده مش حساب حسن';
+  end if;
+
+  return query
+  with paired as (
+    select c.equipment_id,
+      (coalesce(c.day_rate, 0) - coalesce(d.day_rate, 0))
+      * (1 + greatest(0, coalesce(c.actual_hours, 0) - coalesce(c.base_hours, 0)) / coalesce(nullif(c.base_hours, 0), 8))
+      as commission
+    from daily_logs c
+    join daily_logs d on d.equipment_id = c.equipment_id and d.date = c.date and d.role = 'driver'
+    where c.role = 'contractor' and c.date like p_month || '%'
+  ),
+  market as (
+    select d.equipment_id, coalesce(d.hassan_commission, 0) as commission
+    from daily_logs d
+    where d.role = 'market' and d.hassan_commission is not null and d.date like p_month || '%'
+  ),
+  expenses as (
+    select me.equipment_id, me.amount as commission
+    from monthly_expenses me
+    join expense_categories ec on ec.id = me.category_id
+    where ec.counts_as_commission and me.month = p_month
+  ),
+  all_rows as (
+    select * from paired
+    union all
+    select * from market
+    union all
+    select * from expenses
+  )
+  select e.name, sum(r.commission)
+  from all_rows r
+  join equipment e on e.id = r.equipment_id
+  group by e.name
+  order by sum(r.commission) desc;
+end;
+$$;
+
+create or replace function get_hassan_treasury_balance(p_month text)
+returns table (balance numeric, all_time_commission numeric, all_time_spent numeric, month_commission numeric, month_spent numeric)
+language plpgsql security definer stable as $$
+declare
+  v_all_time_commission numeric;
+  v_month_commission numeric;
+  v_all_time_spent numeric;
+  v_month_spent numeric;
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and role = 'hassan') then
+    raise exception 'الحساب ده مش حساب حسن';
+  end if;
+
+  select coalesce(sum(commission), 0) into v_all_time_commission from (
+    select (coalesce(c.day_rate, 0) - coalesce(d.day_rate, 0))
+      * (1 + greatest(0, coalesce(c.actual_hours, 0) - coalesce(c.base_hours, 0)) / coalesce(nullif(c.base_hours, 0), 8)) as commission
+    from daily_logs c
+    join daily_logs d on d.equipment_id = c.equipment_id and d.date = c.date and d.role = 'driver'
+    where c.role = 'contractor'
+    union all
+    select coalesce(hassan_commission, 0) from daily_logs where role = 'market' and hassan_commission is not null
+    union all
+    select me.amount from monthly_expenses me join expense_categories ec on ec.id = me.category_id where ec.counts_as_commission
+  ) t;
+
+  select coalesce(sum(commission), 0) into v_month_commission from (
+    select (coalesce(c.day_rate, 0) - coalesce(d.day_rate, 0))
+      * (1 + greatest(0, coalesce(c.actual_hours, 0) - coalesce(c.base_hours, 0)) / coalesce(nullif(c.base_hours, 0), 8)) as commission
+    from daily_logs c
+    join daily_logs d on d.equipment_id = c.equipment_id and d.date = c.date and d.role = 'driver'
+    where c.role = 'contractor' and c.date like p_month || '%'
+    union all
+    select coalesce(hassan_commission, 0) from daily_logs where role = 'market' and hassan_commission is not null and date like p_month || '%'
+    union all
+    select me.amount from monthly_expenses me join expense_categories ec on ec.id = me.category_id where ec.counts_as_commission and me.month = p_month
+  ) t;
+
+  select coalesce(sum(amount), 0) into v_all_time_spent from hassan_treasury_expenses;
+  select coalesce(sum(amount), 0) into v_month_spent from hassan_treasury_expenses where date like p_month || '%';
+
+  return query select v_all_time_commission - v_all_time_spent, v_all_time_commission, v_all_time_spent, v_month_commission, v_month_spent;
+end;
+$$;
