@@ -165,6 +165,11 @@ export const salaryPaymentsApi = {
 
 export const systemApi = {
   resetAll: (): Promise<void> => invoke("system:resetAll"),
+  diagnoseExpenses: (): Promise<{
+    total: number;
+    orphaned: number;
+    sample: { id: number; equipment_id: number; month: string; date: string | null; amount: number }[];
+  }> => invoke("system:diagnoseExpenses"),
 };
 
 export const syncApi = {

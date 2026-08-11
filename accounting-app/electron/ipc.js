@@ -1957,6 +1957,22 @@ function registerIpcHandlers(db) {
     return { contractorPayments, totalIncoming };
   });
 
+  // --- تشخيص مؤقت: بيقول كام مصروف موجود محليًا، وكام منهم بيشاور على
+  // equipment_id مش موجود في جدول المعدات خالص (يتيم) — ده اللي بيخلي
+  // المزامنة تتخطاه بصمت من غير أي رسالة خطأ. ---
+  ipcMain.handle("system:diagnoseExpenses", () => {
+    const total = db.prepare("SELECT COUNT(*) AS c FROM monthly_expenses").get().c;
+    const orphaned = db
+      .prepare("SELECT COUNT(*) AS c FROM monthly_expenses me WHERE NOT EXISTS (SELECT 1 FROM equipment e WHERE e.id = me.equipment_id)")
+      .get().c;
+    const sample = db
+      .prepare(
+        "SELECT id, equipment_id, month, date, amount FROM monthly_expenses me WHERE NOT EXISTS (SELECT 1 FROM equipment e WHERE e.id = me.equipment_id) LIMIT 5"
+      )
+      .all();
+    return { total, orphaned, sample };
+  });
+
   // --- Danger zone: wipe every recorded transaction (السركي, expenses,
   // advances, bonuses, payments, Hassan's ledger) so the office can start a
   // clean month — but keep the reference lists (equipment, partners, their
