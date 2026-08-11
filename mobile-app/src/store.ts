@@ -514,6 +514,40 @@ export function deleteSupplierPayment(id: number) {
   deleteFromCloud("supplier_payments", id);
 }
 
+// --- تجميعات لتقرير الصادر: زي دي بتلم كل المعدات/الموظفين مع بعض، مش
+// معدة أو موظف واحد بس زي الدوال التانية فوق.
+export function listAllMonthlyExpenses(month: string): (MonthlyExpense & { equipment_name: string; category_name: string })[] {
+  return state.monthly_expenses
+    .filter((e) => e.month === month)
+    .map((e) => ({ ...e, equipment_name: equipmentName(e.equipment_id), category_name: categoryName(e.category_id) }))
+    .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+}
+export function listAllPayrollEntries(month: string): (PayrollEntry & { employee_name: string })[] {
+  return state.payroll_entries
+    .filter((e) => e.month === month)
+    .map((e) => ({ ...e, employee_name: employeeName(e.employee_id) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+export function listAllSalaryPayments(month: string): (SalaryPayment & { employee_name: string })[] {
+  return state.salary_payments
+    .filter((p) => p.month === month)
+    .map((p) => ({ ...p, employee_name: employeeName(p.employee_id) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// صافي المديونية/المستحق لحسن — كل الوقت، مش شهر بعينه (زي اللاب بالظبط).
+export function hassanLedgerBalance(): { netDebt: number; netDue: number } {
+  let netDebt = 0;
+  let netDue = 0;
+  for (const e of state.hassan_ledger) {
+    if (e.type === "loan") netDebt += e.amount;
+    else if (e.type === "repayment") netDebt -= e.amount;
+    else if (e.type === "due") netDue += e.amount;
+    else if (e.type === "collection") netDue -= e.amount;
+  }
+  return { netDebt, netDue };
+}
+
 // --- Export bookkeeping: كل حاجة اتصدّرت قبل كده بتتعلّم عشان التصدير
 // الجاي يجيب بس الجديد، مش يكرر كل حاجة تاني.
 export function markAllExported() {

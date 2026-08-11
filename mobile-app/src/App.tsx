@@ -7,12 +7,17 @@ import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import PartnerSummary from "./pages/PartnerSummary";
 import Dashboard from "./pages/Dashboard";
+import More, { MoreScreen } from "./pages/More";
+import HassanLedger from "./pages/HassanLedger";
+import Waste from "./pages/Waste";
+import Suppliers from "./pages/Suppliers";
+import OutgoingReport from "./pages/OutgoingReport";
 import UndoToast from "./components/UndoToast";
 import { Equipment } from "./types";
 import { initCloudSync, subscribeRemoteChanges } from "./store";
 import { Profile, fetchProfile, getSession, onAuthChange } from "./auth";
 
-type Screen = "dashboard" | "home" | "payroll" | "settings";
+type Screen = "dashboard" | "home" | "payroll" | "settings" | "more";
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -55,6 +60,7 @@ export default function App() {
 function StaffApp() {
   const [screen, setScreen] = useState<Screen>("dashboard");
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
+  const [moreScreen, setMoreScreen] = useState<MoreScreen | null>(null);
   const [month, setMonth] = useState(currentMonthKey());
   const [remoteVersion, setRemoteVersion] = useState(0);
 
@@ -82,12 +88,24 @@ function StaffApp() {
         )}
         {screen === "payroll" && <Payroll month={month} onChangeMonth={setMonth} />}
         {screen === "settings" && <Settings />}
+        {screen === "more" && !moreScreen && <More onOpen={setMoreScreen} />}
+        {screen === "more" && moreScreen === "hassan" && (
+          <HassanLedger month={month} onChangeMonth={setMonth} onBack={() => setMoreScreen(null)} />
+        )}
+        {screen === "more" && moreScreen === "waste" && (
+          <Waste month={month} onChangeMonth={setMonth} onBack={() => setMoreScreen(null)} />
+        )}
+        {screen === "more" && moreScreen === "suppliers" && <Suppliers onBack={() => setMoreScreen(null)} />}
+        {screen === "more" && moreScreen === "outgoing" && (
+          <OutgoingReport month={month} onChangeMonth={setMonth} onBack={() => setMoreScreen(null)} />
+        )}
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white border-t border-slate-200 flex px-2 py-2">
         <NavButton icon="📊" label="الداشبورد" active={screen === "dashboard"} onClick={() => { setSelectedEquipment(null); setScreen("dashboard"); }} />
         <NavButton icon="🏗️" label="المعدات" active={screen === "home"} onClick={goHome} />
         <NavButton icon="👥" label="المرتبات" active={screen === "payroll"} onClick={() => { setSelectedEquipment(null); setScreen("payroll"); }} />
+        <NavButton icon="🗂️" label="المزيد" active={screen === "more"} onClick={() => { setSelectedEquipment(null); setMoreScreen(null); setScreen("more"); }} />
         <NavButton icon="⚙️" label="الإعدادات" active={screen === "settings"} onClick={() => { setSelectedEquipment(null); setScreen("settings"); }} />
       </nav>
       <UndoToast />
