@@ -66,7 +66,8 @@ create table if not exists monthly_expenses (
   category_id bigint references expense_categories(id),
   amount numeric not null default 0,
   payment_method text,
-  note text
+  note text,
+  sync_key text unique
 );
 
 create table if not exists payroll_entries (
@@ -77,7 +78,8 @@ create table if not exists payroll_entries (
   date text not null,
   amount numeric not null default 0,
   payment_method text,
-  reason text
+  reason text,
+  sync_key text unique
 );
 
 create table if not exists salary_payments (
@@ -556,3 +558,17 @@ begin
   return query select v_all_time_commission - v_all_time_spent, v_all_time_commission, v_all_time_spent, v_month_commission, v_month_spent;
 end;
 $$;
+
+-- ============ باج قديم: monthly_expenses وpayroll_entries وsalary_payments
+-- اتعملوا من غير عمود sync_key من الأول (على عكس كل الجداول التانية اللي
+-- بتتزامن بنفس الطريقة) — يعني أي مصروف أو سلفة أو دفعة مرتب جديدة كانت
+-- بتفشل في المزامنة بصمت من أول ما الميزات دي اتعملت، والداتا القديمة
+-- بس (اللي دخلت قبل المزامنة) هي اللي كانت شكلها سليم. ============
+alter table monthly_expenses add column if not exists sync_key text unique;
+alter table payroll_entries add column if not exists sync_key text unique;
+alter table salary_payments add column if not exists sync_key text unique;
+
+-- بيجبر PostgREST يعمل تحديث فوري لكاش الشكل (schema cache) بدل ما ينتظر
+-- الدورة التلقائية — من غيره ممكن ياخد شوية دقايق لحد ما الأعمدة الجديدة
+-- تتعرف عليها فعليًا.
+notify pgrst, 'reload schema';
