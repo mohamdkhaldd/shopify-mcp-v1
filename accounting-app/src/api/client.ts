@@ -167,6 +167,10 @@ export const systemApi = {
   resetAll: (): Promise<void> => invoke("system:resetAll"),
 };
 
+export const syncApi = {
+  pushAll: (): Promise<{ pushed: number; error?: string }> => invoke("sync:pushAll"),
+};
+
 export const appApi = {
   getVersion: (): Promise<string> => invoke("app:getVersion"),
   checkForUpdate: (): Promise<AppUpdateStatus> => invoke("app:checkForUpdate"),

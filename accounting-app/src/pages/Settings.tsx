@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { appApi, systemApi } from "../api/client";
+import { appApi, syncApi, systemApi } from "../api/client";
 import { AppUpdateStatus } from "../api/types";
 import Icon from "../components/Icon";
 import DriversTab from "./settings/DriversTab";
@@ -26,6 +26,8 @@ export default function Settings() {
   const [checking, setChecking] = useState(false);
   const [updateResult, setUpdateResult] = useState<AppUpdateStatus | null>(null);
   const [installing, setInstalling] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ pushed: number; error?: string } | null>(null);
 
   useEffect(() => {
     appApi.getVersion().then(setVersion);
@@ -42,6 +44,14 @@ export default function Settings() {
   async function handleInstallUpdate() {
     setInstalling(true);
     await appApi.installUpdate();
+  }
+
+  async function handleSyncAll() {
+    setSyncing(true);
+    setSyncResult(null);
+    const result = await syncApi.pushAll();
+    setSyncResult(result);
+    setSyncing(false);
   }
 
   async function handleResetAll() {
@@ -134,6 +144,26 @@ export default function Settings() {
         {updateResult?.state === "dev" && (
           <p className="text-xs text-slate-400 mt-2">التحديث التلقائي شغال بس في النسخة المثبّتة فعليًا على الجهاز.</p>
         )}
+      </div>
+
+      <div className="bg-white rounded-card shadow-card p-5">
+        <h2 className="font-bold text-slate-700 mb-1">مزامنة مع الموبايل</h2>
+        <p className="text-xs text-slate-400 mb-3">
+          بيبعت كل البيانات الموجودة في اللاب (المعدات، الشركاء، السائقين، السركي، المصروفات، المرتبات) للسحابة
+          دفعة واحدة — استخدمها أول مرة تربط اللاب بالمزامنة عشان كل التاريخ القديم يوصل للموبايل، مش بس اللي
+          هيتسجل من دلوقتي.
+        </p>
+        <button
+          onClick={handleSyncAll}
+          disabled={syncing}
+          className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
+        >
+          {syncing ? "جاري الإرسال... ممكن تاخد دقايق" : "🔄 ابعت كل بيانات اللاب للسحابة الآن"}
+        </button>
+        {syncResult && !syncResult.error && (
+          <p className="text-xs text-primary-dark mt-2">تم إرسال {syncResult.pushed} سطر بنجاح.</p>
+        )}
+        {syncResult?.error && <p className="text-xs text-rose-500 mt-2">{syncResult.error}</p>}
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5 border border-rose-100">

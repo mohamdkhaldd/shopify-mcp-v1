@@ -469,4 +469,87 @@ async function pushToCloud(table, localId, data) {
   }
 }
 
-module.exports = { startCloudSync, pushToCloud };
+// بيبعت كل الداتا الموجودة في اللاب للسحابة مرة واحدة — لازم لأول مرة
+// اللاب يتربط فيها بالمزامنة، عشان كل التاريخ القديم (قبل ما الموبايل
+// يتعمل أصلًا) يوصل للسحابة وبالتالي للموبايل، مش بس اللي بيتسجل من دلوقتي.
+async function pushAllToCloud(db) {
+  if (!activeClient) return { pushed: 0, error: "مش متصل بالسحابة لسه" };
+  let pushed = 0;
+
+  for (const p of db.prepare("SELECT * FROM partners").all()) {
+    await pushToCloud("partners", p.id, { name: p.name, opening_balance: p.opening_balance });
+    pushed++;
+  }
+  for (const c of db.prepare("SELECT * FROM contractors").all()) {
+    await pushToCloud("contractors", c.id, { name: c.name, opening_balance: c.opening_balance });
+    pushed++;
+  }
+  for (const e of db.prepare("SELECT * FROM employees").all()) {
+    await pushToCloud("employees", e.id, { name: e.name, wage_type: e.wage_type, rate: e.rate, fixed_salary: !!e.fixed_salary });
+    pushed++;
+  }
+  for (const c of db.prepare("SELECT * FROM expense_categories").all()) {
+    await pushToCloud("expense_categories", c.id, { name: c.name, counts_as_commission: !!c.counts_as_commission });
+    pushed++;
+  }
+
+  const shareStmt = db.prepare(
+    "SELECT eps.percentage, p.name AS partner_name FROM equipment_partner_shares eps JOIN partners p ON p.id = eps.partner_id WHERE eps.equipment_id = ?"
+  );
+  for (const eq of db.prepare("SELECT * FROM equipment").all()) {
+    await pushToCloud("equipment", eq.id, { name: eq.name, purchase_price: eq.purchase_price, shares: shareStmt.all(eq.id) });
+    pushed++;
+  }
+
+  for (const log of db
+    .prepare("SELECT dl.*, e.name AS equipment_name FROM daily_logs dl JOIN equipment e ON e.id = dl.equipment_id")
+    .all()) {
+    await pushToCloud("daily_logs", log.id, log);
+    pushed++;
+  }
+
+  for (const exp of db
+    .prepare(
+      `SELECT me.*, e.name AS equipment_name, ec.name AS category_name FROM monthly_expenses me
+       JOIN equipment e ON e.id = me.equipment_id LEFT JOIN expense_categories ec ON ec.id = me.category_id`
+    )
+    .all()) {
+    await pushToCloud("monthly_expenses", exp.id, exp);
+    pushed++;
+  }
+
+  for (const a of db
+    .prepare("SELECT a.*, e.name AS employee_name FROM employee_advances a JOIN employees e ON e.id = a.employee_id")
+    .all()) {
+    await pushToCloud("payroll_entries", `advance-${a.id}`, { ...a, kind: "advance" });
+    pushed++;
+  }
+  for (const b of db
+    .prepare("SELECT b.*, e.name AS employee_name FROM employee_bonuses b JOIN employees e ON e.id = b.employee_id")
+    .all()) {
+    await pushToCloud("payroll_entries", `bonus-${b.id}`, { ...b, kind: "bonus" });
+    pushed++;
+  }
+  for (const d of db
+    .prepare("SELECT d.*, e.name AS employee_name FROM employee_deductions d JOIN employees e ON e.id = d.employee_id")
+    .all()) {
+    await pushToCloud("payroll_entries", `deduction-${d.id}`, { ...d, kind: "deduction" });
+    pushed++;
+  }
+  for (const sp of db
+    .prepare("SELECT sp.*, e.name AS employee_name FROM salary_payments sp JOIN employees e ON e.id = sp.employee_id")
+    .all()) {
+    await pushToCloud("salary_payments", sp.id, sp);
+    pushed++;
+  }
+  for (const pp of db
+    .prepare("SELECT pp.*, p.name AS partner_name FROM partner_payments pp JOIN partners p ON p.id = pp.partner_id")
+    .all()) {
+    await pushToCloud("partner_payments", pp.id, pp);
+    pushed++;
+  }
+
+  return { pushed };
+}
+
+module.exports = { startCloudSync, pushToCloud, pushAllToCloud };
