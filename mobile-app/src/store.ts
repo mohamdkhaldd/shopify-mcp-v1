@@ -135,6 +135,7 @@ function loadState(): State {
   parsed.contractor_payments ??= [];
   parsed.partner_payments ??= [];
   parsed.treasury_accounts ??= TREASURY_ACCOUNT_NAMES.map((name) => ({ name, balance: 0 }));
+  for (const e of parsed.monthly_expenses ?? []) e.receipt_image ??= null;
   return parsed;
 }
 
@@ -191,6 +192,13 @@ export function addPartner(name: string, opening_balance: number): Partner {
   pushToCloud("partners", partner.id, { name: partner.name });
   return partner;
 }
+// تعديل محلي بس — زي اللاب بالظبط (تعديلات البيانات الأساسية مش متزامنة
+// حاليًا، الإضافة الأولى بس اللي بتتبعت للسحابة).
+export function updatePartnerBalance(id: number, opening_balance: number) {
+  const partner = state.partners.find((p) => p.id === id);
+  if (partner) partner.opening_balance = opening_balance;
+  save();
+}
 
 // --- Contractors ---
 export function listContractors(): Contractor[] {
@@ -202,6 +210,11 @@ export function addContractor(name: string, opening_balance: number): Contractor
   save();
   pushToCloud("contractors", contractor.id, { name: contractor.name });
   return contractor;
+}
+export function updateContractorBalance(id: number, opening_balance: number) {
+  const contractor = state.contractors.find((c) => c.id === id);
+  if (contractor) contractor.opening_balance = opening_balance;
+  save();
 }
 
 // --- Employees (drivers) ---
@@ -215,6 +228,25 @@ export function addEmployee(name: string, wage_type: Driver["wage_type"], rate: 
   pushToCloud("employees", employee.id, { name: employee.name, wage_type, rate, fixed_salary });
   return employee;
 }
+// بيحدّث سجلات السركي القديمة كمان لو الاسم اتغيّر، زي اللاب بالظبط — عشان
+// شيت المعدة يفضل عارف الأيام دي بتاعة مين. ملحوظة: التعديل ده محلي بس،
+// زي اللاب، مش بيتزامن مع السحابة حاليًا.
+export function updateEmployee(id: number, patch: { name: string; wage_type: Driver["wage_type"]; rate: number; fixed_salary: boolean }) {
+  const employee = state.employees.find((e) => e.id === id);
+  if (!employee) return;
+  const oldName = employee.name;
+  const trimmed = patch.name.trim();
+  employee.name = trimmed;
+  employee.wage_type = patch.wage_type;
+  employee.rate = patch.rate;
+  employee.fixed_salary = patch.fixed_salary;
+  if (oldName !== trimmed) {
+    for (const log of state.daily_logs) {
+      if (log.role === "driver" && log.person_name === oldName) log.person_name = trimmed;
+    }
+  }
+  save();
+}
 
 // --- Expense categories ---
 export function listExpenseCategories(): ExpenseCategory[] {
@@ -226,6 +258,13 @@ export function addExpenseCategory(name: string, counts_as_commission: boolean):
   save();
   pushToCloud("expense_categories", category.id, { name: category.name, counts_as_commission });
   return category;
+}
+export function updateExpenseCategory(id: number, name: string, counts_as_commission: boolean) {
+  const category = state.expense_categories.find((c) => c.id === id);
+  if (!category) return;
+  category.name = name.trim();
+  category.counts_as_commission = counts_as_commission;
+  save();
 }
 
 // --- Equipment ---
@@ -242,6 +281,13 @@ export function addEquipment(name: string, purchase_price: number, shares: { par
     shares: shares.map((s) => ({ partner_name: partnerName(s.partner_id), percentage: s.percentage })),
   });
   return equipment;
+}
+export function updateEquipment(id: number, purchase_price: number, shares: { partner_id: number; percentage: number }[]) {
+  const equipment = state.equipment.find((e) => e.id === id);
+  if (!equipment) return;
+  equipment.purchase_price = purchase_price;
+  equipment.shares = shares;
+  save();
 }
 
 // --- Daily logs (السركي / المقاول / سركي سوق) ---
@@ -806,6 +852,7 @@ export function mergeRemoteRecord(collectionName: string, docId: string, data: a
         amount: Number(data.amount) || 0,
         payment_method: data.payment_method ?? null,
         note: data.note ?? null,
+        receipt_image: null,
       });
       break;
     }

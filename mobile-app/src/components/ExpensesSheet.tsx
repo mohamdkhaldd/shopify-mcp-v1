@@ -10,6 +10,13 @@ const PAYMENT_METHODS = [
   { value: "vodafone_cash", label: "فودفون كاش" },
 ];
 
+function handleImageSelect(file: File | null, onLoaded: (dataUrl: string) => void) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => onLoaded(reader.result as string);
+  reader.readAsDataURL(file);
+}
+
 export default function ExpensesSheet({ equipmentId, month }: { equipmentId: number; month: string }) {
   const [expenses, setExpenses] = useState<MonthlyExpense[]>([]);
   const categories = listExpenseCategories();
@@ -18,6 +25,8 @@ export default function ExpensesSheet({ equipmentId, month }: { equipmentId: num
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
   const [note, setNote] = useState("");
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const refresh = () => setExpenses(listMonthlyExpenses(equipmentId, month));
   useEffect(() => {
@@ -36,9 +45,11 @@ export default function ExpensesSheet({ equipmentId, month }: { equipmentId: num
       amount: Number(amount) || 0,
       payment_method: method,
       note: note.trim() || null,
+      receipt_image: receiptImage,
     });
     setAmount("");
     setNote("");
+    setReceiptImage(null);
     refresh();
   }
 
@@ -89,6 +100,25 @@ export default function ExpensesSheet({ equipmentId, month }: { equipmentId: num
           <label className="block text-[11px] text-slate-500 mb-1">بيان</label>
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
         </div>
+        <div>
+          <label className="block text-[11px] text-slate-500 mb-1">صورة الإيصال</label>
+          {receiptImage ? (
+            <div className="flex items-center gap-2">
+              <img src={receiptImage} alt="" className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+              <button onClick={() => setReceiptImage(null)} className="text-xs text-rose-500 font-bold">
+                مسح الصورة
+              </button>
+            </div>
+          ) : (
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) => handleImageSelect(e.target.files?.[0] ?? null, setReceiptImage)}
+              className="w-full text-xs text-slate-500"
+            />
+          )}
+        </div>
         <button onClick={save} disabled={!amount} className="w-full bg-primary text-white rounded-xl py-2.5 text-sm font-bold disabled:opacity-50">
           حفظ المصروف
         </button>
@@ -97,7 +127,13 @@ export default function ExpensesSheet({ equipmentId, month }: { equipmentId: num
       <div className="space-y-2">
         {expenses.map((e) => (
           <div key={e.id} className="bg-white rounded-xl border border-slate-200 px-3 py-2 flex items-center justify-between text-sm">
-            <div className="text-slate-500">{e.date?.slice(-2)}</div>
+            {e.receipt_image ? (
+              <button onClick={() => setPreviewImage(e.receipt_image)}>
+                <img src={e.receipt_image} alt="" className="w-8 h-8 rounded object-cover border border-slate-200" />
+              </button>
+            ) : (
+              <div className="text-slate-500">{e.date?.slice(-2)}</div>
+            )}
             <div className="font-bold text-primary-dark">{e.amount} ج.م</div>
             <button onClick={() => remove(e.id)} className="text-rose-500 text-xs font-bold">
               مسح
@@ -105,6 +141,12 @@ export default function ExpensesSheet({ equipmentId, month }: { equipmentId: num
           </div>
         ))}
       </div>
+
+      {previewImage && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-6" onClick={() => setPreviewImage(null)}>
+          <img src={previewImage} alt="" className="max-w-full max-h-full rounded-xl" />
+        </div>
+      )}
     </div>
   );
 }

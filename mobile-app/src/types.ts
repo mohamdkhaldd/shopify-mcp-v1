@@ -70,6 +70,7 @@ export interface MonthlyExpense {
   amount: number;
   payment_method: string | null;
   note: string | null;
+  receipt_image: string | null;
 }
 
 export type PaymentMethodLike = "cash" | "wallet" | "instapay" | "vodafone_cash";
