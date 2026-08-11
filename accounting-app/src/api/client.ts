@@ -173,7 +173,12 @@ export const systemApi = {
 };
 
 export const syncApi = {
-  pushAll: (): Promise<{ pushed: number; error?: string }> => invoke("sync:pushAll"),
+  pushAll: (): Promise<{
+    pushed: number;
+    failed?: number;
+    errors?: { table: string; localId: number | string; error: string }[];
+    error?: string;
+  }> => invoke("sync:pushAll"),
   isSecondaryMachine: (): Promise<boolean> => invoke("sync:isSecondaryMachine"),
   markAsSecondaryMachine: (): Promise<string> => invoke("sync:markAsSecondaryMachine"),
 };

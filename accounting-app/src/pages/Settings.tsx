@@ -27,7 +27,12 @@ export default function Settings() {
   const [updateResult, setUpdateResult] = useState<AppUpdateStatus | null>(null);
   const [installing, setInstalling] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ pushed: number; error?: string } | null>(null);
+  const [syncResult, setSyncResult] = useState<{
+    pushed: number;
+    failed?: number;
+    errors?: { table: string; localId: number | string; error: string }[];
+    error?: string;
+  } | null>(null);
   const [isSecondaryMachine, setIsSecondaryMachine] = useState<boolean | null>(null);
   const [marking, setMarking] = useState(false);
   const [diagnosing, setDiagnosing] = useState(false);
@@ -209,9 +214,21 @@ export default function Settings() {
           {syncing ? "جاري الإرسال... ممكن تاخد دقايق" : "🔄 ابعت كل بيانات اللاب للسحابة الآن"}
         </button>
         {syncResult && !syncResult.error && (
-          <p className="text-xs text-primary-dark mt-2">تم إرسال {syncResult.pushed} سطر بنجاح.</p>
+          <p className="text-xs text-primary-dark mt-2">
+            تم إرسال {syncResult.pushed} سطر بنجاح
+            {!!syncResult.failed && <span className="text-rose-600"> — {syncResult.failed} سطر فشل (تفاصيله تحت)</span>}.
+          </p>
         )}
         {syncResult?.error && <p className="text-xs text-rose-500 mt-2">{syncResult.error}</p>}
+        {!!syncResult?.errors?.length && (
+          <div className="mt-2 bg-rose-50 rounded-lg p-2 space-y-1 text-xs text-rose-700">
+            {syncResult.errors.map((e, i) => (
+              <p key={i}>
+                {e.table} #{e.localId}: {e.error}
+              </p>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">
