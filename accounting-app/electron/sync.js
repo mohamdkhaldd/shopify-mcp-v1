@@ -1,4 +1,8 @@
 const { createClient } = require("@supabase/supabase-js");
+const { app } = require("electron");
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 const WebSocket = require("ws");
 
 const SUPABASE_URL = "https://xpnkwmpzwvcfezimklwa.supabase.co";
@@ -346,6 +350,52 @@ function translateRow(table, row) {
 // ما حد يمسحه يدويًا — أأمن من حذف تلقائي ممكن يمسح حاجة غلط.
 let activeClient = null;
 
+// كل الأجهزة اللي اتزامنت قبل ما الميزة دي تتعمل بتحسب sync_key بصيغة
+// "desktop_<localId>" بس (من غير أي رقم جهاز) — لازم اللاب الأساسي يفضل
+// يحسبها بنفس الصيغة دي بالظبط عشان ما يبقاش فيه تكرار لكل قيد سبق اتبعت.
+// أي لاب جديد بينضم بعد كده (مش الأساسي) لازم يستخدم رقم جهاز مميز خالص
+// عشان الـ ID المحلي بتاعه (اللي ممكن يتشابه مع اللاب الأساسي بالصدفة، زي
+// سلفة رقمها 12 في اللابين مع بعض) ما يجيش يلخبط أو يمسح قيد اللاب التاني
+// في السحابة. الملف ده مبيتعملش إلا لو المستخدم دوس "ده جهاز إضافي" من
+// الإعدادات — افتراضيًا كل جهاز جديد بيفضل شغال بالصيغة القديمة.
+function machineIdPath() {
+  return path.join(app.getPath("userData"), "machine-id.txt");
+}
+function loadMachineId() {
+  try {
+    if (fs.existsSync(machineIdPath())) return fs.readFileSync(machineIdPath(), "utf8").trim() || null;
+  } catch (err) {
+    console.error("loadMachineId failed", err);
+  }
+  return null;
+}
+// بنأجل قراءة الملف لحد أول استخدام فعلي (مش وقت تحميل الموديول) عشان
+// app.getPath محتاج الـ app يكون جاهز، والموديول ده بيتعمله require وقت
+// بدء تشغيل main.js قبل ما app.whenReady() تخلص.
+let machineId;
+let machineIdLoaded = false;
+function ensureMachineIdLoaded() {
+  if (!machineIdLoaded) {
+    machineId = loadMachineId();
+    machineIdLoaded = true;
+  }
+}
+
+function markAsSecondaryMachine() {
+  machineId = crypto.randomUUID();
+  machineIdLoaded = true;
+  fs.writeFileSync(machineIdPath(), machineId, "utf8");
+  return machineId;
+}
+function isSecondaryMachine() {
+  ensureMachineIdLoaded();
+  return !!machineId;
+}
+function syncKeyFor(localId) {
+  ensureMachineIdLoaded();
+  return machineId ? `desktop_${machineId}_${localId}` : `desktop_${localId}`;
+}
+
 async function startCloudSync(db) {
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: true },
@@ -497,7 +547,7 @@ async function pushToCloud(table, localId, data) {
             amount: data.amount,
             payment_method: data.payment_method,
             note: data.note,
-            sync_key: `desktop_${localId}`,
+            sync_key: syncKeyFor(localId),
           },
           { onConflict: "sync_key" }
         );
@@ -515,7 +565,7 @@ async function pushToCloud(table, localId, data) {
             amount: data.amount,
             payment_method: data.payment_method,
             reason: data.reason,
-            sync_key: `desktop_${localId}`,
+            sync_key: syncKeyFor(localId),
           },
           { onConflict: "sync_key" }
         );
@@ -532,7 +582,7 @@ async function pushToCloud(table, localId, data) {
             amount: data.amount,
             payment_method: data.payment_method,
             note: data.note,
-            sync_key: `desktop_${localId}`,
+            sync_key: syncKeyFor(localId),
           },
           { onConflict: "sync_key" }
         );
@@ -548,7 +598,7 @@ async function pushToCloud(table, localId, data) {
             amount: data.amount,
             method: data.method,
             note: data.note,
-            sync_key: `desktop_${localId}`,
+            sync_key: syncKeyFor(localId),
           },
           { onConflict: "sync_key" }
         );
@@ -563,7 +613,7 @@ async function pushToCloud(table, localId, data) {
             party_name: data.party_name,
             description: data.description,
             note: data.note,
-            sync_key: `desktop_${localId}`,
+            sync_key: syncKeyFor(localId),
           },
           { onConflict: "sync_key" }
         );
@@ -571,14 +621,14 @@ async function pushToCloud(table, localId, data) {
       }
       case "hassan_treasury_expenses": {
         await activeClient.from("hassan_treasury_expenses").upsert(
-          { date: data.date, amount: data.amount, description: data.description, sync_key: `desktop_${localId}` },
+          { date: data.date, amount: data.amount, description: data.description, sync_key: syncKeyFor(localId) },
           { onConflict: "sync_key" }
         );
         return;
       }
       case "waste_entries": {
         await activeClient.from("waste_entries").upsert(
-          { date: data.date, amount: data.amount, payment_method: data.payment_method, note: data.note, sync_key: `desktop_${localId}` },
+          { date: data.date, amount: data.amount, payment_method: data.payment_method, note: data.note, sync_key: syncKeyFor(localId) },
           { onConflict: "sync_key" }
         );
         return;
@@ -593,7 +643,7 @@ async function pushToCloud(table, localId, data) {
             description: data.description,
             amount: data.amount,
             note: data.note,
-            sync_key: `desktop_${localId}`,
+            sync_key: syncKeyFor(localId),
           },
           { onConflict: "sync_key" }
         );
@@ -609,7 +659,7 @@ async function pushToCloud(table, localId, data) {
             amount: data.amount,
             method: data.method,
             note: data.note,
-            sync_key: `desktop_${localId}`,
+            sync_key: syncKeyFor(localId),
           },
           { onConflict: "sync_key" }
         );
@@ -729,4 +779,4 @@ async function pushAllToCloud(db) {
   return { pushed };
 }
 
-module.exports = { startCloudSync, pushToCloud, pushAllToCloud };
+module.exports = { startCloudSync, pushToCloud, pushAllToCloud, markAsSecondaryMachine, isSecondaryMachine };

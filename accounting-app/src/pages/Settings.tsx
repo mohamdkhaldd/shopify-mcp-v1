@@ -28,10 +28,24 @@ export default function Settings() {
   const [installing, setInstalling] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ pushed: number; error?: string } | null>(null);
+  const [isSecondaryMachine, setIsSecondaryMachine] = useState<boolean | null>(null);
+  const [marking, setMarking] = useState(false);
 
   useEffect(() => {
     appApi.getVersion().then(setVersion);
+    syncApi.isSecondaryMachine().then(setIsSecondaryMachine);
   }, []);
+
+  async function handleMarkAsSecondaryMachine() {
+    const confirmed = window.confirm(
+      "دوس \"تأكيد\" مرة واحدة بس، على اللاب ده بالذات، قبل أي حاجة تانية — قبل ما تدوس \"ابعت كل بيانات اللاب للسحابة\" وقبل ما تسجل أي بيانات جديدة من عليه. الخطوة دي بتخلي اللاب ده يعرف إنه مش اللاب الأساسي، عشان بياناته القديمة متلخبطش ببيانات اللاب التاني في السحابة."
+    );
+    if (!confirmed) return;
+    setMarking(true);
+    await syncApi.markAsSecondaryMachine();
+    setIsSecondaryMachine(true);
+    setMarking(false);
+  }
 
   async function handleCheckForUpdate() {
     setChecking(true);
@@ -143,6 +157,27 @@ export default function Settings() {
         )}
         {updateResult?.state === "dev" && (
           <p className="text-xs text-slate-400 mt-2">التحديث التلقائي شغال بس في النسخة المثبّتة فعليًا على الجهاز.</p>
+        )}
+      </div>
+
+      <div className="bg-white rounded-card shadow-card p-5 border border-amber-100">
+        <h2 className="font-bold text-slate-700 mb-1">لاب إضافي بينضم للنظام</h2>
+        <p className="text-xs text-slate-400 mb-3">
+          لو اللاب ده جهاز تاني عنده بيانات قديمة مسجلة عليه من قبل، وهيتزامن دلوقتي لأول مرة مع نظام شغال بالفعل على
+          جهاز/موبايل تاني — لازم تدوس هنا مرة واحدة الأول، قبل ما تدوس "ابعت كل بيانات اللاب للسحابة" تحت وقبل أي
+          تسجيل جديد. من غيرها، ممكن بيانات اللاب ده تلخبط أو تمسح بيانات حقيقية موجودة بالفعل في السحابة لو اتفق إن
+          أرقام القيود عندهم اتشابهت بالصدفة.
+        </p>
+        {isSecondaryMachine === true ? (
+          <p className="text-xs text-primary-dark font-semibold">✓ اللاب ده متعلّم كجهاز إضافي — آمن تدوس "ابعت كل بيانات اللاب للسحابة" تحت.</p>
+        ) : (
+          <button
+            onClick={handleMarkAsSecondaryMachine}
+            disabled={marking || isSecondaryMachine === null}
+            className="bg-amber-500 text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-amber-600 disabled:opacity-50"
+          >
+            {marking ? "جاري الإعداد..." : "ده جهاز إضافي، مش الأساسي"}
+          </button>
         )}
       </div>
 

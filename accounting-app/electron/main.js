@@ -4,7 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const { initDatabase } = require("./db");
 const { registerIpcHandlers } = require("./ipc");
-const { startCloudSync, pushAllToCloud } = require("./sync");
+const { startCloudSync, pushAllToCloud, markAsSecondaryMachine, isSecondaryMachine } = require("./sync");
 const { autoUpdater } = require("electron-updater");
 
 const isDev = !app.isPackaged;
@@ -139,6 +139,8 @@ app.whenReady().then(() => {
   registerIpcHandlers(db);
   startCloudSync(db);
   ipcMain.handle("sync:pushAll", () => pushAllToCloud(db));
+  ipcMain.handle("sync:isSecondaryMachine", () => isSecondaryMachine());
+  ipcMain.handle("sync:markAsSecondaryMachine", () => markAsSecondaryMachine());
   createWindow();
   setupAutoUpdate();
 
