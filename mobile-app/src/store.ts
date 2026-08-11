@@ -1,5 +1,6 @@
 import {
   Contractor,
+  ContractorPayment,
   DailyLog,
   DailyLogRole,
   Driver,
@@ -10,12 +11,15 @@ import {
   HassanTreasuryExpense,
   MonthlyExpense,
   Partner,
+  PartnerPayment,
   PayrollEntry,
   PayrollKind,
   SalaryPayment,
   Supplier,
   SupplierPayment,
   SupplierPurchase,
+  TreasuryAccount,
+  TreasuryAccountName,
   WasteEntry,
 } from "./types";
 import {
@@ -26,6 +30,7 @@ import {
   SEED_PARTNERS,
 } from "./seed";
 import { deleteFromCloud, pushToCloud, startCloudSync } from "./sync";
+import { computeDayValue, partnerAllTimeSummary, PartnerAllTimeSummary } from "./utils/profit";
 
 const STORAGE_KEY = "al-bunyan-mobile-v2";
 const SEEN_REMOTE_KEYS_KEY = "al-bunyan-seen-remote-keys";
@@ -46,8 +51,13 @@ interface State {
   suppliers: Supplier[];
   supplier_purchases: SupplierPurchase[];
   supplier_payments: SupplierPayment[];
+  contractor_payments: ContractorPayment[];
+  partner_payments: PartnerPayment[];
+  treasury_accounts: TreasuryAccount[];
   nextId: number;
 }
+
+const TREASURY_ACCOUNT_NAMES: TreasuryAccountName[] = ["cash", "wallet", "instapay", "vodafone_cash"];
 
 function buildSeedState(): State {
   let nextId = 1;
@@ -96,6 +106,9 @@ function buildSeedState(): State {
     suppliers: [],
     supplier_purchases: [],
     supplier_payments: [],
+    contractor_payments: [],
+    partner_payments: [],
+    treasury_accounts: TREASURY_ACCOUNT_NAMES.map((name) => ({ name, balance: 0 })),
     nextId,
   };
 }
@@ -119,6 +132,9 @@ function loadState(): State {
   parsed.suppliers ??= [];
   parsed.supplier_purchases ??= [];
   parsed.supplier_payments ??= [];
+  parsed.contractor_payments ??= [];
+  parsed.partner_payments ??= [];
+  parsed.treasury_accounts ??= TREASURY_ACCOUNT_NAMES.map((name) => ({ name, balance: 0 }));
   return parsed;
 }
 
@@ -159,6 +175,9 @@ function categoryName(id: number | null): string {
 }
 function partnerName(id: number): string {
   return state.partners.find((p) => p.id === id)?.name ?? "";
+}
+function contractorName(id: number): string {
+  return state.contractors.find((c) => c.id === id)?.name ?? "";
 }
 
 // --- Partners ---
@@ -514,6 +533,80 @@ export function deleteSupplierPayment(id: number) {
   deleteFromCloud("supplier_payments", id);
 }
 
+// --- دفعات المقاولين (فلوس المقاول دفعها للشركة) ---
+export function listContractorPayments(contractor_id: number): ContractorPayment[] {
+  return state.contractor_payments.filter((p) => p.contractor_id === contractor_id).sort((a, b) => b.date.localeCompare(a.date));
+}
+export function addContractorPayment(contractor_id: number, payment: Omit<ContractorPayment, "id" | "contractor_id">): ContractorPayment {
+  const record: ContractorPayment = { id: state.nextId++, contractor_id, ...payment };
+  state.contractor_payments.push(record);
+  save();
+  pushToCloud("contractor_payments", record.id, { ...record, contractor_name: contractorName(contractor_id) });
+  return record;
+}
+export function deleteContractorPayment(id: number) {
+  state.contractor_payments = state.contractor_payments.filter((p) => p.id !== id);
+  save();
+  deleteFromCloud("contractor_payments", id);
+}
+
+// --- دفعات الشركاء (فلوس اتدفعت للشريك) ---
+export function listPartnerPayments(partner_id: number): PartnerPayment[] {
+  return state.partner_payments.filter((p) => p.partner_id === partner_id).sort((a, b) => b.date.localeCompare(a.date));
+}
+export function addPartnerPayment(partner_id: number, payment: Omit<PartnerPayment, "id" | "partner_id">): PartnerPayment {
+  const record: PartnerPayment = { id: state.nextId++, partner_id, ...payment };
+  state.partner_payments.push(record);
+  save();
+  pushToCloud("partner_payments", record.id, { ...record, partner_name: partnerName(partner_id) });
+  return record;
+}
+export function deletePartnerPayment(id: number) {
+  state.partner_payments = state.partner_payments.filter((p) => p.id !== id);
+  save();
+  deleteFromCloud("partner_payments", id);
+}
+
+// --- الخزنة: رصيد يدوي محلي لكل جهاز بس (زي اللاب بالظبط) — كل جهاز بيعكس
+// الكاش/المحفظة الموجودة فعليًا وقت ما بتتفتح منه، فمش حاجة تتزامن بين
+// الأجهزة، بس الحركة (الوارد/الصادر) بتتحسب من بيانات متزامنة فعلًا.
+export function listTreasuryAccounts(): TreasuryAccount[] {
+  return [...state.treasury_accounts];
+}
+export function updateTreasuryAccountBalance(name: TreasuryAccountName, balance: number) {
+  const account = state.treasury_accounts.find((a) => a.name === name);
+  if (account) account.balance = balance;
+  save();
+}
+
+// --- ملخصات المقاولين/الشركاء — رصيد شغال على كل الوقت (زي اللاب بالظبط)،
+// مش شهر واحد بس.
+export interface ContractorAllTimeSummary {
+  id: number;
+  name: string;
+  opening_balance: number;
+  totalWork: number;
+  totalPaid: number;
+  remaining: number;
+}
+export function listContractorSummaries(): ContractorAllTimeSummary[] {
+  return state.contractors.map((c) => {
+    const totalWork =
+      c.opening_balance +
+      state.daily_logs
+        .filter((l) => l.role === "contractor" && l.person_name === c.name)
+        .reduce((sum, l) => sum + computeDayValue(l), 0);
+    const totalPaid = state.contractor_payments.filter((p) => p.contractor_id === c.id).reduce((sum, p) => sum + p.amount, 0);
+    return { id: c.id, name: c.name, opening_balance: c.opening_balance, totalWork, totalPaid, remaining: totalWork - totalPaid };
+  });
+}
+export function listPartnerSummaries(): PartnerAllTimeSummary[] {
+  return state.partners.map((p) => {
+    const totalPaid = state.partner_payments.filter((pp) => pp.partner_id === p.id).reduce((sum, pp) => sum + pp.amount, 0);
+    return partnerAllTimeSummary(p, totalPaid);
+  });
+}
+
 // --- تجميعات لتقرير الصادر: زي دي بتلم كل المعدات/الموظفين مع بعض، مش
 // معدة أو موظف واحد بس زي الدوال التانية فوق.
 export function listAllMonthlyExpenses(month: string): (MonthlyExpense & { equipment_name: string; category_name: string })[] {
@@ -532,6 +625,24 @@ export function listAllSalaryPayments(month: string): (SalaryPayment & { employe
   return state.salary_payments
     .filter((p) => p.month === month)
     .map((p) => ({ ...p, employee_name: employeeName(p.employee_id) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+export function listAllSupplierPayments(month: string): (SupplierPayment & { supplier_name: string })[] {
+  return state.supplier_payments
+    .filter((p) => p.date.startsWith(month))
+    .map((p) => ({ ...p, supplier_name: state.suppliers.find((s) => s.id === p.supplier_id)?.name ?? "" }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+export function listAllContractorPayments(month: string): (ContractorPayment & { contractor_name: string })[] {
+  return state.contractor_payments
+    .filter((p) => p.date.startsWith(month))
+    .map((p) => ({ ...p, contractor_name: contractorName(p.contractor_id) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+export function listAllPartnerPayments(month: string): (PartnerPayment & { partner_name: string })[] {
+  return state.partner_payments
+    .filter((p) => p.date.startsWith(month))
+    .map((p) => ({ ...p, partner_name: partnerName(p.partner_id) }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -594,6 +705,15 @@ function findOrCreateEmployeeByName(name: string): number | null {
   if (!trimmed) return null;
   const e = state.employees.find((x) => x.name === trimmed);
   return e?.id ?? null;
+}
+function findOrCreateContractorByName(name: string): number {
+  const trimmed = name.trim();
+  let c = state.contractors.find((x) => x.name === trimmed);
+  if (!c) {
+    c = { id: state.nextId++, name: trimmed, opening_balance: 0 };
+    state.contractors.push(c);
+  }
+  return c.id;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -801,6 +921,38 @@ export function mergeRemoteRecord(collectionName: string, docId: string, data: a
       });
       break;
     }
+    case "contractor_payments": {
+      if (seenRemoteKeys.has(docId)) break;
+      seenRemoteKeys.add(docId);
+      saveSeenRemoteKeys();
+      const contractorNameVal = (data.contractor_name ?? "").trim();
+      if (!contractorNameVal || !data.date) break;
+      state.contractor_payments.push({
+        id: state.nextId++,
+        contractor_id: findOrCreateContractorByName(contractorNameVal),
+        date: data.date,
+        amount: Number(data.amount) || 0,
+        method: data.method ?? null,
+        note: data.note ?? null,
+      });
+      break;
+    }
+    case "partner_payments": {
+      if (seenRemoteKeys.has(docId)) break;
+      seenRemoteKeys.add(docId);
+      saveSeenRemoteKeys();
+      const partnerNameVal = (data.partner_name ?? "").trim();
+      if (!partnerNameVal || !data.date) break;
+      state.partner_payments.push({
+        id: state.nextId++,
+        partner_id: findOrCreatePartnerByName(partnerNameVal),
+        date: data.date,
+        amount: Number(data.amount) || 0,
+        method: data.method ?? null,
+        note: data.note ?? null,
+      });
+      break;
+    }
     default:
       return;
   }
@@ -873,4 +1025,6 @@ export function pushAllToCloud() {
   for (const w of state.waste_entries) pushToCloud("waste_entries", w.id, { ...w });
   for (const p of state.supplier_purchases) pushToCloud("supplier_purchases", p.id, { ...p, supplier_name: supplierName(p.supplier_id) });
   for (const p of state.supplier_payments) pushToCloud("supplier_payments", p.id, { ...p, supplier_name: supplierName(p.supplier_id) });
+  for (const p of state.contractor_payments) pushToCloud("contractor_payments", p.id, { ...p, contractor_name: contractorName(p.contractor_id) });
+  for (const p of state.partner_payments) pushToCloud("partner_payments", p.id, { ...p, partner_name: partnerName(p.partner_id) });
 }

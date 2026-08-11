@@ -29,6 +29,8 @@ const COLLECTIONS = [
   "suppliers",
   "supplier_purchases",
   "supplier_payments",
+  "contractor_payments",
+  "partner_payments",
 ];
 
 function findOrCreateEquipmentId(db, name) {
@@ -71,6 +73,15 @@ function findOrCreateSupplierId(db, name) {
   const existing = db.prepare("SELECT id FROM suppliers WHERE name = ?").get(trimmed);
   if (existing) return existing.id;
   const info = db.prepare("INSERT INTO suppliers (name) VALUES (?)").run(trimmed);
+  return info.lastInsertRowid;
+}
+
+function findOrCreateContractorId(db, name) {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return null;
+  const existing = db.prepare("SELECT id FROM contractors WHERE name = ?").get(trimmed);
+  if (existing) return existing.id;
+  const info = db.prepare("INSERT INTO contractors (name, opening_balance) VALUES (?, 0)").run(trimmed);
   return info.lastInsertRowid;
 }
 
@@ -237,6 +248,24 @@ function mergeSupplierPayment(db, data, docId) {
   ).run(supplierId, data.date, Number(data.amount) || 0, data.method ?? null, data.note ?? null, docId);
 }
 
+function mergeContractorPayment(db, data, docId) {
+  const contractorId = findOrCreateContractorId(db, data.contractor_name);
+  if (!contractorId || !data.date) return;
+  db.prepare(
+    `INSERT INTO contractor_payments (contractor_id, date, amount, method, note, sync_key)
+     VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(sync_key) DO NOTHING`
+  ).run(contractorId, data.date, Number(data.amount) || 0, data.method ?? null, data.note ?? null, docId);
+}
+
+function mergePartnerPayment(db, data, docId) {
+  const partnerId = findOrCreatePartnerId(db, data.partner_name);
+  if (!partnerId || !data.date) return;
+  db.prepare(
+    `INSERT INTO partner_payments (partner_id, date, amount, method, note, sync_key)
+     VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(sync_key) DO NOTHING`
+  ).run(partnerId, data.date, Number(data.amount) || 0, data.method ?? null, data.note ?? null, docId);
+}
+
 function mergeDoc(db, collectionName, docId, data) {
   switch (collectionName) {
     case "partners":
@@ -265,6 +294,10 @@ function mergeDoc(db, collectionName, docId, data) {
       return mergeSupplierPurchase(db, data, docId);
     case "supplier_payments":
       return mergeSupplierPayment(db, data, docId);
+    case "contractor_payments":
+      return mergeContractorPayment(db, data, docId);
+    case "partner_payments":
+      return mergePartnerPayment(db, data, docId);
     case "payroll_entries":
       return mergePayrollEntry(db, data, docId);
     case "salary_payments":
@@ -281,24 +314,33 @@ const equipmentNames = new Map();
 const employeeNames = new Map();
 const categoryNames = new Map();
 const supplierNames = new Map();
+const partnerNames = new Map();
+const contractorNames = new Map();
 
 async function primeNameCaches(supabase) {
-  const [{ data: eq }, { data: emp }, { data: cat }, { data: sup }] = await Promise.all([
+  const [{ data: eq }, { data: emp }, { data: cat }, { data: sup }, { data: pt }, { data: con }] = await Promise.all([
     supabase.from("equipment").select("id,name"),
     supabase.from("employees").select("id,name"),
     supabase.from("expense_categories").select("id,name"),
     supabase.from("suppliers").select("id,name"),
+    supabase.from("partners").select("id,name"),
+    supabase.from("contractors").select("id,name"),
   ]);
   for (const r of eq ?? []) equipmentNames.set(r.id, r.name);
   for (const r of emp ?? []) employeeNames.set(r.id, r.name);
   for (const r of cat ?? []) categoryNames.set(r.id, r.name);
   for (const r of sup ?? []) supplierNames.set(r.id, r.name);
+  for (const r of pt ?? []) partnerNames.set(r.id, r.name);
+  for (const r of con ?? []) contractorNames.set(r.id, r.name);
 }
 
 function translateRow(table, row) {
   switch (table) {
     case "partners":
+      partnerNames.set(row.id, row.name);
+      return { name: row.name };
     case "contractors":
+      contractorNames.set(row.id, row.name);
       return { name: row.name };
     case "employees":
       employeeNames.set(row.id, row.name);
@@ -338,6 +380,16 @@ function translateRow(table, row) {
       const supplier_name = supplierNames.get(row.supplier_id);
       if (!supplier_name) return null;
       return { ...row, supplier_name };
+    }
+    case "contractor_payments": {
+      const contractor_name = contractorNames.get(row.contractor_id);
+      if (!contractor_name) return null;
+      return { ...row, contractor_name };
+    }
+    case "partner_payments": {
+      const partner_name = partnerNames.get(row.partner_id);
+      if (!partner_name) return null;
+      return { ...row, partner_name };
     }
     default:
       return null;
@@ -665,6 +717,22 @@ async function pushToCloud(table, localId, data) {
         );
         return;
       }
+      case "contractor_payments": {
+        const contractorId = await getOrCreateByName("contractors", data.contractor_name);
+        if (!contractorId) return;
+        await activeClient.from("contractor_payments").upsert(
+          {
+            contractor_id: contractorId,
+            date: data.date,
+            amount: data.amount,
+            method: data.method,
+            note: data.note,
+            sync_key: syncKeyFor(localId),
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
     }
   } catch (err) {
     console.error(`pushToCloud failed for ${table}`, err);
@@ -748,6 +816,12 @@ async function pushAllToCloud(db) {
     .prepare("SELECT pp.*, p.name AS partner_name FROM partner_payments pp JOIN partners p ON p.id = pp.partner_id")
     .all()) {
     await pushToCloud("partner_payments", pp.id, pp);
+    pushed++;
+  }
+  for (const cp of db
+    .prepare("SELECT cp.*, c.name AS contractor_name FROM contractor_payments cp JOIN contractors c ON c.id = cp.contractor_id")
+    .all()) {
+    await pushToCloud("contractor_payments", cp.id, cp);
     pushed++;
   }
 

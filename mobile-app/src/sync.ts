@@ -25,6 +25,7 @@ const employeeNames = new Map<number, string>();
 const partnerNames = new Map<number, string>();
 const categoryNames = new Map<number, string>();
 const supplierNames = new Map<number, string>();
+const contractorNames = new Map<number, string>();
 
 async function getOrCreateByName(table: string, name: string, extra: Record<string, unknown> = {}): Promise<number | null> {
   const trimmed = name.trim();
@@ -226,6 +227,38 @@ export async function pushToCloud(collectionName: string, localId: number, data:
         );
         return;
       }
+      case "contractor_payments": {
+        const contractorId = await getOrCreateByName("contractors", data.contractor_name as string);
+        if (!contractorId) return;
+        await supabase.from("contractor_payments").upsert(
+          {
+            contractor_id: contractorId,
+            date: data.date,
+            amount: data.amount,
+            method: data.method,
+            note: data.note,
+            sync_key: syncKeyFor(localId),
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
+      case "partner_payments": {
+        const partnerId = await getOrCreateByName("partners", data.partner_name as string);
+        if (!partnerId) return;
+        await supabase.from("partner_payments").upsert(
+          {
+            partner_id: partnerId,
+            date: data.date,
+            amount: data.amount,
+            method: data.method,
+            note: data.note,
+            sync_key: syncKeyFor(localId),
+          },
+          { onConflict: "sync_key" }
+        );
+        return;
+      }
     }
   } catch {
     // مفيش نت أو حصل خطأ مؤقت — التعديل محفوظ محليًا وهيتحاول يتبعت تاني
@@ -250,7 +283,9 @@ export async function deleteFromCloud(collectionName: string, localId: number, m
       }
       case "monthly_expenses":
       case "payroll_entries":
-      case "salary_payments": {
+      case "salary_payments":
+      case "contractor_payments":
+      case "partner_payments": {
         await supabase.from(collectionName).delete().eq("sync_key", syncKeyFor(localId));
         return;
       }
@@ -266,18 +301,20 @@ let started = false;
 const channels: RealtimeChannel[] = [];
 
 async function primeNameCaches() {
-  const [{ data: eq }, { data: emp }, { data: pt }, { data: cat }, { data: sup }] = await Promise.all([
+  const [{ data: eq }, { data: emp }, { data: pt }, { data: cat }, { data: sup }, { data: con }] = await Promise.all([
     supabase.from("equipment").select("id,name"),
     supabase.from("employees").select("id,name"),
     supabase.from("partners").select("id,name"),
     supabase.from("expense_categories").select("id,name"),
     supabase.from("suppliers").select("id,name"),
+    supabase.from("contractors").select("id,name"),
   ]);
   for (const r of eq ?? []) equipmentNames.set(r.id, r.name);
   for (const r of emp ?? []) employeeNames.set(r.id, r.name);
   for (const r of pt ?? []) partnerNames.set(r.id, r.name);
   for (const r of cat ?? []) categoryNames.set(r.id, r.name);
   for (const r of sup ?? []) supplierNames.set(r.id, r.name);
+  for (const r of con ?? []) contractorNames.set(r.id, r.name);
 }
 
 export async function startCloudSync(onRemoteChange: RemoteDocHandler) {
@@ -310,7 +347,10 @@ export async function startCloudSync(onRemoteChange: RemoteDocHandler) {
     partnerNames.set(row.id as number, row.name as string);
     return { name: row.name };
   });
-  subscribe("contractors", (row) => ({ name: row.name }));
+  subscribe("contractors", (row) => {
+    contractorNames.set(row.id as number, row.name as string);
+    return { name: row.name };
+  });
   subscribe("employees", (row) => {
     employeeNames.set(row.id as number, row.name as string);
     return { name: row.name, wage_type: row.wage_type, rate: row.rate, fixed_salary: row.fixed_salary };
@@ -360,5 +400,15 @@ export async function startCloudSync(onRemoteChange: RemoteDocHandler) {
     const supplierNameVal = supplierNames.get(row.supplier_id as number);
     if (!supplierNameVal) return null;
     return { ...row, supplier_name: supplierNameVal };
+  });
+  subscribe("contractor_payments", (row) => {
+    const contractorNameVal = contractorNames.get(row.contractor_id as number);
+    if (!contractorNameVal) return null;
+    return { ...row, contractor_name: contractorNameVal };
+  });
+  subscribe("partner_payments", (row) => {
+    const partnerNameVal = partnerNames.get(row.partner_id as number);
+    if (!partnerNameVal) return null;
+    return { ...row, partner_name: partnerNameVal };
   });
 }

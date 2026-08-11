@@ -435,3 +435,20 @@ create policy "staff full access" on supplier_payments for all using (is_staff()
 -- بيخلي Postgres يبعت الصف كامل (مش الـ id بس) في إشعارات الحذف —
 -- محتاجينها عشان اللاب يعرف يمسح صف السركي الصح لما يتمسح من الموبايل.
 alter table daily_logs replica identity full;
+
+-- ============ دفعات المقاولين (فلوس المقاول دفعها للشركة) — كانت موجودة
+-- في اللاب بس (contractor_payments في SQLite) ومكانتش متزامنة خالص، ده اللي
+-- كان بيمنع شاشة "المقاولين" والصادر/الوارد يظهروا صح على الموبايل. ============
+create table if not exists contractor_payments (
+  id bigint generated always as identity primary key,
+  contractor_id bigint not null references contractors(id) on delete cascade,
+  date text not null,
+  amount numeric not null default 0,
+  method text,
+  note text,
+  sync_key text unique
+);
+
+alter table contractor_payments enable row level security;
+drop policy if exists "staff full access" on contractor_payments;
+create policy "staff full access" on contractor_payments for all using (is_staff()) with check (is_staff());

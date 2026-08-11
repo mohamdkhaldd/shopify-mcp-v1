@@ -18,15 +18,15 @@ import { signOut } from "../auth";
 type Kind = "drivers" | "contractors" | "partners" | "equipment" | "categories";
 
 const KINDS: { id: Kind; label: string }[] = [
-  { id: "drivers", label: "السائقين" },
-  { id: "contractors", label: "المقاولين" },
   { id: "partners", label: "الشركاء" },
+  { id: "drivers", label: "السائقين" },
   { id: "equipment", label: "المعدات" },
+  { id: "contractors", label: "المقاولين" },
   { id: "categories", label: "أنواع المصروفات" },
 ];
 
 export default function Settings() {
-  const [kind, setKind] = useState<Kind>("drivers");
+  const [kind, setKind] = useState<Kind>("partners");
   const [, forceRefresh] = useState(0);
   const refresh = () => forceRefresh((n) => n + 1);
   const [syncing, setSyncing] = useState(false);

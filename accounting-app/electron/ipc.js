@@ -1185,7 +1185,10 @@ function registerIpcHandlers(db) {
          VALUES (@contractor_id, @date, @amount, @method, @note)`
       )
       .run({ ...payment, method: payment.method || "cash", note: payment.note ?? null });
-    return db.prepare("SELECT * FROM contractor_payments WHERE id = ?").get(info.lastInsertRowid);
+    const created = db.prepare("SELECT * FROM contractor_payments WHERE id = ?").get(info.lastInsertRowid);
+    const contractor = db.prepare("SELECT name FROM contractors WHERE id = ?").get(payment.contractor_id);
+    if (contractor) pushToCloud("contractor_payments", created.id, { contractor_name: contractor.name, ...created });
+    return created;
   });
   ipcMain.handle("contractorPayments:delete", (_e, { id }) => {
     db.prepare("DELETE FROM contractor_payments WHERE id = ?").run(id);

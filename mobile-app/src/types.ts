@@ -146,3 +146,28 @@ export interface SupplierPayment {
   method: string | null;
   note: string | null;
 }
+
+export interface ContractorPayment {
+  id: number;
+  contractor_id: number;
+  date: string;
+  amount: number;
+  method: string | null;
+  note: string | null;
+}
+
+export interface PartnerPayment {
+  id: number;
+  partner_id: number;
+  date: string;
+  amount: number;
+  method: string | null;
+  note: string | null;
+}
+
+export type TreasuryAccountName = "cash" | "wallet" | "instapay" | "vodafone_cash";
+
+export interface TreasuryAccount {
+  name: TreasuryAccountName;
+  balance: number;
+}

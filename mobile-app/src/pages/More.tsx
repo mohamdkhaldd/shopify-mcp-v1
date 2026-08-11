@@ -1,10 +1,14 @@
-type MoreScreen = "hassan" | "waste" | "suppliers" | "outgoing";
+type MoreScreen = "hassan" | "contractors" | "partners" | "treasury" | "outgoing" | "waste" | "suppliers" | "reports";
 
 const ITEMS: { screen: MoreScreen; icon: string; label: string; desc: string }[] = [
   { screen: "hassan", icon: "🧾", label: "حسن", desc: "حسابه الشخصي وخزنته" },
+  { screen: "contractors", icon: "🚜", label: "المقاولين", desc: "المستحق عليهم والدفعات" },
+  { screen: "partners", icon: "🤝", label: "الشركاء", desc: "المستحق لهم والدفعات" },
+  { screen: "treasury", icon: "💰", label: "الخزنة", desc: "أرصدة الكاش والمحافظ" },
+  { screen: "outgoing", icon: "📤", label: "الصادر والوارد", desc: "كل الفلوس اللي خرجت الشهر ده" },
   { screen: "waste", icon: "🗑️", label: "الهالك", desc: "الفلوس اللي راحت هالك" },
   { screen: "suppliers", icon: "🚚", label: "الموردين", desc: "المشتريات والدفعات" },
-  { screen: "outgoing", icon: "📤", label: "الصادر", desc: "كل الفلوس اللي خرجت الشهر ده" },
+  { screen: "reports", icon: "📈", label: "التقارير", desc: "ملخص شامل لأرقام الشركة" },
 ];
 
 export default function More({ onOpen }: { onOpen: (screen: MoreScreen) => void }) {

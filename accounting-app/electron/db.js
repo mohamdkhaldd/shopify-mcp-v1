@@ -470,7 +470,15 @@ function initDatabase() {
   // مزامنة الموبايل: كل قيد جاي من السحابة بيحمل sync_key فريد (جهاز+رقمه
   // المحلي)، وبنستخدمه كمفتاح فريد عشان لو نفس القيد وصل تاني (مثلاً بعد
   // إعادة فتح البرنامج) ميتكررش. NULL مسموح يتكرر عادي (قيود اللاب القديمة).
-  for (const table of ["monthly_expenses", "employee_advances", "employee_bonuses", "employee_deductions", "salary_payments"]) {
+  for (const table of [
+    "monthly_expenses",
+    "employee_advances",
+    "employee_bonuses",
+    "employee_deductions",
+    "salary_payments",
+    "contractor_payments",
+    "partner_payments",
+  ]) {
     const hasSyncKey = db
       .prepare(`PRAGMA table_info(${table})`)
       .all()

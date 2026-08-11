@@ -1,4 +1,4 @@
-import { DailyLog, Equipment } from "../types";
+import { DailyLog, Equipment, Partner } from "../types";
 import { getState } from "../store";
 
 export function computeDayValue(log: DailyLog): number {
@@ -114,4 +114,36 @@ export function computeEquipmentSummary(equipment: Equipment, month: string): Eq
   });
 
   return { driverIncome, marketIncome, income, driverSalaryExpense, manualExpenseTotal, expenseTotal, netProfit, distribution };
+}
+
+// نفس فكرة equipmentAllTimeProfit في اللاب: مجموع صافي ربح المعدة على كل
+// الشهور اللي فيها حركة، مش شهر واحد بس — ده اللي بيتحسب عليه مستحق الشريك.
+export function computeEquipmentAllTimeNetProfit(equipment: Equipment): number {
+  const state = getState();
+  const months = new Set<string>();
+  for (const l of state.daily_logs) if (l.equipment_id === equipment.id) months.add(l.date.slice(0, 7));
+  for (const e of state.monthly_expenses) if (e.equipment_id === equipment.id) months.add(e.month);
+  let total = 0;
+  for (const month of months) total += computeEquipmentSummary(equipment, month).netProfit;
+  return total;
+}
+
+export interface PartnerAllTimeSummary {
+  id: number;
+  name: string;
+  opening_balance: number;
+  totalDue: number;
+  totalPaid: number;
+  remaining: number;
+}
+
+export function partnerAllTimeSummary(partner: Partner, totalPaid: number): PartnerAllTimeSummary {
+  const state = getState();
+  let totalDue = partner.opening_balance;
+  for (const eq of state.equipment) {
+    const share = eq.shares.find((s) => s.partner_id === partner.id);
+    if (!share) continue;
+    totalDue += (computeEquipmentAllTimeNetProfit(eq) * share.percentage) / 100;
+  }
+  return { id: partner.id, name: partner.name, opening_balance: partner.opening_balance, totalDue, totalPaid, remaining: totalDue - totalPaid };
 }
