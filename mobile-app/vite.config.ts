@@ -12,10 +12,17 @@ export default defineConfig({
     // جديد (وقتها بيتحمّل في الخلفية ويتفعّل المرة الجاية اللي تفتحه فيها).
     VitePWA({
       registerType: "autoUpdate",
+      // بنسجّل الـ service worker يدويًا في main.tsx (بدل السكريبت الجاهز
+      // اللي بيتحط تلقائي) عشان نقدر نستخدم registerSW({ immediate: true })
+      // اللي بيتأكد إن أي تحديث جديد يتفعّل ويعمل reload للصفحة فورًا، بدل
+      // ما يفضل التطبيق شغال بالكود القديم لحد ما حد يقفله ويفتحه من الأول.
+      injectRegister: false,
       includeAssets: ["logo.png"],
       manifest: false, // بنستخدم public/manifest.json الجاهز بدل ما نولّده تاني
       workbox: {
         globPatterns: ["**/*.{js,css,html,png,woff,woff2}"],
+        clientsClaim: true,
+        skipWaiting: true,
       },
     }),
   ],
