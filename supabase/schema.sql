@@ -267,6 +267,7 @@ returns table (
   base_hours numeric,
   day_rate numeric,
   is_day_off boolean,
+  note text,
   day_value numeric
 )
 language plpgsql security definer stable as $$
@@ -286,6 +287,7 @@ begin
          dl.base_hours,
          dl.day_rate,
          dl.is_day_off,
+         dl.note,
          case
            when dl.is_day_off then 0
            else coalesce(dl.day_rate,0)

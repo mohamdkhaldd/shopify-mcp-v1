@@ -22,6 +22,7 @@ interface DailyLogRow {
   base_hours: number | null;
   day_rate: number | null;
   is_day_off: boolean;
+  note: string | null;
   day_value: number;
 }
 
@@ -75,17 +76,49 @@ function EquipmentLogSheet({ month, logs }: { month: string; logs: DailyLogRow[]
               {log && !log.is_day_off && <div className="text-xs font-bold text-primary-dark">{formatEGP(log.day_value)}</div>}
             </div>
             {log?.is_day_off ? (
-              <div className="text-[11px] font-bold text-rose-600 mt-0.5">مشتغلش</div>
+              <div className="text-[11px] font-bold text-rose-600 mt-0.5">
+                مشتغلش{log.note && <span className="font-semibold"> — {log.note}</span>}
+              </div>
             ) : !log ? (
               <div className="text-[11px] text-slate-400 mt-0.5">مفيش بيانات مسجلة</div>
             ) : (
               <div className="text-[11px] text-slate-500 mt-0.5">
                 {log.person_name || "—"} — {log.actual_hours ?? log.base_hours ?? "—"} ساعة
+                {log.note && <span> — {log.note}</span>}
               </div>
             )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function EquipmentExpenseSheet({ expenses }: { expenses: ExpenseRow[] }) {
+  const sorted = [...expenses].sort((a, b) => (a.expense_date ?? "").localeCompare(b.expense_date ?? ""));
+  const total = expenses.reduce((s, e) => s + e.amount, 0);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between px-0.5 pb-1">
+        <div className="text-[11px] text-slate-400 font-semibold">إجمالي المصروفات الشهر ده</div>
+        <div className="text-sm font-extrabold text-rose-600">{formatEGP(total)}</div>
+      </div>
+      {sorted.length === 0 ? (
+        <div className="text-[11px] text-slate-400 text-center py-3">مفيش مصروفات مسجلة الشهر ده.</div>
+      ) : (
+        sorted.map((e, i) => (
+          <div key={i} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-extrabold text-slate-700">
+                {e.expense_date?.slice(-2) ?? "—"} <span className="text-[10px] font-semibold text-slate-400">({e.category_name || "بدون نوع"})</span>
+              </div>
+              <div className="text-xs font-bold text-rose-600">{formatEGP(e.amount)}</div>
+            </div>
+            {e.note && <div className="text-[11px] text-slate-500 mt-0.5">{e.note}</div>}
+          </div>
+        ))
+      )}
     </div>
   );
 }
@@ -99,7 +132,8 @@ export default function PartnerSummary({ displayName }: { displayName: string })
   const [balance, setBalance] = useState<Balance | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedEquipment, setExpandedEquipment] = useState<string | null>(null);
+  const [expandedLogEquipment, setExpandedLogEquipment] = useState<string | null>(null);
+  const [expandedExpenseEquipment, setExpandedExpenseEquipment] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.rpc("get_partner_balance").then(({ data, error }) => {
@@ -233,11 +267,11 @@ export default function PartnerSummary({ displayName }: { displayName: string })
             ) : (
               summary.map((s) => {
                 const eqLogs = logs.filter((l) => l.equipment_name === s.equipment_name);
-                const isOpen = expandedEquipment === s.equipment_name;
+                const isOpen = expandedLogEquipment === s.equipment_name;
                 return (
                   <div key={s.equipment_name} className="bg-white rounded-2xl shadow-card overflow-hidden">
                     <button
-                      onClick={() => setExpandedEquipment(isOpen ? null : s.equipment_name)}
+                      onClick={() => setExpandedLogEquipment(isOpen ? null : s.equipment_name)}
                       className="w-full p-3.5 flex items-center justify-between text-start"
                     >
                       <div className="text-sm font-bold text-slate-800">{s.equipment_name}</div>
@@ -257,19 +291,37 @@ export default function PartnerSummary({ displayName }: { displayName: string })
 
         {!loading && !error && tab === "expenses" && (
           <>
-            {expenses.map((e, i) => (
-              <div key={i} className="bg-white rounded-xl border border-slate-200 px-3 py-2.5">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="font-bold text-slate-700">{e.equipment_name}</div>
-                  <div className="text-slate-400">{e.expense_date?.slice(-2) ?? "—"}</div>
-                </div>
-                <div className="flex items-center justify-between mt-1 text-xs text-slate-500">
-                  <div>{e.category_name || "—"} {e.note && <span>({e.note})</span>}</div>
-                  <div className="font-bold text-rose-600">{formatEGP(e.amount)}</div>
-                </div>
-              </div>
-            ))}
-            {expenses.length === 0 && <div className="text-sm text-slate-400 text-center py-6">مفيش مصروفات مسجلة للشهر ده لسه.</div>}
+            {summary.length === 0 ? (
+              <div className="text-sm text-slate-400 text-center py-6">مفيش معدات مسجلة ليك لسه.</div>
+            ) : (
+              summary.map((s) => {
+                const eqExpenses = expenses.filter((e) => e.equipment_name === s.equipment_name);
+                const isOpen = expandedExpenseEquipment === s.equipment_name;
+                const total = eqExpenses.reduce((sum, e) => sum + e.amount, 0);
+                return (
+                  <div key={s.equipment_name} className="bg-white rounded-2xl shadow-card overflow-hidden">
+                    <button
+                      onClick={() => setExpandedExpenseEquipment(isOpen ? null : s.equipment_name)}
+                      className="w-full p-3.5 flex items-center justify-between text-start"
+                    >
+                      <div>
+                        <div className="text-sm font-bold text-slate-800">{s.equipment_name}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">{eqExpenses.length} حركة مصروف</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-rose-600">{formatEGP(total)}</span>
+                        <span className="text-primary-dark text-lg leading-none">{isOpen ? "−" : "+"}</span>
+                      </div>
+                    </button>
+                    {isOpen && (
+                      <div className="border-t border-slate-100 p-3.5">
+                        <EquipmentExpenseSheet expenses={eqExpenses} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </>
         )}
       </div>
