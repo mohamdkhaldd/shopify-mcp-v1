@@ -236,18 +236,14 @@ export default function PartnerSummary({ displayName }: { displayName: string })
                   <div className="text-sm font-extrabold text-slate-700">{r.equipment_name}</div>
                   <div className="text-[11px] text-slate-400">نصيبك {r.percentage}%</div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
                     <div className="text-[10px] text-slate-400">الدخل</div>
                     <div className="text-xs font-bold text-slate-700">{formatEGP(r.income)}</div>
                   </div>
                   <div>
                     <div className="text-[10px] text-slate-400">المصروفات</div>
-                    <div className="text-xs font-bold text-rose-600">{formatEGP(r.manual_expense)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-400">مرتب السواق</div>
-                    <div className="text-xs font-bold text-rose-600">{formatEGP(r.driver_salary_expense)}</div>
+                    <div className="text-xs font-bold text-rose-600">{formatEGP(r.manual_expense + r.driver_salary_expense)}</div>
                   </div>
                   <div>
                     <div className="text-[10px] text-slate-400">نصيبك</div>
