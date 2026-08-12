@@ -1,11 +1,5 @@
 import { useState } from "react";
-import {
-  addContractorPayment,
-  deleteContractorPayment,
-  listContractorPayments,
-  listContractorSummaries,
-} from "../store";
-import { pushUndo } from "../undo";
+import { listContractorPayments, listContractorSummaries } from "../store";
 
 function formatEGP(value: number): string {
   return `${Math.round(value).toLocaleString("ar-EG")} ج.م`;
@@ -22,43 +16,12 @@ function paymentMethodLabel(v: string | null) {
   return PAYMENT_METHODS.find((m) => m.value === v)?.label ?? v ?? "—";
 }
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export default function Contractors({ onBack }: { onBack: () => void }) {
-  const [version, setVersion] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [date, setDate] = useState(todayIso());
-  const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState("cash");
-
   const items = listContractorSummaries();
 
-  function refresh() {
-    setVersion((v) => v + 1);
-  }
-
-  function save(contractorId: number) {
-    if (!amount) return;
-    addContractorPayment(contractorId, { date, amount: Number(amount), method, note: null });
-    setAmount("");
-    refresh();
-  }
-
-  function remove(contractorId: number, id: number) {
-    const payment = listContractorPayments(contractorId).find((p) => p.id === id);
-    if (!payment) return;
-    deleteContractorPayment(id);
-    refresh();
-    pushUndo("اتمسحت دفعة مقاول", () => {
-      addContractorPayment(contractorId, { date: payment.date, amount: payment.amount, method: payment.method, note: payment.note });
-      refresh();
-    });
-  }
-
   return (
-    <div key={version}>
+    <div>
       <div className="bg-primary text-white px-4 pt-6 pb-3 flex items-center gap-2">
         <button onClick={onBack} className="text-white/80 text-lg">
           ‹
@@ -71,7 +34,7 @@ export default function Contractors({ onBack }: { onBack: () => void }) {
 
       <div className="p-4 space-y-2">
         {items.length === 0 ? (
-          <div className="text-sm text-slate-400 text-center py-4">لسه مفيش مقاولين مسجلين. ضيفهم من الإعدادات الأول.</div>
+          <div className="text-sm text-slate-400 text-center py-4">لسه مفيش مقاولين مسجلين.</div>
         ) : (
           items.map((c) => (
             <div key={c.id} className="bg-white rounded-2xl shadow-card overflow-hidden">
@@ -87,43 +50,19 @@ export default function Contractors({ onBack }: { onBack: () => void }) {
                 )}
               </button>
               {expandedId === c.id && (
-                <div className="border-t border-slate-100 p-3.5 space-y-3">
-                  <div className="space-y-2">
-                    <div className="text-xs font-extrabold text-slate-700">تسجيل دفعة</div>
-                    <div className="flex gap-1.5">
-                      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
-                      <input type="number" inputMode="decimal" placeholder="القيمة" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
-                    </div>
-                    <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs">
-                      {PAYMENT_METHODS.map((m) => (
-                        <option key={m.value} value={m.value}>
-                          {m.label}
-                        </option>
+                <div className="border-t border-slate-100 p-3.5">
+                  <div className="text-xs font-bold text-slate-500 mb-1.5">الدفعات</div>
+                  {listContractorPayments(c.id).length === 0 ? (
+                    <div className="text-xs text-slate-400">لا يوجد.</div>
+                  ) : (
+                    <div className="space-y-1">
+                      {listContractorPayments(c.id).map((p) => (
+                        <div key={p.id} className="text-xs text-slate-600">
+                          {p.date} — {formatEGP(p.amount)} — {paymentMethodLabel(p.method)}
+                        </div>
                       ))}
-                    </select>
-                    <button onClick={() => save(c.id)} disabled={!amount} className="w-full bg-primary text-white rounded-lg py-2 text-xs font-bold disabled:opacity-50">
-                      حفظ الدفعة
-                    </button>
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-500 mb-1.5">الدفعات</div>
-                    {listContractorPayments(c.id).length === 0 ? (
-                      <div className="text-xs text-slate-400">لا يوجد.</div>
-                    ) : (
-                      <div className="space-y-1">
-                        {listContractorPayments(c.id).map((p) => (
-                          <div key={p.id} className="flex items-center justify-between text-xs text-slate-600">
-                            <span>
-                              {p.date} — {formatEGP(p.amount)} — {paymentMethodLabel(p.method)}
-                            </span>
-                            <button onClick={() => remove(c.id, p.id)} className="text-rose-500 font-bold shrink-0 ms-2">
-                              مسح
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

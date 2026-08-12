@@ -1,16 +1,6 @@
 import { useState } from "react";
 import MonthBar from "../components/MonthBar";
-import {
-  addHassanLedgerEntry,
-  addHassanTreasuryExpense,
-  deleteHassanLedgerEntry,
-  deleteHassanTreasuryExpense,
-  hassanLedgerBalance,
-  listEquipment,
-  listHassanLedger,
-  listHassanTreasuryExpenses,
-} from "../store";
-import { pushUndo } from "../undo";
+import { hassanLedgerBalance, listEquipment, listHassanLedger, listHassanTreasuryExpenses } from "../store";
 import { HassanLedgerType } from "../types";
 import { computeCommissionRows, computeEquipmentCommissionDetail, computeHassanTreasuryBalance } from "../utils/commission";
 
@@ -27,10 +17,6 @@ const LEDGER_TYPES: { value: HassanLedgerType; label: string }[] = [
 
 function typeLabel(type: HassanLedgerType) {
   return LEDGER_TYPES.find((t) => t.value === type)?.label ?? type;
-}
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 function sourceLabel(source: string, category_name?: string) {
@@ -115,52 +101,8 @@ function CommissionTab({ month }: { month: string }) {
 }
 
 function LedgerTab({ month }: { month: string }) {
-  const [entries, setEntries] = useState(() => listHassanLedger(month));
-  const [balance, setBalance] = useState(() => hassanLedgerBalance());
-  const [date, setDate] = useState(todayIso());
-  const [type, setType] = useState<HassanLedgerType>("loan");
-  const [amount, setAmount] = useState("");
-  const [partyName, setPartyName] = useState("");
-  const [description, setDescription] = useState("");
-
-  function refresh() {
-    setEntries(listHassanLedger(month));
-    setBalance(hassanLedgerBalance());
-  }
-
-  function save() {
-    if (!amount) return;
-    addHassanLedgerEntry({
-      date,
-      type,
-      amount: Number(amount),
-      party_name: partyName.trim() || null,
-      description: description.trim() || null,
-      note: null,
-    });
-    setAmount("");
-    setPartyName("");
-    setDescription("");
-    refresh();
-  }
-
-  function remove(id: number) {
-    const entry = entries.find((e) => e.id === id);
-    if (!entry) return;
-    deleteHassanLedgerEntry(id);
-    refresh();
-    pushUndo("اتمسحت حركة من حساب حسن", () => {
-      addHassanLedgerEntry({
-        date: entry.date,
-        type: entry.type,
-        amount: entry.amount,
-        party_name: entry.party_name,
-        description: entry.description,
-        note: entry.note,
-      });
-      refresh();
-    });
-  }
+  const entries = listHassanLedger(month);
+  const balance = hassanLedgerBalance();
 
   return (
     <div className="p-4 space-y-3">
@@ -175,39 +117,6 @@ function LedgerTab({ month }: { month: string }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-card p-4 space-y-2">
-        <div className="text-sm font-extrabold text-slate-700">تسجيل حركة</div>
-        <div>
-          <label className="block text-[11px] text-slate-500 mb-1">التاريخ</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="block text-[11px] text-slate-500 mb-1">النوع</label>
-          <select value={type} onChange={(e) => setType(e.target.value as HassanLedgerType)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
-            {LEDGER_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-[11px] text-slate-500 mb-1">القيمة</label>
-          <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="block text-[11px] text-slate-500 mb-1">الجهة/الشخص</label>
-          <input value={partyName} onChange={(e) => setPartyName(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="block text-[11px] text-slate-500 mb-1">بيان</label>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-        </div>
-        <button onClick={save} disabled={!amount} className="w-full bg-primary text-white rounded-xl py-2.5 text-sm font-bold disabled:opacity-50">
-          حفظ
-        </button>
-      </div>
-
       <div className="space-y-2">
         {entries.length === 0 ? (
           <div className="text-sm text-slate-400 text-center py-4">لسه مفيش حركات مسجلة الشهر ده.</div>
@@ -218,13 +127,8 @@ function LedgerTab({ month }: { month: string }) {
                 <span className="font-bold text-slate-700">{typeLabel(e.type)}</span>
                 <span className="font-bold text-primary-dark">{formatEGP(e.amount)}</span>
               </div>
-              <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400">
-                <span>
-                  {e.date} {e.party_name && `— ${e.party_name}`} {e.description && `(${e.description})`}
-                </span>
-                <button onClick={() => remove(e.id)} className="text-rose-500 font-bold">
-                  مسح
-                </button>
+              <div className="mt-1 text-[11px] text-slate-400">
+                {e.date} {e.party_name && `— ${e.party_name}`} {e.description && `(${e.description})`}
               </div>
             </div>
           ))
@@ -235,35 +139,8 @@ function LedgerTab({ month }: { month: string }) {
 }
 
 function TreasuryTab({ month }: { month: string }) {
-  const [entries, setEntries] = useState(() => listHassanTreasuryExpenses(month));
-  const [balance, setBalance] = useState(() => computeHassanTreasuryBalance(month));
-  const [date, setDate] = useState(todayIso());
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
-
-  function refresh() {
-    setEntries(listHassanTreasuryExpenses(month));
-    setBalance(computeHassanTreasuryBalance(month));
-  }
-
-  function save() {
-    if (!amount || !description) return;
-    addHassanTreasuryExpense({ date, amount: Number(amount), description });
-    setAmount("");
-    setDescription("");
-    refresh();
-  }
-
-  function remove(id: number) {
-    const entry = entries.find((e) => e.id === id);
-    if (!entry) return;
-    deleteHassanTreasuryExpense(id);
-    refresh();
-    pushUndo("اتمسح مصروف من خزنة حسن", () => {
-      addHassanTreasuryExpense({ date: entry.date, amount: entry.amount, description: entry.description });
-      refresh();
-    });
-  }
+  const entries = listHassanTreasuryExpenses(month);
+  const balance = computeHassanTreasuryBalance(month);
 
   return (
     <div className="p-4 space-y-3">
@@ -284,25 +161,6 @@ function TreasuryTab({ month }: { month: string }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-card p-4 space-y-2">
-        <div className="text-sm font-extrabold text-slate-700">تسجيل دفع</div>
-        <div>
-          <label className="block text-[11px] text-slate-500 mb-1">التاريخ</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="block text-[11px] text-slate-500 mb-1">القيمة</label>
-          <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label className="block text-[11px] text-slate-500 mb-1">بيان</label>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="زي: قسط عربية، إيجار" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-        </div>
-        <button onClick={save} disabled={!amount || !description} className="w-full bg-primary text-white rounded-xl py-2.5 text-sm font-bold disabled:opacity-50">
-          حفظ
-        </button>
-      </div>
-
       <div className="space-y-2">
         {entries.length === 0 ? (
           <div className="text-sm text-slate-400 text-center py-4">لسه مفيش حاجة اتدفعت من خزنة حسن الشهر ده.</div>
@@ -313,12 +171,7 @@ function TreasuryTab({ month }: { month: string }) {
                 <div className="text-slate-700 font-semibold">{e.description}</div>
                 <div className="text-[11px] text-slate-400">{e.date}</div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-primary-dark">{formatEGP(e.amount)}</span>
-                <button onClick={() => remove(e.id)} className="text-rose-500 text-xs font-bold">
-                  مسح
-                </button>
-              </div>
+              <span className="font-bold text-primary-dark">{formatEGP(e.amount)}</span>
             </div>
           ))
         )}
