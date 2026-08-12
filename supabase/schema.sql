@@ -153,13 +153,17 @@ drop policy if exists "staff updates profiles" on profiles;
 create policy "staff updates profiles" on profiles for update using (is_staff());
 
 -- ============ رقم الشريك الشهري — الشريك بياخد أرقامه هو بس، محسوبة
--- جاهزة (دخل، مصروف، صافي ربح، حصته) من غير ما يشوف أي داتا تشغيلية خام. ============
+-- جاهزة (دخل، مصروف، مرتب السواق، صافي ربح، حصته) من غير ما يشوف أي داتا
+-- تشغيلية خام. لازم يتطابق مع equipmentMonthNetProfit في اللاب بالظبط —
+-- يعني برضو بيخصم مرتب السواق الفعلي (سلف+حوافز+دفعات) على المعدة ده،
+-- مقسوم على المعدات حسب أيام الشغل، مش بس المصروفات اليدوية. ============
 create or replace function get_partner_summary(p_month text)
 returns table (
   equipment_name text,
   percentage numeric,
   income numeric,
   manual_expense numeric,
+  driver_salary_expense numeric,
   net_profit numeric,
   partner_share numeric
 )
@@ -193,17 +197,45 @@ begin
     from monthly_expenses me
     where me.month = p_month
     group by me.equipment_id
+  ),
+  driver_days as (
+    select e.id as employee_id, dl.equipment_id, count(*) as days
+    from daily_logs dl
+    join employees e on e.name = dl.person_name
+    where dl.role = 'driver' and dl.date like p_month || '%'
+    group by e.id, dl.equipment_id
+  ),
+  employee_totals as (
+    select employee_id, sum(days) as total_days
+    from driver_days
+    group by employee_id
+  ),
+  employee_taken as (
+    select distinct dd.employee_id,
+      coalesce((select sum(amount) from payroll_entries pe where pe.employee_id = dd.employee_id and pe.month = p_month and pe.kind in ('advance','bonus')), 0)
+      + coalesce((select sum(amount) from salary_payments sp where sp.employee_id = dd.employee_id and sp.month = p_month), 0) as total_taken
+    from driver_days dd
+  ),
+  driver_salary as (
+    select dd.equipment_id,
+           sum(et.total_taken * dd.days::numeric / etot.total_days) as total_driver_salary
+    from driver_days dd
+    join employee_totals etot on etot.employee_id = dd.employee_id
+    join employee_taken et on et.employee_id = dd.employee_id
+    group by dd.equipment_id
   )
   select e.name,
          eps.percentage,
          coalesce(i.total_income, 0),
          coalesce(x.total_expense, 0),
-         coalesce(i.total_income, 0) - coalesce(x.total_expense, 0) as net_profit,
-         (coalesce(i.total_income, 0) - coalesce(x.total_expense, 0)) * eps.percentage / 100 as partner_share
+         coalesce(ds.total_driver_salary, 0),
+         coalesce(i.total_income, 0) - coalesce(x.total_expense, 0) - coalesce(ds.total_driver_salary, 0) as net_profit,
+         (coalesce(i.total_income, 0) - coalesce(x.total_expense, 0) - coalesce(ds.total_driver_salary, 0)) * eps.percentage / 100 as partner_share
   from equipment_partner_shares eps
   join equipment e on e.id = eps.equipment_id
   left join income i on i.equipment_id = eps.equipment_id
   left join expense x on x.equipment_id = eps.equipment_id
+  left join driver_salary ds on ds.equipment_id = eps.equipment_id
   where eps.partner_id = v_partner_id;
 end;
 $$;
@@ -345,12 +377,39 @@ begin
     select me.equipment_id, sum(me.amount) as total_expense
     from monthly_expenses me
     group by me.equipment_id
+  ),
+  driver_days as (
+    select e.id as employee_id, dl.equipment_id, left(dl.date,7) as month, count(*) as days
+    from daily_logs dl
+    join employees e on e.name = dl.person_name
+    where dl.role = 'driver'
+    group by e.id, dl.equipment_id, left(dl.date,7)
+  ),
+  employee_totals as (
+    select employee_id, month, sum(days) as total_days
+    from driver_days
+    group by employee_id, month
+  ),
+  employee_taken as (
+    select distinct dd.employee_id, dd.month,
+      coalesce((select sum(amount) from payroll_entries pe where pe.employee_id = dd.employee_id and pe.month = dd.month and pe.kind in ('advance','bonus')), 0)
+      + coalesce((select sum(amount) from salary_payments sp where sp.employee_id = dd.employee_id and sp.month = dd.month), 0) as total_taken
+    from driver_days dd
+  ),
+  driver_salary as (
+    select dd.equipment_id,
+           sum(et.total_taken * dd.days::numeric / etot.total_days) as total_driver_salary
+    from driver_days dd
+    join employee_totals etot on etot.employee_id = dd.employee_id and etot.month = dd.month
+    join employee_taken et on et.employee_id = dd.employee_id and et.month = dd.month
+    group by dd.equipment_id
   )
-  select coalesce(v_opening, 0) + coalesce(sum((coalesce(i.total_income,0) - coalesce(x.total_expense,0)) * eps.percentage / 100), 0)
+  select coalesce(v_opening, 0) + coalesce(sum((coalesce(i.total_income,0) - coalesce(x.total_expense,0) - coalesce(ds.total_driver_salary,0)) * eps.percentage / 100), 0)
   into v_due
   from equipment_partner_shares eps
   left join income i on i.equipment_id = eps.equipment_id
   left join expense x on x.equipment_id = eps.equipment_id
+  left join driver_salary ds on ds.equipment_id = eps.equipment_id
   where eps.partner_id = v_partner_id;
 
   select coalesce(sum(amount), 0) into v_paid from partner_payments where partner_id = v_partner_id;
