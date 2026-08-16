@@ -95,7 +95,18 @@ export default function PartnerDetailView({ partnerId, onBack }: PartnerDetailVi
             <tbody>
               {detail.equipmentBreakdown.map((e) => (
                 <tr key={e.equipment_name} className="border-b border-slate-50 last:border-0">
-                  <td className="py-2 font-semibold text-slate-700">{e.equipment_name}</td>
+                  <td className="py-2 font-semibold text-slate-700">
+                    {e.equipment_name}
+                    {e.shiftIncome.length > 1 && (
+                      <div className="mt-1 space-y-0.5">
+                        {e.shiftIncome.map((s) => (
+                          <div key={s.shift_label} className="text-[11px] font-normal text-slate-400">
+                            {s.shift_label || "أساسي"}: {formatEGP(s.income)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="py-2 text-slate-500">{e.percentage}%</td>
                   <td className="py-2 font-semibold text-slate-700">{formatEGP(e.monthAmount)}</td>
                 </tr>

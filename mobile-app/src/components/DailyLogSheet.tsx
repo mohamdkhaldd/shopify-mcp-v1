@@ -13,12 +13,13 @@ interface DailyLogSheetProps {
   equipmentId: number;
   month: string;
   role: DailyLogRole;
+  shiftLabel: string;
   people: Person[];
 }
 
-export default function DailyLogSheet({ equipmentId, month, role }: DailyLogSheetProps) {
+export default function DailyLogSheet({ equipmentId, month, role, shiftLabel }: DailyLogSheetProps) {
   const dates = useMemo(() => daysInMonth(month), [month]);
-  const logs = listDailyLogs(equipmentId, month, role);
+  const logs = listDailyLogs(equipmentId, month, role, shiftLabel);
   const byDate = new Map(logs.map((l) => [l.date, l]));
   const isContractor = role === "contractor";
   const isDriver = role === "driver";
@@ -69,7 +70,7 @@ export default function DailyLogSheet({ equipmentId, month, role }: DailyLogShee
               </div>
 
               {off ? (
-                <div className="text-xs font-bold text-rose-600">{isContractor ? "مشتغلش (متعلّم من شيت السركي)" : "مشتغلش"}</div>
+                <div className="text-xs font-bold text-rose-600">{isDriver ? "مشتغلش (متعلّم من شيت المقاول)" : "مشتغلش"}</div>
               ) : !log ? (
                 <div className="text-xs text-slate-400">مفيش بيانات مسجلة.</div>
               ) : (
@@ -89,7 +90,7 @@ export default function DailyLogSheet({ equipmentId, month, role }: DailyLogShee
         })}
       </div>
 
-      {isDriver && (
+      {(isDriver || isContractor) && (
         <div className="bg-slate-50 rounded-2xl p-3 text-sm">
           <div className="font-bold text-slate-600 mb-1">أيام الشغل في الشهر</div>
           <div className="text-slate-600">

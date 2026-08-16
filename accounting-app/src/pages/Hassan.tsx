@@ -70,6 +70,7 @@ function EquipmentCommissionPanel({ equipmentId, month }: { equipmentId: number;
                 <tr className="text-slate-400 border-b border-slate-100">
                   <th className="text-start font-semibold py-1.5">اليوم</th>
                   <th className="text-start font-semibold py-1.5">المصدر</th>
+                  <th className="text-start font-semibold py-1.5">الشيفت</th>
                   <th className="text-start font-semibold py-1.5">المقاول بكام</th>
                   <th className="text-start font-semibold py-1.5">السركي بكام</th>
                   <th className="text-start font-semibold py-1.5">كوميشن حسن</th>
@@ -82,6 +83,7 @@ function EquipmentCommissionPanel({ equipmentId, month }: { equipmentId: number;
                     <td className="py-1.5 text-slate-500">
                       {d.source === "expense" ? d.category_name ?? "مصروف" : d.source === "market" ? "سركي سوق" : "سركي/مقاول"}
                     </td>
+                    <td className="py-1.5 text-slate-500">{d.source === "paired" ? d.shift_label || "أساسي" : "—"}</td>
                     <td className="py-1.5 text-slate-600">{d.contractor_rate == null ? "—" : formatEGP(d.contractor_rate)}</td>
                     <td className="py-1.5 text-slate-600">{d.driver_rate == null ? "—" : formatEGP(d.driver_rate)}</td>
                     <td className="py-1.5 font-semibold text-primary-dark">{formatEGP(d.commission)}</td>
@@ -90,7 +92,7 @@ function EquipmentCommissionPanel({ equipmentId, month }: { equipmentId: number;
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={4} className="pt-2 text-sm font-bold text-slate-700">إجمالي الشهر</td>
+                  <td colSpan={5} className="pt-2 text-sm font-bold text-slate-700">إجمالي الشهر</td>
                   <td className="pt-2 text-sm font-bold text-primary-dark">{formatEGP(detail.monthTotal)}</td>
                 </tr>
               </tfoot>

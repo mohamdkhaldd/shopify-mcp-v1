@@ -55,7 +55,21 @@ create table if not exists daily_logs (
   fixed_value numeric,
   hassan_commission numeric,
   note text,
-  unique (equipment_id, date, role)
+  shift_label text not null default '',
+  unique (equipment_id, date, role, shift_label)
+);
+
+-- شيفتات إضافية مسمّاة لمعدة اشتغلت بأكتر من وردية (زي "وردية 2") — الشيفت
+-- الأساسي (shift_label = '') مالوش سطر هنا، السطر هنا بس عشان اسم الشيفت
+-- يفضل موجود حتى لو لسه معملتلوش أي يوم في daily_logs. الـ RLS policy بتاعته
+-- موجودة تحت مع باقي جداول staff (بعد ما is_staff() تتعرّف).
+create table if not exists equipment_shifts (
+  id bigint generated always as identity primary key,
+  equipment_id bigint not null references equipment(id) on delete cascade,
+  label text not null,
+  created_at timestamptz not null default now(),
+  sync_key text unique,
+  unique (equipment_id, label)
 );
 
 create table if not exists monthly_expenses (
@@ -109,6 +123,7 @@ alter table employees enable row level security;
 alter table expense_categories enable row level security;
 alter table equipment enable row level security;
 alter table equipment_partner_shares enable row level security;
+alter table equipment_shifts enable row level security;
 alter table daily_logs enable row level security;
 alter table monthly_expenses enable row level security;
 alter table payroll_entries enable row level security;
@@ -136,6 +151,8 @@ drop policy if exists "staff full access" on equipment;
 create policy "staff full access" on equipment for all using (is_staff()) with check (is_staff());
 drop policy if exists "staff full access" on equipment_partner_shares;
 create policy "staff full access" on equipment_partner_shares for all using (is_staff()) with check (is_staff());
+drop policy if exists "staff full access" on equipment_shifts;
+create policy "staff full access" on equipment_shifts for all using (is_staff()) with check (is_staff());
 drop policy if exists "staff full access" on daily_logs;
 create policy "staff full access" on daily_logs for all using (is_staff()) with check (is_staff());
 drop policy if exists "staff full access" on monthly_expenses;
@@ -268,6 +285,7 @@ returns table (
   day_rate numeric,
   is_day_off boolean,
   note text,
+  shift_label text,
   day_value numeric
 )
 language plpgsql security definer stable as $$
@@ -288,6 +306,7 @@ begin
          dl.day_rate,
          dl.is_day_off,
          dl.note,
+         dl.shift_label,
          case
            when dl.is_day_off then 0
            else coalesce(dl.day_rate,0)
@@ -298,7 +317,43 @@ begin
   join equipment e on e.id = dl.equipment_id
   join equipment_partner_shares eps on eps.equipment_id = dl.equipment_id and eps.partner_id = v_partner_id
   where dl.role = 'driver' and dl.date like p_month || '%'
-  order by dl.date;
+  order by dl.date, dl.shift_label;
+end;
+$$;
+
+-- ============ تفصيل دخل معدة الشريك مقسّم بالشيفت (سركي أساسي / وردية 2 /
+-- ...) — عرض بس، زي equipmentShiftIncomeBreakdown في اللاب بالظبط، مالوش أي
+-- علاقة بحساب net_profit/partner_share في get_partner_summary (المصروفات
+-- ومرتب السواق بيتخصموا مرة واحدة على مستوى المعدة كلها، مش لكل شيفت لوحده). ============
+create or replace function get_partner_shift_income(p_month text)
+returns table (equipment_name text, shift_label text, income numeric)
+language plpgsql security definer stable as $$
+declare
+  v_partner_id bigint;
+begin
+  select partner_id into v_partner_id from profiles where id = auth.uid() and role = 'partner';
+  if v_partner_id is null then
+    raise exception 'الحساب ده مش شريك مسجل';
+  end if;
+
+  return query
+  select e.name,
+         dl.shift_label,
+         sum(
+           case
+             when dl.is_day_off then 0
+             when dl.role = 'market' then coalesce(dl.fixed_value,0) - coalesce(dl.hassan_commission,0)
+             else coalesce(dl.day_rate,0)
+                  + (coalesce(dl.actual_hours, dl.base_hours, 0) - coalesce(dl.base_hours, 0))
+                    * (coalesce(dl.day_rate,0) / nullif(coalesce(dl.base_hours,8),0))
+           end
+         ) as income
+  from daily_logs dl
+  join equipment e on e.id = dl.equipment_id
+  join equipment_partner_shares eps on eps.equipment_id = dl.equipment_id and eps.partner_id = v_partner_id
+  where dl.role in ('driver','market') and dl.date like p_month || '%'
+  group by e.name, dl.shift_label
+  order by e.name, dl.shift_label;
 end;
 $$;
 
@@ -547,8 +602,8 @@ begin
       * (1 + greatest(0, coalesce(c.actual_hours, 0) - coalesce(c.base_hours, 0)) / coalesce(nullif(c.base_hours, 0), 8))
       as commission
     from daily_logs c
-    join daily_logs d on d.equipment_id = c.equipment_id and d.date = c.date and d.role = 'driver'
-    where c.role = 'contractor' and c.date like p_month || '%'
+    join daily_logs d on d.equipment_id = c.equipment_id and d.date = c.date and d.role = 'driver' and d.shift_label = c.shift_label
+    where c.role = 'contractor' and c.date like p_month || '%' and not c.is_day_off and not d.is_day_off
   ),
   market as (
     select d.equipment_id, coalesce(d.hassan_commission, 0) as commission
@@ -593,8 +648,8 @@ begin
     select (coalesce(c.day_rate, 0) - coalesce(d.day_rate, 0))
       * (1 + greatest(0, coalesce(c.actual_hours, 0) - coalesce(c.base_hours, 0)) / coalesce(nullif(c.base_hours, 0), 8)) as commission
     from daily_logs c
-    join daily_logs d on d.equipment_id = c.equipment_id and d.date = c.date and d.role = 'driver'
-    where c.role = 'contractor'
+    join daily_logs d on d.equipment_id = c.equipment_id and d.date = c.date and d.role = 'driver' and d.shift_label = c.shift_label
+    where c.role = 'contractor' and not c.is_day_off and not d.is_day_off
     union all
     select coalesce(hassan_commission, 0) from daily_logs where role = 'market' and hassan_commission is not null
     union all
@@ -605,8 +660,8 @@ begin
     select (coalesce(c.day_rate, 0) - coalesce(d.day_rate, 0))
       * (1 + greatest(0, coalesce(c.actual_hours, 0) - coalesce(c.base_hours, 0)) / coalesce(nullif(c.base_hours, 0), 8)) as commission
     from daily_logs c
-    join daily_logs d on d.equipment_id = c.equipment_id and d.date = c.date and d.role = 'driver'
-    where c.role = 'contractor' and c.date like p_month || '%'
+    join daily_logs d on d.equipment_id = c.equipment_id and d.date = c.date and d.role = 'driver' and d.shift_label = c.shift_label
+    where c.role = 'contractor' and c.date like p_month || '%' and not c.is_day_off and not d.is_day_off
     union all
     select coalesce(hassan_commission, 0) from daily_logs where role = 'market' and hassan_commission is not null and date like p_month || '%'
     union all
@@ -619,6 +674,14 @@ begin
   return query select v_all_time_commission - v_all_time_spent, v_all_time_commission, v_all_time_spent, v_month_commission, v_month_spent;
 end;
 $$;
+
+-- ============ معدة ممكن تشتغل بأكتر من وردية في نفس اليوم (سركي/مقاول
+-- منفصلين ومسمّيين، زي "وردية 2") — daily_logs محتاجة عمود shift_label زيادة
+-- على الـ unique constraint القديم اللي كان بيمنع أكتر من سطر لنفس
+-- المعدة+التاريخ+الدور. ============
+alter table daily_logs add column if not exists shift_label text not null default '';
+alter table daily_logs drop constraint if exists daily_logs_equipment_id_date_role_key;
+alter table daily_logs add constraint daily_logs_equipment_date_role_shift_key unique (equipment_id, date, role, shift_label);
 
 -- ============ باج قديم: monthly_expenses وpayroll_entries وsalary_payments
 -- اتعملوا من غير عمود sync_key من الأول (على عكس كل الجداول التانية اللي

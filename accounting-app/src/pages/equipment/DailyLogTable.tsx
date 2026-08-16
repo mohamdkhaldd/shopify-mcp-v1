@@ -16,19 +16,25 @@ interface DailyLogTableProps {
   equipmentId: number;
   month: string;
   role: DailyLogRole;
+  shiftLabel: string;
   mode: "hours" | "fixed";
   people: Person[];
   mismatchedDates?: Set<string>;
   onChanged?: () => void;
 }
 
-// الساعات مشتركة بين السركي والمقاول لنفس المعدة واليوم — لو يوم اتمسح من
-// شيت، بيتمسح من التاني بردو (السيرفر بيعمل ده تلقائيًا)، فلازم نحفظ نسخة
-// من الاتنين قبل المسح عشان Ctrl+Z يرجّعهم مع بعض بدل ما يرجّع نص الصورة.
+// الساعات مشتركة بين السركي والمقاول لنفس المعدة واليوم والشيفت — لو يوم
+// اتمسح من شيت، بيتمسح من التاني بردو (السيرفر بيعمل ده تلقائيًا)، فلازم
+// نحفظ نسخة من الاتنين قبل المسح عشان Ctrl+Z يرجّعهم مع بعض بدل ما يرجّع
+// نص الصورة.
 const OTHER_HOURS_ROLE: Partial<Record<DailyLogRole, DailyLogRole>> = {
   driver: "contractor",
   contractor: "driver",
 };
+
+// شيت المقاول هو مصدر الأيام/الساعات دلوقتي (تدخل فيه، وشيت السركي بيتزامن
+// معاه تلقائيًا زي مرايا) — عكس الوضع القديم بالظبط.
+const MASTER_ROLE: DailyLogRole = "contractor";
 
 interface RowDraft {
   id: number | null;
@@ -108,6 +114,7 @@ export default function DailyLogTable({
   equipmentId,
   month,
   role,
+  shiftLabel,
   mode,
   people,
   mismatchedDates,
@@ -135,12 +142,12 @@ export default function DailyLogTable({
   const [applyingOvertime, setApplyingOvertime] = useState(false);
 
   useEffect(() => {
-    if (mode !== "hours" || role !== "driver") return;
+    if (mode !== "hours" || role !== MASTER_ROLE) return;
     equipmentApi.list().then((list) => setOtherEquipment(list.filter((eq) => eq.id !== equipmentId)));
   }, [mode, role, equipmentId]);
 
   const refresh = () =>
-    dailyLogsApi.list(equipmentId, month, role).then((logs) => {
+    dailyLogsApi.list(equipmentId, month, role, shiftLabel).then((logs) => {
       const byDate = new Map(logs.map((l) => [l.date, l]));
       const next: Record<string, RowDraft> = {};
       for (const date of dates) {
@@ -154,7 +161,7 @@ export default function DailyLogTable({
     setLoading(true);
     refresh().finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [equipmentId, month, role]);
+  }, [equipmentId, month, role, shiftLabel]);
 
   useEffect(() => {
     setBulkFrom("1");
@@ -194,6 +201,7 @@ export default function DailyLogTable({
       equipment_id: log.equipment_id,
       date: log.date,
       role: log.role,
+      shift_label: log.shift_label,
       person_name: log.person_name,
       actual_hours: log.actual_hours,
       base_hours: log.base_hours,
@@ -255,10 +263,10 @@ export default function DailyLogTable({
         // الساعات مشتركة مع الشيت التاني (سركي/مقاول) — مسح اليوم هنا بيمسحه
         // هناك بردو من السيرفر تلقائيًا، فلازم نحفظ نسخة من صف الشيت التاني
         // قبل المسح عشان Ctrl+Z يرجّع الاتنين مع بعض.
-        const original = (await dailyLogsApi.list(equipmentId, month, role)).find((l) => l.date === date) ?? null;
+        const original = (await dailyLogsApi.list(equipmentId, month, role, shiftLabel)).find((l) => l.date === date) ?? null;
         const otherRole = OTHER_HOURS_ROLE[role];
         const counterpart = otherRole
-          ? (await dailyLogsApi.list(equipmentId, month, otherRole)).find((l) => l.date === date) ?? null
+          ? (await dailyLogsApi.list(equipmentId, month, otherRole, shiftLabel)).find((l) => l.date === date) ?? null
           : null;
         await dailyLogsApi.remove(row.id);
         updateRow(date, { id: null, day_value: 0 });
@@ -278,6 +286,7 @@ export default function DailyLogTable({
       equipment_id: equipmentId,
       date,
       role,
+      shift_label: shiftLabel,
       person_name: row.is_day_off ? "" : row.person_name,
       actual_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.actual_hours) : null,
       base_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.base_hours) : null,
@@ -300,7 +309,7 @@ export default function DailyLogTable({
   // زرار "مشتغلش" — بيعلّم اليوم إنه معدة/سائق ما اشتغلوش من غير ما يمسح أي
   // بيانات مكتوبة (لو رجع يشتغل تاني تقدر تشيل العلامة والبيانات ترجع زي
   // ما هي). العلامة بتتزامن مع الشيت التاني (سركي/مقاول) تلقائيًا من السيرفر.
-  // زرار "مشتغلش" بقى بيمسح اسم السواق وسعر اليوم والساعات خالص لما يتعلّم،
+  // زرار "مشتغلش" بقى بيمسح اسم المقاول وسعر اليوم والساعات خالص لما يتعلّم،
   // وبيقفل الخانات دي لحد ما تشيل العلامة تاني (مفيش داعي تفضل بيانات ليوم
   // اتعلّم إنه مشتغلش أصلًا). بياخد نسخة من الصف الأصلي (والشيت التاني) قبل
   // المسح عشان Ctrl+Z يرجّعهم لو غلطت.
@@ -314,10 +323,10 @@ export default function DailyLogTable({
       return;
     }
 
-    const original = row.id ? (await dailyLogsApi.list(equipmentId, month, role)).find((l) => l.date === date) ?? null : null;
+    const original = row.id ? (await dailyLogsApi.list(equipmentId, month, role, shiftLabel)).find((l) => l.date === date) ?? null : null;
     const otherRole = OTHER_HOURS_ROLE[role];
     const counterpart = otherRole
-      ? (await dailyLogsApi.list(equipmentId, month, otherRole)).find((l) => l.date === date) ?? null
+      ? (await dailyLogsApi.list(equipmentId, month, otherRole, shiftLabel)).find((l) => l.date === date) ?? null
       : null;
 
     const cleared: Partial<RowDraft> = {
@@ -349,8 +358,8 @@ export default function DailyLogTable({
   }
 
   // Fills a whole date range with the same name/rate/base-hours in one go —
-  // most days in a month share the same driver and rate, only the actual
-  // hours change on the odd overtime day, so that's left per-day as usual.
+  // most days in a month share the same driver/contractor and rate, only the
+  // actual hours change on the odd overtime day, so that's left per-day as usual.
   async function applyBulkFill() {
     const from = Number(bulkFrom);
     const to = Number(bulkTo);
@@ -364,13 +373,14 @@ export default function DailyLogTable({
 
     for (const date of targetDates) {
       const existing = rows[date];
-      // في شيت المقاول الساعات ثابتة جاية من السركي — التعبئة السريعة هنا
+      // في شيت السركي الساعات ثابتة جاية من المقاول — التعبئة السريعة هنا
       // بتحدد بس الاسم والسعر، ومسيبتش الساعات المتزامنة زي ما هي.
-      const preserveHours = role === "contractor";
+      const preserveHours = role !== MASTER_ROLE;
       await dailyLogsApi.upsert({
         equipment_id: equipmentId,
         date,
         role,
+        shift_label: shiftLabel,
         person_name: bulkPerson,
         actual_hours: preserveHours ? hoursOrNull(existing?.actual_hours ?? "") : Number(bulkBaseHours) || 0,
         base_hours: preserveHours ? hoursOrNull(existing?.base_hours ?? "") : Number(bulkBaseHours) || 0,
@@ -405,7 +415,7 @@ export default function DailyLogTable({
     // الأيام دي هتتمسح من الشيت التاني (سركي/مقاول) بردو تلقائيًا، فلازم
     // نحفظ نسخة من صفوفه هو كمان قبل المسح عشان Ctrl+Z يرجّع الاتنين.
     const otherRole = OTHER_HOURS_ROLE[role];
-    const otherLogs = otherRole ? await dailyLogsApi.list(equipmentId, month, otherRole) : [];
+    const otherLogs = otherRole ? await dailyLogsApi.list(equipmentId, month, otherRole, shiftLabel) : [];
     const otherByDate = new Map(otherLogs.map((l) => [l.date, l]));
     const counterpartSnapshot = targetDates
       .map((date) => otherByDate.get(date))
@@ -427,6 +437,7 @@ export default function DailyLogTable({
           equipment_id: equipmentId,
           date,
           role,
+          shift_label: shiftLabel,
           person_name: row.is_day_off ? "" : row.person_name,
           actual_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.actual_hours) : null,
           base_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.base_hours) : null,
@@ -445,29 +456,29 @@ export default function DailyLogTable({
   }
 
   // بينسخ الساعات/الأساسية/الأوفر تايم/علامة "مشتغلش" من معدة تانية لنفس
-  // الشهر — مفيد لما تضيف معدة جديدة بنفس مواعيد وردية معدة موجودة، فتنسخها
-  // بدل ما تكتب كل يوم من الأول. الاسم وسعر اليوم (سركي ومقاول) مش بيتغيروا،
-  // لازم تحددهم بنفسك بعد النسخ. بتاخد نسخة من بيانات المعدة الهدف قبل
-  // النسخ عشان Ctrl+Z يرجّعها لو غلطت.
+  // الشهر (من الشيفت الأساسي بتاعها) — مفيد لما تضيف معدة جديدة بنفس مواعيد
+  // وردية معدة موجودة، فتنسخها بدل ما تكتب كل يوم من الأول. الاسم وسعر اليوم
+  // (سركي ومقاول) مش بيتغيروا، لازم تحددهم بنفسك بعد النسخ. بتاخد نسخة من
+  // بيانات المعدة الهدف قبل النسخ عشان Ctrl+Z يرجّعها لو غلطت.
   async function applyCopyFromEquipment() {
     if (!copySourceId) return;
     const sourceId = Number(copySourceId);
     const sourceName = otherEquipment.find((eq) => eq.id === sourceId)?.name ?? "";
 
-    const beforeDriver = await dailyLogsApi.list(equipmentId, month, "driver");
-    const beforeContractor = await dailyLogsApi.list(equipmentId, month, "contractor");
+    const beforeDriver = await dailyLogsApi.list(equipmentId, month, "driver", shiftLabel);
+    const beforeContractor = await dailyLogsApi.list(equipmentId, month, "contractor", shiftLabel);
     const beforeDates = new Set([...beforeDriver, ...beforeContractor].map((l) => `${l.role}:${l.date}`));
 
     setCopying(true);
-    await dailyLogsApi.copyFromEquipment(equipmentId, sourceId, month);
+    await dailyLogsApi.copyFromEquipment(equipmentId, sourceId, month, "", shiftLabel);
     await refresh();
     setCopying(false);
     onChanged?.();
 
     pushUndo(`اتنسخت بيانات ${sourceName} في شهر ${month}`, async () => {
       for (const log of [...beforeDriver, ...beforeContractor]) await restoreDailyLog(log);
-      const afterDriver = await dailyLogsApi.list(equipmentId, month, "driver");
-      const afterContractor = await dailyLogsApi.list(equipmentId, month, "contractor");
+      const afterDriver = await dailyLogsApi.list(equipmentId, month, "driver", shiftLabel);
+      const afterContractor = await dailyLogsApi.list(equipmentId, month, "contractor", shiftLabel);
       for (const log of [...afterDriver, ...afterContractor]) {
         if (!beforeDates.has(`${log.role}:${log.date}`)) await dailyLogsApi.remove(log.id);
       }
@@ -490,7 +501,7 @@ export default function DailyLogTable({
     if (targetDates.length === 0) return;
 
     const otherRole = OTHER_HOURS_ROLE[role];
-    const otherLogs = otherRole ? await dailyLogsApi.list(equipmentId, month, otherRole) : [];
+    const otherLogs = otherRole ? await dailyLogsApi.list(equipmentId, month, otherRole, shiftLabel) : [];
     const otherByDate = new Map(otherLogs.map((l) => [l.date, l]));
     const snapshot = targetDates.map((date) => ({
       date,
@@ -515,6 +526,7 @@ export default function DailyLogTable({
           equipment_id: equipmentId,
           date,
           role,
+          shift_label: shiftLabel,
           person_name: row.is_day_off ? "" : row.person_name,
           actual_hours: !row.is_paid_leave ? hoursOrNull(row.actual_hours) : null,
           base_hours: !row.is_paid_leave ? hoursOrNull(row.base_hours) : null,
@@ -538,6 +550,7 @@ export default function DailyLogTable({
   // ملخص أيام الشهر: كام يوم اشتغل كامل، وكام يوم اشتغل جزء بس من ساعاته
   // الأساسية (مجمّعين بعدد الساعات اللي اشتغلوها، زي "3 أيام اشتغلوا 4
   // ساعات بس") — الأيام اللي معلّمة "مشتغلش" أو لسه فاضية متحسبش خالص.
+  // بيتعرض تحت السركي والمقاول مع بعض.
   const workDaysSummary = useMemo(() => {
     let fullDays = 0;
     const partialGroups = new Map<number, string[]>();
@@ -562,7 +575,7 @@ export default function DailyLogTable({
 
   return (
     <div className="bg-white rounded-card shadow-card p-5">
-      {mode === "hours" && role === "driver" && otherEquipment.length > 0 && (
+      {mode === "hours" && role === MASTER_ROLE && otherEquipment.length > 0 && (
         <div className="no-print bg-slate-50 rounded-xl p-3 mb-4">
           <div className="text-xs font-bold text-slate-500 mb-2">انسخ ساعات وأوفر تايم الشهر ده من معدة تانية</div>
           <div className="flex flex-wrap items-end gap-2">
@@ -590,7 +603,7 @@ export default function DailyLogTable({
             </button>
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
-            بينسخ الساعات والأساسية والأوفر تايم وأيام "مشتغلش" بس لنفس الشهر — بيستبدل أي بيانات ساعات موجودة هنا. الاسم وسعر اليوم (هنا وفي شيت المقاول) بيفضلوا زي ما هم، لازم تحددهم بنفسك بعد النسخ. تقدر ترجع الأصل بـ Ctrl+Z لو غلطت.
+            بينسخ الساعات والأساسية والأوفر تايم وأيام "مشتغلش" بس لنفس الشهر (من الشيفت الأساسي بتاع المعدة المصدر) — بيستبدل أي بيانات ساعات موجودة هنا. الاسم وسعر اليوم (هنا وفي شيت السركي) بيفضلوا زي ما هم، لازم تحددهم بنفسك بعد النسخ. تقدر ترجع الأصل بـ Ctrl+Z لو غلطت.
           </div>
         </div>
       )}
@@ -653,7 +666,7 @@ export default function DailyLogTable({
                 className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
               />
             </div>
-            {role === "driver" && (
+            {role === MASTER_ROLE && (
               <div>
                 <label className="block text-[11px] text-slate-400 mb-1">الساعات الأساسية</label>
                 <input
@@ -682,14 +695,14 @@ export default function DailyLogTable({
             </button>
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
-            {role === "driver"
-              ? '"تطبيق على الأيام" بيملأ الاسم وسعر اليوم والساعات الأساسية لكل الأيام في المدى ده (من غير أوفر تايم). "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده من غير ما تحتاج اسم أو سعر — يعني الشخص مشتغلش الأيام دي، وتقدر ترجعها بـ Ctrl+Z لو غلطت. الساعات والأساسية والبيان بتتسجل في شيت المقاول تلقائيًا لنفس الأيام — تدخلها هنا مرة واحدة بس، وبعدين تحدد المقاول وسعره من هناك.'
-              : '"تطبيق على الأيام" بيملأ الاسم وسعر اليوم بس لكل الأيام في المدى ده — الساعات ثابتة جاية من شيت السركي ومبتتغيرش من هنا. "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده، وتقدر ترجعها بـ Ctrl+Z لو غلطت.'}
+            {role === MASTER_ROLE
+              ? '"تطبيق على الأيام" بيملأ الاسم وسعر اليوم والساعات الأساسية لكل الأيام في المدى ده (من غير أوفر تايم). "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده من غير ما تحتاج اسم أو سعر — يعني الشخص مشتغلش الأيام دي، وتقدر ترجعها بـ Ctrl+Z لو غلطت. الساعات والأساسية والبيان بتتسجل في شيت السركي تلقائيًا لنفس الأيام — تدخلها هنا مرة واحدة بس، وبعدين تحدد السواق وسعره من هناك.'
+              : '"تطبيق على الأيام" بيملأ الاسم وسعر اليوم بس لكل الأيام في المدى ده — الساعات ثابتة جاية من شيت المقاول ومبتتغيرش من هنا. "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده، وتقدر ترجعها بـ Ctrl+Z لو غلطت.'}
           </div>
         </div>
       )}
 
-      {mode === "hours" && role === "driver" && (
+      {mode === "hours" && role === MASTER_ROLE && (
         <div className="no-print bg-slate-50 rounded-xl p-3 mb-4">
           <div className="text-xs font-bold text-slate-500 mb-2">طبّق أوفر تايم على أيام معيّنة</div>
           <div className="flex flex-wrap items-end gap-2">
@@ -778,7 +791,7 @@ export default function DailyLogTable({
                   ].join(" ")}
                 >
                   <td className="py-1.5 text-slate-500 whitespace-nowrap">
-                    {mode === "hours" && role === "driver" && (
+                    {mode === "hours" && role === MASTER_ROLE && (
                       <button
                         type="button"
                         onClick={() => toggleDayOff(date)}
@@ -827,8 +840,8 @@ export default function DailyLogTable({
                           value={row.actual_hours}
                           onChange={(e) => handleActualHoursChange(date, e.target.value)}
                           onBlur={() => saveRow(date)}
-                          disabled={role === "contractor" || row.is_day_off}
-                          title={role === "contractor" ? "الساعات بتتسجل من شيت السركي" : row.is_day_off ? "اليوم ده متعلّم إنه مشتغلش" : undefined}
+                          disabled={role !== MASTER_ROLE || row.is_day_off}
+                          title={role !== MASTER_ROLE ? "الساعات بتتسجل من شيت المقاول" : row.is_day_off ? "اليوم ده متعلّم إنه مشتغلش" : undefined}
                           className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       </td>
@@ -841,8 +854,8 @@ export default function DailyLogTable({
                           value={row.overtime_hours}
                           onChange={(e) => handleOvertimeChange(date, e.target.value)}
                           onBlur={() => saveRow(date)}
-                          disabled={row.is_paid_leave || role === "contractor" || row.is_day_off}
-                          title={role === "contractor" ? "الساعات بتتسجل من شيت السركي" : row.is_day_off ? "اليوم ده متعلّم إنه مشتغلش" : undefined}
+                          disabled={row.is_paid_leave || role !== MASTER_ROLE || row.is_day_off}
+                          title={role !== MASTER_ROLE ? "الساعات بتتسجل من شيت المقاول" : row.is_day_off ? "اليوم ده متعلّم إنه مشتغلش" : undefined}
                           className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       </td>
@@ -854,8 +867,8 @@ export default function DailyLogTable({
                           value={row.base_hours}
                           onChange={(e) => updateRow(date, { base_hours: e.target.value })}
                           onBlur={() => saveRow(date)}
-                          disabled={role === "contractor" || row.is_day_off}
-                          title={role === "contractor" ? "الساعات بتتسجل من شيت السركي" : row.is_day_off ? "اليوم ده متعلّم إنه مشتغلش" : undefined}
+                          disabled={role !== MASTER_ROLE || row.is_day_off}
+                          title={role !== MASTER_ROLE ? "الساعات بتتسجل من شيت المقاول" : row.is_day_off ? "اليوم ده متعلّم إنه مشتغلش" : undefined}
                           className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       </td>
@@ -954,7 +967,7 @@ export default function DailyLogTable({
         </table>
       </div>
 
-      {mode === "hours" && role === "driver" && (
+      {mode === "hours" && (
         <div className="mt-4 bg-slate-50 rounded-xl p-3 text-sm">
           <div className="font-bold text-slate-600 mb-1">أيام الشغل في الشهر</div>
           <div className="text-slate-600">

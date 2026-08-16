@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import MonthBar from "../components/MonthBar";
 import DailyLogSheet from "../components/DailyLogSheet";
 import MarketSheet from "../components/MarketSheet";
 import ExpensesSheet from "../components/ExpensesSheet";
 import ProfitSheet from "../components/ProfitSheet";
-import { listContractors, listEmployees } from "../store";
+import { listContractors, listEmployees, listShiftLabelsForEquipment } from "../store";
 import { Equipment } from "../types";
 
 type Tab = "driver" | "contractor" | "market" | "expense" | "profit";
@@ -16,6 +16,10 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "expense", label: "المصروفات" },
   { id: "profit", label: "الأرباح" },
 ];
+
+// الشيفتات بتفرق بس في تابات السركي والمقاول — سركي السوق والمصروفات
+// والأرباح مستقلين عن مفهوم الشيفت خالص.
+const SHIFT_AWARE_TABS: Tab[] = ["driver", "contractor"];
 
 export default function EquipmentDetail({
   equipment,
@@ -29,8 +33,14 @@ export default function EquipmentDetail({
   onBack: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("driver");
+  const [shiftLabel, setShiftLabel] = useState("");
   const employees = listEmployees();
   const contractors = listContractors();
+  const shiftLabels = listShiftLabelsForEquipment(equipment.id, month);
+
+  useEffect(() => {
+    setShiftLabel("");
+  }, [equipment.id, month]);
 
   return (
     <div>
@@ -60,9 +70,28 @@ export default function EquipmentDetail({
         ))}
       </div>
 
+      {SHIFT_AWARE_TABS.includes(tab) && shiftLabels.length > 1 && (
+        <div className="flex gap-1.5 overflow-x-auto px-4 pb-3">
+          {shiftLabels.map((label) => (
+            <button
+              key={label}
+              onClick={() => setShiftLabel(label)}
+              className={[
+                "shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold",
+                shiftLabel === label ? "bg-primary-dark text-white" : "bg-white text-slate-500 shadow-card",
+              ].join(" ")}
+            >
+              {label || "أساسي"}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="px-4 pb-6">
-        {tab === "driver" && <DailyLogSheet equipmentId={equipment.id} month={month} role="driver" people={employees} />}
-        {tab === "contractor" && <DailyLogSheet equipmentId={equipment.id} month={month} role="contractor" people={contractors} />}
+        {tab === "driver" && <DailyLogSheet equipmentId={equipment.id} month={month} role="driver" shiftLabel={shiftLabel} people={employees} />}
+        {tab === "contractor" && (
+          <DailyLogSheet equipmentId={equipment.id} month={month} role="contractor" shiftLabel={shiftLabel} people={contractors} />
+        )}
         {tab === "market" && <MarketSheet equipmentId={equipment.id} month={month} />}
         {tab === "expense" && <ExpensesSheet equipmentId={equipment.id} month={month} />}
         {tab === "profit" && <ProfitSheet equipment={equipment} month={month} />}

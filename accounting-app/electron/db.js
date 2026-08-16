@@ -114,7 +114,19 @@ CREATE TABLE IF NOT EXISTS daily_logs (
   fixed_value REAL,
   hassan_commission REAL,
   note TEXT,
-  UNIQUE (equipment_id, date, role)
+  shift_label TEXT NOT NULL DEFAULT '',
+  UNIQUE (equipment_id, date, role, shift_label)
+);
+
+-- شيفتات إضافية مسمّاة لمعدة اشتغلت بأكتر من وردية في نفس اليوم (زي "وردية
+-- 2") — الشيفت الأساسي (shift_label = '') مالوش سطر هنا خالص، السطر هنا بس
+-- عشان اسم الشيفت الجديد يفضل موجود في التابات حتى لو لسه معملتلوش أي يوم.
+CREATE TABLE IF NOT EXISTS equipment_shifts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  equipment_id INTEGER NOT NULL REFERENCES equipment(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  created_at TEXT,
+  UNIQUE (equipment_id, label)
 );
 
 CREATE TABLE IF NOT EXISTS hassan_ledger (
@@ -452,6 +464,44 @@ function initDatabase() {
     tx();
   }
 
+  // daily_logs القديم متقيّد بـ UNIQUE(equipment_id, date, role) — لازم يتوسع
+  // لـ UNIQUE(equipment_id, date, role, shift_label) عشان معدة تقدر يبقى ليها
+  // أكتر من شيفت (سركي/مقاول) في نفس اليوم. SQLite ما بيدعمش تعديل UNIQUE
+  // مباشرة، فبنعيد بناء الجدول بنفس بياناته (shift_label = '' للسطور القديمة
+  // كلها، يعني الشيفت الأساسي، من غير أي تغيير في المعنى).
+  const dailyLogsRow = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='daily_logs'").get();
+  if (dailyLogsRow && !dailyLogsRow.sql.includes("shift_label")) {
+    const tx = db.transaction(() => {
+      db.exec("ALTER TABLE daily_logs RENAME TO daily_logs_migrate_old");
+      db.exec(`
+        CREATE TABLE daily_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          equipment_id INTEGER NOT NULL REFERENCES equipment(id) ON DELETE CASCADE,
+          date TEXT NOT NULL,
+          role TEXT NOT NULL CHECK (role IN ('driver', 'contractor', 'market')),
+          person_name TEXT NOT NULL,
+          actual_hours REAL,
+          base_hours REAL,
+          day_rate REAL,
+          is_paid_leave INTEGER NOT NULL DEFAULT 0,
+          is_day_off INTEGER NOT NULL DEFAULT 0,
+          fixed_value REAL,
+          hassan_commission REAL,
+          note TEXT,
+          shift_label TEXT NOT NULL DEFAULT '',
+          UNIQUE (equipment_id, date, role, shift_label)
+        )
+      `);
+      db.exec(`
+        INSERT INTO daily_logs (id, equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note, shift_label)
+        SELECT id, equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note, ''
+        FROM daily_logs_migrate_old
+      `);
+      db.exec("DROP TABLE daily_logs_migrate_old");
+    });
+    tx();
+  }
+
   const accountCount = db.prepare("SELECT COUNT(*) AS c FROM treasury_accounts").get().c;
   if (accountCount === 0) {
     const insertAccount = db.prepare(
@@ -478,6 +528,7 @@ function initDatabase() {
     "salary_payments",
     "contractor_payments",
     "partner_payments",
+    "equipment_shifts",
   ]) {
     const hasSyncKey = db
       .prepare(`PRAGMA table_info(${table})`)

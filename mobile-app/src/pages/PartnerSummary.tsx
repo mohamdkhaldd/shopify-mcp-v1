@@ -23,7 +23,14 @@ interface DailyLogRow {
   day_rate: number | null;
   is_day_off: boolean;
   note: string | null;
+  shift_label: string;
   day_value: number;
+}
+
+interface ShiftIncomeRow {
+  equipment_name: string;
+  shift_label: string;
+  income: number;
 }
 
 interface ExpenseRow {
@@ -47,7 +54,7 @@ function formatEGP(value: number): string {
   return `${Math.round(value).toLocaleString("ar-EG")} ج.م`;
 }
 
-function EquipmentLogSheet({ month, logs }: { month: string; logs: DailyLogRow[] }) {
+function ShiftCalendar({ month, logs }: { month: string; logs: DailyLogRow[] }) {
   const dates = daysInMonth(month);
   const byDate = new Map(logs.map((l) => [l.log_date, l]));
   const total = logs.reduce((s, l) => s + (l.is_day_off ? 0 : l.day_value), 0);
@@ -94,6 +101,38 @@ function EquipmentLogSheet({ month, logs }: { month: string; logs: DailyLogRow[]
   );
 }
 
+// لو المعدة اشتغلت بأكتر من وردية الشهر ده، بيبان تابات شيفتات فوق الشيت —
+// لو وردية واحدة بس (الوضع العادي)، بيتعرض تقويم الشيفت الوحيد مباشرة زي
+// الأول من غير أي تاب زيادة.
+function EquipmentLogSheet({ month, logs }: { month: string; logs: DailyLogRow[] }) {
+  const shiftLabels = [...new Set(logs.map((l) => l.shift_label))].sort((a, b) => a.localeCompare(b));
+  const [activeShift, setActiveShift] = useState(shiftLabels[0] ?? "");
+  const effectiveShift = shiftLabels.includes(activeShift) ? activeShift : shiftLabels[0] ?? "";
+  const shiftLogs = logs.filter((l) => l.shift_label === effectiveShift);
+
+  return (
+    <div>
+      {shiftLabels.length > 1 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {shiftLabels.map((label) => (
+            <button
+              key={label}
+              onClick={() => setActiveShift(label)}
+              className={[
+                "rounded-lg px-2.5 py-1 text-[11px] font-bold",
+                effectiveShift === label ? "bg-primary-dark text-white" : "bg-slate-100 text-slate-500",
+              ].join(" ")}
+            >
+              {label || "أساسي"}
+            </button>
+          ))}
+        </div>
+      )}
+      <ShiftCalendar month={month} logs={shiftLogs} />
+    </div>
+  );
+}
+
 function EquipmentExpenseSheet({ expenses }: { expenses: ExpenseRow[] }) {
   const sorted = [...expenses].sort((a, b) => (a.expense_date ?? "").localeCompare(b.expense_date ?? ""));
   const total = expenses.reduce((s, e) => s + e.amount, 0);
@@ -129,6 +168,7 @@ export default function PartnerSummary({ displayName }: { displayName: string })
   const [summary, setSummary] = useState<SummaryRow[]>([]);
   const [logs, setLogs] = useState<DailyLogRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
+  const [shiftIncome, setShiftIncome] = useState<ShiftIncomeRow[]>([]);
   const [balance, setBalance] = useState<Balance | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -148,14 +188,16 @@ export default function PartnerSummary({ displayName }: { displayName: string })
       supabase.rpc("get_partner_summary", { p_month: month }),
       supabase.rpc("get_partner_daily_logs", { p_month: month }),
       supabase.rpc("get_partner_expenses", { p_month: month }),
-    ]).then(([s, l, e]) => {
-      const firstError = s.error ?? l.error ?? e.error;
+      supabase.rpc("get_partner_shift_income", { p_month: month }),
+    ]).then(([s, l, e, si]) => {
+      const firstError = s.error ?? l.error ?? e.error ?? si.error;
       if (firstError) {
         setError(firstError.message);
       } else {
         setSummary((s.data as SummaryRow[]) ?? []);
         setLogs((l.data as DailyLogRow[]) ?? []);
         setExpenses((e.data as ExpenseRow[]) ?? []);
+        setShiftIncome((si.data as ShiftIncomeRow[]) ?? []);
       }
       setLoading(false);
     });
@@ -230,12 +272,23 @@ export default function PartnerSummary({ displayName }: { displayName: string })
 
         {!loading && !error && tab === "summary" && (
           <>
-            {summary.map((r) => (
+            {summary.map((r) => {
+              const eqShiftIncome = shiftIncome.filter((si) => si.equipment_name === r.equipment_name);
+              return (
               <div key={r.equipment_name} className="bg-white rounded-2xl shadow-card p-4">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-extrabold text-slate-700">{r.equipment_name}</div>
                   <div className="text-[11px] text-slate-400">نصيبك {r.percentage}%</div>
                 </div>
+                {eqShiftIncome.length > 1 && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mb-2 text-[10.5px] text-slate-400">
+                    {eqShiftIncome.map((si) => (
+                      <div key={si.shift_label}>
+                        {si.shift_label || "أساسي"}: <span className="font-semibold text-slate-500">{formatEGP(si.income)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
                     <div className="text-[10px] text-slate-400">الدخل</div>
@@ -251,7 +304,8 @@ export default function PartnerSummary({ displayName }: { displayName: string })
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
             {summary.length === 0 && <div className="text-sm text-slate-400 text-center py-6">مفيش أرقام مسجلة للشهر ده لسه.</div>}
           </>
         )}

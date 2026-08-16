@@ -201,6 +201,21 @@ function equipmentMonthNetProfit(db, equipmentId, monthKey) {
   return driverIncome + marketIncome - expense - driverSalaryExpense;
 }
 
+// تفصيل دخل معدة معينة مقسّم بالشيفت (سركي أساسي / وردية 2 / ...) — عرض بس،
+// مالوش أي علاقة بحساب equipmentMonthNetProfit أو نصيب الشريك (المصروفات
+// ومرتب السائق بيتخصموا مرة واحدة على مستوى المعدة كلها، مش لكل شيفت لوحده).
+function equipmentShiftIncomeBreakdown(db, equipmentId, monthKey) {
+  const logs = db
+    .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role IN ('driver','market') AND date LIKE ?")
+    .all(equipmentId, `${monthKey}%`);
+  const byShift = new Map();
+  for (const log of logs) {
+    const shiftLabel = log.shift_label ?? "";
+    byShift.set(shiftLabel, (byShift.get(shiftLabel) ?? 0) + computeDayValue(log));
+  }
+  return [...byShift.entries()].map(([shift_label, income]) => ({ shift_label, income }));
+}
+
 function registerIpcHandlers(db) {
   // --- Partners ---
   ipcMain.handle("partners:list", () => db.prepare("SELECT * FROM partners ORDER BY name").all());
@@ -406,12 +421,12 @@ function registerIpcHandlers(db) {
   });
 
   // --- Daily logs (السركي / المقاول / سركي سوق — same table, different role) ---
-  ipcMain.handle("dailyLogs:list", (_e, { equipment_id, month, role }) => {
+  ipcMain.handle("dailyLogs:list", (_e, { equipment_id, month, role, shift_label }) => {
     const rows = db
       .prepare(
-        "SELECT * FROM daily_logs WHERE equipment_id = ? AND role = ? AND date LIKE ? ORDER BY date"
+        "SELECT * FROM daily_logs WHERE equipment_id = ? AND role = ? AND shift_label = ? AND date LIKE ? ORDER BY date"
       )
-      .all(equipment_id, role, `${month}%`);
+      .all(equipment_id, role, shift_label ?? "", `${month}%`);
     return rows.map((row) => ({ ...row, day_value: computeDayValue(row) }));
   });
 
@@ -429,13 +444,15 @@ function registerIpcHandlers(db) {
   function syncHoursToOtherRole(db, log) {
     const otherRole = OTHER_HOURS_ROLE[log.role];
     if (!otherRole) return;
+    const shiftLabel = log.shift_label ?? "";
     const existing = db
-      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ?")
-      .get(log.equipment_id, log.date, otherRole);
+      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ? AND shift_label = ?")
+      .get(log.equipment_id, log.date, otherRole, shiftLabel);
     const params = {
       equipment_id: log.equipment_id,
       date: log.date,
       role: otherRole,
+      shift_label: shiftLabel,
       person_name: log.is_day_off ? "" : existing?.person_name ?? "",
       actual_hours: log.actual_hours ?? null,
       base_hours: log.base_hours ?? null,
@@ -447,9 +464,9 @@ function registerIpcHandlers(db) {
       note: log.note ?? null,
     };
     db.prepare(
-      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
-       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
-       ON CONFLICT(equipment_id, date, role) DO UPDATE SET
+      `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
+       VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
+       ON CONFLICT(equipment_id, date, role, shift_label) DO UPDATE SET
          person_name = excluded.person_name,
          actual_hours = excluded.actual_hours,
          base_hours = excluded.base_hours,
@@ -459,14 +476,16 @@ function registerIpcHandlers(db) {
     ).run(params);
   }
 
-  // One row per equipment/date/role — matches the spreadsheet's "one line per
-  // day of the month" layout, so saving a day's cells overwrites that day's
-  // row instead of appending a new one.
+  // One row per equipment/date/role/shift_label — matches the spreadsheet's
+  // "one line per day of the month" layout, so saving a day's cells
+  // overwrites that day's row instead of appending a new one.
   ipcMain.handle("dailyLogs:upsert", (_e, log) => {
+    const shiftLabel = log.shift_label ?? "";
     const params = {
       equipment_id: log.equipment_id,
       date: log.date,
       role: log.role,
+      shift_label: shiftLabel,
       person_name: log.person_name,
       actual_hours: log.actual_hours ?? null,
       base_hours: log.base_hours ?? null,
@@ -478,9 +497,9 @@ function registerIpcHandlers(db) {
       note: log.note ?? null,
     };
     db.prepare(
-      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
-       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
-       ON CONFLICT(equipment_id, date, role) DO UPDATE SET
+      `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
+       VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
+       ON CONFLICT(equipment_id, date, role, shift_label) DO UPDATE SET
          person_name = excluded.person_name,
          actual_hours = excluded.actual_hours,
          base_hours = excluded.base_hours,
@@ -493,16 +512,16 @@ function registerIpcHandlers(db) {
     ).run(params);
     syncHoursToOtherRole(db, log);
     const row = db
-      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ?")
-      .get(log.equipment_id, log.date, log.role);
+      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ? AND shift_label = ?")
+      .get(log.equipment_id, log.date, log.role, shiftLabel);
     const equipmentName = db.prepare("SELECT name FROM equipment WHERE id = ?").get(log.equipment_id)?.name;
     if (equipmentName) {
       pushToCloud("daily_logs", row.id, { ...row, equipment_name: equipmentName });
       const otherRole = OTHER_HOURS_ROLE[log.role];
       if (otherRole) {
         const counterpart = db
-          .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ?")
-          .get(log.equipment_id, log.date, otherRole);
+          .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ? AND shift_label = ?")
+          .get(log.equipment_id, log.date, otherRole, shiftLabel);
         if (counterpart) pushToCloud("daily_logs", counterpart.id, { ...counterpart, equipment_name: equipmentName });
       }
     }
@@ -513,15 +532,34 @@ function registerIpcHandlers(db) {
     const log = db.prepare("SELECT * FROM daily_logs WHERE id = ?").get(id);
     db.prepare("DELETE FROM daily_logs WHERE id = ?").run(id);
     // يوم مشتغلش خالص في شيت — يبقى مشتغلش في التاني بردو (نفس اليوم بيتحذف
-    // من الاتنين، مش بس واحد).
+    // من الاتنين، مش بس واحد)، بشرط يبقوا في نفس الشيفت.
     if (log && OTHER_HOURS_ROLE[log.role]) {
-      db.prepare("DELETE FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ?").run(
+      db.prepare("DELETE FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ? AND shift_label = ?").run(
         log.equipment_id,
         log.date,
-        OTHER_HOURS_ROLE[log.role]
+        OTHER_HOURS_ROLE[log.role],
+        log.shift_label ?? ""
       );
     }
     return { ok: true };
+  });
+
+  // --- Equipment shifts (وردية إضافية زي "وردية 2" لمعدة اشتغلت بأكتر من
+  // شيفت في نفس اليوم) — الشيفت الأساسي (shift_label = '') ضمني ومالوش سطر
+  // هنا، دي بس للشيفتات الإضافية اللي المستخدم بيسميها بنفسه. ---
+  ipcMain.handle("equipmentShifts:list", (_e, { equipment_id }) =>
+    db.prepare("SELECT * FROM equipment_shifts WHERE equipment_id = ? ORDER BY id").all(equipment_id)
+  );
+  ipcMain.handle("equipmentShifts:create", (_e, { equipment_id, label }) => {
+    const trimmed = (label ?? "").trim();
+    if (!trimmed) throw new Error("لازم اسم للشيفت");
+    const info = db
+      .prepare("INSERT INTO equipment_shifts (equipment_id, label, created_at) VALUES (?, ?, ?)")
+      .run(equipment_id, trimmed, new Date().toISOString());
+    const created = { id: info.lastInsertRowid, equipment_id, label: trimmed };
+    const equipmentName = db.prepare("SELECT name FROM equipment WHERE id = ?").get(equipment_id)?.name;
+    if (equipmentName) pushToCloud("equipment_shifts", created.id, { ...created, equipment_name: equipmentName });
+    return created;
   });
 
   // معدة جديدة غالبًا هتشتغل بنفس ساعات ودوام معدة قديمة (نفس مواعيد الورديات
@@ -530,47 +568,53 @@ function registerIpcHandlers(db) {
   // تلقائيًا زي أي تعديل عادي. الاسم وسعر اليوم (في السركي والمقاول) بيفضلوا
   // زي ما هما عند المعدة الهدف من غير ما نلمسهم — لازم يتحددوا يدويًا بعد
   // النسخ لأن السواق/المقاول وسعره مختلفين عن المعدة التانية.
-  ipcMain.handle("dailyLogs:copyFromEquipment", (_e, { target_equipment_id, source_equipment_id, month }) => {
-    const sourceLogs = db
-      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND date LIKE ?")
-      .all(source_equipment_id, `${month}%`);
-    const upsertHours = db.prepare(
-      `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
-       VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
-       ON CONFLICT(equipment_id, date, role) DO UPDATE SET
+  ipcMain.handle(
+    "dailyLogs:copyFromEquipment",
+    (_e, { target_equipment_id, source_equipment_id, month, source_shift_label, target_shift_label }) => {
+      const sourceShift = source_shift_label ?? "";
+      const targetShift = target_shift_label ?? "";
+      const sourceLogs = db
+        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND shift_label = ? AND date LIKE ?")
+        .all(source_equipment_id, sourceShift, `${month}%`);
+      const upsertHours = db.prepare(
+        `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
+       VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
+       ON CONFLICT(equipment_id, date, role, shift_label) DO UPDATE SET
          person_name = excluded.person_name,
          actual_hours = excluded.actual_hours,
          base_hours = excluded.base_hours,
          day_rate = excluded.day_rate,
          is_day_off = excluded.is_day_off,
          note = excluded.note`
-    );
-    const copy = db.transaction((logs) => {
-      for (const src of logs) {
-        for (const targetRole of ["driver", "contractor"]) {
-          const existing = db
-            .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ?")
-            .get(target_equipment_id, src.date, targetRole);
-          upsertHours.run({
-            equipment_id: target_equipment_id,
-            date: src.date,
-            role: targetRole,
-            person_name: src.is_day_off ? "" : existing?.person_name ?? "",
-            actual_hours: src.actual_hours,
-            base_hours: src.base_hours,
-            day_rate: src.is_day_off ? null : existing?.day_rate ?? null,
-            is_paid_leave: existing?.is_paid_leave ?? 0,
-            is_day_off: src.is_day_off ? 1 : 0,
-            fixed_value: existing?.fixed_value ?? null,
-            hassan_commission: existing?.hassan_commission ?? null,
-            note: src.note,
-          });
+      );
+      const copy = db.transaction((logs) => {
+        for (const src of logs) {
+          for (const targetRole of ["driver", "contractor"]) {
+            const existing = db
+              .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ? AND shift_label = ?")
+              .get(target_equipment_id, src.date, targetRole, targetShift);
+            upsertHours.run({
+              equipment_id: target_equipment_id,
+              date: src.date,
+              role: targetRole,
+              shift_label: targetShift,
+              person_name: src.is_day_off ? "" : existing?.person_name ?? "",
+              actual_hours: src.actual_hours,
+              base_hours: src.base_hours,
+              day_rate: src.is_day_off ? null : existing?.day_rate ?? null,
+              is_paid_leave: existing?.is_paid_leave ?? 0,
+              is_day_off: src.is_day_off ? 1 : 0,
+              fixed_value: existing?.fixed_value ?? null,
+              hassan_commission: existing?.hassan_commission ?? null,
+              note: src.note,
+            });
+          }
         }
-      }
-    });
-    copy(sourceLogs);
-    return { count: sourceLogs.length };
-  });
+      });
+      copy(sourceLogs);
+      return { count: sourceLogs.length };
+    }
+  );
 
   // --- Monthly expenses ---
   ipcMain.handle("monthlyExpenses:list", (_e, { equipment_id, month }) =>
@@ -934,11 +978,22 @@ function registerIpcHandlers(db) {
   // ساعات أوفر تايم × الفرق بينهم بالساعة، متزاوجين بنفس التاريخ. سركي
   // السوق مالوش معادلة — أي رقم كوميشن اتكتب في الصف ده بالظبط.
   function computePairedCommission(_equipmentName, driverLog, contractorLog) {
+    // لو أي شيت من الاتنين متعلّم إنه "مشتغلش"، مفيش كوميشن خالص — من غير
+    // الشرط ده لو يوم واحد اتعلّم مشتغلش في شيت وسعره لسه متسجل غلط في
+    // الشيت التاني، الكوميشن كان بيطلع سعر المقاول كامل من غير خصم السركي.
+    if (driverLog.is_day_off || contractorLog.is_day_off) return 0;
     const k = contractorLog.day_rate ?? 0;
     const h = driverLog.day_rate ?? 0;
     const baseHours = contractorLog.base_hours || 8;
     const overtimeHours = Math.max(0, (contractorLog.actual_hours ?? 0) - (contractorLog.base_hours ?? 0));
     return (k - h) + overtimeHours * (k / baseHours - h / baseHours);
+  }
+
+  // بيربط سطر السركي بسطر المقاول لنفس اليوم — لازم يبقى بالتاريخ والشيفت
+  // مع بعض (مش بالتاريخ بس)، وإلا معدة شغالة بورديتين هيتلخبط سطر وردية
+  // بسطر وردية تانية لنفس اليوم.
+  function pairKey(log) {
+    return `${log.date}|${log.shift_label ?? ""}`;
   }
 
   // كوميشن حسن كله — لو month اتبعت بيتفلتر عليه بس، لو من غيره (null) بيحسب
@@ -980,14 +1035,15 @@ function registerIpcHandlers(db) {
             )
             .all(equipment.id);
 
-      const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
+      const driverByKey = new Map(driverLogs.map((l) => [pairKey(l), l]));
       for (const contractorLog of contractorLogs) {
-        const driverLog = driverByDate.get(contractorLog.date);
+        const driverLog = driverByKey.get(pairKey(contractorLog));
         if (!driverLog) continue;
         rows.push({
           equipment_id: equipment.id,
           equipment_name: equipment.name,
           date: contractorLog.date,
+          shift_label: contractorLog.shift_label ?? "",
           source: "paired",
           commission: computePairedCommission(equipment.name, driverLog, contractorLog),
         });
@@ -1082,13 +1138,14 @@ function registerIpcHandlers(db) {
       )
       .all(equipment_id, `${year}-%`);
 
-    const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
+    const driverByKey = new Map(driverLogs.map((l) => [pairKey(l), l]));
     const allRows = [];
     for (const contractorLog of contractorLogs) {
-      const driverLog = driverByDate.get(contractorLog.date);
+      const driverLog = driverByKey.get(pairKey(contractorLog));
       if (!driverLog) continue;
       allRows.push({
         date: contractorLog.date,
+        shift_label: contractorLog.shift_label ?? "",
         source: "paired",
         contractor_rate: contractorLog.day_rate ?? 0,
         driver_rate: driverLog.day_rate ?? 0,
@@ -1340,10 +1397,14 @@ function registerIpcHandlers(db) {
 
     const equipmentBreakdown = shares.map((s) => {
       const netProfit = equipmentMonthNetProfit(db, s.equipment_id, month);
+      const shiftIncome = equipmentShiftIncomeBreakdown(db, s.equipment_id, month);
       return {
         equipment_name: s.equipment_name,
         percentage: s.percentage,
         monthAmount: (netProfit * s.percentage) / 100,
+        // عرض بس — الدخل مقسّم بالشيفت لو المعدة اشتغلت بأكتر من وردية،
+        // مش داخل في حساب monthAmount نفسه (شوف equipmentShiftIncomeBreakdown).
+        shiftIncome,
       };
     });
     const monthDue = equipmentBreakdown.reduce((sum, e) => sum + e.monthAmount, 0);
@@ -1702,9 +1763,9 @@ function registerIpcHandlers(db) {
           "SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'market' AND date LIKE ? AND hassan_commission IS NOT NULL"
         )
         .all(eq.id, `${month}%`);
-      const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
+      const driverByKey = new Map(driverLogs.map((l) => [pairKey(l), l]));
       for (const cl of contractorLogs) {
-        const dl = driverByDate.get(cl.date);
+        const dl = driverByKey.get(pairKey(cl));
         if (!dl) continue;
         commissionRows.push(computePairedCommission(eq.name, dl, cl));
       }

@@ -19,6 +19,7 @@ const COLLECTIONS = [
   "employees",
   "expense_categories",
   "equipment",
+  "equipment_shifts",
   "daily_logs",
   "monthly_expenses",
   "payroll_entries",
@@ -163,9 +164,9 @@ function mergeDailyLog(db, data) {
   const equipmentId = findOrCreateEquipmentId(db, data.equipment_name);
   if (!equipmentId || !data.date || !data.role) return;
   db.prepare(
-    `INSERT INTO daily_logs (equipment_id, date, role, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
-     VALUES (@equipment_id, @date, @role, @person_name, @actual_hours, @base_hours, @day_rate, 0, @is_day_off, @fixed_value, @hassan_commission, @note)
-     ON CONFLICT(equipment_id, date, role) DO UPDATE SET
+    `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
+     VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, 0, @is_day_off, @fixed_value, @hassan_commission, @note)
+     ON CONFLICT(equipment_id, date, role, shift_label) DO UPDATE SET
        person_name = excluded.person_name,
        actual_hours = excluded.actual_hours,
        base_hours = excluded.base_hours,
@@ -178,6 +179,7 @@ function mergeDailyLog(db, data) {
     equipment_id: equipmentId,
     date: data.date,
     role: data.role,
+    shift_label: data.shift_label ?? "",
     person_name: data.person_name || "",
     actual_hours: data.actual_hours ?? null,
     base_hours: data.base_hours ?? null,
@@ -187,6 +189,16 @@ function mergeDailyLog(db, data) {
     hassan_commission: data.hassan_commission ?? null,
     note: data.note ?? null,
   });
+}
+
+function mergeEquipmentShift(db, data, docId) {
+  const equipmentId = findOrCreateEquipmentId(db, data.equipment_name);
+  const label = (data.label || "").trim();
+  if (!equipmentId || !label) return;
+  db.prepare(
+    `INSERT INTO equipment_shifts (equipment_id, label, created_at, sync_key)
+     VALUES (?, ?, ?, ?) ON CONFLICT(sync_key) DO NOTHING`
+  ).run(equipmentId, label, data.created_at ?? new Date().toISOString(), docId);
 }
 
 function mergeMonthlyExpense(db, data, docId) {
@@ -308,6 +320,8 @@ function mergeDoc(db, collectionName, docId, data) {
       return mergeExpenseCategory(db, data);
     case "equipment":
       return mergeEquipment(db, data);
+    case "equipment_shifts":
+      return mergeEquipmentShift(db, data, docId);
     case "daily_logs":
       return mergeDailyLog(db, data);
     case "monthly_expenses":
@@ -397,6 +411,11 @@ async function translateRow(supabase, table, row, old) {
         .map((s) => ({ partner_name: s.partners?.name, percentage: s.percentage }))
         .filter((s) => s.partner_name);
       return { name: row.name, purchase_price: row.purchase_price, shares };
+    }
+    case "equipment_shifts": {
+      const equipment_name = equipmentNames.get(row.equipment_id);
+      if (!equipment_name) return null;
+      return { ...row, equipment_name };
     }
     case "daily_logs": {
       const equipment_name = equipmentNames.get(row.equipment_id);
@@ -544,8 +563,8 @@ async function startCloudSync(db) {
         if (!equipmentName || !old.date || !old.role) return;
         try {
           db.prepare(
-            "DELETE FROM daily_logs WHERE equipment_id = (SELECT id FROM equipment WHERE name = ?) AND date = ? AND role = ?"
-          ).run(equipmentName, old.date, old.role);
+            "DELETE FROM daily_logs WHERE equipment_id = (SELECT id FROM equipment WHERE name = ?) AND date = ? AND role = ? AND shift_label = ?"
+          ).run(equipmentName, old.date, old.role, old.shift_label ?? "");
         } catch (err) {
           console.error("sync delete failed for daily_logs", err);
         }
@@ -647,6 +666,7 @@ async function pushToCloud(table, localId, data) {
               equipment_id: equipmentId,
               date: data.date,
               role: data.role,
+              shift_label: data.shift_label ?? "",
               person_name: data.person_name ?? "",
               actual_hours: data.actual_hours,
               base_hours: data.base_hours,
@@ -656,7 +676,23 @@ async function pushToCloud(table, localId, data) {
               hassan_commission: data.hassan_commission,
               note: data.note,
             },
-            { onConflict: "equipment_id,date,role" }
+            { onConflict: "equipment_id,date,role,shift_label" }
+          )
+        );
+        return { ok: true };
+      }
+      case "equipment_shifts": {
+        const equipmentId = await getOrCreateByName("equipment", data.equipment_name);
+        if (!equipmentId) return { ok: false, error: `equipment not found: ${data.equipment_name}` };
+        checkError(
+          await activeClient.from("equipment_shifts").upsert(
+            {
+              equipment_id: equipmentId,
+              label: data.label,
+              created_at: data.created_at ?? new Date().toISOString(),
+              sync_key: syncKeyFor(localId),
+            },
+            { onConflict: "sync_key" }
           )
         );
         return { ok: true };
@@ -870,6 +906,12 @@ async function pushAllToCloud(db) {
   );
   for (const eq of db.prepare("SELECT * FROM equipment").all()) {
     await run("equipment", eq.id, { name: eq.name, purchase_price: eq.purchase_price, shares: shareStmt.all(eq.id) });
+  }
+
+  for (const s of db
+    .prepare("SELECT es.*, e.name AS equipment_name FROM equipment_shifts es JOIN equipment e ON e.id = es.equipment_id")
+    .all()) {
+    await run("equipment_shifts", s.id, s);
   }
 
   for (const log of db

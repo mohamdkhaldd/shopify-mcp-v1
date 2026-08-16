@@ -56,7 +56,19 @@ export interface DailyLog {
   fixed_value: number | null;
   hassan_commission: number | null;
   note: string | null;
+  shift_label: string;
   day_value: number;
+}
+
+export interface EquipmentShift {
+  id: number;
+  equipment_id: number;
+  label: string;
+}
+
+export interface EquipmentShiftIncome {
+  shift_label: string;
+  income: number;
 }
 
 export interface MonthlyExpense {
@@ -184,6 +196,7 @@ export interface HassanCommissionRow {
   equipment_id: number;
   equipment_name: string;
   date: string;
+  shift_label?: string;
   source: "paired" | "market" | "expense";
   category_name?: string | null;
   commission: number;
@@ -196,6 +209,7 @@ export interface HassanCommissionSummary {
 
 export interface HassanEquipmentCommissionDay {
   date: string;
+  shift_label?: string;
   source: "paired" | "market" | "expense";
   category_name?: string | null;
   contractor_rate: number | null;
@@ -304,6 +318,7 @@ export interface PartnerEquipmentBreakdown {
   equipment_name: string;
   percentage: number;
   monthAmount: number;
+  shiftIncome: EquipmentShiftIncome[];
 }
 
 export interface PartnerEquipmentYearBreakdown {

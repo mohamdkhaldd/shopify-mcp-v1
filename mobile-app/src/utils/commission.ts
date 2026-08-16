@@ -4,11 +4,19 @@ import { DailyLog } from "../types";
 // كوميشن حسن على أي معدة = الفرق بين سعر المقاول وسعر السركي، بنفس المنطق
 // لكل المعدات من غير استثناء.
 function computePairedCommission(driverLog: DailyLog, contractorLog: DailyLog): number {
+  // لو أي شيت من الاتنين متعلّم إنه "مشتغلش"، مفيش كوميشن خالص.
+  if (driverLog.is_day_off || contractorLog.is_day_off) return 0;
   const k = contractorLog.day_rate ?? 0;
   const h = driverLog.day_rate ?? 0;
   const baseHours = contractorLog.base_hours || 8;
   const overtimeHours = Math.max(0, (contractorLog.actual_hours ?? 0) - (contractorLog.base_hours ?? 0));
   return k - h + overtimeHours * (k / baseHours - h / baseHours);
+}
+
+// بيربط سطر السركي بسطر المقاول لنفس اليوم والشيفت — لازم الشيفت يتساوى
+// كمان، وإلا معدة شغالة بورديتين هيتلخبط سطر وردية بسطر وردية تانية.
+function pairKey(log: DailyLog): string {
+  return `${log.date}|${log.shift_label ?? ""}`;
 }
 
 export interface CommissionRow {
@@ -39,9 +47,9 @@ export function computeCommissionRows(month: string | null): { rows: CommissionR
       return !!category?.counts_as_commission;
     });
 
-    const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
+    const driverByKey = new Map(driverLogs.map((l) => [pairKey(l), l]));
     for (const contractorLog of contractorLogs) {
-      const driverLog = driverByDate.get(contractorLog.date);
+      const driverLog = driverByKey.get(pairKey(contractorLog));
       if (!driverLog) continue;
       rows.push({
         equipment_id: equipment.id,
@@ -80,6 +88,7 @@ export function computeCommissionRows(month: string | null): { rows: CommissionR
 
 export interface CommissionDayRow {
   date: string;
+  shift_label?: string;
   source: "paired" | "market" | "expense";
   category_name?: string;
   contractor_rate: number | null;
@@ -106,13 +115,14 @@ export function computeEquipmentCommissionDetail(equipmentId: number, month: str
     return !!category?.counts_as_commission;
   });
 
-  const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
+  const driverByKey = new Map(driverLogs.map((l) => [pairKey(l), l]));
   const allRows: CommissionDayRow[] = [];
   for (const contractorLog of contractorLogs) {
-    const driverLog = driverByDate.get(contractorLog.date);
+    const driverLog = driverByKey.get(pairKey(contractorLog));
     if (!driverLog) continue;
     allRows.push({
       date: contractorLog.date,
+      shift_label: contractorLog.shift_label ?? "",
       source: "paired",
       contractor_rate: contractorLog.day_rate ?? 0,
       driver_rate: driverLog.day_rate ?? 0,

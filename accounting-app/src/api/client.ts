@@ -13,6 +13,7 @@ import {
   EmployeeAdvance,
   EmployeeBonus,
   EmployeeDeduction,
+  EquipmentShift,
   EquipmentSummary,
   ExpenseCategory,
   HassanBalance,
@@ -106,16 +107,30 @@ export const equipmentApi = {
 };
 
 export const dailyLogsApi = {
-  list: (equipment_id: number, month: string, role: DailyLogRole): Promise<DailyLog[]> =>
-    invoke("dailyLogs:list", { equipment_id, month, role }),
+  list: (equipment_id: number, month: string, role: DailyLogRole, shift_label = ""): Promise<DailyLog[]> =>
+    invoke("dailyLogs:list", { equipment_id, month, role, shift_label }),
   upsert: (log: Omit<DailyLog, "id" | "day_value">): Promise<DailyLog> => invoke("dailyLogs:upsert", log),
   remove: (id: number): Promise<void> => invoke("dailyLogs:delete", { id }),
   copyFromEquipment: (
     target_equipment_id: number,
     source_equipment_id: number,
-    month: string
+    month: string,
+    source_shift_label = "",
+    target_shift_label = ""
   ): Promise<{ count: number }> =>
-    invoke("dailyLogs:copyFromEquipment", { target_equipment_id, source_equipment_id, month }),
+    invoke("dailyLogs:copyFromEquipment", {
+      target_equipment_id,
+      source_equipment_id,
+      month,
+      source_shift_label,
+      target_shift_label,
+    }),
+};
+
+export const equipmentShiftsApi = {
+  list: (equipment_id: number): Promise<EquipmentShift[]> => invoke("equipmentShifts:list", { equipment_id }),
+  create: (equipment_id: number, label: string): Promise<EquipmentShift> =>
+    invoke("equipmentShifts:create", { equipment_id, label }),
 };
 
 export const monthlyExpensesApi = {

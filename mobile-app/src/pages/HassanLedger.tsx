@@ -42,6 +42,7 @@ function EquipmentCommissionPanel({ equipmentId, month }: { equipmentId: number;
             <div key={i} className="flex items-center justify-between text-xs text-slate-600">
               <span>
                 {d.date} — {sourceLabel(d.source, d.category_name)}
+                {d.source === "paired" && <span className="text-slate-400"> ({d.shift_label || "أساسي"})</span>}
               </span>
               <span className="font-bold text-primary-dark shrink-0 ms-2">{formatEGP(d.commission)}</span>
             </div>

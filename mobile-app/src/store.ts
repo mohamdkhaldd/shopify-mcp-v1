@@ -313,10 +313,24 @@ const OTHER_HOURS_ROLE: Partial<Record<DailyLogRole, DailyLogRole>> = {
   contractor: "driver",
 };
 
-export function listDailyLogs(equipment_id: number, month: string, role: DailyLogRole): DailyLog[] {
+function shiftOf(l: { shift_label?: string }): string {
+  return l.shift_label ?? "";
+}
+
+export function listDailyLogs(equipment_id: number, month: string, role: DailyLogRole, shiftLabel = ""): DailyLog[] {
   return state.daily_logs
-    .filter((l) => l.equipment_id === equipment_id && l.role === role && l.date.startsWith(month))
+    .filter((l) => l.equipment_id === equipment_id && l.role === role && l.date.startsWith(month) && shiftOf(l) === shiftLabel)
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// كل شيفتات المعدة اللي فيها بيانات مسجلة فعلاً الشهر ده — بيرجّع الشيفت
+// الأساسي ("") دايمًا حتى لو فاضي، عشان تابة "أساسي" تفضل موجودة.
+export function listShiftLabelsForEquipment(equipment_id: number, month: string): string[] {
+  const labels = new Set<string>([""]);
+  for (const l of state.daily_logs) {
+    if (l.equipment_id === equipment_id && l.date.startsWith(month)) labels.add(shiftOf(l));
+  }
+  return [...labels].sort((a, b) => a.localeCompare(b));
 }
 
 function pushDailyLogToCloud(log: DailyLog) {
@@ -324,6 +338,7 @@ function pushDailyLogToCloud(log: DailyLog) {
     equipment_name: equipmentName(log.equipment_id),
     date: log.date,
     role: log.role,
+    shift_label: shiftOf(log),
     person_name: log.person_name,
     actual_hours: log.actual_hours,
     base_hours: log.base_hours,
@@ -335,14 +350,15 @@ function pushDailyLogToCloud(log: DailyLog) {
   });
 }
 
-// السركي والمقاول نفس اليوم ونفس الساعات فعليًا — أي تعديل على الساعات في
-// شيت بينسخ نفسه على شيت التاني، من غير ما يلمس اسم الشخص ولا سعره —
-// إلا لو اليوم اتعلّم "مشتغلش"، ساعتها بيتمسح الاسم والسعر من الشيتين خالص.
+// السركي والمقاول نفس اليوم ونفس الساعات ونفس الشيفت فعليًا — أي تعديل على
+// الساعات في شيت بينسخ نفسه على شيت التاني لنفس الشيفت، من غير ما يلمس اسم
+// الشخص ولا سعره — إلا لو اليوم اتعلّم "مشتغلش"، ساعتها بيتمسح الاسم والسعر
+// من الشيتين خالص.
 function syncHoursToOtherRole(log: DailyLog) {
   const otherRole = OTHER_HOURS_ROLE[log.role];
   if (!otherRole) return;
   const existing = state.daily_logs.find(
-    (l) => l.equipment_id === log.equipment_id && l.date === log.date && l.role === otherRole
+    (l) => l.equipment_id === log.equipment_id && l.date === log.date && l.role === otherRole && shiftOf(l) === shiftOf(log)
   );
   if (existing) {
     existing.actual_hours = log.actual_hours;
@@ -359,6 +375,7 @@ function syncHoursToOtherRole(log: DailyLog) {
       equipment_id: log.equipment_id,
       date: log.date,
       role: otherRole,
+      shift_label: shiftOf(log),
       person_name: "",
       actual_hours: log.actual_hours,
       base_hours: log.base_hours,
@@ -374,7 +391,7 @@ function syncHoursToOtherRole(log: DailyLog) {
 
 export function upsertDailyLog(log: Omit<DailyLog, "id">): DailyLog {
   const existing = state.daily_logs.find(
-    (l) => l.equipment_id === log.equipment_id && l.date === log.date && l.role === log.role
+    (l) => l.equipment_id === log.equipment_id && l.date === log.date && l.role === log.role && shiftOf(l) === shiftOf(log)
   );
   let record: DailyLog;
   if (existing) {
@@ -390,7 +407,7 @@ export function upsertDailyLog(log: Omit<DailyLog, "id">): DailyLog {
   const otherRole = OTHER_HOURS_ROLE[record.role];
   if (otherRole) {
     const counterpart = state.daily_logs.find(
-      (l) => l.equipment_id === record.equipment_id && l.date === record.date && l.role === otherRole
+      (l) => l.equipment_id === record.equipment_id && l.date === record.date && l.role === otherRole && shiftOf(l) === shiftOf(record)
     );
     if (counterpart) pushDailyLogToCloud(counterpart);
   }
@@ -402,16 +419,17 @@ export function deleteDailyLog(id: number) {
   state.daily_logs = state.daily_logs.filter((l) => l.id !== id);
   if (log) {
     const eqName = equipmentName(log.equipment_id);
-    deleteFromCloud("daily_logs", id, { equipment_name: eqName, date: log.date, role: log.role });
+    deleteFromCloud("daily_logs", id, { equipment_name: eqName, date: log.date, role: log.role, shift_label: shiftOf(log) });
     const otherRole = OTHER_HOURS_ROLE[log.role];
     if (otherRole) {
       const counterpart = state.daily_logs.find(
-        (l) => l.equipment_id === log.equipment_id && l.date === log.date && l.role === otherRole
+        (l) => l.equipment_id === log.equipment_id && l.date === log.date && l.role === otherRole && shiftOf(l) === shiftOf(log)
       );
       state.daily_logs = state.daily_logs.filter(
-        (l) => !(l.equipment_id === log.equipment_id && l.date === log.date && l.role === otherRole)
+        (l) => !(l.equipment_id === log.equipment_id && l.date === log.date && l.role === otherRole && shiftOf(l) === shiftOf(log))
       );
-      if (counterpart) deleteFromCloud("daily_logs", counterpart.id, { equipment_name: eqName, date: log.date, role: otherRole });
+      if (counterpart)
+        deleteFromCloud("daily_logs", counterpart.id, { equipment_name: eqName, date: log.date, role: otherRole, shift_label: shiftOf(log) });
     }
   }
   save();
@@ -860,13 +878,15 @@ export function mergeRemoteRecord(collectionName: string, docId: string, data: a
       const equipmentName = (data.equipment_name ?? "").trim();
       if (!equipmentName || !data.date || !data.role) break;
       const equipmentId = findOrCreateEquipmentByName(equipmentName);
+      const shiftLabel = data.shift_label ?? "";
       const existing = state.daily_logs.find(
-        (l) => l.equipment_id === equipmentId && l.date === data.date && l.role === data.role
+        (l) => l.equipment_id === equipmentId && l.date === data.date && l.role === data.role && (l.shift_label ?? "") === shiftLabel
       );
       const patch: Omit<DailyLog, "id"> = {
         equipment_id: equipmentId,
         date: data.date,
         role: data.role,
+        shift_label: shiftLabel,
         person_name: data.person_name ?? "",
         actual_hours: data.actual_hours ?? null,
         base_hours: data.base_hours ?? null,

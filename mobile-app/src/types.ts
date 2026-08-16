@@ -59,6 +59,7 @@ export interface DailyLog {
   fixed_value: number | null;
   hassan_commission: number | null;
   note: string | null;
+  shift_label: string;
 }
 
 export interface MonthlyExpense {

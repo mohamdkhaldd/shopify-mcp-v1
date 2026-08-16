@@ -3,8 +3,8 @@ import Icon from "../../components/Icon";
 import MonthPicker from "../../components/equipment/MonthPicker";
 import PrintButton from "../../components/PrintButton";
 import { PrintHeader, PrintSignoff } from "../../components/PrintSignoff";
-import { contractorsApi, dailyLogsApi, employeesApi } from "../../api/client";
-import { Equipment, WageType } from "../../api/types";
+import { contractorsApi, dailyLogsApi, employeesApi, equipmentShiftsApi } from "../../api/client";
+import { Equipment, EquipmentShift, WageType } from "../../api/types";
 import { currentMonthKey, monthLabel } from "../../utils/months";
 import DailyLogTable from "./DailyLogTable";
 import ExpensesTable from "./ExpensesTable";
@@ -20,6 +20,10 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: "expenses", label: "المصروفات", icon: "treasury" },
 ];
 
+// الشيفتات (سركي/مقاول) بتفرق بس في التابات دي — سركي السوق والمصروفات
+// مستقلين عن مفهوم الشيفت خالص.
+const SHIFT_AWARE_TABS: Tab[] = ["summary", "driver", "contractor"];
+
 interface EquipmentDetailProps {
   equipment: Equipment;
   onBack: () => void;
@@ -32,6 +36,10 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
   const [contractors, setContractors] = useState<{ id: number; name: string }[]>([]);
   const [mismatchedDates, setMismatchedDates] = useState<Set<string>>(new Set());
   const [refreshKey, setRefreshKey] = useState(0);
+  const [shifts, setShifts] = useState<EquipmentShift[]>([]);
+  const [activeShiftLabel, setActiveShiftLabel] = useState("");
+  const [addingShift, setAddingShift] = useState(false);
+  const [newShiftName, setNewShiftName] = useState("");
 
   useEffect(() => {
     employeesApi.list().then(setEmployees);
@@ -39,9 +47,29 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
   }, []);
 
   useEffect(() => {
+    setActiveShiftLabel("");
+    refreshShifts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [equipment.id]);
+
+  function refreshShifts() {
+    equipmentShiftsApi.list(equipment.id).then(setShifts);
+  }
+
+  async function handleAddShift() {
+    const trimmed = newShiftName.trim();
+    if (!trimmed) return;
+    const created = await equipmentShiftsApi.create(equipment.id, trimmed);
+    setShifts((prev) => [...prev, created]);
+    setActiveShiftLabel(created.label);
+    setNewShiftName("");
+    setAddingShift(false);
+  }
+
+  useEffect(() => {
     Promise.all([
-      dailyLogsApi.list(equipment.id, month, "driver"),
-      dailyLogsApi.list(equipment.id, month, "contractor"),
+      dailyLogsApi.list(equipment.id, month, "driver", activeShiftLabel),
+      dailyLogsApi.list(equipment.id, month, "contractor", activeShiftLabel),
     ]).then(([driverLogs, contractorLogs]) => {
       const driverHoursByDate = new Map<string, number>();
       driverLogs.forEach((l) => driverHoursByDate.set(l.date, (l.actual_hours ?? 0)));
@@ -54,13 +82,17 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
       });
       setMismatchedDates(mismatches);
     });
-  }, [equipment.id, month, refreshKey]);
+  }, [equipment.id, month, activeShiftLabel, refreshKey]);
 
   const activeTabLabel = tabs.find((t) => t.id === tab)!.label;
+  const activeShiftName = activeShiftLabel || (shifts.length > 0 ? "أساسي" : "");
+  const printTitle = activeShiftName
+    ? `${equipment.name} — ${activeTabLabel} — ${activeShiftName}`
+    : `${equipment.name} — ${activeTabLabel}`;
 
   return (
     <div className="space-y-6">
-      <PrintHeader title={`${equipment.name} — ${activeTabLabel}`} subtitle={`${monthLabel(month)} ${month.split("-")[0]}`} />
+      <PrintHeader title={printTitle} subtitle={`${monthLabel(month)} ${month.split("-")[0]}`} />
 
       <div className="no-print flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -112,6 +144,63 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
         })}
       </div>
 
+      {SHIFT_AWARE_TABS.includes(tab) && (
+        <div className="no-print flex flex-wrap items-center gap-1.5">
+          <button
+            onClick={() => setActiveShiftLabel("")}
+            className={[
+              "rounded-lg px-3 py-1.5 text-xs font-bold transition-colors",
+              activeShiftLabel === "" ? "bg-primary-dark text-white" : "bg-white text-slate-500 shadow-card hover:text-primary-dark",
+            ].join(" ")}
+          >
+            أساسي
+          </button>
+          {shifts.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setActiveShiftLabel(s.label)}
+              className={[
+                "rounded-lg px-3 py-1.5 text-xs font-bold transition-colors",
+                activeShiftLabel === s.label ? "bg-primary-dark text-white" : "bg-white text-slate-500 shadow-card hover:text-primary-dark",
+              ].join(" ")}
+            >
+              {s.label}
+            </button>
+          ))}
+          {addingShift ? (
+            <div className="flex items-center gap-1">
+              <input
+                autoFocus
+                value={newShiftName}
+                onChange={(e) => setNewShiftName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddShift()}
+                placeholder="اسم الشيفت زي: وردية 2"
+                className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs w-40"
+              />
+              <button onClick={handleAddShift} className="rounded-lg bg-primary text-white px-2.5 py-1.5 text-xs font-bold">
+                إضافة
+              </button>
+              <button
+                onClick={() => {
+                  setAddingShift(false);
+                  setNewShiftName("");
+                }}
+                className="rounded-lg bg-slate-100 text-slate-500 px-2.5 py-1.5 text-xs font-bold"
+              >
+                إلغاء
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setAddingShift(true)}
+              className="rounded-lg border border-dashed border-slate-300 text-slate-400 px-3 py-1.5 text-xs font-bold hover:text-primary-dark hover:border-primary"
+            >
+              + شيفت جديد
+            </button>
+          )}
+        </div>
+      )}
+
       {tab === "summary" && <ProfitSummary equipmentId={equipment.id} month={month} refreshKey={refreshKey} />}
 
       {tab === "driver" && (
@@ -119,6 +208,7 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
           equipmentId={equipment.id}
           month={month}
           role="driver"
+          shiftLabel={activeShiftLabel}
           mode="hours"
           people={employees}
           mismatchedDates={mismatchedDates}
@@ -131,6 +221,7 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
           equipmentId={equipment.id}
           month={month}
           role="contractor"
+          shiftLabel={activeShiftLabel}
           mode="hours"
           people={contractors}
           mismatchedDates={mismatchedDates}
@@ -143,6 +234,7 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
           equipmentId={equipment.id}
           month={month}
           role="market"
+          shiftLabel=""
           mode="fixed"
           people={employees}
           onChanged={() => setRefreshKey((k) => k + 1)}

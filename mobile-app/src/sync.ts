@@ -121,6 +121,7 @@ export async function pushToCloud(collectionName: string, localId: number, data:
             equipment_id: equipmentId,
             date: data.date,
             role: data.role,
+            shift_label: data.shift_label ?? "",
             person_name: data.person_name ?? "",
             actual_hours: data.actual_hours,
             base_hours: data.base_hours,
@@ -130,7 +131,7 @@ export async function pushToCloud(collectionName: string, localId: number, data:
             hassan_commission: data.hassan_commission,
             note: data.note,
           },
-          { onConflict: "equipment_id,date,role" }
+          { onConflict: "equipment_id,date,role,shift_label" }
         );
         return;
       }
@@ -300,7 +301,13 @@ export async function deleteFromCloud(collectionName: string, localId: number, m
         if (!match) return;
         const equipmentId = await findIdByName("equipment", match.equipment_name as string);
         if (!equipmentId) return;
-        await supabase.from("daily_logs").delete().eq("equipment_id", equipmentId).eq("date", match.date as string).eq("role", match.role as string);
+        await supabase
+          .from("daily_logs")
+          .delete()
+          .eq("equipment_id", equipmentId)
+          .eq("date", match.date as string)
+          .eq("role", match.role as string)
+          .eq("shift_label", (match.shift_label as string) ?? "");
         return;
       }
       case "monthly_expenses":
