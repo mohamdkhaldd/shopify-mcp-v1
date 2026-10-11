@@ -14,7 +14,6 @@ export function computeDayValue(log: DailyLog): number {
 }
 
 function computeDriverWageValue(log: DailyLog, employeeRate: number): number {
-  if (log.is_day_off && log.is_paid_leave) return employeeRate;
   if (log.is_paid_leave || log.is_day_off) return 0;
   const baseHours = log.base_hours ?? 0;
   const hourlyRate = employeeRate / (baseHours || 8);
