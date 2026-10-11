@@ -1703,10 +1703,11 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
         .reduce((sum, e) => sum + e.amount, 0);
       const driverSalaryExpense = driverSalaryForEquipment(equipmentId, monthKey);
       const expense = manualExpense + driverSalaryExpense;
-      return { profit: income - expense, expense };
+      return { profit: income - expense, expense, income };
     }
 
     const equipmentAnnualExpense = new Map(state.equipment.map((e) => [e.id, 0]));
+    const equipmentAnnualIncome = new Map(state.equipment.map((e) => [e.id, 0]));
     const monthlyProfitTrend: { month: string; profit: number }[] = [];
     let totalAnnualProfit = 0;
     let totalAnnualExpense = 0;
@@ -1715,10 +1716,11 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       const monthKey = `${year}-${String(m + 1).padStart(2, "0")}`;
       let monthProfit = 0;
       for (const eq of state.equipment) {
-        const { profit, expense } = equipmentMonthTotals(eq.id, monthKey);
+        const { profit, expense, income } = equipmentMonthTotals(eq.id, monthKey);
         monthProfit += profit;
         totalAnnualExpense += expense;
         equipmentAnnualExpense.set(eq.id, (equipmentAnnualExpense.get(eq.id) ?? 0) + expense);
+        equipmentAnnualIncome.set(eq.id, (equipmentAnnualIncome.get(eq.id) ?? 0) + income);
       }
       monthlyProfitTrend.push({ month: MONTH_NAMES_AR[m], profit: monthProfit });
       totalAnnualProfit += monthProfit;
@@ -1727,6 +1729,8 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     const equipmentExpenses = state.equipment.map((eq) => ({
       name: eq.name,
       annualExpense: equipmentAnnualExpense.get(eq.id) ?? 0,
+      annualIncome: equipmentAnnualIncome.get(eq.id) ?? 0,
+      annualProfit: (equipmentAnnualIncome.get(eq.id) ?? 0) - (equipmentAnnualExpense.get(eq.id) ?? 0),
     }));
 
     const totalReceivables = state.contractors.reduce((sum, c) => {

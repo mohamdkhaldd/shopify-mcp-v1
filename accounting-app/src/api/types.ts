@@ -425,6 +425,8 @@ export interface DashboardMonthlyProfit {
 export interface DashboardEquipmentExpense {
   name: string;
   annualExpense: number;
+  annualIncome: number;
+  annualProfit: number;
 }
 
 export interface DashboardSummary {

@@ -5,6 +5,8 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -18,6 +20,46 @@ import { ContractorSummary, DashboardSummary, PartnerSummary, SupplierDashboardR
 import { formatEGP } from "../utils/format";
 
 type DrilldownKind = "expense" | "contractors" | "partners" | "suppliers" | null;
+
+// بيقسم اسم المعدة على سطرين بالكتير (بالكلمات) عشان الأسماء الطويلة زي
+// "ونش 5 طن دبوسة" تبان كاملة جنب العمود بدل ما تتقص.
+function splitLabel(name: string, maxChars = 14): string[] {
+  const words = name.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > maxChars && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(current);
+  if (lines.length > 2) return [lines[0], `${lines.slice(1).join(" ").slice(0, maxChars - 1)}…`];
+  return lines;
+}
+
+// اسم المعدة على محور الأعمدة: direction="ltr" هنا مقصودة — مع RTL المتصفح
+// بيعكس معنى textAnchor="end" فالاسم كان بيترسم فوق الأعمدة نفسها ويستخبى.
+// الحروف العربي نفسها بتتكتب صح عادي جوه السطر.
+function EquipmentTick({ x, y, payload, fill }: { x?: number; y?: number; payload?: { value: string }; fill: string }) {
+  const name = payload?.value ?? "";
+  const lines = splitLabel(name);
+  const lineHeight = 13;
+  const startY = (y ?? 0) - ((lines.length - 1) * lineHeight) / 2;
+  return (
+    <text x={(x ?? 0) - 6} y={startY} textAnchor="end" direction="ltr" fill={fill} fontSize={11} fontFamily="Cairo">
+      <title>{name}</title>
+      {lines.map((line, i) => (
+        <tspan key={i} x={(x ?? 0) - 6} dy={i === 0 ? 4 : lineHeight}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  );
+}
 
 export default function Dashboard() {
   const { theme } = useTheme();
@@ -49,6 +91,8 @@ export default function Dashboard() {
   if (!summary) {
     return <div className="text-sm text-slate-400">جاري التحميل...</div>;
   }
+
+  const equipmentChartHeight = Math.max(240, summary.equipmentExpenses.length * 38);
 
   return (
     <div className="space-y-6">
@@ -113,59 +157,77 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-        <div className="xl:col-span-3 bg-white rounded-card shadow-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-slate-800">اتجاه صافي الربح الشهري</h2>
-            <span className="text-xs text-slate-400">السنة الحالية</span>
-          </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={summary.monthlyProfitTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#2F8F63" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#2F8F63" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: tickFill }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: tickFill }} axisLine={false} tickLine={false} width={70} />
-              <Tooltip formatter={(value: number) => formatEGP(value)} contentStyle={tooltipStyle} />
-              <Area
-                type="monotone"
-                dataKey="profit"
-                stroke="#2F8F63"
-                strokeWidth={2.5}
-                fill="url(#profitFill)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+      <div className="bg-white rounded-card shadow-card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-bold text-slate-800">اتجاه صافي الربح الشهري</h2>
+          <span className="text-xs text-slate-400">السنة الحالية</span>
         </div>
+        <ResponsiveContainer width="100%" height={280}>
+          <AreaChart data={summary.monthlyProfitTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#2F8F63" stopOpacity={0.35} />
+                <stop offset="100%" stopColor="#2F8F63" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} />
+            <XAxis dataKey="month" tick={{ fontSize: 12, fill: tickFill }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 12, fill: tickFill }} axisLine={false} tickLine={false} width={70} />
+            <Tooltip formatter={(value: number) => formatEGP(value)} contentStyle={tooltipStyle} />
+            <Area type="monotone" dataKey="profit" stroke="#2F8F63" strokeWidth={2.5} fill="url(#profitFill)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
 
-        <div className="xl:col-span-2 bg-white rounded-card shadow-card p-5">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="bg-white rounded-card shadow-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-slate-800">مصروف كل معدة (سنويًا)</h2>
           </div>
-          <ResponsiveContainer width="100%" height={340}>
-            <BarChart
-              data={summary.equipmentExpenses}
-              layout="vertical"
-              margin={{ top: 0, right: 10, left: 0, bottom: 0 }}
-              barCategoryGap={10}
-            >
+          <ResponsiveContainer width="100%" height={equipmentChartHeight}>
+            <BarChart data={summary.equipmentExpenses} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }} barCategoryGap={10}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridStroke} />
               <XAxis type="number" tick={{ fontSize: 11, fill: tickFill }} axisLine={false} tickLine={false} />
               <YAxis
                 type="category"
                 dataKey="name"
-                tick={{ fontSize: 10, fill: categoryTickFill }}
+                tick={<EquipmentTick fill={categoryTickFill} />}
                 axisLine={false}
                 tickLine={false}
-                width={110}
+                width={120}
                 interval={0}
               />
-              <Tooltip formatter={(value: number) => formatEGP(value)} contentStyle={tooltipStyle} />
-              <Bar dataKey="annualExpense" fill="#2F8F63" radius={[0, 6, 6, 0]} barSize={14} />
+              <Tooltip formatter={(value: number) => [formatEGP(value), "المصروف"]} contentStyle={tooltipStyle} />
+              <Bar dataKey="annualExpense" fill="#C2853A" radius={[0, 6, 6, 0]} barSize={14} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-card shadow-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-bold text-slate-800">صافي ربح كل معدة (سنويًا)</h2>
+            <span className="text-xs text-slate-400">الدخل − المصروف</span>
+          </div>
+          <ResponsiveContainer width="100%" height={equipmentChartHeight}>
+            <BarChart data={summary.equipmentExpenses} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }} barCategoryGap={10}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridStroke} />
+              <XAxis type="number" tick={{ fontSize: 11, fill: tickFill }} axisLine={false} tickLine={false} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                tick={<EquipmentTick fill={categoryTickFill} />}
+                axisLine={false}
+                tickLine={false}
+                width={120}
+                interval={0}
+              />
+              <ReferenceLine x={0} stroke={tickFill} strokeOpacity={0.5} />
+              <Tooltip formatter={(value: number) => [formatEGP(value), "صافي الربح"]} contentStyle={tooltipStyle} />
+              <Bar dataKey="annualProfit" radius={[0, 6, 6, 0]} barSize={14}>
+                {summary.equipmentExpenses.map((eq) => (
+                  <Cell key={eq.name} fill={eq.annualProfit >= 0 ? "#2F8F63" : "#E11D48"} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -178,17 +240,37 @@ export default function Dashboard() {
             <thead>
               <tr className="text-slate-400 border-b border-slate-100">
                 <th className="text-start font-semibold py-2">المعدة</th>
+                <th className="text-start font-semibold py-2">الدخل السنوي</th>
                 <th className="text-start font-semibold py-2">المصروف السنوي</th>
+                <th className="text-start font-semibold py-2">صافي الربح</th>
               </tr>
             </thead>
             <tbody>
               {summary.equipmentExpenses.map((eq) => (
                 <tr key={eq.name} className="border-b border-slate-50 last:border-0">
                   <td className="py-2.5 font-semibold text-slate-700">{eq.name}</td>
+                  <td className="py-2.5 text-slate-500">{formatEGP(eq.annualIncome)}</td>
                   <td className="py-2.5 text-slate-500">{formatEGP(eq.annualExpense)}</td>
+                  <td className={["py-2.5 font-semibold", eq.annualProfit >= 0 ? "text-primary-dark" : "text-rose-600"].join(" ")}>
+                    {formatEGP(eq.annualProfit)}
+                  </td>
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t border-slate-100">
+                <td className="pt-3 font-bold text-slate-700">الإجمالي</td>
+                <td className="pt-3 font-bold text-slate-600">
+                  {formatEGP(summary.equipmentExpenses.reduce((sum, eq) => sum + eq.annualIncome, 0))}
+                </td>
+                <td className="pt-3 font-bold text-slate-600">
+                  {formatEGP(summary.equipmentExpenses.reduce((sum, eq) => sum + eq.annualExpense, 0))}
+                </td>
+                <td className="pt-3 font-bold text-primary-dark">
+                  {formatEGP(summary.equipmentExpenses.reduce((sum, eq) => sum + eq.annualProfit, 0))}
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>

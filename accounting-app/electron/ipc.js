@@ -1812,10 +1812,11 @@ function registerIpcHandlers(db) {
         .get(equipmentId, monthKey).total;
       const driverSalaryExpense = driverSalaryForEquipment(db, equipmentId, monthKey);
       const expense = manualExpense + driverSalaryExpense;
-      return { profit: income - expense, expense };
+      return { profit: income - expense, expense, income };
     }
 
     const equipmentAnnualExpense = new Map(equipmentList.map((e) => [e.id, 0]));
+    const equipmentAnnualIncome = new Map(equipmentList.map((e) => [e.id, 0]));
     const monthlyProfitTrend = [];
     let totalAnnualProfit = 0;
     let totalAnnualExpense = 0;
@@ -1824,10 +1825,11 @@ function registerIpcHandlers(db) {
       const monthKey = `${year}-${String(m + 1).padStart(2, "0")}`;
       let monthProfit = 0;
       for (const eq of equipmentList) {
-        const { profit, expense } = equipmentMonthTotals(eq.id, monthKey);
+        const { profit, expense, income } = equipmentMonthTotals(eq.id, monthKey);
         monthProfit += profit;
         totalAnnualExpense += expense;
         equipmentAnnualExpense.set(eq.id, equipmentAnnualExpense.get(eq.id) + expense);
+        equipmentAnnualIncome.set(eq.id, equipmentAnnualIncome.get(eq.id) + income);
       }
       monthlyProfitTrend.push({ month: MONTH_NAMES_AR[m], profit: monthProfit });
       totalAnnualProfit += monthProfit;
@@ -1836,6 +1838,8 @@ function registerIpcHandlers(db) {
     const equipmentExpenses = equipmentList.map((eq) => ({
       name: eq.name,
       annualExpense: equipmentAnnualExpense.get(eq.id),
+      annualIncome: equipmentAnnualIncome.get(eq.id),
+      annualProfit: equipmentAnnualIncome.get(eq.id) - equipmentAnnualExpense.get(eq.id),
     }));
 
     const contractors = db.prepare("SELECT * FROM contractors").all();
