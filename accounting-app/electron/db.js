@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS daily_logs (
   hassan_commission REAL,
   note TEXT,
   shift_label TEXT NOT NULL DEFAULT '',
+  site_name TEXT,
   UNIQUE (equipment_id, date, role, shift_label)
 );
 
@@ -500,6 +501,17 @@ function initDatabase() {
       db.exec("DROP TABLE daily_logs_migrate_old");
     });
     tx();
+  }
+
+  // اسم الموقع اللي المعدة اشتغلت فيه اليوم ده — بيتكتب في شيت المقاول (أو
+  // سركي السوق) وبيتنسخ لشيت السركي تلقائيًا. بييجي بعد إعادة بناء جدول
+  // الشيفتات فوق عشان ميتمسحش لو الترحيلين اشتغلوا في نفس المرة.
+  const dailyLogsHasSiteName = db
+    .prepare("PRAGMA table_info(daily_logs)")
+    .all()
+    .some((col) => col.name === "site_name");
+  if (!dailyLogsHasSiteName) {
+    db.exec("ALTER TABLE daily_logs ADD COLUMN site_name TEXT");
   }
 
   const accountCount = db.prepare("SELECT COUNT(*) AS c FROM treasury_accounts").get().c;

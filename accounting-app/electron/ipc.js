@@ -28,6 +28,9 @@ function computeDayValue(log) {
 // بيتطبق على أصحاب الأجر اليومي بس — مفيش أوفر تايم ولا إجازة جمعة تلقائية،
 // بيتحسب بس من الأيام المسجلة فعليًا.
 function computeDriverWageValue(log, employeeRate) {
+  // يوم المعدة مشتغلتش فيه بس اتعلّم "إجازة مدفوعة" للسواق ده — بياخد
+  // يوميته الأساسية كاملة (من غير أوفر تايم طبعًا).
+  if (log.is_day_off && log.is_paid_leave) return employeeRate;
   if (log.is_paid_leave || log.is_day_off) return 0;
   const baseHours = log.base_hours ?? 0;
   const hourlyRate = employeeRate / (baseHours || 8);
@@ -432,48 +435,55 @@ function registerIpcHandlers(db) {
 
   const OTHER_HOURS_ROLE = { driver: "contractor", contractor: "driver" };
 
-  // السركي والمقاول نفس اليوم ونفس الساعات فعليًا — الفرق بس السعر والشخص.
-  // فأي تعديل على الساعات/الأساسية/البيان في شيت السائق بينسخ نفسه على شيت
-  // المقاول لنفس المعدة واليوم من غير ما تدخلهم مرتين (ولو صف المقاول
-  // مالوش شخص/سعر لسه بيتعمله واحد فاضي جاهز يتحدد بس)، والعكس صحيح — من
-  // غير ما نلمس اسم الشخص ولا سعر اليوم بتاعه، ومن غير ما نمس إجازة السائق
-  // المدفوعة لأنها مفهوم خاص بمرتبه الشهري ومالهاش معنى عند المقاول. علامة
-  // "اليوم مشتغلش" (is_day_off) بتتزامن هي كمان — لو اليوم مشتغلش في شيت،
-  // بيبقى مشتغلش في التاني بردو، وبيتمسح الاسم والسعر من الشيتين خالص (مفيش
-  // داعي يفضلوا موجودين ليوم متعلّم إنه مشتغلش أصلًا).
-  function syncHoursToOtherRole(db, log) {
-    const otherRole = OTHER_HOURS_ROLE[log.role];
-    if (!otherRole) return;
-    const shiftLabel = log.shift_label ?? "";
-    const existing = db
-      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ? AND shift_label = ?")
-      .get(log.equipment_id, log.date, otherRole, shiftLabel);
-    const params = {
-      equipment_id: log.equipment_id,
-      date: log.date,
-      role: otherRole,
-      shift_label: shiftLabel,
-      person_name: log.is_day_off ? "" : existing?.person_name ?? "",
-      actual_hours: log.actual_hours ?? null,
-      base_hours: log.base_hours ?? null,
-      day_rate: log.is_day_off ? null : existing?.day_rate ?? null,
-      is_paid_leave: existing?.is_paid_leave ?? 0,
-      is_day_off: log.is_day_off ? 1 : 0,
-      fixed_value: existing?.fixed_value ?? null,
-      hassan_commission: existing?.hassan_commission ?? null,
-      note: log.note ?? null,
-    };
-    db.prepare(
-      `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
-       VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
+  const UPSERT_DAILY_LOG_SQL = `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note, site_name)
+       VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note, @site_name)
        ON CONFLICT(equipment_id, date, role, shift_label) DO UPDATE SET
          person_name = excluded.person_name,
          actual_hours = excluded.actual_hours,
          base_hours = excluded.base_hours,
          day_rate = excluded.day_rate,
+         is_paid_leave = excluded.is_paid_leave,
          is_day_off = excluded.is_day_off,
-         note = excluded.note`
-    ).run(params);
+         fixed_value = excluded.fixed_value,
+         hassan_commission = excluded.hassan_commission,
+         note = excluded.note,
+         site_name = excluded.site_name`;
+
+  function findDailyLog(db, equipmentId, date, role, shiftLabel) {
+    return db
+      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ? AND shift_label = ?")
+      .get(equipmentId, date, role, shiftLabel ?? "");
+  }
+
+  // شيت المقاول هو المصدر الوحيد للأيام: الساعات/الأساسية/البيان/الموقع/علامة
+  // "مشتغلش" (ومعاها مدفوعة ولا لأ) بتتكتب فيه وبتتنسخ لشيت السركي لنفس
+  // المعدة واليوم والشيفت — مش العكس. اسم السواق وسعر اليوم في السركي بيفضلوا
+  // زي ما هما، إلا في يوم "مشتغلش": السعر بيتمسح، والاسم بيفضل بس لو اليوم
+  // اتعلّم إجازة مدفوعة (عشان تختار السواق اللي هياخدها)، غير كده بيتمسح.
+  // إجازة السائق الشهري المدفوعة في يوم شغل عادي (خاصة بمرتبه) مبتتلمسش.
+  function mirrorContractorToDriver(db, contractorLog) {
+    const shiftLabel = contractorLog.shift_label ?? "";
+    const existing = findDailyLog(db, contractorLog.equipment_id, contractorLog.date, "driver", shiftLabel);
+    const isDayOff = !!contractorLog.is_day_off;
+    const isPaidDayOff = isDayOff && !!contractorLog.is_paid_leave;
+    db.prepare(UPSERT_DAILY_LOG_SQL).run({
+      equipment_id: contractorLog.equipment_id,
+      date: contractorLog.date,
+      role: "driver",
+      shift_label: shiftLabel,
+      person_name: isDayOff && !isPaidDayOff ? "" : existing?.person_name ?? "",
+      actual_hours: contractorLog.actual_hours ?? null,
+      base_hours: contractorLog.base_hours ?? null,
+      day_rate: isDayOff ? null : existing?.day_rate ?? null,
+      // خارج أيام "مشتغلش" العلامة دي معناها إجازة شهرية مدفوعة للسواق نفسه —
+      // بتفضل زي ما هي، إلا لو كانت جاية من يوم "مشتغلش" مدفوع اتشال.
+      is_paid_leave: isDayOff ? (isPaidDayOff ? 1 : 0) : existing?.is_day_off ? 0 : existing?.is_paid_leave ?? 0,
+      is_day_off: isDayOff ? 1 : 0,
+      fixed_value: existing?.fixed_value ?? null,
+      hassan_commission: existing?.hassan_commission ?? null,
+      note: contractorLog.note ?? null,
+      site_name: contractorLog.site_name ?? null,
+    });
   }
 
   // One row per equipment/date/role/shift_label — matches the spreadsheet's
@@ -486,7 +496,7 @@ function registerIpcHandlers(db) {
       date: log.date,
       role: log.role,
       shift_label: shiftLabel,
-      person_name: log.person_name,
+      person_name: log.person_name ?? "",
       actual_hours: log.actual_hours ?? null,
       base_hours: log.base_hours ?? null,
       day_rate: log.day_rate ?? null,
@@ -495,33 +505,35 @@ function registerIpcHandlers(db) {
       fixed_value: log.fixed_value ?? null,
       hassan_commission: log.hassan_commission ?? null,
       note: log.note ?? null,
+      site_name: log.site_name?.trim() || null,
     };
-    db.prepare(
-      `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
-       VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
-       ON CONFLICT(equipment_id, date, role, shift_label) DO UPDATE SET
-         person_name = excluded.person_name,
-         actual_hours = excluded.actual_hours,
-         base_hours = excluded.base_hours,
-         day_rate = excluded.day_rate,
-         is_paid_leave = excluded.is_paid_leave,
-         is_day_off = excluded.is_day_off,
-         fixed_value = excluded.fixed_value,
-         hassan_commission = excluded.hassan_commission,
-         note = excluded.note`
-    ).run(params);
-    syncHoursToOtherRole(db, log);
-    const row = db
-      .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ? AND shift_label = ?")
-      .get(log.equipment_id, log.date, log.role, shiftLabel);
+    // صف السركي مبيقدرش يغيّر الحاجات المشتركة مع المقاول — لو فيه صف مقاول
+    // لنفس اليوم، الساعات/البيان/الموقع/علامة "مشتغلش" بتتاخد منه هو.
+    if (log.role === "driver") {
+      const master = findDailyLog(db, log.equipment_id, log.date, "contractor", shiftLabel);
+      if (master) {
+        params.actual_hours = master.actual_hours;
+        params.base_hours = master.base_hours;
+        params.note = master.note;
+        params.site_name = master.site_name;
+        params.is_day_off = master.is_day_off ? 1 : 0;
+        if (master.is_day_off) params.is_paid_leave = master.is_paid_leave ? 1 : 0;
+      }
+    }
+    if (params.is_day_off) {
+      params.day_rate = null;
+      params.actual_hours = null;
+      params.base_hours = null;
+      if (!params.is_paid_leave) params.person_name = "";
+    }
+    db.prepare(UPSERT_DAILY_LOG_SQL).run(params);
+    if (log.role === "contractor") mirrorContractorToDriver(db, params);
+    const row = findDailyLog(db, log.equipment_id, log.date, log.role, shiftLabel);
     const equipmentName = db.prepare("SELECT name FROM equipment WHERE id = ?").get(log.equipment_id)?.name;
     if (equipmentName) {
       pushToCloud("daily_logs", row.id, { ...row, equipment_name: equipmentName });
-      const otherRole = OTHER_HOURS_ROLE[log.role];
-      if (otherRole) {
-        const counterpart = db
-          .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ? AND shift_label = ?")
-          .get(log.equipment_id, log.date, otherRole, shiftLabel);
+      if (log.role === "contractor") {
+        const counterpart = findDailyLog(db, log.equipment_id, log.date, "driver", shiftLabel);
         if (counterpart) pushToCloud("daily_logs", counterpart.id, { ...counterpart, equipment_name: equipmentName });
       }
     }
@@ -531,13 +543,12 @@ function registerIpcHandlers(db) {
   ipcMain.handle("dailyLogs:delete", (_e, { id }) => {
     const log = db.prepare("SELECT * FROM daily_logs WHERE id = ?").get(id);
     db.prepare("DELETE FROM daily_logs WHERE id = ?").run(id);
-    // يوم مشتغلش خالص في شيت — يبقى مشتغلش في التاني بردو (نفس اليوم بيتحذف
-    // من الاتنين، مش بس واحد)، بشرط يبقوا في نفس الشيفت.
-    if (log && OTHER_HOURS_ROLE[log.role]) {
-      db.prepare("DELETE FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ? AND shift_label = ?").run(
+    // يوم اتمسح من شيت المقاول (المصدر) بيتمسح من السركي بردو، بشرط يبقوا في
+    // نفس الشيفت. مسح يوم من السركي مبيلمسش المقاول.
+    if (log && log.role === "contractor") {
+      db.prepare("DELETE FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = 'driver' AND shift_label = ?").run(
         log.equipment_id,
         log.date,
-        OTHER_HOURS_ROLE[log.role],
         log.shift_label ?? ""
       );
     }
@@ -564,7 +575,7 @@ function registerIpcHandlers(db) {
 
   // معدة جديدة غالبًا هتشتغل بنفس ساعات ودوام معدة قديمة (نفس مواعيد الورديات
   // والأوفر تايم) — بننسخ الساعات/الأساسية/الأوفر تايم/علامة "مشتغلش"/البيان
-  // بس من شيت السركي بتاع المعدة المصدر لنفس الشهر، وبيتزامنوا لشيت المقاول
+  // بس من شيت المقاول بتاع المعدة المصدر لنفس الشهر، وبيتزامنوا لشيت السركي
   // تلقائيًا زي أي تعديل عادي. الاسم وسعر اليوم (في السركي والمقاول) بيفضلوا
   // زي ما هما عند المعدة الهدف من غير ما نلمسهم — لازم يتحددوا يدويًا بعد
   // النسخ لأن السواق/المقاول وسعره مختلفين عن المعدة التانية.
@@ -574,41 +585,29 @@ function registerIpcHandlers(db) {
       const sourceShift = source_shift_label ?? "";
       const targetShift = target_shift_label ?? "";
       const sourceLogs = db
-        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver' AND shift_label = ? AND date LIKE ?")
+        .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'contractor' AND shift_label = ? AND date LIKE ?")
         .all(source_equipment_id, sourceShift, `${month}%`);
-      const upsertHours = db.prepare(
-        `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
-       VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note)
-       ON CONFLICT(equipment_id, date, role, shift_label) DO UPDATE SET
-         person_name = excluded.person_name,
-         actual_hours = excluded.actual_hours,
-         base_hours = excluded.base_hours,
-         day_rate = excluded.day_rate,
-         is_day_off = excluded.is_day_off,
-         note = excluded.note`
-      );
       const copy = db.transaction((logs) => {
         for (const src of logs) {
-          for (const targetRole of ["driver", "contractor"]) {
-            const existing = db
-              .prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND date = ? AND role = ? AND shift_label = ?")
-              .get(target_equipment_id, src.date, targetRole, targetShift);
-            upsertHours.run({
-              equipment_id: target_equipment_id,
-              date: src.date,
-              role: targetRole,
-              shift_label: targetShift,
-              person_name: src.is_day_off ? "" : existing?.person_name ?? "",
-              actual_hours: src.actual_hours,
-              base_hours: src.base_hours,
-              day_rate: src.is_day_off ? null : existing?.day_rate ?? null,
-              is_paid_leave: existing?.is_paid_leave ?? 0,
-              is_day_off: src.is_day_off ? 1 : 0,
-              fixed_value: existing?.fixed_value ?? null,
-              hassan_commission: existing?.hassan_commission ?? null,
-              note: src.note,
-            });
-          }
+          const existing = findDailyLog(db, target_equipment_id, src.date, "contractor", targetShift);
+          const params = {
+            equipment_id: target_equipment_id,
+            date: src.date,
+            role: "contractor",
+            shift_label: targetShift,
+            person_name: src.is_day_off ? "" : existing?.person_name ?? "",
+            actual_hours: src.actual_hours,
+            base_hours: src.base_hours,
+            day_rate: src.is_day_off ? null : existing?.day_rate ?? null,
+            is_paid_leave: src.is_day_off && src.is_paid_leave ? 1 : 0,
+            is_day_off: src.is_day_off ? 1 : 0,
+            fixed_value: existing?.fixed_value ?? null,
+            hassan_commission: existing?.hassan_commission ?? null,
+            note: src.note,
+            site_name: existing?.site_name ?? null,
+          };
+          db.prepare(UPSERT_DAILY_LOG_SQL).run(params);
+          mirrorContractorToDriver(db, params);
         }
       });
       copy(sourceLogs);

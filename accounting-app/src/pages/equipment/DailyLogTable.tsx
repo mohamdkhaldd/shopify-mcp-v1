@@ -32,8 +32,9 @@ const OTHER_HOURS_ROLE: Partial<Record<DailyLogRole, DailyLogRole>> = {
   contractor: "driver",
 };
 
-// شيت المقاول هو مصدر الأيام/الساعات دلوقتي (تدخل فيه، وشيت السركي بيتزامن
-// معاه تلقائيًا زي مرايا) — عكس الوضع القديم بالظبط.
+// شيت المقاول هو مصدر الأيام/الساعات/البيان/الموقع وعلامة "مشتغلش" (تدخل
+// فيه، وشيت السركي بيتزامن معاه تلقائيًا زي مرايا) — السيرفر نفسه بيمنع
+// السركي إنه يغيّر أي حاجة من دول، فالاتجاه واحد بس: مقاول ← سركي.
 const MASTER_ROLE: DailyLogRole = "contractor";
 
 interface RowDraft {
@@ -48,6 +49,7 @@ interface RowDraft {
   fixed_value: string;
   hassan_commission: string;
   note: string;
+  site_name: string;
   day_value: number;
   saving: boolean;
 }
@@ -65,6 +67,7 @@ function emptyRow(): RowDraft {
     fixed_value: "",
     hassan_commission: "",
     note: "",
+    site_name: "",
     day_value: 0,
     saving: false,
   };
@@ -129,6 +132,7 @@ export default function DailyLogTable({
   const [bulkPerson, setBulkPerson] = useState("");
   const [bulkRate, setBulkRate] = useState("");
   const [bulkBaseHours, setBulkBaseHours] = useState("8");
+  const [bulkSite, setBulkSite] = useState("");
   const [bulkApplying, setBulkApplying] = useState(false);
   const [bulkClearing, setBulkClearing] = useState(false);
   const { pushUndo } = useUndo();
@@ -183,6 +187,7 @@ export default function DailyLogTable({
       fixed_value: log.fixed_value?.toString() ?? "",
       hassan_commission: log.hassan_commission?.toString() ?? "",
       note: log.note ?? "",
+      site_name: log.site_name ?? "",
       day_value: log.day_value,
       saving: false,
     };
@@ -211,6 +216,7 @@ export default function DailyLogTable({
       fixed_value: log.fixed_value,
       hassan_commission: log.hassan_commission,
       note: log.note,
+      site_name: log.site_name,
     });
   }
 
@@ -235,8 +241,11 @@ export default function DailyLogTable({
     const patch: Partial<RowDraft> = { person_name: name };
     // سعر اليوم هنا معناه دخل المعدة، مش مرتب الشخص — نقترحه بس من سعر السائق
     // اليومي، لأن مرتب الموظف الشهري رقم شهري ومالوش علاقة بقيمة يوم شغل المعدة.
-    if (match?.rate && match.wage_type !== "monthly" && mode === "hours") patch.day_rate = String(match.rate);
-    if (match?.wage_type !== "monthly") patch.is_paid_leave = false;
+    if (match?.rate && match.wage_type !== "monthly" && mode === "hours" && !rows[date]?.is_day_off)
+      patch.day_rate = String(match.rate);
+    // علامة الإجازة المدفوعة في يوم "مشتغلش" جاية من شيت المقاول ومالهاش
+    // علاقة بنوع أجر السواق — متتلمسش هنا.
+    if (match?.wage_type !== "monthly" && !rows[date]?.is_day_off) patch.is_paid_leave = false;
     updateRow(date, patch);
   }
 
@@ -249,7 +258,7 @@ export default function DailyLogTable({
     // الساعات الفعلية لوحدها (اتكتبت مباشرة أو عن طريق خانة الأوفر تايم)
     // كافية تحفظ الصف من غير شخص، عشان تقدر تدخل الساعات مرة واحدة وتسمع
     // في الشيت التاني قبل ما تحدد السواق/المقاول وسعره.
-    const hasNote = mode === "hours" && row.note.trim().length > 0;
+    const hasNote = mode === "hours" && (row.note.trim().length > 0 || row.site_name.trim().length > 0);
     const hasHours = mode === "hours" && row.actual_hours.trim() !== "";
     const hasContent =
       mode === "hours"
@@ -287,7 +296,7 @@ export default function DailyLogTable({
       date,
       role,
       shift_label: shiftLabel,
-      person_name: row.is_day_off ? "" : row.person_name,
+      person_name: row.is_day_off && !row.is_paid_leave ? "" : row.person_name,
       actual_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.actual_hours) : null,
       base_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.base_hours) : null,
       day_rate: row.is_day_off ? null : mode === "hours" ? Number(row.day_rate) || 0 : null,
@@ -296,8 +305,9 @@ export default function DailyLogTable({
       fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
       hassan_commission: mode === "fixed" && row.hassan_commission ? Number(row.hassan_commission) : null,
       note: row.note.trim() || null,
+      site_name: row.site_name.trim() || null,
     });
-    updateRow(date, { id: saved.id, day_value: saved.day_value, saving: false });
+    updateRow(date, { id: saved.id, person_name: saved.person_name, day_value: saved.day_value, saving: false });
     onChanged?.();
   }
 
@@ -351,6 +361,17 @@ export default function DailyLogTable({
     }
   }
 
+  // زرار "مدفوعة" جنب علامة "مشتغلش" في شيت المقاول — لو اليوم اتعلّم إجازة
+  // مدفوعة، تقدر تختار في شيت السركي السواق اللي هياخد يوميته؛ لو مش مدفوعة
+  // خانة السواق بتفضل مقفولة وفاضية.
+  async function togglePaidDayOff(date: string) {
+    const row = rows[date] ?? emptyRow();
+    if (!row.is_day_off) return;
+    const next = !row.is_paid_leave;
+    updateRow(date, { is_paid_leave: next });
+    await saveRow(date, { is_paid_leave: next });
+  }
+
   function handleBulkPersonChange(name: string) {
     setBulkPerson(name);
     const match = people.find((p) => p.name === name);
@@ -385,11 +406,12 @@ export default function DailyLogTable({
         actual_hours: preserveHours ? hoursOrNull(existing?.actual_hours ?? "") : Number(bulkBaseHours) || 0,
         base_hours: preserveHours ? hoursOrNull(existing?.base_hours ?? "") : Number(bulkBaseHours) || 0,
         day_rate: Number(bulkRate) || 0,
-        is_paid_leave: false,
+        is_paid_leave: existing?.is_day_off ? existing.is_paid_leave : false,
         is_day_off: existing?.is_day_off ?? false,
         fixed_value: null,
         hassan_commission: null,
         note: rows[date]?.note.trim() || null,
+        site_name: (role === MASTER_ROLE && bulkSite.trim()) || existing?.site_name.trim() || null,
       });
     }
 
@@ -438,7 +460,7 @@ export default function DailyLogTable({
           date,
           role,
           shift_label: shiftLabel,
-          person_name: row.is_day_off ? "" : row.person_name,
+          person_name: row.is_day_off && !row.is_paid_leave ? "" : row.person_name,
           actual_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.actual_hours) : null,
           base_hours: mode === "hours" && !row.is_paid_leave ? hoursOrNull(row.base_hours) : null,
           day_rate: row.is_day_off ? null : mode === "hours" ? Number(row.day_rate) || 0 : null,
@@ -447,6 +469,7 @@ export default function DailyLogTable({
           fixed_value: mode === "fixed" ? Number(row.fixed_value) || 0 : null,
           hassan_commission: mode === "fixed" && row.hassan_commission ? Number(row.hassan_commission) : null,
           note: row.note.trim() || null,
+          site_name: row.site_name.trim() || null,
         });
       }
       for (const log of counterpartSnapshot) await restoreDailyLog(log);
@@ -527,7 +550,7 @@ export default function DailyLogTable({
           date,
           role,
           shift_label: shiftLabel,
-          person_name: row.is_day_off ? "" : row.person_name,
+          person_name: row.is_day_off && !row.is_paid_leave ? "" : row.person_name,
           actual_hours: !row.is_paid_leave ? hoursOrNull(row.actual_hours) : null,
           base_hours: !row.is_paid_leave ? hoursOrNull(row.base_hours) : null,
           day_rate: row.is_day_off ? null : Number(row.day_rate) || 0,
@@ -536,6 +559,7 @@ export default function DailyLogTable({
           fixed_value: null,
           hassan_commission: null,
           note: row.note.trim() || null,
+          site_name: row.site_name.trim() || null,
         });
         if (counterpart) await restoreDailyLog(counterpart);
       }
@@ -668,6 +692,18 @@ export default function DailyLogTable({
             </div>
             {role === MASTER_ROLE && (
               <div>
+                <label className="block text-[11px] text-slate-400 mb-1">اسم الموقع</label>
+                <input
+                  type="text"
+                  value={bulkSite}
+                  onChange={(e) => setBulkSite(e.target.value)}
+                  placeholder="اختياري"
+                  className="w-32 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                />
+              </div>
+            )}
+            {role === MASTER_ROLE && (
+              <div>
                 <label className="block text-[11px] text-slate-400 mb-1">الساعات الأساسية</label>
                 <input
                   type="number"
@@ -696,8 +732,8 @@ export default function DailyLogTable({
           </div>
           <div className="text-[11px] text-slate-400 mt-2">
             {role === MASTER_ROLE
-              ? '"تطبيق على الأيام" بيملأ الاسم وسعر اليوم والساعات الأساسية لكل الأيام في المدى ده (من غير أوفر تايم). "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده من غير ما تحتاج اسم أو سعر — يعني الشخص مشتغلش الأيام دي، وتقدر ترجعها بـ Ctrl+Z لو غلطت. الساعات والأساسية والبيان بتتسجل في شيت السركي تلقائيًا لنفس الأيام — تدخلها هنا مرة واحدة بس، وبعدين تحدد السواق وسعره من هناك.'
-              : '"تطبيق على الأيام" بيملأ الاسم وسعر اليوم بس لكل الأيام في المدى ده — الساعات ثابتة جاية من شيت المقاول ومبتتغيرش من هنا. "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده، وتقدر ترجعها بـ Ctrl+Z لو غلطت.'}
+              ? '"تطبيق على الأيام" بيملأ الاسم وسعر اليوم والساعات الأساسية (واسم الموقع لو كتبته) لكل الأيام في المدى ده (من غير أوفر تايم). "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده من غير ما تحتاج اسم أو سعر — يعني الشخص مشتغلش الأيام دي، وتقدر ترجعها بـ Ctrl+Z لو غلطت. الساعات والأساسية والبيان والموقع بتتسجل في شيت السركي تلقائيًا لنفس الأيام — تدخلها هنا مرة واحدة بس، وبعدين تحدد السواق وسعره من هناك.'
+              : '"تطبيق على الأيام" بيملأ الاسم وسعر اليوم بس لكل الأيام في المدى ده — الساعات والموقع ثابتين جايين من شيت المقاول ومبيتغيروش من هنا. "افرغ الأيام دي" بيمسح أي بيانات مسجلة في المدى ده، وتقدر ترجعها بـ Ctrl+Z لو غلطت.'}
           </div>
         </div>
       )}
@@ -749,6 +785,7 @@ export default function DailyLogTable({
             <tr className="text-slate-400 border-b border-slate-100">
               <th className="text-start font-semibold py-2 whitespace-nowrap">اليوم</th>
               <th className="text-start font-semibold py-2 min-w-[140px]">الاسم</th>
+              <th className="text-start font-semibold py-2 min-w-[120px]">الموقع</th>
               {mode === "hours" ? (
                 <>
                   <th className="text-start font-semibold py-2">الساعات الفعلية</th>
@@ -807,18 +844,51 @@ export default function DailyLogTable({
                     )}
                     {dayNum}
                     <span className="text-xs text-slate-400"> ({weekdayLabel(date)})</span>
-                    {row.is_day_off && <span className="print-only">مشتغلش</span>}
+                    {row.is_day_off && (
+                      <span className="print-only">{row.is_paid_leave ? "مشتغلش (مدفوعة)" : "مشتغلش"}</span>
+                    )}
+                    {mode === "hours" && row.is_day_off && role === MASTER_ROLE && (
+                      <button
+                        type="button"
+                        onClick={() => togglePaidDayOff(date)}
+                        title="دوس عشان تغيّر الإجازة مدفوعة ولا لأ — لو مدفوعة تختار السواق من شيت السركي"
+                        className={[
+                          "no-print ms-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-bold border",
+                          row.is_paid_leave
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                            : "bg-white text-slate-500 border-slate-300 hover:bg-slate-50",
+                        ].join(" ")}
+                      >
+                        {row.is_paid_leave ? "مدفوعة" : "مش مدفوعة"}
+                      </button>
+                    )}
+                    {mode === "hours" && row.is_day_off && role !== MASTER_ROLE && (
+                      <span
+                        className={[
+                          "no-print ms-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-bold",
+                          row.is_paid_leave ? "bg-emerald-50 text-emerald-700" : "bg-rose-100 text-rose-600",
+                        ].join(" ")}
+                      >
+                        {row.is_paid_leave ? "إجازة مدفوعة" : "مشتغلش"}
+                      </span>
+                    )}
                   </td>
                   <td className="py-1.5">
                     <select
                       value={row.person_name}
                       onChange={(e) => handlePersonChange(date, e.target.value)}
                       onBlur={() => saveRow(date)}
-                      disabled={row.is_day_off}
-                      title={row.is_day_off ? "اليوم ده متعلّم إنه مشتغلش" : undefined}
+                      disabled={row.is_day_off && !(role === "driver" && row.is_paid_leave)}
+                      title={
+                        row.is_day_off
+                          ? role === "driver" && row.is_paid_leave
+                            ? "إجازة مدفوعة — اختار السواق اللي هياخد اليوم ده"
+                            : "اليوم ده متعلّم إنه مشتغلش (مش مدفوعة)"
+                          : undefined
+                      }
                       className={[
                         "w-full rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 bg-white disabled:bg-slate-100 disabled:text-slate-400",
-                        row.is_paid_leave ? "no-print" : "",
+                        row.is_paid_leave && !row.is_day_off ? "no-print" : "",
                       ].join(" ")}
                     >
                       <option value=""></option>
@@ -828,7 +898,18 @@ export default function DailyLogTable({
                         </option>
                       ))}
                     </select>
-                    {row.is_paid_leave && <span className="print-only">&nbsp;</span>}
+                    {row.is_paid_leave && !row.is_day_off && <span className="print-only">&nbsp;</span>}
+                  </td>
+                  <td className="py-1.5">
+                    <input
+                      type="text"
+                      value={row.site_name}
+                      onChange={(e) => updateRow(date, { site_name: e.target.value })}
+                      onBlur={() => saveRow(date)}
+                      disabled={mode === "hours" && role !== MASTER_ROLE}
+                      title={mode === "hours" && role !== MASTER_ROLE ? "الموقع بيتسجل من شيت المقاول" : undefined}
+                      className="w-full min-w-[110px] rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-500"
+                    />
                   </td>
                   {mode === "hours" ? (
                     <>
@@ -887,7 +968,7 @@ export default function DailyLogTable({
                       </td>
                       {role === "driver" && (
                         <td className="no-print py-1.5 text-center">
-                          {isMonthlyPerson(row.person_name) && (
+                          {isMonthlyPerson(row.person_name) && !row.is_day_off && (
                             <input
                               type="checkbox"
                               checked={row.is_paid_leave}
@@ -906,7 +987,9 @@ export default function DailyLogTable({
                           value={row.note}
                           onChange={(e) => updateRow(date, { note: e.target.value })}
                           onBlur={() => saveRow(date)}
-                          className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          disabled={role !== MASTER_ROLE}
+                          title={role !== MASTER_ROLE ? "البيان بيتسجل من شيت المقاول" : undefined}
+                          className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-500"
                         />
                       </td>
                     </>
@@ -946,7 +1029,7 @@ export default function DailyLogTable({
           <tfoot>
             {mode === "hours" && (
               <tr>
-                <td colSpan={2} className="pt-3 text-sm font-bold text-slate-700">
+                <td colSpan={3} className="pt-3 text-sm font-bold text-slate-700">
                   إجمالي الأوفر تايم
                 </td>
                 <td colSpan={role === "driver" ? 5 : 4} className="pt-3 text-sm font-bold text-slate-600">
@@ -956,7 +1039,7 @@ export default function DailyLogTable({
             )}
             <tr>
               <td
-                colSpan={mode === "hours" ? (role === "driver" ? 7 : 6) : 4}
+                colSpan={mode === "hours" ? (role === "driver" ? 8 : 7) : 5}
                 className="pt-3 text-sm font-bold text-slate-700"
               >
                 إجمالي الشهر

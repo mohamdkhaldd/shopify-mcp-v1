@@ -70,7 +70,12 @@ export default function DailyLogSheet({ equipmentId, month, role, shiftLabel }: 
               </div>
 
               {off ? (
-                <div className="text-xs font-bold text-rose-600">{isDriver ? "مشتغلش (متعلّم من شيت المقاول)" : "مشتغلش"}</div>
+                <div className="text-xs font-bold text-rose-600">
+                  {isDriver ? "مشتغلش (متعلّم من شيت المقاول)" : "مشتغلش"}
+                  {log?.is_paid_leave && (
+                    <span className="text-emerald-700"> — إجازة مدفوعة{isDriver && log.person_name ? ` لـ ${log.person_name}` : ""}</span>
+                  )}
+                </div>
               ) : !log ? (
                 <div className="text-xs text-slate-400">مفيش بيانات مسجلة.</div>
               ) : (
@@ -82,6 +87,7 @@ export default function DailyLogSheet({ equipmentId, month, role, shiftLabel }: 
                       <span className="text-primary-dark"> (أوفر تايم {log.actual_hours - log.base_hours})</span>
                     )}
                   </div>
+                  {log.site_name && <div>الموقع: <span className="font-semibold text-slate-700">{log.site_name}</span></div>}
                   {log.note && <div>بيان: {log.note}</div>}
                 </div>
               )}

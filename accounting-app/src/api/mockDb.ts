@@ -20,6 +20,7 @@ interface DailyLogRow {
   fixed_value: number | null;
   hassan_commission: number | null;
   note: string | null;
+  site_name?: string | null;
 }
 
 interface MonthlyExpenseRow {
@@ -197,6 +198,7 @@ function computeDayValue(log: DailyLogRow): number {
 // في شيت السركي (ده بقى بيمثل قد إيه المعدة اشتغلت بيه، رقم مختلف تمامًا).
 // بيتطبق على أصحاب الأجر اليومي بس — بيتحسب من الأيام المسجلة فعليًا فقط.
 function computeDriverWageValue(log: DailyLogRow, employeeRate: number): number {
+  if (log.is_day_off && log.is_paid_leave) return employeeRate;
   if (log.is_paid_leave || log.is_day_off) return 0;
   const baseHours = log.base_hours ?? 0;
   const hourlyRate = employeeRate / (baseHours || 8);
@@ -418,28 +420,21 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { wage_type: emp.wage_type, rate: emp.rate, fixed_salary: emp.fixed_salary };
   }
 
-  const OTHER_HOURS_ROLE: Partial<Record<string, "driver" | "contractor">> = {
-    driver: "contractor",
-    contractor: "driver",
-  };
-
-  // السركي والمقاول نفس اليوم ونفس الساعات فعليًا — أي تعديل على الساعات في
-  // شيت بينسخ نفسه على شيت التاني لنفس المعدة واليوم، من غير ما يلمس اسم
-  // الشخص ولا سعره ولا إجازة السائق المدفوعة (مفهوم خاص بيه بس) — إلا لو
-  // اليوم اتعلّم "مشتغلش"، ساعتها بيتمسح الاسم والسعر من الشيتين خالص.
-  function syncHoursToOtherRole(log: DailyLogRow) {
-    const otherRole = OTHER_HOURS_ROLE[log.role];
-    if (!otherRole) return;
+  // نفس منطق ipc.js: شيت المقاول هو المصدر، وبيتنسخ منه للسركي بس (مش العكس).
+  function mirrorContractorToDriver(log: DailyLogRow) {
+    const isPaidDayOff = log.is_day_off && log.is_paid_leave;
     const existing = state.daily_logs.find(
-      (l) => l.equipment_id === log.equipment_id && l.date === log.date && l.role === otherRole
+      (l) => l.equipment_id === log.equipment_id && l.date === log.date && l.role === "driver"
     );
     if (existing) {
       existing.actual_hours = log.actual_hours ?? null;
       existing.base_hours = log.base_hours ?? null;
       existing.note = log.note ?? null;
+      existing.site_name = log.site_name ?? null;
+      existing.is_paid_leave = log.is_day_off ? isPaidDayOff : existing.is_day_off ? false : existing.is_paid_leave;
       existing.is_day_off = !!log.is_day_off;
       if (log.is_day_off) {
-        existing.person_name = "";
+        if (!isPaidDayOff) existing.person_name = "";
         existing.day_rate = null;
       }
     } else {
@@ -447,19 +442,24 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
         id: state.nextId++,
         equipment_id: log.equipment_id,
         date: log.date,
-        role: otherRole,
+        role: "driver",
         person_name: "",
         actual_hours: log.actual_hours ?? null,
         base_hours: log.base_hours ?? null,
         day_rate: null,
-        is_paid_leave: false,
+        is_paid_leave: isPaidDayOff,
         is_day_off: !!log.is_day_off,
         fixed_value: null,
         hassan_commission: null,
         note: log.note ?? null,
+        site_name: log.site_name ?? null,
       });
     }
   }
+
+  // الشيفتات الإضافية مش متخزنة في نسخة المعاينة — الشيفت الأساسي بس.
+  if (channel === "equipmentShifts:list") return [];
+  if (channel === "equipmentShifts:create") return { id: state.nextId++, equipment_id: payload.equipment_id, label: payload.label };
 
   if (channel === "dailyLogs:list") {
     return state.daily_logs
@@ -471,69 +471,86 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     const existing = state.daily_logs.find(
       (l) => l.equipment_id === payload.equipment_id && l.date === payload.date && l.role === payload.role
     );
+    const next: Omit<DailyLogRow, "id"> = { ...payload };
+    if (next.role === "driver") {
+      const master = state.daily_logs.find(
+        (l) => l.equipment_id === next.equipment_id && l.date === next.date && l.role === "contractor"
+      );
+      if (master) {
+        next.actual_hours = master.actual_hours;
+        next.base_hours = master.base_hours;
+        next.note = master.note;
+        next.site_name = master.site_name ?? null;
+        next.is_day_off = master.is_day_off;
+        if (master.is_day_off) next.is_paid_leave = master.is_paid_leave;
+      }
+    }
+    if (next.is_day_off) {
+      next.day_rate = null;
+      next.actual_hours = null;
+      next.base_hours = null;
+      if (!next.is_paid_leave) next.person_name = "";
+    }
     let record: DailyLogRow;
     if (existing) {
-      Object.assign(existing, payload);
+      Object.assign(existing, next);
       record = existing;
     } else {
-      record = { id: state.nextId++, ...payload };
+      record = { id: state.nextId++, ...next };
       state.daily_logs.push(record);
     }
-    syncHoursToOtherRole(record);
+    if (record.role === "contractor") mirrorContractorToDriver(record);
     saveState(state);
     return { ...record, day_value: computeDayValue(record) };
   }
   if (channel === "dailyLogs:delete") {
     const log = state.daily_logs.find((l) => l.id === payload.id);
     state.daily_logs = state.daily_logs.filter((l) => l.id !== payload.id);
-    // يوم مشتغلش خالص في شيت — يبقى مشتغلش في التاني بردو.
-    if (log) {
-      const otherRole = OTHER_HOURS_ROLE[log.role];
-      if (otherRole) {
-        state.daily_logs = state.daily_logs.filter(
-          (l) => !(l.equipment_id === log.equipment_id && l.date === log.date && l.role === otherRole)
-        );
-      }
+    // يوم اتمسح من شيت المقاول بيتمسح من السركي بردو — مش العكس.
+    if (log && log.role === "contractor") {
+      state.daily_logs = state.daily_logs.filter(
+        (l) => !(l.equipment_id === log.equipment_id && l.date === log.date && l.role === "driver")
+      );
     }
     saveState(state);
     return { ok: true };
   }
   if (channel === "dailyLogs:copyFromEquipment") {
     const sourceLogs = state.daily_logs.filter(
-      (l) => l.equipment_id === payload.source_equipment_id && l.role === "driver" && l.date.startsWith(payload.month)
+      (l) => l.equipment_id === payload.source_equipment_id && l.role === "contractor" && l.date.startsWith(payload.month)
     );
     for (const src of sourceLogs) {
-      for (const targetRole of ["driver", "contractor"] as const) {
-        const existing = state.daily_logs.find(
-          (l) => l.equipment_id === payload.target_equipment_id && l.date === src.date && l.role === targetRole
-        );
-        if (existing) {
-          existing.actual_hours = src.actual_hours;
-          existing.base_hours = src.base_hours;
-          existing.is_day_off = src.is_day_off;
-          existing.note = src.note;
-          if (src.is_day_off) {
-            existing.person_name = "";
-            existing.day_rate = null;
-          }
-        } else {
-          state.daily_logs.push({
-            id: state.nextId++,
-            equipment_id: payload.target_equipment_id,
-            date: src.date,
-            role: targetRole,
-            person_name: "",
-            actual_hours: src.actual_hours,
-            base_hours: src.base_hours,
-            day_rate: null,
-            is_paid_leave: false,
-            is_day_off: src.is_day_off,
-            fixed_value: null,
-            hassan_commission: null,
-            note: src.note,
-          });
-        }
+      let target = state.daily_logs.find(
+        (l) => l.equipment_id === payload.target_equipment_id && l.date === src.date && l.role === "contractor"
+      );
+      if (!target) {
+        target = {
+          id: state.nextId++,
+          equipment_id: payload.target_equipment_id,
+          date: src.date,
+          role: "contractor",
+          person_name: "",
+          actual_hours: null,
+          base_hours: null,
+          day_rate: null,
+          is_paid_leave: false,
+          is_day_off: false,
+          fixed_value: null,
+          hassan_commission: null,
+          note: null,
+        };
+        state.daily_logs.push(target);
       }
+      target.actual_hours = src.actual_hours;
+      target.base_hours = src.base_hours;
+      target.is_day_off = src.is_day_off;
+      target.is_paid_leave = src.is_day_off && src.is_paid_leave;
+      target.note = src.note;
+      if (src.is_day_off) {
+        target.person_name = "";
+        target.day_rate = null;
+      }
+      mirrorContractorToDriver(target);
     }
     saveState(state);
     return { count: sourceLogs.length };

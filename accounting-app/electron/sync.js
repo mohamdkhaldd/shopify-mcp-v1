@@ -163,9 +163,13 @@ function mergeEquipment(db, data) {
 function mergeDailyLog(db, data) {
   const equipmentId = findOrCreateEquipmentId(db, data.equipment_name);
   if (!equipmentId || !data.date || !data.role) return;
+  // إجازة مدفوعة واسم الموقع ممكن ميبقوش موجودين في السحابة لو جدولها لسه
+  // متحدّثش — ساعتها بنسيب القيمة المحلية زي ما هي بدل ما نصفّرها.
+  const hasPaidLeave = data.is_paid_leave !== undefined && data.is_paid_leave !== null;
+  const hasSiteName = data.site_name !== undefined;
   db.prepare(
-    `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note)
-     VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, 0, @is_day_off, @fixed_value, @hassan_commission, @note)
+    `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note, site_name)
+     VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note, @site_name)
      ON CONFLICT(equipment_id, date, role, shift_label) DO UPDATE SET
        person_name = excluded.person_name,
        actual_hours = excluded.actual_hours,
@@ -174,7 +178,9 @@ function mergeDailyLog(db, data) {
        is_day_off = excluded.is_day_off,
        fixed_value = excluded.fixed_value,
        hassan_commission = excluded.hassan_commission,
-       note = excluded.note`
+       note = excluded.note${hasPaidLeave ? ",\n       is_paid_leave = excluded.is_paid_leave" : ""}${
+      hasSiteName ? ",\n       site_name = excluded.site_name" : ""
+    }`
   ).run({
     equipment_id: equipmentId,
     date: data.date,
@@ -184,10 +190,12 @@ function mergeDailyLog(db, data) {
     actual_hours: data.actual_hours ?? null,
     base_hours: data.base_hours ?? null,
     day_rate: data.day_rate ?? null,
+    is_paid_leave: data.is_paid_leave ? 1 : 0,
     is_day_off: data.is_day_off ? 1 : 0,
     fixed_value: data.fixed_value ?? null,
     hassan_commission: data.hassan_commission ?? null,
     note: data.note ?? null,
+    site_name: data.site_name ?? null,
   });
 }
 
@@ -660,25 +668,30 @@ async function pushToCloud(table, localId, data) {
       case "daily_logs": {
         const equipmentId = await getOrCreateByName("equipment", data.equipment_name);
         if (!equipmentId) return { ok: false, error: `equipment not found: ${data.equipment_name}` };
-        checkError(
-          await activeClient.from("daily_logs").upsert(
-            {
-              equipment_id: equipmentId,
-              date: data.date,
-              role: data.role,
-              shift_label: data.shift_label ?? "",
-              person_name: data.person_name ?? "",
-              actual_hours: data.actual_hours,
-              base_hours: data.base_hours,
-              day_rate: data.day_rate,
-              is_day_off: !!data.is_day_off,
-              fixed_value: data.fixed_value,
-              hassan_commission: data.hassan_commission,
-              note: data.note,
-            },
-            { onConflict: "equipment_id,date,role,shift_label" }
-          )
-        );
+        const row = {
+          equipment_id: equipmentId,
+          date: data.date,
+          role: data.role,
+          shift_label: data.shift_label ?? "",
+          person_name: data.person_name ?? "",
+          actual_hours: data.actual_hours,
+          base_hours: data.base_hours,
+          day_rate: data.day_rate,
+          is_day_off: !!data.is_day_off,
+          fixed_value: data.fixed_value,
+          hassan_commission: data.hassan_commission,
+          note: data.note,
+        };
+        const extended = { ...row, is_paid_leave: !!data.is_paid_leave, site_name: data.site_name ?? null };
+        const result = await activeClient.from("daily_logs").upsert(extended, { onConflict: "equipment_id,date,role,shift_label" });
+        // لو جدول السحابة لسه مضافلوش عمودين is_paid_leave/site_name (الـ SQL
+        // الجديد في supabase/schema.sql متشغّلش)، بنبعت الصف من غيرهم بدل ما
+        // المزامنة كلها تقف.
+        if (result.error && /is_paid_leave|site_name/.test(result.error.message ?? "")) {
+          checkError(await activeClient.from("daily_logs").upsert(row, { onConflict: "equipment_id,date,role,shift_label" }));
+        } else {
+          checkError(result);
+        }
         return { ok: true };
       }
       case "equipment_shifts": {

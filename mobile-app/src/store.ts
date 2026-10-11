@@ -381,6 +381,7 @@ function syncHoursToOtherRole(log: DailyLog) {
       base_hours: log.base_hours,
       day_rate: null,
       is_paid_leave: false,
+      site_name: log.site_name ?? null,
       is_day_off: log.is_day_off,
       fixed_value: null,
       hassan_commission: null,
@@ -891,11 +892,12 @@ export function mergeRemoteRecord(collectionName: string, docId: string, data: a
         actual_hours: data.actual_hours ?? null,
         base_hours: data.base_hours ?? null,
         day_rate: data.day_rate ?? null,
-        is_paid_leave: false,
+        is_paid_leave: Boolean(data.is_paid_leave),
         is_day_off: Boolean(data.is_day_off),
         fixed_value: data.fixed_value ?? null,
         hassan_commission: data.hassan_commission ?? null,
         note: data.note ?? null,
+        site_name: data.site_name ?? null,
       };
       if (existing) Object.assign(existing, patch);
       else state.daily_logs.push({ id: state.nextId++, ...patch });

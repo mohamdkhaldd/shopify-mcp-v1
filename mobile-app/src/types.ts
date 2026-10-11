@@ -60,6 +60,7 @@ export interface DailyLog {
   hassan_commission: number | null;
   note: string | null;
   shift_label: string;
+  site_name: string | null;
 }
 
 export interface MonthlyExpense {

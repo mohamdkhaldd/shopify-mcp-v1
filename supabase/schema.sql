@@ -56,8 +56,15 @@ create table if not exists daily_logs (
   hassan_commission numeric,
   note text,
   shift_label text not null default '',
+  is_paid_leave boolean not null default false,
+  site_name text,
   unique (equipment_id, date, role, shift_label)
 );
+
+-- لقواعد البيانات القديمة اللي جدولها اتعمل قبل العمودين دول: إجازة مدفوعة
+-- (لأيام "مشتغلش" اللي بتتحسب للسواق) واسم الموقع لكل يوم.
+alter table daily_logs add column if not exists is_paid_leave boolean not null default false;
+alter table daily_logs add column if not exists site_name text;
 
 -- شيفتات إضافية مسمّاة لمعدة اشتغلت بأكتر من وردية (زي "وردية 2") — الشيفت
 -- الأساسي (shift_label = '') مالوش سطر هنا، السطر هنا بس عشان اسم الشيفت
