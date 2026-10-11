@@ -361,15 +361,16 @@ export default function DailyLogTable({
     }
   }
 
-  // زرار "مدفوعة" جنب علامة "مشتغلش" في شيت المقاول — لو اليوم اتعلّم إجازة
-  // مدفوعة، تقدر تختار في شيت السركي السواق اللي هياخد يوميته؛ لو مش مدفوعة
-  // خانة السواق بتفضل مقفولة وفاضية.
+  // زرار "مدفوعة" الصغير في شيت السركي جنب أي يوم متعلّم "مشتغلش" من شيت
+  // المقاول — لو اتداس، خانة السواق بتتفتح عشان تختار مين هياخد اليوم ده؛
+  // لو اتشال، السواق بيتمسح والخانة بتتقفل تاني.
   async function togglePaidDayOff(date: string) {
     const row = rows[date] ?? emptyRow();
     if (!row.is_day_off) return;
     const next = !row.is_paid_leave;
-    updateRow(date, { is_paid_leave: next });
-    await saveRow(date, { is_paid_leave: next });
+    const patch: Partial<RowDraft> = next ? { is_paid_leave: true } : { is_paid_leave: false, person_name: "" };
+    updateRow(date, patch);
+    await saveRow(date, patch);
   }
 
   function handleBulkPersonChange(name: string) {
@@ -847,30 +848,24 @@ export default function DailyLogTable({
                     {row.is_day_off && (
                       <span className="print-only">{row.is_paid_leave ? "مشتغلش (مدفوعة)" : "مشتغلش"}</span>
                     )}
-                    {mode === "hours" && row.is_day_off && role === MASTER_ROLE && (
+                    {mode === "hours" && row.is_day_off && role === "driver" && (
                       <button
                         type="button"
                         onClick={() => togglePaidDayOff(date)}
-                        title="دوس عشان تغيّر الإجازة مدفوعة ولا لأ — لو مدفوعة تختار السواق من شيت السركي"
-                        className={[
-                          "no-print ms-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-bold border",
+                        title={
                           row.is_paid_leave
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-300"
-                            : "bg-white text-slate-500 border-slate-300 hover:bg-slate-50",
-                        ].join(" ")}
-                      >
-                        {row.is_paid_leave ? "مدفوعة" : "مش مدفوعة"}
-                      </button>
-                    )}
-                    {mode === "hours" && row.is_day_off && role !== MASTER_ROLE && (
-                      <span
+                            ? "إجازة مدفوعة — دوس تاني عشان تلغيها"
+                            : "اليوم ده مشتغلش — دوس لو مدفوع، وبعدين اختار السواق"
+                        }
                         className={[
-                          "no-print ms-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-bold",
-                          row.is_paid_leave ? "bg-emerald-50 text-emerald-700" : "bg-rose-100 text-rose-600",
+                          "no-print ms-1.5 rounded px-1 py-px text-[10px] font-bold border",
+                          row.is_paid_leave
+                            ? "bg-emerald-500 text-white border-emerald-500"
+                            : "bg-white text-slate-400 border-slate-300 hover:text-emerald-700 hover:border-emerald-400",
                         ].join(" ")}
                       >
-                        {row.is_paid_leave ? "إجازة مدفوعة" : "مشتغلش"}
-                      </span>
+                        مدفوع
+                      </button>
                     )}
                   </td>
                   <td className="py-1.5">

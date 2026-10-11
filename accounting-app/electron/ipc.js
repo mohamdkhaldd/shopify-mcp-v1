@@ -456,16 +456,17 @@ function registerIpcHandlers(db) {
   }
 
   // شيت المقاول هو المصدر الوحيد للأيام: الساعات/الأساسية/البيان/الموقع/علامة
-  // "مشتغلش" (ومعاها مدفوعة ولا لأ) بتتكتب فيه وبتتنسخ لشيت السركي لنفس
-  // المعدة واليوم والشيفت — مش العكس. اسم السواق وسعر اليوم في السركي بيفضلوا
-  // زي ما هما، إلا في يوم "مشتغلش": السعر بيتمسح، والاسم بيفضل بس لو اليوم
-  // اتعلّم إجازة مدفوعة (عشان تختار السواق اللي هياخدها)، غير كده بيتمسح.
+  // "مشتغلش" بتتكتب فيه وبتتنسخ لشيت السركي لنفس المعدة واليوم والشيفت — مش
+  // العكس. اسم السواق وسعر اليوم في السركي بيفضلوا زي ما هما، إلا في يوم
+  // "مشتغلش": السعر بيتمسح، وعلامة "مدفوعة" (بتتحدد من شيت السركي نفسه)
+  // بتبدأ مش مدفوعة واسم السواق بيتمسح — ولو اليوم كان متعلّم مشتغلش من قبل،
+  // اختيار "مدفوعة" والسواق اللي في السركي بيفضلوا زي ما هما.
   // إجازة السائق الشهري المدفوعة في يوم شغل عادي (خاصة بمرتبه) مبتتلمسش.
   function mirrorContractorToDriver(db, contractorLog) {
     const shiftLabel = contractorLog.shift_label ?? "";
     const existing = findDailyLog(db, contractorLog.equipment_id, contractorLog.date, "driver", shiftLabel);
     const isDayOff = !!contractorLog.is_day_off;
-    const isPaidDayOff = isDayOff && !!contractorLog.is_paid_leave;
+    const isPaidDayOff = isDayOff && !!existing?.is_day_off && !!existing?.is_paid_leave;
     db.prepare(UPSERT_DAILY_LOG_SQL).run({
       equipment_id: contractorLog.equipment_id,
       date: contractorLog.date,
@@ -517,9 +518,10 @@ function registerIpcHandlers(db) {
         params.note = master.note;
         params.site_name = master.site_name;
         params.is_day_off = master.is_day_off ? 1 : 0;
-        if (master.is_day_off) params.is_paid_leave = master.is_paid_leave ? 1 : 0;
       }
     }
+    // "مدفوعة" معناها بس في شيت السركي (مين السواق اللي هياخد اليوم).
+    if (log.role === "contractor") params.is_paid_leave = 0;
     if (params.is_day_off) {
       params.day_rate = null;
       params.actual_hours = null;
@@ -599,7 +601,7 @@ function registerIpcHandlers(db) {
             actual_hours: src.actual_hours,
             base_hours: src.base_hours,
             day_rate: src.is_day_off ? null : existing?.day_rate ?? null,
-            is_paid_leave: src.is_day_off && src.is_paid_leave ? 1 : 0,
+            is_paid_leave: 0,
             is_day_off: src.is_day_off ? 1 : 0,
             fixed_value: existing?.fixed_value ?? null,
             hassan_commission: existing?.hassan_commission ?? null,

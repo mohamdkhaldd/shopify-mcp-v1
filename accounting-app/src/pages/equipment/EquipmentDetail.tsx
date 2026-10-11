@@ -14,8 +14,8 @@ type Tab = "summary" | "driver" | "contractor" | "market" | "expenses";
 
 const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: "summary", label: "الأرباح وتوزيع الشركاء", icon: "reports" },
-  { id: "driver", label: "السركي", icon: "salaries" },
   { id: "contractor", label: "المقاول", icon: "contractors" },
+  { id: "driver", label: "السركي", icon: "salaries" },
   { id: "market", label: "سركي سوق", icon: "equipment" },
   { id: "expenses", label: "المصروفات", icon: "treasury" },
 ];

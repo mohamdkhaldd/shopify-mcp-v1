@@ -422,10 +422,10 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
 
   // نفس منطق ipc.js: شيت المقاول هو المصدر، وبيتنسخ منه للسركي بس (مش العكس).
   function mirrorContractorToDriver(log: DailyLogRow) {
-    const isPaidDayOff = log.is_day_off && log.is_paid_leave;
     const existing = state.daily_logs.find(
       (l) => l.equipment_id === log.equipment_id && l.date === log.date && l.role === "driver"
     );
+    const isPaidDayOff = log.is_day_off && !!existing?.is_day_off && !!existing?.is_paid_leave;
     if (existing) {
       existing.actual_hours = log.actual_hours ?? null;
       existing.base_hours = log.base_hours ?? null;
@@ -482,9 +482,9 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
         next.note = master.note;
         next.site_name = master.site_name ?? null;
         next.is_day_off = master.is_day_off;
-        if (master.is_day_off) next.is_paid_leave = master.is_paid_leave;
       }
     }
+    if (next.role === "contractor") next.is_paid_leave = false;
     if (next.is_day_off) {
       next.day_rate = null;
       next.actual_hours = null;
@@ -544,7 +544,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       target.actual_hours = src.actual_hours;
       target.base_hours = src.base_hours;
       target.is_day_off = src.is_day_off;
-      target.is_paid_leave = src.is_day_off && src.is_paid_leave;
+      target.is_paid_leave = false;
       target.note = src.note;
       if (src.is_day_off) {
         target.person_name = "";
