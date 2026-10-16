@@ -1726,9 +1726,30 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
           }, 0);
         const paidIn = (prefix: string) =>
           state.partner_payments.filter((pp) => pp.partner_id === p.id && pp.date.startsWith(prefix)).reduce((s, pp) => s + pp.amount, 0);
-        return { id: p.id, name: p.name, monthDue: shareOf(month) - paidIn(month), yearDue: yearMonths.reduce((s, m) => s + shareOf(m), 0) - paidIn(year) };
+        const allTimeShare = state.equipment.reduce((sum, eq) => {
+          const sh = eq.shares.find((x) => x.partner_id === p.id);
+          if (!sh) return sum;
+          const months = [...new Set(state.daily_logs.filter((l) => l.equipment_id === eq.id).map((l) => l.date.slice(0, 7)))];
+          for (const e of state.monthly_expenses) if (e.equipment_id === eq.id && !months.includes(e.month)) months.push(e.month);
+          return sum + (months.reduce((s, m) => s + equipmentMonthNetProfit(eq.id, m), 0) * sh.percentage) / 100;
+        }, 0);
+        return {
+          id: p.id,
+          name: p.name,
+          monthDue: shareOf(month) - paidIn(month),
+          yearDue: yearMonths.reduce((s, m) => s + shareOf(m), 0) - paidIn(year),
+          openingBalance: p.opening_balance ?? 0,
+          totalDue: (p.opening_balance ?? 0) + allTimeShare - paidIn(""),
+        };
       })
-      .filter((p) => Math.abs(p.monthDue) > 0.005 || Math.abs(p.yearDue) > 0.005);
+      .filter((p) => Math.abs(p.monthDue) > 0.005 || Math.abs(p.yearDue) > 0.005 || Math.abs(p.totalDue) > 0.005);
+    const receivables = state.contractors
+      .map((c) => {
+        const work = state.daily_logs.filter((l) => l.role === "contractor" && l.person_name === c.name).reduce((s, l) => s + computeDayValue(l), 0);
+        const paid = state.contractor_payments.filter((x) => x.contractor_id === c.id).reduce((s, x) => s + x.amount, 0);
+        return { id: c.id, name: c.name, openingBalance: c.opening_balance ?? 0, work, paid, remaining: (c.opening_balance ?? 0) + work - paid };
+      })
+      .filter((c) => Math.abs(c.remaining) > 0.005);
     const suppliersDue =
       state.supplier_purchases.reduce((s, x) => s + x.amount, 0) - state.supplier_payments.reduce((s, x) => s + x.amount, 0);
     const recentPayments = expensePayments
@@ -1738,17 +1759,21 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
         return { ...p, equipment_name: e ? eqName(e.equipment_id) : "", category_name: e ? catName(e.category_id) : null, payee: e?.payee ?? null };
       });
     const expensesDue = expenses.reduce((s, e) => s + e.remaining, 0);
-    const partnersYearDue = partners.reduce((s, p) => s + p.yearDue, 0);
+    const partnersTotalDue = partners.reduce((s, p) => s + Math.max(0, p.totalDue), 0);
     return {
       month,
       expenses,
       partners,
+      receivables,
       suppliersDue,
       recentPayments,
       expensesDue,
       partnersMonthDue: partners.reduce((s, p) => s + p.monthDue, 0),
-      partnersYearDue,
-      totalDue: expensesDue + Math.max(0, partnersYearDue) + Math.max(0, suppliersDue),
+      partnersYearDue: partners.reduce((s, p) => s + p.yearDue, 0),
+      partnersOpening: partners.reduce((s, p) => s + p.openingBalance, 0),
+      partnersTotalDue,
+      receivablesTotal: receivables.reduce((s, c) => s + Math.max(0, c.remaining), 0),
+      totalDue: expensesDue + partnersTotalDue + Math.max(0, suppliersDue),
     };
   }
 

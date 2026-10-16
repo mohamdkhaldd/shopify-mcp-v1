@@ -1940,9 +1940,27 @@ function registerIpcHandlers(db) {
         const shareOf = (m) => shares.reduce((sum, sh) => sum + (eqProfit(sh.equipment_id, m) * sh.percentage) / 100, 0);
         const monthDue = shareOf(month) - paidStmt.get(p.id, `${month}%`).total;
         const yearDue = yearMonths.reduce((sum, m) => sum + shareOf(m), 0) - paidStmt.get(p.id, `${year}%`).total;
-        return { id: p.id, name: p.name, monthDue, yearDue };
+        // الإجمالي = الرصيد الافتتاحي (فلوس قديمة ليه قبل السيستم) + نصيبه من
+        // كل الأرباح من الأول − كل اللي اتدفعله — نفس "الباقي" في صفحة الشركاء.
+        const allTimeShare = shares.reduce((sum, sh) => sum + (equipmentAllTimeProfit(sh.equipment_id) * sh.percentage) / 100, 0);
+        const totalDue = (p.opening_balance ?? 0) + allTimeShare - paidStmt.get(p.id, "%").total;
+        return { id: p.id, name: p.name, monthDue, yearDue, openingBalance: p.opening_balance ?? 0, totalDue };
       })
-      .filter((p) => Math.abs(p.monthDue) > 0.005 || Math.abs(p.yearDue) > 0.005);
+      .filter((p) => Math.abs(p.monthDue) > 0.005 || Math.abs(p.yearDue) > 0.005 || Math.abs(p.totalDue) > 0.005);
+
+    // لينا عند المقاولين: الرصيد الافتتاحي (فلوس قديمة عليهم قبل السيستم) +
+    // قيمة كل شغلهم − كل اللي دفعوه — نفس "الباقي" في صفحة المقاولين.
+    const contractorWorkStmt = db.prepare("SELECT * FROM daily_logs WHERE role = 'contractor' AND person_name = ?");
+    const contractorPaidStmt = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM contractor_payments WHERE contractor_id = ?");
+    const receivables = db
+      .prepare("SELECT * FROM contractors ORDER BY name")
+      .all()
+      .map((c) => {
+        const work = contractorWorkStmt.all(c.name).reduce((sum, l) => sum + computeDayValue(l), 0);
+        const paid = contractorPaidStmt.get(c.id).total;
+        return { id: c.id, name: c.name, openingBalance: c.opening_balance ?? 0, work, paid, remaining: (c.opening_balance ?? 0) + work - paid };
+      })
+      .filter((c) => Math.abs(c.remaining) > 0.005);
 
     const suppliersDue = db
       .prepare(
@@ -1961,17 +1979,21 @@ function registerIpcHandlers(db) {
       .all(`${month}%`);
 
     const expensesDue = expenses.reduce((sum, e) => sum + e.remaining, 0);
-    const partnersYearDue = partners.reduce((sum, p) => sum + p.yearDue, 0);
+    const partnersTotalDue = partners.reduce((sum, p) => sum + Math.max(0, p.totalDue), 0);
     return {
       month,
       expenses,
       partners,
+      receivables,
       suppliersDue,
       recentPayments,
       expensesDue,
       partnersMonthDue: partners.reduce((sum, p) => sum + p.monthDue, 0),
-      partnersYearDue,
-      totalDue: expensesDue + Math.max(0, partnersYearDue) + Math.max(0, suppliersDue),
+      partnersYearDue: partners.reduce((sum, p) => sum + p.yearDue, 0),
+      partnersOpening: partners.reduce((sum, p) => sum + p.openingBalance, 0),
+      partnersTotalDue,
+      receivablesTotal: receivables.reduce((sum, c) => sum + Math.max(0, c.remaining), 0),
+      totalDue: expensesDue + partnersTotalDue + Math.max(0, suppliersDue),
     };
   });
 

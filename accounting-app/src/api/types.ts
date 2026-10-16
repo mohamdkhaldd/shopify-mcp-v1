@@ -461,7 +461,8 @@ export interface PayableExpense {
 export interface PayablesSummary {
   month: string;
   expenses: PayableExpense[];
-  partners: { id: number; name: string; monthDue: number; yearDue: number }[];
+  partners: { id: number; name: string; monthDue: number; yearDue: number; openingBalance: number; totalDue: number }[];
+  receivables: { id: number; name: string; openingBalance: number; work: number; paid: number; remaining: number }[];
   suppliersDue: number;
   recentPayments: {
     id: number;
@@ -477,6 +478,9 @@ export interface PayablesSummary {
   expensesDue: number;
   partnersMonthDue: number;
   partnersYearDue: number;
+  partnersOpening: number;
+  partnersTotalDue: number;
+  receivablesTotal: number;
   totalDue: number;
 }
 

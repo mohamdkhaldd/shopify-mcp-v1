@@ -160,7 +160,7 @@ export default function Payables({ onGoToSuppliers }: { onGoToSuppliers: () => v
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <SummaryBox label="إجمالي اللي علينا" value={data.totalDue} tone="rose" />
         <SummaryBox label="باقي مصروفات المعدات" value={data.expensesDue} />
-        <SummaryBox label={`للشركاء — سنة ${month.slice(0, 4)}`} value={Math.max(0, data.partnersYearDue)} />
+        <SummaryBox label="للشركاء (الإجمالي مع الرصيد الافتتاحي)" value={data.partnersTotalDue} />
         <SummaryBox label="للموردين" value={data.suppliersDue} onClick={onGoToSuppliers} />
       </div>
 
@@ -177,6 +177,8 @@ export default function Payables({ onGoToSuppliers }: { onGoToSuppliers: () => v
                 <th className="text-start font-semibold py-2">الشريك</th>
                 <th className="text-start font-semibold py-2">علينا — {monthLabel(month)}</th>
                 <th className="text-start font-semibold py-2">علينا — سنة {month.slice(0, 4)}</th>
+                <th className="text-start font-semibold py-2">الرصيد الافتتاحي</th>
+                <th className="text-start font-semibold py-2">الإجمالي المستحق له</th>
               </tr>
             </thead>
             <tbody>
@@ -188,6 +190,10 @@ export default function Payables({ onGoToSuppliers }: { onGoToSuppliers: () => v
                   </td>
                   <td className="py-2 font-semibold text-slate-800">
                     <PartnerDue value={p.yearDue} />
+                  </td>
+                  <td className="py-2 text-slate-600">{formatEGP(p.openingBalance)}</td>
+                  <td className="py-2 font-bold text-rose-600">
+                    <PartnerDue value={p.totalDue} />
                   </td>
                 </tr>
               ))}
@@ -201,10 +207,15 @@ export default function Payables({ onGoToSuppliers }: { onGoToSuppliers: () => v
                 <td className="pt-2 font-bold text-slate-800">
                   <PartnerDue value={data.partnersYearDue} />
                 </td>
+                <td className="pt-2 font-bold text-slate-600">{formatEGP(data.partnersOpening)}</td>
+                <td className="pt-2 font-bold text-rose-600">{formatEGP(data.partnersTotalDue)}</td>
               </tr>
             </tfoot>
           </table>
         )}
+        <p className="text-[11px] text-slate-400 -mt-4 mb-6">
+          الإجمالي المستحق = الرصيد الافتتاحي (فلوس قديمة ليه قبل السيستم) + نصيبه من كل الأرباح من الأول − كل اللي اتدفعله.
+        </p>
 
         <h3 className="text-sm font-bold text-slate-600 mb-2">للموردين</h3>
         <div className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 mb-6 text-sm">
@@ -280,6 +291,44 @@ export default function Payables({ onGoToSuppliers }: { onGoToSuppliers: () => v
               </span>
             ))}
           </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-card shadow-card p-5">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-bold text-slate-800">لينا عند المقاولين</h2>
+          <span className="text-lg font-extrabold text-primary">{formatEGP(data.receivablesTotal)}</span>
+        </div>
+        <p className="text-xs text-slate-400 mb-4">
+          الرصيد الافتتاحي (فلوس قديمة عليهم قبل السيستم) + قيمة كل شغلهم − كل اللي دفعوه.
+        </p>
+        {data.receivables.length === 0 ? (
+          <div className="text-sm text-slate-400">مفيش فلوس لينا عند حد.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-slate-400 border-b border-slate-100">
+                <th className="text-start font-semibold py-2">المقاول</th>
+                <th className="text-start font-semibold py-2">الرصيد الافتتاحي</th>
+                <th className="text-start font-semibold py-2">قيمة الشغل</th>
+                <th className="text-start font-semibold py-2">دفع</th>
+                <th className="text-start font-semibold py-2">الباقي لينا</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.receivables.map((c) => (
+                <tr key={c.id} className="border-b border-slate-50 last:border-0">
+                  <td className="py-2 font-semibold text-slate-700">{c.name}</td>
+                  <td className="py-2 text-slate-600">{formatEGP(c.openingBalance)}</td>
+                  <td className="py-2 text-slate-600">{formatEGP(c.work)}</td>
+                  <td className="py-2 text-slate-600">{formatEGP(c.paid)}</td>
+                  <td className={`py-2 font-bold ${c.remaining >= 0 ? "text-primary-dark" : "text-rose-600"}`}>
+                    {c.remaining >= 0 ? formatEGP(c.remaining) : `دفع زيادة ${formatEGP(-c.remaining)}`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 
