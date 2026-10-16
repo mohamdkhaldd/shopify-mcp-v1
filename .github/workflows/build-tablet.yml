@@ -48,6 +48,7 @@ jobs:
           sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"$APP_VERSION\"/" android/app/build.gradle
           # أيقونة التطبيق = لوجو الشركة
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          command -v convert >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick)
           for pair in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
             name=${pair%%:*}; size=${pair##*:}
             for icon in ic_launcher ic_launcher_round ic_launcher_foreground; do
