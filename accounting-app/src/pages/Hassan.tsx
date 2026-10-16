@@ -580,29 +580,245 @@ function LedgerTab({ month }: { month: string }) {
   );
 }
 
-const WORKER_ENTRY_TYPES: { value: HassanWorkerEntryType; label: string }[] = [
-  { value: "payment", label: "دفعة مرتب" },
-  { value: "advance", label: "سلفة" },
-  { value: "bonus", label: "حافز" },
-  { value: "deduction", label: "خصم" },
-];
+// خانة تسجيل حركة واحدة (دفعة مرتب / سلفة / حافز / خصم) جوه شيت العامل.
+function WorkerEntryForm({
+  type,
+  workerId,
+  month,
+  suggestedAmount,
+  notePlaceholder,
+  noteRequired,
+  buttonLabel,
+  buttonClass,
+  onSaved,
+}: {
+  type: HassanWorkerEntryType;
+  workerId: number;
+  month: string;
+  suggestedAmount?: number;
+  notePlaceholder: string;
+  noteRequired?: boolean;
+  buttonLabel: string;
+  buttonClass: string;
+  onSaved: () => void;
+}) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
 
-// شيت مرتبات العمال اللي حسن بيقبضهم من كوميشنه: كل دفعة مرتب أو سلفة
-// بتتسجل لوحدها في خزنة حسن ("مرتب فلان")، والحافز والخصم بيغيّروا المستحق بس.
+  useEffect(() => {
+    if (suggestedAmount !== undefined) setAmount(suggestedAmount > 0 ? String(suggestedAmount) : "");
+  }, [suggestedAmount]);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!amount || (noteRequired && !note.trim())) return;
+    await hassanApi.workerEntryCreate({ worker_id: workerId, month, date, type, amount: Number(amount), note: note || null });
+    if (suggestedAmount === undefined) setAmount("");
+    setNote("");
+    onSaved();
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="no-print flex flex-wrap items-end gap-2">
+      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
+      <input
+        type="number"
+        min="0"
+        step="any"
+        placeholder="القيمة"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+      />
+      <input
+        type="text"
+        placeholder={notePlaceholder}
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+      />
+      <button type="submit" className={`${buttonClass} text-white rounded-lg px-3 py-1.5 text-sm font-semibold`}>
+        {buttonLabel}
+      </button>
+    </form>
+  );
+}
+
+// شيت مرتب عامل واحد لشهر — زي شيت مرتب السواق في صفحة الرواتب بالظبط:
+// المرتب والسلف والحوافز والخصومات ودفعات المرتب، كل حركة بتاريخها وسببها،
+// وبيتطبع لوحده.
+function WorkerSlip({
+  row,
+  month,
+  entries,
+  onChanged,
+}: {
+  row: HassanWorkerPayroll["rows"][number];
+  month: string;
+  entries: HassanWorkerEntry[];
+  onChanged: () => void;
+}) {
+  const mine = entries.filter((e) => e.worker_id === row.worker_id).sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+  const ofType = (t: HassanWorkerEntryType) => mine.filter((e) => e.type === t);
+
+  async function handleDelete(id: number) {
+    await hassanApi.workerEntryRemove(id);
+    onChanged();
+  }
+
+  const section = (t: HassanWorkerEntryType, title: string, form: JSX.Element) => (
+    <div className="mb-4">
+      <div className="text-xs font-bold text-slate-500 mb-1.5">{title}</div>
+      {ofType(t).length > 0 ? (
+        <ul className="space-y-1 mb-2">
+          {ofType(t).map((e) => (
+            <li key={e.id} className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">
+                {e.date} — {formatEGP(e.amount)} {e.note && <span className="text-slate-400">({e.note})</span>}
+              </span>
+              <button onClick={() => handleDelete(e.id)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
+                حذف
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="text-xs text-slate-400 mb-2">مفيش.</div>
+      )}
+      {form}
+    </div>
+  );
+
+  return (
+    <tr>
+      <td colSpan={9} className="bg-slate-50 px-4 py-5 rounded-xl">
+        <div className="bg-white rounded-card shadow-card p-5 max-w-2xl">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
+            <div>
+              <div className="font-extrabold text-slate-900">
+                {row.name}
+                {row.job && <span className="text-sm font-semibold text-slate-400"> — {row.job}</span>}
+              </div>
+              <div className="text-xs text-slate-400">
+                شيت مرتب {monthLabel(month)} {month.slice(0, 4)} — عمال حسن
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <PrintButton />
+              <Icon name="salaries" className="w-6 h-6 text-primary no-print" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mb-4">
+            <div className="text-center bg-primary-light rounded-xl py-2.5">
+              <div className="text-xs text-slate-500">المرتب الشهري</div>
+              <div className="font-bold text-slate-800">{formatEGP(row.monthly_salary)}</div>
+            </div>
+            <div className="text-center bg-emerald-50 rounded-xl py-2.5">
+              <div className="text-xs text-slate-500">الحافز</div>
+              <div className="font-bold text-emerald-600">{formatEGP(row.bonuses)}</div>
+            </div>
+            <div className="text-center bg-rose-50 rounded-xl py-2.5">
+              <div className="text-xs text-slate-500">الخصم</div>
+              <div className="font-bold text-rose-600">{formatEGP(row.deductions)}</div>
+            </div>
+            <div className="text-center bg-rose-50 rounded-xl py-2.5">
+              <div className="text-xs text-slate-500">السلف</div>
+              <div className="font-bold text-rose-600">{formatEGP(row.advances)}</div>
+            </div>
+            <div className="text-center bg-primary rounded-xl py-2.5">
+              <div className="text-xs text-white/80">المستحق</div>
+              <div className="font-extrabold text-white">{formatEGP(row.net)}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 mb-4">
+            <div>
+              <div className="text-xs text-slate-500">اتدفع (مرتب + سلف)</div>
+              <div className="font-bold text-emerald-600">{formatEGP(row.paid)}</div>
+            </div>
+            <div className="text-end">
+              <div className="text-xs text-slate-500">الباقي</div>
+              <div className={`font-extrabold ${row.remaining > 0 ? "text-rose-600" : "text-slate-800"}`}>{formatEGP(row.remaining)}</div>
+            </div>
+          </div>
+
+          {section(
+            "payment",
+            "دفع المرتب",
+            <WorkerEntryForm
+              type="payment"
+              workerId={row.worker_id}
+              month={month}
+              suggestedAmount={row.remaining}
+              notePlaceholder="ملاحظة (اختياري)"
+              buttonLabel="دفعت المرتب"
+              buttonClass="bg-primary hover:bg-primary-dark"
+              onSaved={onChanged}
+            />
+          )}
+          {section(
+            "advance",
+            "السلف",
+            <WorkerEntryForm
+              type="advance"
+              workerId={row.worker_id}
+              month={month}
+              notePlaceholder="ملاحظة (اختياري)"
+              buttonLabel="إضافة سلفة"
+              buttonClass="bg-primary hover:bg-primary-dark"
+              onSaved={onChanged}
+            />
+          )}
+          {section(
+            "bonus",
+            "الحافز",
+            <WorkerEntryForm
+              type="bonus"
+              workerId={row.worker_id}
+              month={month}
+              notePlaceholder="الحافز ده عشان إيه؟"
+              noteRequired
+              buttonLabel="إضافة حافز"
+              buttonClass="bg-emerald-600 hover:bg-emerald-700"
+              onSaved={onChanged}
+            />
+          )}
+          {section(
+            "deduction",
+            "الخصم",
+            <WorkerEntryForm
+              type="deduction"
+              workerId={row.worker_id}
+              month={month}
+              notePlaceholder="سبب الخصم"
+              noteRequired
+              buttonLabel="إضافة خصم"
+              buttonClass="bg-rose-600 hover:bg-rose-700"
+              onSaved={onChanged}
+            />
+          )}
+          <p className="no-print text-xs text-slate-400">
+            دفعة المرتب والسلفة بيتخصموا من خزنة حسن على طول ويظهروا هناك باسم العامل. الحافز والخصم بيغيّروا المستحق بس.
+          </p>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// شيت مرتبات العمال اللي حسن بيقبضهم من كوميشنه — دوس على اسم العامل تفتح
+// شيت مرتبه وتسجل له كل حاجة وتطبعه.
 function WorkersTab({ month }: { month: string }) {
   const [workers, setWorkers] = useState<HassanWorker[]>([]);
   const [payroll, setPayroll] = useState<HassanWorkerPayroll | null>(null);
   const [entries, setEntries] = useState<HassanWorkerEntry[]>([]);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const [newName, setNewName] = useState("");
   const [newJob, setNewJob] = useState("");
   const [newSalary, setNewSalary] = useState("");
-
-  const [entryWorkerId, setEntryWorkerId] = useState("");
-  const [entryType, setEntryType] = useState<HassanWorkerEntryType>("payment");
-  const [entryAmount, setEntryAmount] = useState("");
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
-  const [entryNote, setEntryNote] = useState("");
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
@@ -627,22 +843,6 @@ function WorkersTab({ month }: { month: string }) {
     refresh();
   }
 
-  async function handleAddEntry(e: FormEvent) {
-    e.preventDefault();
-    if (!entryWorkerId || !entryAmount) return;
-    await hassanApi.workerEntryCreate({
-      worker_id: Number(entryWorkerId),
-      month,
-      date: entryDate,
-      type: entryType,
-      amount: Number(entryAmount),
-      note: entryNote || null,
-    });
-    setEntryAmount("");
-    setEntryNote("");
-    refresh();
-  }
-
   function startEdit(w: HassanWorker) {
     setEditingId(w.id);
     setEditName(w.name);
@@ -663,16 +863,12 @@ function WorkersTab({ month }: { month: string }) {
     refresh();
   }
 
-  async function handleDeleteEntry(id: number) {
-    await hassanApi.workerEntryRemove(id);
-    refresh();
-  }
-
-  const typeLabelOf = (t: HassanWorkerEntryType) => WORKER_ENTRY_TYPES.find((x) => x.value === t)?.label ?? t;
+  // لما شيت عامل يبقى مفتوح، الطباعة بتطلع شيته هو بس.
+  const slipOpen = expandedId != null;
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className={`${slipOpen ? "no-print " : ""}grid grid-cols-1 sm:grid-cols-3 gap-4`}>
         <div className="bg-white rounded-card shadow-card p-5">
           <div className="text-sm text-slate-500 font-semibold">إجمالي المستحق للعمال — {monthLabel(month)}</div>
           <div className="mt-2 text-2xl font-extrabold text-slate-800">{formatEGP(payroll?.totalNet ?? 0)}</div>
@@ -688,13 +884,16 @@ function WorkersTab({ month }: { month: string }) {
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-4">شيت مرتبات عمال حسن — {monthLabel(month)} {month.slice(0, 4)}</h2>
+        <h2 className={`${slipOpen ? "no-print " : ""}font-bold text-slate-800 mb-1`}>
+          شيت مرتبات عمال حسن — {monthLabel(month)} {month.slice(0, 4)}
+        </h2>
+        <p className="no-print text-xs text-slate-400 mb-4">دوس على اسم أي عامل تفتح شيت مرتبه — تسجل له دفع المرتب والسلف والحافز والخصم وتطبعه.</p>
         {!payroll || payroll.rows.length === 0 ? (
           <div className="text-sm text-slate-400">لسه مفيش عمال — ضيفهم من تحت.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className={slipOpen ? "no-print" : ""}>
                 <tr className="text-slate-400 border-b border-slate-100">
                   <th className="text-start font-semibold py-2">العامل</th>
                   <th className="text-start font-semibold py-2">الوظيفة</th>
@@ -709,25 +908,34 @@ function WorkersTab({ month }: { month: string }) {
               </thead>
               <tbody>
                 {payroll.rows.map((r) => (
-                  <tr key={r.worker_id} className="border-b border-slate-50 last:border-0">
-                    <td className="py-2 font-semibold text-slate-700">
-                      {r.name}
-                      {!r.active && <span className="text-xs text-slate-400"> (اتشال)</span>}
-                    </td>
-                    <td className="py-2 text-slate-500">{r.job ?? "—"}</td>
-                    <td className="py-2 text-slate-600">{formatEGP(r.monthly_salary)}</td>
-                    <td className="py-2 text-slate-600">{formatEGP(r.bonuses)}</td>
-                    <td className="py-2 text-rose-500">{formatEGP(r.deductions)}</td>
-                    <td className="py-2 font-semibold text-slate-800">{formatEGP(r.net)}</td>
-                    <td className="py-2 text-slate-600">{formatEGP(r.advances)}</td>
-                    <td className="py-2 text-slate-600">{formatEGP(r.payments)}</td>
-                    <td className={["py-2 font-bold", r.remaining > 0 ? "text-primary-dark" : r.remaining < 0 ? "text-rose-600" : "text-slate-500"].join(" ")}>
-                      {formatEGP(r.remaining)}
-                    </td>
-                  </tr>
+                  <Fragment key={r.worker_id}>
+                    <tr className={`${slipOpen ? "no-print " : ""}border-b border-slate-50 last:border-0`}>
+                      <td className="py-2">
+                        <button
+                          onClick={() => setExpandedId(expandedId === r.worker_id ? null : r.worker_id)}
+                          className="flex items-center gap-2 font-semibold text-slate-700 hover:text-primary"
+                        >
+                          <Icon name="salaries" className="w-4 h-4 text-primary no-print" />
+                          {r.name}
+                          {!r.active && <span className="text-xs text-slate-400"> (اتشال)</span>}
+                        </button>
+                      </td>
+                      <td className="py-2 text-slate-500">{r.job ?? "—"}</td>
+                      <td className="py-2 text-slate-600">{formatEGP(r.monthly_salary)}</td>
+                      <td className="py-2 text-slate-600">{formatEGP(r.bonuses)}</td>
+                      <td className="py-2 text-rose-500">{formatEGP(r.deductions)}</td>
+                      <td className="py-2 font-semibold text-slate-800">{formatEGP(r.net)}</td>
+                      <td className="py-2 text-slate-600">{formatEGP(r.advances)}</td>
+                      <td className="py-2 text-slate-600">{formatEGP(r.payments)}</td>
+                      <td className={["py-2 font-bold", r.remaining > 0 ? "text-primary-dark" : r.remaining < 0 ? "text-rose-600" : "text-slate-500"].join(" ")}>
+                        {formatEGP(r.remaining)}
+                      </td>
+                    </tr>
+                    {expandedId === r.worker_id && <WorkerSlip row={r} month={month} entries={entries} onChanged={refresh} />}
+                  </Fragment>
                 ))}
               </tbody>
-              <tfoot>
+              <tfoot className={slipOpen ? "no-print" : ""}>
                 <tr className="border-t border-slate-100">
                   <td colSpan={5} className="pt-3 font-bold text-slate-700">
                     الإجمالي
@@ -743,115 +951,6 @@ function WorkersTab({ month }: { month: string }) {
           </div>
         )}
       </div>
-
-      <div className="no-print bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-1">صرف / سلفة / حافز / خصم — {monthLabel(month)}</h2>
-        <p className="text-xs text-slate-400 mb-4">
-          دفعة المرتب والسلفة بيتخصموا من خزنة حسن على طول ويظهروا هناك باسم العامل. الحافز والخصم بيغيّروا مستحق العامل بس.
-        </p>
-        <form onSubmit={handleAddEntry} className="flex flex-wrap items-end gap-2">
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">العامل</label>
-            <select
-              value={entryWorkerId}
-              onChange={(e) => setEntryWorkerId(e.target.value)}
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white min-w-[140px]"
-            >
-              <option value=""></option>
-              {workers.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">النوع</label>
-            <select
-              value={entryType}
-              onChange={(e) => setEntryType(e.target.value as HassanWorkerEntryType)}
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white"
-            >
-              {WORKER_ENTRY_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">القيمة</label>
-            <input
-              type="number"
-              min="0"
-              step="any"
-              value={entryAmount}
-              onChange={(e) => setEntryAmount(e.target.value)}
-              className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">التاريخ</label>
-            <input
-              type="date"
-              value={entryDate}
-              onChange={(e) => setEntryDate(e.target.value)}
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">ملاحظة</label>
-            <input
-              type="text"
-              value={entryNote}
-              onChange={(e) => setEntryNote(e.target.value)}
-              placeholder="اختياري"
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={!entryWorkerId || !entryAmount}
-            className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
-          >
-            تسجيل
-          </button>
-        </form>
-
-        {entries.length > 0 && (
-          <table className="w-full text-sm mt-4">
-            <thead>
-              <tr className="text-slate-400 border-b border-slate-100">
-                <th className="text-start font-semibold py-2">التاريخ</th>
-                <th className="text-start font-semibold py-2">العامل</th>
-                <th className="text-start font-semibold py-2">النوع</th>
-                <th className="text-start font-semibold py-2">القيمة</th>
-                <th className="text-start font-semibold py-2">ملاحظة</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => (
-                <tr key={e.id} className="border-b border-slate-50 last:border-0">
-                  <td className="py-2 text-slate-500">{e.date}</td>
-                  <td className="py-2 font-semibold text-slate-700">{e.worker_name}</td>
-                  <td className="py-2 text-slate-600">{typeLabelOf(e.type)}</td>
-                  <td className={["py-2 font-semibold", e.type === "deduction" ? "text-rose-600" : "text-slate-700"].join(" ")}>
-                    {formatEGP(e.amount)}
-                  </td>
-                  <td className="py-2 text-slate-500">{e.note ?? "—"}</td>
-                  <td className="py-2">
-                    <button onClick={() => handleDeleteEntry(e.id)} className="text-xs text-rose-500 hover:text-rose-700 font-semibold">
-                      حذف
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
       <div className="no-print bg-white rounded-card shadow-card p-5">
         <h2 className="font-bold text-slate-800 mb-4">عمال حسن</h2>
         <form onSubmit={handleAddWorker} className="flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
