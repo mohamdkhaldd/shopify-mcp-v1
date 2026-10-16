@@ -27,7 +27,7 @@ export const navItems: NavItem[] = [
   { id: "partners", label: "الشركاء", icon: "partners" },
   { id: "treasury", label: "الخزنة", icon: "treasury" },
   { id: "outgoingIncoming", label: "الصادر والوارد", icon: "flow" },
-  { id: "payables", label: "الآجل", icon: "waste" },
+  { id: "payables", label: "الرصيد", icon: "balance" },
   { id: "suppliers", label: "الموردين", icon: "suppliers" },
   { id: "reports", label: "التقارير", icon: "reports" },
   { id: "settings", label: "الإعدادات", icon: "settings" },

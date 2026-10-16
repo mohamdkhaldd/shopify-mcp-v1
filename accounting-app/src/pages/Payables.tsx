@@ -14,7 +14,7 @@ function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function SummaryBox({ label, value, tone, onClick }: { label: string; value: number; tone?: "rose"; onClick?: () => void }) {
+function SummaryBox({ label, value, tone, onClick }: { label: string; value: number; tone?: "rose" | "green"; onClick?: () => void }) {
   const Tag = onClick ? "button" : "div";
   return (
     <Tag
@@ -25,7 +25,9 @@ function SummaryBox({ label, value, tone, onClick }: { label: string; value: num
       ].join(" ")}
     >
       <div className="text-sm text-slate-500 font-semibold">{label}</div>
-      <div className={`mt-2 text-2xl font-extrabold ${tone === "rose" ? "text-rose-600" : "text-slate-800"}`}>{formatEGP(value)}</div>
+      <div className={`mt-2 text-2xl font-extrabold ${tone === "rose" ? "text-rose-600" : tone === "green" ? "text-primary" : "text-slate-800"}`}>
+        {formatEGP(value)}
+      </div>
       {onClick && <div className="no-print text-[11px] text-primary font-semibold mt-1">دوس للتفاصيل</div>}
     </Tag>
   );
@@ -142,13 +144,13 @@ export default function Payables({ onGoToSuppliers }: { onGoToSuppliers: () => v
 
   return (
     <div className="space-y-6">
-      <PrintHeader title="الآجل — اللي علينا" subtitle={`${monthLabel(month)} ${month.slice(0, 4)}`} />
+      <PrintHeader title="الرصيد — اللي لينا واللي علينا" subtitle={`${monthLabel(month)} ${month.slice(0, 4)}`} />
 
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">الآجل (اللي علينا)</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900">الرصيد</h1>
           <p className="text-sm text-slate-500 mt-1">
-            كل فلوس لسه علينا: باقي مصروفات المعدات، نصيب الشركاء اللي لسه متدفعش، والموردين.
+            اللي لينا عند المقاولين، واللي علينا (باقي مصروفات المعدات، الشركاء، الموردين)، والصافي بينهم.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -157,8 +159,25 @@ export default function Payables({ onGoToSuppliers }: { onGoToSuppliers: () => v
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <SummaryBox label="إجمالي اللي علينا" value={data.totalDue} tone="rose" />
+      {/* الصافي = اللي لينا عند الناس − اللي علينا للناس: الفلوس اللي المفروض
+          تبقى معانا كأرقام لو الكل دفع اللي عليه واحنا دفعنا اللي علينا. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <SummaryBox label="اللي لينا عند الناس" value={data.receivablesTotal} tone="green" />
+        <SummaryBox label="اللي علينا للناس" value={data.totalDue} tone="rose" />
+        <div
+          className={[
+            "rounded-card shadow-card p-5 text-white",
+            data.receivablesTotal - data.totalDue >= 0 ? "bg-primary" : "bg-rose-600",
+          ].join(" ")}
+        >
+          <div className="text-sm font-semibold opacity-90">الصافي (لينا − علينا)</div>
+          <div className="mt-2 text-2xl font-extrabold">{formatEGP(data.receivablesTotal - data.totalDue)}</div>
+          <div className="text-[11px] opacity-80 mt-1">الفلوس اللي المفروض تفضل معانا لو الكل دفع واحنا دفعنا كل اللي علينا</div>
+        </div>
+      </div>
+
+      <h2 className="font-bold text-slate-700 -mb-2">تفصيل اللي علينا</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <SummaryBox label="باقي مصروفات المعدات" value={data.expensesDue} />
         <SummaryBox label="للشركاء (الإجمالي مع الرصيد الافتتاحي)" value={data.partnersTotalDue} />
         <SummaryBox label="للموردين" value={data.suppliersDue} onClick={onGoToSuppliers} />

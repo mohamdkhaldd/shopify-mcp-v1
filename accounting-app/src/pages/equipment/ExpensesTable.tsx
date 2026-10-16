@@ -153,7 +153,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
               setPaidNow(e.target.value);
               setPaidTouched(true);
             }}
-            title="لو دفعت جزء بس، اكتب اللي دفعته — الباقي هيروح صفحة الآجل"
+            title="لو دفعت جزء بس، اكتب اللي دفعته — الباقي هيروح صفحة الرصيد"
             className={[
               "w-28 rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40",
               amount && paidNow !== "" && Number(paidNow) < Number(amount) ? "border-rose-300 bg-rose-50" : "border-slate-200",
@@ -258,7 +258,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
                     {(exp.remaining ?? 0) > 0 && (
                       <span
                         className="no-print ms-1.5 rounded-md bg-rose-100 text-rose-700 px-1.5 py-0.5 text-[11px] font-bold"
-                        title="الباقي ده متسجل في صفحة الآجل"
+                        title="الباقي ده متسجل في صفحة الرصيد"
                       >
                         باقي {formatEGP(exp.remaining ?? 0)}
                       </span>
