@@ -1102,9 +1102,157 @@ function registerIpcHandlers(db) {
   // --- خزنة حسن: كوميشنه المتراكم من أول ما اتسجلت أي بيانات، ناقص أي فلوس
   // دفعها هو من الخزنة دي (زي قسط أو إيجار) — رصيد شخصي بحت، مالوش أي علاقة
   // بخزنة الشركة (الكاش/المحفظة/انستا باي) خالص. ---
+  // --- جزاءات حسن: بتتخصم من كوميشنه ومن رصيد خزنته. ---
+  ipcMain.handle("hassanPenalties:list", (_e, { month }) =>
+    db.prepare("SELECT * FROM hassan_penalties WHERE date LIKE ? ORDER BY date DESC, id DESC").all(`${month}%`)
+  );
+  ipcMain.handle("hassanPenalties:create", (_e, { date, amount, reason }) => {
+    const info = db
+      .prepare("INSERT INTO hassan_penalties (date, amount, reason) VALUES (?, ?, ?)")
+      .run(date, amount, reason?.trim() || null);
+    return db.prepare("SELECT * FROM hassan_penalties WHERE id = ?").get(info.lastInsertRowid);
+  });
+  ipcMain.handle("hassanPenalties:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM hassan_penalties WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
+  // --- مرتبات عمال حسن: نفس فكرة شيت المرتبات بس الفلوس طالعة من خزنة حسن. ---
+  ipcMain.handle("hassanWorkers:list", () =>
+    db.prepare("SELECT * FROM hassan_workers WHERE active = 1 ORDER BY name").all()
+  );
+  ipcMain.handle("hassanWorkers:create", (_e, { name, job, monthly_salary, start_month }) => {
+    const trimmed = (name ?? "").trim();
+    if (!trimmed) throw new Error("لازم اسم العامل");
+    const info = db
+      .prepare("INSERT INTO hassan_workers (name, job, monthly_salary, start_month) VALUES (?, ?, ?, ?)")
+      .run(trimmed, job?.trim() || null, Number(monthly_salary) || 0, start_month);
+    return db.prepare("SELECT * FROM hassan_workers WHERE id = ?").get(info.lastInsertRowid);
+  });
+  ipcMain.handle("hassanWorkers:update", (_e, { id, name, job, monthly_salary }) => {
+    db.prepare("UPDATE hassan_workers SET name = ?, job = ?, monthly_salary = ? WHERE id = ?").run(
+      (name ?? "").trim(),
+      job?.trim() || null,
+      Number(monthly_salary) || 0,
+      id
+    );
+    return db.prepare("SELECT * FROM hassan_workers WHERE id = ?").get(id);
+  });
+  // بيشيل العامل من القائمة من الشهر ده ورايح — حركاته القديمة (وفلوسه اللي
+  // اتصرفت من خزنة حسن) بتفضل زي ما هي.
+  ipcMain.handle("hassanWorkers:delete", (_e, { id }) => {
+    db.prepare("UPDATE hassan_workers SET active = 0 WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
+  ipcMain.handle("hassanWorkerEntries:list", (_e, { month }) =>
+    db
+      .prepare(
+        `SELECT we.*, w.name AS worker_name FROM hassan_worker_entries we
+         JOIN hassan_workers w ON w.id = we.worker_id
+         WHERE we.month = ? ORDER BY we.date DESC, we.id DESC`
+      )
+      .all(month)
+  );
+
+  const WORKER_ENTRY_LABEL = { payment: "مرتب", advance: "سلفة" };
+  ipcMain.handle("hassanWorkerEntries:create", (_e, { worker_id, month, date, type, amount, note }) => {
+    const worker = db.prepare("SELECT * FROM hassan_workers WHERE id = ?").get(worker_id);
+    if (!worker) throw new Error("العامل مش موجود");
+    const tx = db.transaction(() => {
+      let treasuryExpenseId = null;
+      // الدفعة والسلفة فلوس طالعة فعلاً — بتتسجل في خزنة حسن باسم العامل
+      // عشان تبان هناك "اتصرف منها مرتب فلان".
+      if (type === "payment" || type === "advance") {
+        const description = `${WORKER_ENTRY_LABEL[type]} ${worker.name}${worker.job ? ` (${worker.job})` : ""} — شهر ${month}${
+          note?.trim() ? ` — ${note.trim()}` : ""
+        }`;
+        const info = db
+          .prepare("INSERT INTO hassan_treasury_expenses (date, amount, description) VALUES (?, ?, ?)")
+          .run(date, amount, description);
+        treasuryExpenseId = info.lastInsertRowid;
+        const created = db.prepare("SELECT * FROM hassan_treasury_expenses WHERE id = ?").get(treasuryExpenseId);
+        pushToCloud("hassan_treasury_expenses", created.id, created);
+      }
+      const info = db
+        .prepare(
+          `INSERT INTO hassan_worker_entries (worker_id, month, date, type, amount, note, treasury_expense_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(worker_id, month, date, type, amount, note?.trim() || null, treasuryExpenseId);
+      return info.lastInsertRowid;
+    });
+    const id = tx();
+    return db.prepare("SELECT * FROM hassan_worker_entries WHERE id = ?").get(id);
+  });
+  ipcMain.handle("hassanWorkerEntries:delete", (_e, { id }) => {
+    const entry = db.prepare("SELECT * FROM hassan_worker_entries WHERE id = ?").get(id);
+    const tx = db.transaction(() => {
+      if (entry?.treasury_expense_id) {
+        db.prepare("DELETE FROM hassan_treasury_expenses WHERE id = ?").run(entry.treasury_expense_id);
+      }
+      db.prepare("DELETE FROM hassan_worker_entries WHERE id = ?").run(id);
+    });
+    tx();
+    return { ok: true };
+  });
+
+  // شيت مرتبات عمال حسن لشهر: كل عامل شغال من الشهر ده أو قبله (أو عنده
+  // حركات في الشهر ده حتى لو اتشال) — المرتب + الحوافز − الخصومات = المستحق،
+  // والمصروف = دفعات المرتب + السلف، والباقي = المستحق − المصروف.
+  ipcMain.handle("hassanWorkers:payroll", (_e, { month }) => {
+    const workers = db
+      .prepare(
+        `SELECT * FROM hassan_workers w
+         WHERE (w.active = 1 AND w.start_month <= ?)
+            OR EXISTS (SELECT 1 FROM hassan_worker_entries e WHERE e.worker_id = w.id AND e.month = ?)
+         ORDER BY w.name`
+      )
+      .all(month, month);
+    const sumStmt = db.prepare(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_worker_entries WHERE worker_id = ? AND month = ? AND type = ?"
+    );
+    const rows = workers.map((w) => {
+      const payments = sumStmt.get(w.id, month, "payment").total;
+      const advances = sumStmt.get(w.id, month, "advance").total;
+      const bonuses = sumStmt.get(w.id, month, "bonus").total;
+      const deductions = sumStmt.get(w.id, month, "deduction").total;
+      const salary = w.active || w.start_month <= month ? w.monthly_salary : 0;
+      const net = salary + bonuses - deductions;
+      const paid = payments + advances;
+      return {
+        worker_id: w.id,
+        name: w.name,
+        job: w.job,
+        active: !!w.active,
+        monthly_salary: salary,
+        bonuses,
+        deductions,
+        net,
+        payments,
+        advances,
+        paid,
+        remaining: net - paid,
+      };
+    });
+    const total = (key) => rows.reduce((sum, r) => sum + r[key], 0);
+    return {
+      month,
+      rows,
+      totalNet: total("net"),
+      totalPaid: total("paid"),
+      totalRemaining: total("remaining"),
+    };
+  });
+
   ipcMain.handle("hassan:treasuryBalance", (_e, { month }) => {
-    const allTimeCommission = computeCommissionRows(null).total;
-    const monthCommission = computeCommissionRows(month).total;
+    const allTimePenalties = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_penalties").get().total;
+    const monthPenalties = db
+      .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_penalties WHERE date LIKE ?")
+      .get(`${month}%`).total;
+    // الكوميشن هنا صافي بعد الجزاءات — ده اللي فعلاً بيدخل خزنة حسن.
+    const allTimeCommission = computeCommissionRows(null).total - allTimePenalties;
+    const monthCommission = computeCommissionRows(month).total - monthPenalties;
     const allTimeSpent = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_treasury_expenses").get().total;
     const monthSpent = db
       .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_treasury_expenses WHERE date LIKE ?")
@@ -1115,6 +1263,8 @@ function registerIpcHandlers(db) {
       allTimeSpent,
       monthCommission,
       monthSpent,
+      monthPenalties,
+      allTimePenalties,
     };
   });
 
@@ -1130,6 +1280,9 @@ function registerIpcHandlers(db) {
     return created;
   });
   ipcMain.handle("hassanTreasury:delete", (_e, { id }) => {
+    // لو السطر ده جاي من شيت مرتبات العمال، بتتمسح الحركة هناك كمان عشان
+    // الشيتين ميختلفوش.
+    db.prepare("DELETE FROM hassan_worker_entries WHERE treasury_expense_id = ?").run(id);
     db.prepare("DELETE FROM hassan_treasury_expenses WHERE id = ?").run(id);
     return { ok: true };
   });
@@ -1794,7 +1947,10 @@ function registerIpcHandlers(db) {
       }
       for (const ml of marketLogs) commissionRows.push(ml.hassan_commission ?? 0);
     }
-    const hassanCommissionTotal = commissionRows.reduce((sum, c) => sum + c, 0);
+    const monthPenalties = db
+      .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_penalties WHERE date LIKE ?")
+      .get(`${month}%`).total;
+    const hassanCommissionTotal = commissionRows.reduce((sum, c) => sum + c, 0) - monthPenalties;
 
     const treasuryAccounts = db.prepare("SELECT * FROM treasury_accounts ORDER BY id").all();
 
@@ -2125,6 +2281,8 @@ function registerIpcHandlers(db) {
       db.prepare("DELETE FROM salary_payments").run();
       db.prepare("DELETE FROM hassan_ledger").run();
       db.prepare("DELETE FROM hassan_treasury_expenses").run();
+      db.prepare("DELETE FROM hassan_penalties").run();
+      db.prepare("DELETE FROM hassan_worker_entries").run();
       db.prepare("DELETE FROM contractor_payments").run();
       db.prepare("DELETE FROM partner_payments").run();
       db.prepare("DELETE FROM supplier_purchases").run();

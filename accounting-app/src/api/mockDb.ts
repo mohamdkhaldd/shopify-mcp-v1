@@ -169,6 +169,18 @@ interface MockState {
   employee_deductions: EmployeeDeductionRow[];
   hassan_ledger: HassanLedgerRow[];
   hassan_treasury_expenses: HassanTreasuryExpenseRow[];
+  hassan_penalties?: { id: number; date: string; amount: number; reason: string | null }[];
+  hassan_workers?: { id: number; name: string; job: string | null; monthly_salary: number; start_month: string; active: number }[];
+  hassan_worker_entries?: {
+    id: number;
+    worker_id: number;
+    month: string;
+    date: string;
+    type: "payment" | "advance" | "bonus" | "deduction";
+    amount: number;
+    note: string | null;
+    treasury_expense_id: number | null;
+  }[];
   contractor_payments: ContractorPaymentRow[];
   partner_payments: PartnerPaymentRow[];
   treasury_accounts: TreasuryAccountRow[];
@@ -365,6 +377,9 @@ function loadState(): MockState {
     for (const b of state.employee_bonuses) if (b.month == null) b.month = b.date.slice(0, 7);
     if (!state.hassan_ledger) state.hassan_ledger = [];
     if (!state.hassan_treasury_expenses) state.hassan_treasury_expenses = [];
+    if (!state.hassan_penalties) state.hassan_penalties = [];
+    if (!state.hassan_workers) state.hassan_workers = [];
+    if (!state.hassan_worker_entries) state.hassan_worker_entries = [];
     if (!state.contractor_payments) state.contractor_payments = [];
     if (!state.partner_payments) state.partner_payments = [];
     if (!state.treasury_accounts) {
@@ -1018,10 +1033,112 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return computeCommissionRows(payload.month);
   }
 
+  const penalties = (state.hassan_penalties ??= []);
+  const workers = (state.hassan_workers ??= []);
+  const workerEntries = (state.hassan_worker_entries ??= []);
+  if (channel === "hassanPenalties:list") {
+    return penalties.filter((p) => p.date.startsWith(payload.month)).sort((a, b) => b.date.localeCompare(a.date));
+  }
+  if (channel === "hassanPenalties:create") {
+    const record = { id: state.nextId++, date: payload.date, amount: payload.amount, reason: payload.reason || null };
+    penalties.push(record);
+    saveState(state);
+    return record;
+  }
+  if (channel === "hassanPenalties:delete") {
+    state.hassan_penalties = penalties.filter((p) => p.id !== payload.id);
+    saveState(state);
+    return { ok: true };
+  }
+  if (channel === "hassanWorkers:list") return workers.filter((w) => w.active).sort((a, b) => a.name.localeCompare(b.name));
+  if (channel === "hassanWorkers:create") {
+    const record = {
+      id: state.nextId++,
+      name: payload.name.trim(),
+      job: payload.job || null,
+      monthly_salary: Number(payload.monthly_salary) || 0,
+      start_month: payload.start_month,
+      active: 1,
+    };
+    workers.push(record);
+    saveState(state);
+    return record;
+  }
+  if (channel === "hassanWorkers:update") {
+    const w = workers.find((x) => x.id === payload.id)!;
+    Object.assign(w, { name: payload.name.trim(), job: payload.job || null, monthly_salary: Number(payload.monthly_salary) || 0 });
+    saveState(state);
+    return w;
+  }
+  if (channel === "hassanWorkers:delete") {
+    const w = workers.find((x) => x.id === payload.id);
+    if (w) w.active = 0;
+    saveState(state);
+    return { ok: true };
+  }
+  if (channel === "hassanWorkerEntries:list") {
+    return workerEntries
+      .filter((e) => e.month === payload.month)
+      .map((e) => ({ ...e, worker_name: workers.find((w) => w.id === e.worker_id)?.name ?? "" }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+  if (channel === "hassanWorkerEntries:create") {
+    const worker = workers.find((w) => w.id === payload.worker_id)!;
+    let treasuryExpenseId: number | null = null;
+    if (payload.type === "payment" || payload.type === "advance") {
+      treasuryExpenseId = state.nextId++;
+      state.hassan_treasury_expenses.push({
+        id: treasuryExpenseId,
+        date: payload.date,
+        amount: payload.amount,
+        description: `${payload.type === "payment" ? "مرتب" : "سلفة"} ${worker.name}${worker.job ? ` (${worker.job})` : ""} — شهر ${payload.month}`,
+      });
+    }
+    const record = { id: state.nextId++, ...payload, note: payload.note || null, treasury_expense_id: treasuryExpenseId };
+    workerEntries.push(record);
+    saveState(state);
+    return record;
+  }
+  if (channel === "hassanWorkerEntries:delete") {
+    const entry = workerEntries.find((e) => e.id === payload.id);
+    if (entry?.treasury_expense_id) {
+      state.hassan_treasury_expenses = state.hassan_treasury_expenses.filter((t) => t.id !== entry.treasury_expense_id);
+    }
+    state.hassan_worker_entries = workerEntries.filter((e) => e.id !== payload.id);
+    saveState(state);
+    return { ok: true };
+  }
+  if (channel === "hassanWorkers:payroll") {
+    const { month } = payload;
+    const rows = workers
+      .filter((w) => (w.active && w.start_month <= month) || workerEntries.some((e) => e.worker_id === w.id && e.month === month))
+      .map((w) => {
+        const sum = (type: string) =>
+          workerEntries.filter((e) => e.worker_id === w.id && e.month === month && e.type === type).reduce((s, e) => s + e.amount, 0);
+        const payments = sum("payment");
+        const advances = sum("advance");
+        const bonuses = sum("bonus");
+        const deductions = sum("deduction");
+        const salary = w.active || w.start_month <= month ? w.monthly_salary : 0;
+        const net = salary + bonuses - deductions;
+        const paid = payments + advances;
+        return { worker_id: w.id, name: w.name, job: w.job, active: !!w.active, monthly_salary: salary, bonuses, deductions, net, payments, advances, paid, remaining: net - paid };
+      });
+    return {
+      month,
+      rows,
+      totalNet: rows.reduce((s, r) => s + r.net, 0),
+      totalPaid: rows.reduce((s, r) => s + r.paid, 0),
+      totalRemaining: rows.reduce((s, r) => s + r.remaining, 0),
+    };
+  }
+
   if (channel === "hassan:treasuryBalance") {
     const { month } = payload;
-    const allTimeCommission = computeCommissionRows(null).total;
-    const monthCommission = computeCommissionRows(month).total;
+    const allTimePenalties = penalties.reduce((s, p) => s + p.amount, 0);
+    const monthPenalties = penalties.filter((p) => p.date.startsWith(month)).reduce((s, p) => s + p.amount, 0);
+    const allTimeCommission = computeCommissionRows(null).total - allTimePenalties;
+    const monthCommission = computeCommissionRows(month).total - monthPenalties;
     const allTimeSpent = state.hassan_treasury_expenses.reduce((sum, e) => sum + e.amount, 0);
     const monthSpent = state.hassan_treasury_expenses
       .filter((e) => e.date.startsWith(month))
@@ -1032,6 +1149,8 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       allTimeSpent,
       monthCommission,
       monthSpent,
+      monthPenalties,
+      allTimePenalties,
     };
   }
 
@@ -1047,6 +1166,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return record;
   }
   if (channel === "hassanTreasury:delete") {
+    state.hassan_worker_entries = workerEntries.filter((e) => e.treasury_expense_id !== payload.id);
     state.hassan_treasury_expenses = state.hassan_treasury_expenses.filter((e) => e.id !== payload.id);
     saveState(state);
     return { ok: true };

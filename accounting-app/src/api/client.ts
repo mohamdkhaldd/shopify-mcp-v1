@@ -25,6 +25,11 @@ import {
   HassanPartyBalance,
   HassanTreasuryBalance,
   HassanTreasuryExpense,
+  HassanPenalty,
+  HassanWorker,
+  HassanWorkerEntry,
+  HassanWorkerEntryType,
+  HassanWorkerPayroll,
   IncomingSummary,
   MonthlyExpense,
   MonthlyReport,
@@ -223,6 +228,26 @@ export const hassanApi = {
   treasuryCreate: (expense: Omit<HassanTreasuryExpense, "id">): Promise<HassanTreasuryExpense> =>
     invoke("hassanTreasury:create", expense),
   treasuryRemove: (id: number): Promise<void> => invoke("hassanTreasury:delete", { id }),
+  penaltiesList: (month: string): Promise<HassanPenalty[]> => invoke("hassanPenalties:list", { month }),
+  penaltyCreate: (penalty: Omit<HassanPenalty, "id">): Promise<HassanPenalty> => invoke("hassanPenalties:create", penalty),
+  penaltyRemove: (id: number): Promise<void> => invoke("hassanPenalties:delete", { id }),
+  workersList: (): Promise<HassanWorker[]> => invoke("hassanWorkers:list"),
+  workerCreate: (worker: { name: string; job: string | null; monthly_salary: number; start_month: string }): Promise<HassanWorker> =>
+    invoke("hassanWorkers:create", worker),
+  workerUpdate: (worker: { id: number; name: string; job: string | null; monthly_salary: number }): Promise<HassanWorker> =>
+    invoke("hassanWorkers:update", worker),
+  workerRemove: (id: number): Promise<void> => invoke("hassanWorkers:delete", { id }),
+  workerEntriesList: (month: string): Promise<HassanWorkerEntry[]> => invoke("hassanWorkerEntries:list", { month }),
+  workerEntryCreate: (entry: {
+    worker_id: number;
+    month: string;
+    date: string;
+    type: HassanWorkerEntryType;
+    amount: number;
+    note: string | null;
+  }): Promise<HassanWorkerEntry> => invoke("hassanWorkerEntries:create", entry),
+  workerEntryRemove: (id: number): Promise<void> => invoke("hassanWorkerEntries:delete", { id }),
+  workersPayroll: (month: string): Promise<HassanWorkerPayroll> => invoke("hassanWorkers:payroll", { month }),
 };
 
 export const contractorPaymentsApi = {

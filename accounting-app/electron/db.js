@@ -150,6 +150,40 @@ CREATE TABLE IF NOT EXISTS hassan_treasury_expenses (
   description TEXT NOT NULL
 );
 
+-- جزاءات بتتخصم من كوميشن حسن (وبالتالي من رصيد خزنته).
+CREATE TABLE IF NOT EXISTS hassan_penalties (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  amount REAL NOT NULL,
+  reason TEXT
+);
+
+-- عمال حسن اللي بيقبضوا من كوميشنه — مرتب شهري ثابت، وبيظهروا في شيت
+-- المرتبات من أول شهر اتضافوا فيه. active = 0 معناها اتشال من القائمة بس
+-- تاريخه القديم بيفضل.
+CREATE TABLE IF NOT EXISTS hassan_workers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  job TEXT,
+  monthly_salary REAL NOT NULL DEFAULT 0,
+  start_month TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1
+);
+
+-- حركات مرتبات عمال حسن: دفعة مرتب / سلفة (فلوس طالعة من خزنة حسن — ليها
+-- سطر مربوط في hassan_treasury_expenses)، أو حافز / خصم (بيغيّروا المستحق
+-- بس من غير فلوس طالعة).
+CREATE TABLE IF NOT EXISTS hassan_worker_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  worker_id INTEGER NOT NULL REFERENCES hassan_workers(id) ON DELETE CASCADE,
+  month TEXT NOT NULL,
+  date TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('payment', 'advance', 'bonus', 'deduction')),
+  amount REAL NOT NULL,
+  note TEXT,
+  treasury_expense_id INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS partner_payments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   partner_id INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,

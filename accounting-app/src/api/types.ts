@@ -263,6 +263,60 @@ export interface HassanTreasuryBalance {
   allTimeSpent: number;
   monthCommission: number;
   monthSpent: number;
+  monthPenalties: number;
+  allTimePenalties: number;
+}
+
+export interface HassanPenalty {
+  id: number;
+  date: string;
+  amount: number;
+  reason: string | null;
+}
+
+export interface HassanWorker {
+  id: number;
+  name: string;
+  job: string | null;
+  monthly_salary: number;
+  start_month: string;
+  active: number;
+}
+
+export type HassanWorkerEntryType = "payment" | "advance" | "bonus" | "deduction";
+
+export interface HassanWorkerEntry {
+  id: number;
+  worker_id: number;
+  worker_name: string;
+  month: string;
+  date: string;
+  type: HassanWorkerEntryType;
+  amount: number;
+  note: string | null;
+}
+
+export interface HassanWorkerPayrollRow {
+  worker_id: number;
+  name: string;
+  job: string | null;
+  active: boolean;
+  monthly_salary: number;
+  bonuses: number;
+  deductions: number;
+  net: number;
+  payments: number;
+  advances: number;
+  paid: number;
+  remaining: number;
+}
+
+export interface HassanWorkerPayroll {
+  month: string;
+  rows: HassanWorkerPayrollRow[];
+  totalNet: number;
+  totalPaid: number;
+  totalRemaining: number;
 }
 
 export interface ContractorPayment {
