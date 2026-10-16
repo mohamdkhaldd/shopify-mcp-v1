@@ -1,5 +1,7 @@
 import { Fragment, FormEvent, useEffect, useState } from "react";
 import MonthPicker from "../components/equipment/MonthPicker";
+import PrintButton from "../components/PrintButton";
+import { PrintHeader, PrintSignoff } from "../components/PrintSignoff";
 import Icon from "../components/Icon";
 import { hassanApi } from "../api/client";
 import {
@@ -12,7 +14,7 @@ import {
   HassanTreasuryBalance,
   HassanTreasuryExpense,
 } from "../api/types";
-import { currentMonthKey } from "../utils/months";
+import { currentMonthKey, monthLabel } from "../utils/months";
 import { formatEGP } from "../utils/format";
 
 const LEDGER_TYPES: { value: HassanLedgerType; label: string }[] = [
@@ -238,7 +240,7 @@ function TreasuryTab({ month }: { month: string }) {
       <div className="bg-white rounded-card shadow-card p-5">
         <h2 className="font-bold text-slate-800 mb-1">دفع حسن من خزنته — {month}</h2>
         <p className="text-xs text-slate-400 mb-4">زي قسط أو إيجار — بتتخصم من فلوس حسن نفسها، مش من خزنة الشركة.</p>
-        <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
+        <form onSubmit={handleAdd} className="no-print flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
           <div>
             <label className="block text-xs text-slate-400 mb-1">التاريخ</label>
             <input
@@ -283,7 +285,7 @@ function TreasuryTab({ month }: { month: string }) {
                 <span className="text-slate-600">
                   {e.date} — {formatEGP(e.amount)} <span className="text-slate-400">({e.description})</span>
                 </span>
-                <button onClick={() => handleDelete(e.id)} className="text-xs text-rose-500 hover:text-rose-700 font-semibold">
+                <button onClick={() => handleDelete(e.id)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
                   حذف
                 </button>
               </li>
@@ -375,8 +377,8 @@ function LedgerTab({ month }: { month: string }) {
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-4">حساب حسن الشخصي — {month}</h2>
-        <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
+        <h2 className="font-bold text-slate-800 mb-4">حساب حسن الشخصي — {monthLabel(month)} {month.slice(0, 4)}</h2>
+        <form onSubmit={handleAdd} className="no-print flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
           <div>
             <label className="block text-xs text-slate-400 mb-1">التاريخ</label>
             <input
@@ -445,7 +447,7 @@ function LedgerTab({ month }: { month: string }) {
                 <th className="text-start font-semibold py-2">القيمة</th>
                 <th className="text-start font-semibold py-2">الجهة</th>
                 <th className="text-start font-semibold py-2">بيان</th>
-                <th></th>
+                <th className="no-print"></th>
               </tr>
             </thead>
             <tbody>
@@ -456,7 +458,7 @@ function LedgerTab({ month }: { month: string }) {
                   <td className="py-2 text-slate-600">{formatEGP(e.amount)}</td>
                   <td className="py-2 text-slate-500">{e.party_name ?? "—"}</td>
                   <td className="py-2 text-slate-500">{e.description ?? "—"}</td>
-                  <td className="py-2">
+                  <td className="no-print py-2">
                     <button onClick={() => handleDelete(e.id)} className="text-xs text-rose-500 hover:text-rose-700 font-semibold">
                       حذف
                     </button>
@@ -474,18 +476,25 @@ function LedgerTab({ month }: { month: string }) {
 export default function Hassan() {
   const [month, setMonth] = useState(currentMonthKey());
   const [tab, setTab] = useState<"commission" | "treasury" | "ledger">("commission");
+  const printTitle =
+    tab === "ledger" ? "حساب حسن الشخصي" : tab === "treasury" ? "خزنة حسن" : "كوميشن حسن";
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <PrintHeader title={printTitle} subtitle={`${monthLabel(month)} ${month.slice(0, 4)}`} />
+
+      <div className="no-print flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">حسن</h1>
           <p className="text-sm text-slate-500 mt-1">كوميشن حسن على تأجير المعدات، منفصل عن حسابه الشخصي.</p>
         </div>
-        <MonthPicker month={month} onChange={setMonth} />
+        <div className="flex items-center gap-2">
+          <PrintButton />
+          <MonthPicker month={month} onChange={setMonth} />
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="no-print flex flex-wrap gap-2">
         <button
           onClick={() => setTab("commission")}
           className={[
@@ -521,6 +530,8 @@ export default function Hassan() {
       {tab === "commission" && <CommissionTab month={month} />}
       {tab === "treasury" && <TreasuryTab month={month} />}
       {tab === "ledger" && <LedgerTab month={month} />}
+
+      <PrintSignoff />
     </div>
   );
 }

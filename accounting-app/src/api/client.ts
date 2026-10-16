@@ -7,6 +7,8 @@ import {
   ContractorSummary,
   DailyLog,
   DailyLogRole,
+  DashboardMonthDues,
+  EquipmentSheetMismatch,
   DashboardSummary,
   Driver,
   Equipment,
@@ -92,6 +94,7 @@ export const expenseCategoriesApi = {
 
 export const equipmentApi = {
   list: (): Promise<Equipment[]> => invoke("equipment:list"),
+  sheetMismatches: (): Promise<EquipmentSheetMismatch[]> => invoke("equipment:sheetMismatches"),
   create: (data: {
     name: string;
     purchase_price: number;
@@ -284,6 +287,7 @@ export const reportsApi = {
 
 export const dashboardApi = {
   summary: (): Promise<DashboardSummary> => invoke("dashboard:summary"),
+  monthDues: (month: string): Promise<DashboardMonthDues> => invoke("dashboard:monthDues", { month }),
 };
 
 export const wasteApi = {

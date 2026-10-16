@@ -404,6 +404,8 @@ export interface ReportEquipmentRow {
   income: number;
   expense: number;
   netProfit: number;
+  workDays: number;
+  offDays: number;
 }
 
 export interface MonthlyReport {
@@ -427,6 +429,8 @@ export interface DashboardEquipmentExpense {
   annualExpense: number;
   annualIncome: number;
   annualProfit: number;
+  workDays: number;
+  offDays: number;
 }
 
 export interface DashboardSummary {
@@ -532,4 +536,25 @@ export interface AppUpdateStatus {
   state: "dev" | "not-available" | "downloaded" | "error";
   version?: string;
   message?: string;
+}
+
+export interface MonthDueRow {
+  id: number;
+  name: string;
+  due: number;
+  paid: number;
+  remaining: number;
+}
+
+export interface DashboardMonthDues {
+  month: string;
+  contractors: MonthDueRow[];
+  partners: MonthDueRow[];
+  contractorsRemaining: number;
+  partnersRemaining: number;
+}
+
+export interface EquipmentSheetMismatch {
+  equipment_id: number;
+  months: { month: string; days: number }[];
 }

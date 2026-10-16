@@ -4,7 +4,7 @@ import MonthPicker from "../../components/equipment/MonthPicker";
 import PrintButton from "../../components/PrintButton";
 import { PrintHeader, PrintSignoff } from "../../components/PrintSignoff";
 import { contractorsApi, dailyLogsApi, employeesApi, equipmentShiftsApi } from "../../api/client";
-import { Equipment, EquipmentShift, WageType } from "../../api/types";
+import { DailyLog, Equipment, EquipmentShift, WageType } from "../../api/types";
 import { currentMonthKey, monthLabel } from "../../utils/months";
 import DailyLogTable from "./DailyLogTable";
 import ExpensesTable from "./ExpensesTable";
@@ -35,6 +35,7 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
   const [employees, setEmployees] = useState<{ id: number; name: string; rate: number; wage_type: WageType }[]>([]);
   const [contractors, setContractors] = useState<{ id: number; name: string }[]>([]);
   const [mismatchedDates, setMismatchedDates] = useState<Set<string>>(new Set());
+  const [oneSheetDates, setOneSheetDates] = useState<string[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [shifts, setShifts] = useState<EquipmentShift[]>([]);
   const [activeShiftLabel, setActiveShiftLabel] = useState("");
@@ -81,6 +82,15 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
         }
       });
       setMismatchedDates(mismatches);
+
+      // يوم متكتب فيه اسم وسعر في شيت واحد بس (مقاول أو سركي) والتاني فاضي.
+      const filled = (l?: DailyLog) => !!l && !l.is_day_off && !!l.person_name && (l.day_rate ?? 0) > 0;
+      const driverByDate = new Map(driverLogs.map((l) => [l.date, l]));
+      const contractorByDate = new Map(contractorLogs.map((l) => [l.date, l]));
+      const dates = new Set([...driverByDate.keys(), ...contractorByDate.keys()]);
+      setOneSheetDates(
+        [...dates].filter((d) => filled(driverByDate.get(d)) !== filled(contractorByDate.get(d))).sort()
+      );
     });
   }, [equipment.id, month, activeShiftLabel, refreshKey]);
 
@@ -120,6 +130,15 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
           <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
           فيه {mismatchedDates.size} يوم الساعات فيه مش متطابقة بين السركي والمقاول — محتاجة مراجعة (متعلّمة بنقطة حمرا
           في الجدول).
+        </div>
+      )}
+
+      {oneSheetDates.length > 0 && (
+        <div className="no-print flex items-center gap-2 bg-rose-50 text-rose-700 text-sm rounded-xl px-4 py-2.5">
+          <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+          فيه {oneSheetDates.length} يوم متسجل في شيت واحد بس (المقاول أو السركي) والتاني ناقص الاسم أو السعر — يوم{" "}
+          {oneSheetDates.map((d) => d.slice(-2)).join("، ")}
+          {activeShiftLabel ? ` (شيفت ${activeShiftLabel})` : ""}.
         </div>
       )}
 

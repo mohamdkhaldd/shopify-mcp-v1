@@ -12,54 +12,17 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import DayCountBadge from "../components/DayCountBadge";
+import EquipmentTick from "../components/EquipmentTick";
 import KpiCard from "../components/KpiCard";
 import Modal from "../components/Modal";
 import { useTheme } from "../theme";
 import { contractorsDashboardApi, dashboardApi, partnersDashboardApi, suppliersApi } from "../api/client";
-import { ContractorSummary, DashboardSummary, PartnerSummary, SupplierDashboardRow } from "../api/types";
+import { ContractorSummary, DashboardMonthDues, DashboardSummary, MonthDueRow, PartnerSummary, SupplierDashboardRow } from "../api/types";
+import { currentMonthKey } from "../utils/months";
 import { formatEGP } from "../utils/format";
 
-type DrilldownKind = "expense" | "contractors" | "partners" | "suppliers" | null;
-
-// بيقسم اسم المعدة على سطرين بالكتير (بالكلمات) عشان الأسماء الطويلة زي
-// "ونش 5 طن دبوسة" تبان كاملة جنب العمود بدل ما تتقص.
-function splitLabel(name: string, maxChars = 14): string[] {
-  const words = name.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length > maxChars && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = next;
-    }
-  }
-  if (current) lines.push(current);
-  if (lines.length > 2) return [lines[0], `${lines.slice(1).join(" ").slice(0, maxChars - 1)}…`];
-  return lines;
-}
-
-// اسم المعدة على محور الأعمدة: direction="ltr" هنا مقصودة — مع RTL المتصفح
-// بيعكس معنى textAnchor="end" فالاسم كان بيترسم فوق الأعمدة نفسها ويستخبى.
-// الحروف العربي نفسها بتتكتب صح عادي جوه السطر.
-function EquipmentTick({ x, y, payload, fill }: { x?: number; y?: number; payload?: { value: string }; fill: string }) {
-  const name = payload?.value ?? "";
-  const lines = splitLabel(name);
-  const lineHeight = 13;
-  const startY = (y ?? 0) - ((lines.length - 1) * lineHeight) / 2;
-  return (
-    <text x={(x ?? 0) - 6} y={startY} textAnchor="end" direction="ltr" fill={fill} fontSize={11} fontFamily="Cairo">
-      <title>{name}</title>
-      {lines.map((line, i) => (
-        <tspan key={i} x={(x ?? 0) - 6} dy={i === 0 ? 4 : lineHeight}>
-          {line}
-        </tspan>
-      ))}
-    </text>
-  );
-}
+type DrilldownKind = "expense" | "contractors" | "partners" | "suppliers" | "monthContractors" | "monthPartners" | null;
 
 export default function Dashboard() {
   const { theme } = useTheme();
@@ -69,8 +32,11 @@ export default function Dashboard() {
   const [partnerRows, setPartnerRows] = useState<PartnerSummary[] | null>(null);
   const [supplierRows, setSupplierRows] = useState<SupplierDashboardRow[] | null>(null);
 
+  const [monthDues, setMonthDues] = useState<DashboardMonthDues | null>(null);
+
   useEffect(() => {
     dashboardApi.summary().then(setSummary);
+    dashboardApi.monthDues(currentMonthKey()).then(setMonthDues);
   }, []);
 
   function openDrilldown(kind: DrilldownKind) {
@@ -146,6 +112,22 @@ export default function Dashboard() {
           tone="neutral"
           sub="نصيب الشركاء من الأرباح لحد النهاردة"
           onClick={() => openDrilldown("partners")}
+        />
+        <KpiCard
+          label={`مستحق للشركة — شهر ${summary.currentMonthLabel}`}
+          value={monthDues ? formatEGP(monthDues.contractorsRemaining) : "..."}
+          icon="contractors"
+          tone="neutral"
+          sub="شغل المقاولين الشهر ده − اللي دفعوه الشهر ده"
+          onClick={() => openDrilldown("monthContractors")}
+        />
+        <KpiCard
+          label={`مستحق للشركاء — شهر ${summary.currentMonthLabel}`}
+          value={monthDues ? formatEGP(monthDues.partnersRemaining) : "..."}
+          icon="partners"
+          tone="neutral"
+          sub="نصيبهم من ربح الشهر ده − اللي اتدفعلهم الشهر ده"
+          onClick={() => openDrilldown("monthPartners")}
         />
         <KpiCard
           label="مستحق للموردين"
@@ -243,6 +225,8 @@ export default function Dashboard() {
                 <th className="text-start font-semibold py-2">الدخل السنوي</th>
                 <th className="text-start font-semibold py-2">المصروف السنوي</th>
                 <th className="text-start font-semibold py-2">صافي الربح</th>
+                <th className="text-start font-semibold py-2">أيام الشغل</th>
+                <th className="text-start font-semibold py-2">أيام الإجازة</th>
               </tr>
             </thead>
             <tbody>
@@ -253,6 +237,12 @@ export default function Dashboard() {
                   <td className="py-2.5 text-slate-500">{formatEGP(eq.annualExpense)}</td>
                   <td className={["py-2.5 font-semibold", eq.annualProfit >= 0 ? "text-primary-dark" : "text-rose-600"].join(" ")}>
                     {formatEGP(eq.annualProfit)}
+                  </td>
+                  <td className="py-2.5">
+                    <DayCountBadge count={eq.workDays} tone="work" />
+                  </td>
+                  <td className="py-2.5">
+                    <DayCountBadge count={eq.offDays} tone="off" />
                   </td>
                 </tr>
               ))}
@@ -268,6 +258,12 @@ export default function Dashboard() {
                 </td>
                 <td className="pt-3 font-bold text-primary-dark">
                   {formatEGP(summary.equipmentExpenses.reduce((sum, eq) => sum + eq.annualProfit, 0))}
+                </td>
+                <td className="pt-3">
+                  <DayCountBadge count={summary.equipmentExpenses.reduce((sum, eq) => sum + eq.workDays, 0)} tone="work" />
+                </td>
+                <td className="pt-3">
+                  <DayCountBadge count={summary.equipmentExpenses.reduce((sum, eq) => sum + eq.offDays, 0)} tone="off" />
                 </td>
               </tr>
             </tfoot>
@@ -293,6 +289,18 @@ export default function Dashboard() {
               ))}
             </tbody>
           </table>
+        </Modal>
+      )}
+
+      {drilldown === "monthContractors" && (
+        <Modal title={`المستحق من كل مقاول — شهر ${summary.currentMonthLabel}`} onClose={() => setDrilldown(null)}>
+          <MonthDuesTable rows={monthDues?.contractors} nameLabel="المقاول" dueLabel="شغله الشهر ده" paidLabel="دفع الشهر ده" />
+        </Modal>
+      )}
+
+      {drilldown === "monthPartners" && (
+        <Modal title={`المستحق لكل شريك — شهر ${summary.currentMonthLabel}`} onClose={() => setDrilldown(null)}>
+          <MonthDuesTable rows={monthDues?.partners} nameLabel="الشريك" dueLabel="نصيبه من ربح الشهر" paidLabel="اتدفعله الشهر ده" />
         </Modal>
       )}
 
@@ -389,5 +397,50 @@ export default function Dashboard() {
         </Modal>
       )}
     </div>
+  );
+}
+
+function MonthDuesTable({
+  rows,
+  nameLabel,
+  dueLabel,
+  paidLabel,
+}: {
+  rows: MonthDueRow[] | undefined;
+  nameLabel: string;
+  dueLabel: string;
+  paidLabel: string;
+}) {
+  if (!rows) return <div className="text-sm text-slate-400">جاري التحميل...</div>;
+  if (rows.length === 0) return <div className="text-sm text-slate-400">مفيش حاجة مسجلة الشهر ده.</div>;
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="text-slate-400 border-b border-slate-100">
+          <th className="text-start font-semibold py-2">{nameLabel}</th>
+          <th className="text-start font-semibold py-2">{dueLabel}</th>
+          <th className="text-start font-semibold py-2">{paidLabel}</th>
+          <th className="text-start font-semibold py-2">الباقي</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.id} className="border-b border-slate-50 last:border-0">
+            <td className="py-2.5 font-semibold text-slate-700">{r.name}</td>
+            <td className="py-2.5 text-slate-500">{formatEGP(r.due)}</td>
+            <td className="py-2.5 text-slate-500">{formatEGP(r.paid)}</td>
+            <td className="py-2.5 font-semibold text-primary-dark">{formatEGP(r.remaining)}</td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr className="border-t border-slate-100">
+          <td className="pt-3 font-bold text-slate-700">الإجمالي</td>
+          <td className="pt-3 font-bold text-slate-600">{formatEGP(rows.reduce((s, r) => s + r.due, 0))}</td>
+          <td className="pt-3 font-bold text-slate-600">{formatEGP(rows.reduce((s, r) => s + r.paid, 0))}</td>
+          <td className="pt-3 font-bold text-primary-dark">{formatEGP(rows.reduce((s, r) => s + r.remaining, 0))}</td>
+        </tr>
+      </tfoot>
+    </table>
   );
 }

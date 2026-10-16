@@ -53,13 +53,31 @@ function createWindow() {
 // ما تدوس طباعة فعلاً.
 let printPreviewWindow = null;
 
+// عدد صفحات ملف PDF طالع من Chromium — كل صفحة ليها object واحد فيه
+// "/Type /Page" (غير "/Type /Pages" اللي هو الفهرس).
+function countPdfPages(buffer) {
+  return (buffer.toString("latin1").match(/\/Type\s*\/Page(?![a-zA-Z])/g) ?? []).length;
+}
+
+// أي شيت بيتطبع لازم يطلع ورقة A4 واحدة بس: بنطبع بالحجم العادي، ولو طلع
+// أكتر من صفحة بنصغّر المقياس ونعيد لحد ما يدخل في صفحة واحدة. المقياس
+// الجديد بيتقدّر من عدد الصفحات (المحتوى طوله بيصغر مع المقياس تقريبًا).
+async function printToSinglePageA4(webContents) {
+  const options = { printBackground: true, pageSize: "A4", margins: { marginType: "default" } };
+  let scale = 1;
+  let pdf = await webContents.printToPDF({ ...options, scale });
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const pages = countPdfPages(pdf);
+    if (pages <= 1 || scale <= 0.2) break;
+    scale = Math.max(0.2, Math.min(scale * 0.92, scale / Math.sqrt(pages) - 0.02));
+    pdf = await webContents.printToPDF({ ...options, scale: Number(scale.toFixed(2)) });
+  }
+  return pdf;
+}
+
 ipcMain.handle("print:preview", async () => {
   if (!mainWindow) return;
-  const pdfBuffer = await mainWindow.webContents.printToPDF({
-    printBackground: true,
-    pageSize: "A4",
-    margins: { marginType: "default" },
-  });
+  const pdfBuffer = await printToSinglePageA4(mainWindow.webContents);
   const tmpPath = path.join(os.tmpdir(), `albunyan-print-${Date.now()}.pdf`);
   fs.writeFileSync(tmpPath, pdfBuffer);
 

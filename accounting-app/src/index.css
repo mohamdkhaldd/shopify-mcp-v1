@@ -41,13 +41,40 @@ body {
     margin: 8mm;
   }
   /* Tailwind's spacing/type scale is rem-based, so shrinking the root
-     size compresses paddings and fonts together — enough to fit a full
-     31-row daily-log sheet on one printed page instead of three. */
+     size compresses paddings and fonts together. The desktop print step
+     (printToSinglePageA4 in electron/main.js) then scales whatever is
+     still too long down to exactly one A4 page, so this only needs to be
+     a readable starting size, not small enough to fit everything. */
   html {
-    font-size: 7px;
+    font-size: 10px;
   }
   table {
     page-break-inside: auto;
+    width: 100% !important;
+  }
+  /* الشيتات فيها خانات إدخال بعرض أدنى للشاشة — على الورق بتتطبع كنص عادي
+     من غير إطار، وعرضها بيتظبط على عرض الصفحة بدل ما الجدول يتقص. */
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+  [class*="min-w-"] {
+    min-width: 0 !important;
+  }
+  input,
+  select,
+  textarea {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    -webkit-appearance: none;
+    appearance: none;
+    padding: 0 !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    color: #0f172a !important;
+  }
+  input::placeholder {
+    color: transparent !important;
   }
   tr {
     page-break-inside: avoid;

@@ -36,3 +36,12 @@ export function weekdayLabel(isoDate: string): string {
   const [year, month, day] = isoDate.split("-").map(Number);
   return WEEKDAY_NAMES_AR[new Date(year, month - 1, day).getDay()];
 }
+
+// عدد أيام الشهر اللي فاتت لحد النهارده (الشهر الحالي لحد النهارده، شهر
+// فات كله، شهر جاي صفر) — عشان نعرف كام يوم المفروض يكون متسجل.
+export function elapsedDaysInMonth(monthKey: string): number {
+  const current = currentMonthKey();
+  if (monthKey > current) return 0;
+  if (monthKey < current) return daysInMonth(monthKey).length;
+  return new Date().getDate();
+}

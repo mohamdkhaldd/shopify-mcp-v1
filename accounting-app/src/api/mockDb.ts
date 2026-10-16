@@ -461,6 +461,26 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
   if (channel === "equipmentShifts:list") return [];
   if (channel === "equipmentShifts:create") return { id: state.nextId++, equipment_id: payload.equipment_id, label: payload.label };
 
+  if (channel === "equipment:sheetMismatches") {
+    const filled = (l?: DailyLogRow) => !!l && !l.is_day_off && !!l.person_name && (l.day_rate ?? 0) > 0;
+    const byEquipment = new Map<number, Map<string, Set<string>>>();
+    for (const a of state.daily_logs) {
+      if ((a.role !== "contractor" && a.role !== "driver") || !filled(a)) continue;
+      const otherRole = a.role === "contractor" ? "driver" : "contractor";
+      const b = state.daily_logs.find((l) => l.equipment_id === a.equipment_id && l.date === a.date && l.role === otherRole);
+      if (filled(b)) continue;
+      if (!byEquipment.has(a.equipment_id)) byEquipment.set(a.equipment_id, new Map());
+      const months = byEquipment.get(a.equipment_id)!;
+      const month = a.date.slice(0, 7);
+      if (!months.has(month)) months.set(month, new Set());
+      months.get(month)!.add(a.date);
+    }
+    return [...byEquipment.entries()].map(([equipment_id, months]) => ({
+      equipment_id,
+      months: [...months.entries()].sort().map(([month, dates]) => ({ month, days: dates.size })),
+    }));
+  }
+
   if (channel === "dailyLogs:list") {
     return state.daily_logs
       .filter((l) => l.equipment_id === payload.equipment_id && l.role === payload.role && l.date.startsWith(payload.month))
@@ -581,76 +601,47 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { ok: true };
   }
 
-  // مرتب الموظف الشهري بيتقسم على المعدات اللي اشتغل عليها الشهر ده حسب عدد
-  // الأيام، من إجمالي الفلوس الحقيقية الماخدوها (سلف + مكافآت + دفعات مرتب
-  // فعلية) — لو مفيش فلوس اتاخدت لسه مفيش مصروف بيتسجل.
-  function monthlySalaryAllocationForEmployeeMonth(employeeName: string, employeeId: number, month: string): Map<number, number> {
-    const logs = state.daily_logs.filter((l) => l.role === "driver" && l.person_name === employeeName && l.date.startsWith(month));
-    const result = new Map<number, number>();
-    if (logs.length === 0) return result;
-
-    const daysByEquipment = new Map<number, number>();
-    for (const l of logs) daysByEquipment.set(l.equipment_id, (daysByEquipment.get(l.equipment_id) ?? 0) + 1);
-
-    const advancesTotal = state.employee_advances
-      .filter((a) => a.employee_id === employeeId && a.month === month)
-      .reduce((sum, a) => sum + a.amount, 0);
-    const bonusesTotal = state.employee_bonuses
-      .filter((b) => b.employee_id === employeeId && b.month === month)
-      .reduce((sum, b) => sum + b.amount, 0);
-    const paidTotal = state.salary_payments
-      .filter((p) => p.employee_id === employeeId && p.month === month)
-      .reduce((sum, p) => sum + p.amount, 0);
-    const totalTaken = advancesTotal + bonusesTotal + paidTotal;
-    if (totalTaken === 0) return result;
-
-    for (const [equipmentId, days] of daysByEquipment) {
-      result.set(equipmentId, totalTaken * (days / logs.length));
+  // نفس منطق ipc.js: مرتب السواق مصروف على المعدة يوم بيوم حسب أيام شغله في
+  // السركي، حتى لو لسه متدفعلوش. يومي: يوميته عن كل يوم. شهري: مرتبه ÷ أيام
+  // الشهر عن كل يوم متسجل باسمه.
+  function driverWageForLog(log: DailyLogRow): number {
+    if (!log.person_name) return 0;
+    const employee = state.employees.find((e) => e.name === log.person_name);
+    if (!employee) return 0;
+    const month = log.date.slice(0, 7);
+    const rateState = getEmployeeStateForMonth(employee.id, month);
+    if (rateState.wage_type === "monthly") {
+      return log.is_day_off && !log.is_paid_leave ? 0 : rateState.rate / daysInMonthList(month).length;
     }
-    return result;
+    return computeDriverWageValue(log, rateState.rate);
   }
 
-  // مرتب أي سواق (يومي أو شهري — مفيش فرق) بيتحط كمصروف على المعدة من الفلوس
-  // الحقيقية اللي فعلاً اتاخدت (سلف + مكافآت + دفعات مرتب)، مقسومة على المعدات
-  // حسب أيام الشغل — لا مصروف بيتسجل غير لما فلوس فعلية تتاخد.
+  function equipmentDayCounts(equipmentId: number, periodPrefix: string) {
+    const byDate = new Map<string, boolean>();
+    for (const l of state.daily_logs) {
+      if (l.equipment_id !== equipmentId || !l.date.startsWith(periodPrefix)) continue;
+      byDate.set(l.date, (byDate.get(l.date) ?? false) || !l.is_day_off);
+    }
+    let workDays = 0;
+    let offDays = 0;
+    for (const worked of byDate.values()) worked ? workDays++ : offDays++;
+    return { workDays, offDays };
+  }
+
   // month=null يحسب كل الوقت (مستخدم في equipmentAllTimeProfit).
   function driverSalaryForEquipment(equipmentId: number, month: string | null): number {
-    const logs = state.daily_logs.filter(
-      (l) => l.equipment_id === equipmentId && l.role === "driver" && (month === null || l.date.startsWith(month))
-    );
-
-    const employees = new Map<number, string>();
-    for (const l of logs) {
-      const employee = state.employees.find((e) => e.name === l.person_name);
-      if (employee) employees.set(employee.id, employee.name);
-    }
-    if (employees.size === 0) return 0;
-
-    const months = month ? [month] : [...new Set(logs.map((l) => l.date.slice(0, 7)))];
-    let sum = 0;
-    for (const [empId, empName] of employees) {
-      for (const m of months) {
-        const allocation = monthlySalaryAllocationForEmployeeMonth(empName, empId, m);
-        sum += allocation.get(equipmentId) ?? 0;
-      }
-    }
-    return sum;
+    return state.daily_logs
+      .filter((l) => l.equipment_id === equipmentId && l.role === "driver" && (month === null || l.date.startsWith(month)))
+      .reduce((sum, l) => sum + driverWageForLog(l), 0);
   }
 
-  // نفس حساب مرتب السائق بس مقسّم بالاسم — لو أكتر من سواق شغلوا على نفس
-  // المعدة في نفس الشهر، كل واحد بيظهر في شيت المصروفات بمرتبه لوحده.
+  // نفس حساب مرتب السائق بس مقسّم بالاسم.
   function driverSalaryBreakdownForEquipment(equipmentId: number, month: string): { name: string; amount: number }[] {
-    const employees = new Map<number, string>();
+    const byDriver = new Map<string, number>();
     for (const l of state.daily_logs) {
       if (l.equipment_id !== equipmentId || l.role !== "driver" || !l.date.startsWith(month)) continue;
-      const employee = state.employees.find((e) => e.name === l.person_name);
-      if (employee) employees.set(employee.id, employee.name);
-    }
-    const byDriver = new Map<string, number>();
-    for (const [empId, empName] of employees) {
-      const allocation = monthlySalaryAllocationForEmployeeMonth(empName, empId, month);
-      const amount = allocation.get(equipmentId) ?? 0;
-      if (amount > 0) byDriver.set(empName, amount);
+      const amount = driverWageForLog(l);
+      if (amount > 0) byDriver.set(l.person_name, (byDriver.get(l.person_name) ?? 0) + amount);
     }
     return [...byDriver.entries()].map(([name, amount]) => ({ name, amount }));
   }
@@ -1631,7 +1622,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       const expense = manualExpense + driverSalaryExpense;
       totalIncome += income;
       totalExpense += expense;
-      return { equipment_name: eq.name, income, expense, netProfit: income - expense };
+      return { equipment_name: eq.name, income, expense, netProfit: income - expense, ...equipmentDayCounts(eq.id, payload.month) };
     });
 
     let payrollTotal = 0;
@@ -1685,6 +1676,40 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
 
   // بديل حي لمصدر بيانات الرئيسية اللي كان ثابت من ملف إكسل قديم — بيحسب
   // كل حاجة من الداتا الحقيقية للسنة الحالية.
+  if (channel === "dashboard:monthDues") {
+    const { month } = payload;
+    const contractors = state.contractors
+      .map((c) => {
+        const due = state.daily_logs
+          .filter((l) => l.role === "contractor" && l.person_name === c.name && l.date.startsWith(month))
+          .reduce((sum, l) => sum + computeDayValue(l), 0);
+        const paid = state.contractor_payments
+          .filter((p) => p.contractor_id === c.id && p.date.startsWith(month))
+          .reduce((sum, p) => sum + p.amount, 0);
+        return { id: c.id, name: c.name, due, paid, remaining: due - paid };
+      })
+      .filter((c) => c.due !== 0 || c.paid !== 0);
+    const partners = state.partners
+      .map((p) => {
+        const due = state.equipment.reduce((sum, eq) => {
+          const share = eq.shares.find((sh) => sh.partner_id === p.id);
+          return share ? sum + (equipmentMonthNetProfit(eq.id, month) * share.percentage) / 100 : sum;
+        }, 0);
+        const paid = state.partner_payments
+          .filter((pp) => pp.partner_id === p.id && pp.date.startsWith(month))
+          .reduce((sum, pp) => sum + pp.amount, 0);
+        return { id: p.id, name: p.name, due, paid, remaining: due - paid };
+      })
+      .filter((p) => p.due !== 0 || p.paid !== 0);
+    return {
+      month,
+      contractors,
+      partners,
+      contractorsRemaining: contractors.reduce((sum, c) => sum + c.remaining, 0),
+      partnersRemaining: partners.reduce((sum, p) => sum + p.remaining, 0),
+    };
+  }
+
   if (channel === "dashboard:summary") {
     const MONTH_NAMES_AR = [
       "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
@@ -1731,6 +1756,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       annualExpense: equipmentAnnualExpense.get(eq.id) ?? 0,
       annualIncome: equipmentAnnualIncome.get(eq.id) ?? 0,
       annualProfit: (equipmentAnnualIncome.get(eq.id) ?? 0) - (equipmentAnnualExpense.get(eq.id) ?? 0),
+      ...equipmentDayCounts(eq.id, year),
     }));
 
     const totalReceivables = state.contractors.reduce((sum, c) => {
