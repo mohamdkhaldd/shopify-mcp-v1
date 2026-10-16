@@ -6,5 +6,5 @@ dist-electron
 release
 *.local
 .DS_Store
-dist-tablet
-android
+/dist-tablet
+/android

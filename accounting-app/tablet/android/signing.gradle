@@ -1,0 +1,18 @@
+// توقيع ثابت لكل نسخ التابلت — لازم نفس المفتاح عشان أي تحديث يتسطب فوق
+// القديم من غير ما يمسح بيانات التطبيق.
+android {
+    signingConfigs {
+        albunyan {
+            storeFile file("release.keystore")
+            storePassword "albunyan-tablet"
+            keyAlias "albunyan"
+            keyPassword "albunyan-tablet"
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.albunyan
+            minifyEnabled false
+        }
+    }
+}
