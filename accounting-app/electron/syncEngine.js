@@ -655,9 +655,17 @@ function createSyncEngine({
         const data = JSON.parse(r.data || "{}");
         return { ...r, data, refs: resolveRefs(r.tbl, data), pending: false };
       });
-    const pendingRows = db
-      .prepare("SELECT * FROM sync_outbox WHERE op != 'initial' AND op != 'merge' ORDER BY id DESC LIMIT 200")
-      .all()
+    // كل صف بيظهر مرة واحدة بس (إضافة صف بتسجل "إضافة" و"تعديل" ورا بعض
+    // داخليًا) — العملية بتاعته هي أول عملية اتعملت عليه.
+    const seen = new Map();
+    for (const e of db.prepare("SELECT * FROM sync_outbox WHERE op NOT IN ('initial', 'merge') ORDER BY id").all()) {
+      const key = e.op === "delete" ? `d|${e.id}` : `${e.tbl}|${e.rid}`;
+      if (!seen.has(key)) seen.set(key, e);
+      else if (e.op === "delete") seen.set(key, e);
+    }
+    const pendingRows = [...seen.values()]
+      .reverse()
+      .slice(0, 200)
       .map((e) => {
         const row = e.op === "delete" ? null : db.prepare(`SELECT * FROM ${e.tbl} WHERE rowid = ?`).get(e.rid);
         let data = {};

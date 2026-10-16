@@ -1,0 +1,8 @@
+{
+  "appId": "com.albunyan.tablet",
+  "appName": "حسابات البنيان",
+  "webDir": "dist-tablet",
+  "android": {
+    "allowMixedContent": false
+  }
+}

@@ -649,9 +649,11 @@ export interface IncomingSummary {
 }
 
 export interface AppUpdateStatus {
-  state: "dev" | "not-available" | "downloaded" | "error";
+  // "apk" = نسخة تابلت أحدث متاحة للتنزيل من url.
+  state: "dev" | "not-available" | "downloaded" | "error" | "apk";
   version?: string;
   message?: string;
+  url?: string;
 }
 
 export interface MonthDueRow {

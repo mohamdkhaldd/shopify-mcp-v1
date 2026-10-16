@@ -150,6 +150,20 @@ export default function Settings() {
           </button>
         )}
 
+        {updateResult?.state === "apk" && updateResult.url && (
+          <div className="mt-2 space-y-1">
+            <p className="text-sm text-primary-dark font-semibold">فيه نسخة جديدة للتابلت ({updateResult.version}).</p>
+            <a
+              href={updateResult.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block bg-primary text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-primary-dark"
+            >
+              نزّل النسخة الجديدة وسطّبها
+            </a>
+            <p className="text-[11px] text-slate-400">بعد ما تنزل افتح الملف ووافق على التثبيت — بياناتك مش هتتمسح.</p>
+          </div>
+        )}
         {updateResult?.state === "not-available" && (
           <p className="text-xs text-slate-400 mt-2">البرنامج عندك أحدث نسخة متاحة.</p>
         )}

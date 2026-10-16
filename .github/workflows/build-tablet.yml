@@ -1,0 +1,78 @@
+name: Build Tablet App
+
+# نسخة التابلت (أندرويد/هواوي): نفس البرنامج بالظبط ملفوف كتطبيق APK.
+# بتتنشر على GitHub كـ prerelease باسم tablet-vX — التابلت بيدوّر عليها من
+# "تحقق من وجود تحديث"، وبرنامج اللاب بيتجاهلها (بيشوف النسخ العادية بس).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: accounting-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm install
+
+      - name: Set version
+        run: echo "APP_VERSION=1.0.${{ github.run_number }}" >> "$GITHUB_ENV"
+
+      - name: Build tablet web app
+        run: npx vite build --config vite.tablet.config.ts
+
+      - name: Create Android project
+        run: npx cap add android
+
+      - name: Customize Android project
+        run: |
+          JAVA_DIR=android/app/src/main/java/com/albunyan/tablet
+          cp tablet/android/PrinterPlugin.java "$JAVA_DIR/"
+          cp tablet/android/MainActivity.java "$JAVA_DIR/"
+          cp tablet/android/release.keystore android/app/
+          cat tablet/android/signing.gradle >> android/app/build.gradle
+          sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"$APP_VERSION\"/" android/app/build.gradle
+          # أيقونة التطبيق = لوجو الشركة
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          for pair in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            name=${pair%%:*}; size=${pair##*:}
+            for icon in ic_launcher ic_launcher_round ic_launcher_foreground; do
+              convert public/logo.png -resize ${size}x${size} -background white -gravity center -extent ${size}x${size} \
+                "android/app/src/main/res/mipmap-$name/$icon.png"
+            done
+          done
+          npx cap sync android
+
+      - name: Build signed APK
+        working-directory: accounting-app/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk "albunyan-tablet-$APP_VERSION.apk"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: tablet-v${{ env.APP_VERSION }}
+          name: نسخة التابلت ${{ env.APP_VERSION }}
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          files: accounting-app/albunyan-tablet-${{ env.APP_VERSION }}.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: albunyan-tablet-apk
+          path: accounting-app/albunyan-tablet-*.apk

@@ -1758,7 +1758,7 @@ function registerIpcHandlers(db) {
   }
 
   ipcMain.handle("treasury:list", () => {
-    const rows = db.prepare("SELECT * FROM treasury_accounts ORDER BY id").all();
+    const rows = db.prepare("SELECT * FROM treasury_accounts ORDER BY CASE name WHEN 'wallet' THEN 1 WHEN 'instapay' THEN 2 WHEN 'cash' THEN 3 WHEN 'vodafone_cash' THEN 4 ELSE 5 END, id").all();
     return rows.map((r) => ({ ...r, name_ar: ACCOUNT_NAME_AR[r.name] ?? r.name }));
   });
 
@@ -1772,7 +1772,7 @@ function registerIpcHandlers(db) {
   });
 
   ipcMain.handle("treasury:summary", (_e, { month }) => {
-    const accounts = db.prepare("SELECT * FROM treasury_accounts ORDER BY id").all();
+    const accounts = db.prepare("SELECT * FROM treasury_accounts ORDER BY CASE name WHEN 'wallet' THEN 1 WHEN 'instapay' THEN 2 WHEN 'cash' THEN 3 WHEN 'vodafone_cash' THEN 4 ELSE 5 END, id").all();
     return accounts.map((acc) => {
       const movements = cashMovements(acc.name);
       const from = acc.opening_date ?? "";
@@ -2170,7 +2170,7 @@ function registerIpcHandlers(db) {
       .get(`${month}%`).total;
     const hassanCommissionTotal = commissionRows.reduce((sum, c) => sum + c, 0) - monthPenalties;
 
-    const treasuryAccounts = db.prepare("SELECT * FROM treasury_accounts ORDER BY id").all();
+    const treasuryAccounts = db.prepare("SELECT * FROM treasury_accounts ORDER BY CASE name WHEN 'wallet' THEN 1 WHEN 'instapay' THEN 2 WHEN 'cash' THEN 3 WHEN 'vodafone_cash' THEN 4 ELSE 5 END, id").all();
 
     return {
       month,
