@@ -30,7 +30,6 @@ function createSyncEngine({
   supabaseUrl,
   supabaseKey,
   email,
-  password,
   clientOptions = {},
   defaultDeviceName = "جهاز",
   onRemoteChanges = () => {},
@@ -44,6 +43,7 @@ function createSyncEngine({
 
   let sb = null;
   let online = false;
+  let needsLogin = false;
   let lastError = null;
   let lastSyncAt = null;
   let pushing = false;
@@ -290,7 +290,7 @@ function createSyncEngine({
   }
 
   async function push() {
-    if (!sb || pushing) return;
+    if (!sb || needsLogin || pushing) return;
     pushing = true;
     try {
       for (let round = 0; round < 200; round++) {
@@ -503,7 +503,7 @@ function createSyncEngine({
   }
 
   async function pull() {
-    if (!sb) return;
+    if (!sb || needsLogin) return;
     if (pulling) {
       pullAgain = true;
       return;
@@ -564,34 +564,80 @@ function createSyncEngine({
     return status();
   }
 
-  async function start() {
-    setup();
+  // الباسورد مش مكتوب في البرنامج: بيتكتب مرة واحدة على كل جهاز (login)،
+  // والجهاز بيحفظ "جلسة الدخول" بس (مش الباسورد) في sync_state — وهي بتتجدد
+  // لوحدها. لو الجلسة اتلغت (الباسورد اتغير مثلًا) البرنامج بيطلب الباسورد تاني.
+  const authStorage = {
+    getItem: (key) => getState(`auth:${key}`),
+    setItem: (key, value) => setState(`auth:${key}`, value),
+    removeItem: (key) => db.prepare("DELETE FROM sync_state WHERE key = ?").run(`auth:${key}`),
+  };
+  let realtimeOn = false;
+
+  async function connect() {
     try {
-      sb = createClient(supabaseUrl, supabaseKey, {
-        auth: { persistSession: false, autoRefreshToken: true },
-        ...clientOptions,
-      });
-      const { error } = await sb.auth.signInWithPassword({ email, password });
+      const { data, error } = await sb.auth.getSession();
       if (error) throw error;
-      sb.channel("sync_rows_changes")
-        .on("postgres_changes", { event: "*", schema: "public", table: "sync_rows" }, () => pull())
-        .subscribe();
+      if (!data.session) {
+        needsLogin = true;
+        online = false;
+        lastError = null;
+        return;
+      }
+      needsLogin = false;
+      if (!realtimeOn) {
+        realtimeOn = true;
+        sb.channel("sync_rows_changes")
+          .on("postgres_changes", { event: "*", schema: "public", table: "sync_rows" }, () => pull())
+          .subscribe();
+      }
       await syncNow();
     } catch (err) {
       online = false;
       lastError = err?.message ?? String(err);
       logger.error?.("sync: start failed", lastError);
     }
+  }
+
+  async function login(password) {
+    if (!sb) throw new Error("المزامنة لسه مبدأتش");
+    const { error } = await sb.auth.signInWithPassword({ email, password: String(password ?? "") });
+    if (error) {
+      const wrong = /invalid/i.test(error.message ?? "");
+      throw new Error(wrong ? "باسورد المزامنة غلط" : `مقدرناش نوصل للسحابة: ${error.message}`);
+    }
+    needsLogin = false;
+    await connect();
+    return status();
+  }
+
+  async function start() {
+    setup();
+    sb = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storage: authStorage, storageKey: "albunyan-sync" },
+      ...clientOptions,
+    });
+    // لو الجلسة اتلغت من السحابة وهو شغال، نطلب الباسورد.
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || (!session && event !== "INITIAL_SESSION")) needsLogin = true;
+    });
+    await connect();
     // التعديلات المحلية بتتبعت كل ثانيتين، وسحب احتياطي كل 30 ثانية لو
     // الإشعار اللحظي فاتنا (نت فصل ورجع مثلًا).
     timers.push(
       setInterval(() => {
-        if (!sb) return;
+        if (!sb || needsLogin) return;
         const pending = db.prepare("SELECT COUNT(*) AS c FROM sync_outbox").get().c;
         if (pending > 0) push();
       }, 2000)
     );
-    timers.push(setInterval(() => pull(), 30000));
+    timers.push(
+      setInterval(() => {
+        if (needsLogin) return;
+        if (!online) connect();
+        else pull();
+      }, 30000)
+    );
   }
 
   function stop() {
@@ -606,6 +652,7 @@ function createSyncEngine({
       pending: db.prepare("SELECT COUNT(*) AS c FROM sync_outbox").get().c,
       deferred: db.prepare("SELECT COUNT(*) AS c FROM sync_deferred").get().c,
       online,
+      needsLogin,
       lastError,
       lastSyncAt,
     };
@@ -695,7 +742,7 @@ function createSyncEngine({
     return { rows, pending: pendingRows, devices };
   }
 
-  return { setup, start, stop, push, pull, syncNow, status, setDeviceName, activity, _applyBatch: applyBatch, _buildBatch: buildBatch };
+  return { setup, start, stop, login, push, pull, syncNow, status, setDeviceName, activity, _applyBatch: applyBatch, _buildBatch: buildBatch };
 }
 
 module.exports = { createSyncEngine };

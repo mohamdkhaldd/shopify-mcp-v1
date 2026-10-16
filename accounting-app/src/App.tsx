@@ -15,7 +15,11 @@ import Suppliers from "./pages/Suppliers";
 import Reports from "./pages/Reports";
 import Activity from "./pages/Activity";
 import { syncApi } from "./api/client";
+import { SyncLoginBar, TabletUpdatePrompt } from "./components/DeviceBars";
 import { SectionId } from "./nav";
+
+// نسخة التابلت (Capacitor) — التحديث فيها بيسأل قبل ما يحمّل.
+const isTablet = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
 
 export default function App() {
   const [active, setActive] = useState<SectionId>("home");
@@ -40,6 +44,7 @@ export default function App() {
       <div className="flex min-h-screen" dir="rtl">
         <Sidebar active={active} onSelect={setActive} />
         <main key={pageKey} className="flex-1 p-6 xl:p-8 max-w-[1400px] mx-auto w-full">
+          <SyncLoginBar />
           {remote && (
             <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-sky-50 border border-sky-200 px-4 py-2.5 text-sm text-sky-900">
               <span>
@@ -76,6 +81,7 @@ export default function App() {
           {active === "activity" && <Activity />}
         </main>
       </div>
+      {isTablet && <TabletUpdatePrompt />}
     </UndoProvider>
   );
 }

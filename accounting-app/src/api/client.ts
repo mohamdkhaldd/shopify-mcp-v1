@@ -205,6 +205,7 @@ export const systemApi = {
 export const syncApi = {
   status: (): Promise<SyncStatus> => invoke("sync:status"),
   now: (): Promise<SyncStatus> => invoke("sync:now"),
+  login: (password: string): Promise<SyncStatus> => invoke("sync:login", { password }),
   setDeviceName: (name: string): Promise<SyncStatus> => invoke("sync:setDeviceName", { name }),
   activity: (filters: { from?: string | null; to?: string | null; device?: string | null; limit?: number }): Promise<SyncActivity> =>
     invoke("sync:activity", filters),
@@ -216,7 +217,10 @@ export const syncApi = {
 export const appApi = {
   getVersion: (): Promise<string> => invoke("app:getVersion"),
   checkForUpdate: (): Promise<AppUpdateStatus> => invoke("app:checkForUpdate"),
-  installUpdate: (): Promise<void> => invoke("app:installUpdate"),
+  // على التابلت: بينزّل ملف النسخة الجديدة جوه البرنامج ويفتح شاشة التثبيت.
+  installUpdate: (url?: string): Promise<void> => invoke("app:installUpdate", url ? { url } : undefined),
+  onUpdateProgress: (callback: (info: { percent: number }) => void): (() => void) =>
+    window.api?.on ? window.api.on("app:updateProgress", callback) : () => {},
 };
 
 export const hassanApi = {

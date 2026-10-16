@@ -7,6 +7,7 @@ import EquipmentTab from "./settings/EquipmentTab";
 import ContractorsTab from "./settings/ContractorsTab";
 import PartnersTab from "./settings/PartnersTab";
 import ExpenseCategoriesTab from "./settings/ExpenseCategoriesTab";
+import { ApkUpdateButton } from "../components/DeviceBars";
 
 type TabId = "partners" | "drivers" | "equipment" | "contractors" | "expenseCategories";
 
@@ -153,15 +154,7 @@ export default function Settings() {
         {updateResult?.state === "apk" && updateResult.url && (
           <div className="mt-2 space-y-1">
             <p className="text-sm text-primary-dark font-semibold">فيه نسخة جديدة للتابلت ({updateResult.version}).</p>
-            <a
-              href={updateResult.url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-block bg-primary text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-primary-dark"
-            >
-              نزّل النسخة الجديدة وسطّبها
-            </a>
-            <p className="text-[11px] text-slate-400">بعد ما تنزل افتح الملف ووافق على التثبيت — بياناتك مش هتتمسح.</p>
+            <ApkUpdateButton update={updateResult} />
           </div>
         )}
         {updateResult?.state === "not-available" && (
@@ -206,7 +199,7 @@ export default function Settings() {
               <div className={`rounded-xl py-2.5 text-center ${syncStatus.online ? "bg-primary-light" : "bg-rose-50"}`}>
                 <div className="text-xs text-slate-500">الحالة</div>
                 <div className={`font-bold ${syncStatus.online ? "text-primary-dark" : "text-rose-600"}`}>
-                  {syncStatus.online ? "● متصل" : "● مش متصل"}
+                  {syncStatus.online ? "● متصل" : syncStatus.needsLogin ? "🔒 محتاج الباسورد" : "● مش متصل"}
                 </div>
               </div>
               <div className="rounded-xl py-2.5 text-center bg-slate-50">

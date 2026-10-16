@@ -442,7 +442,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
   const state = loadState();
 
   // نسخة المعاينة في المتصفح مش متوصلة بالسحابة.
-  if (channel === "sync:status" || channel === "sync:now" || channel === "sync:setDeviceName") {
+  if (channel === "sync:status" || channel === "sync:now" || channel === "sync:setDeviceName" || channel === "sync:login") {
     return { deviceId: "preview", deviceName: payload?.name ?? "معاينة", pending: 0, deferred: 0, online: false, lastError: "نسخة معاينة", lastSyncAt: null };
   }
   if (channel === "sync:activity") return { rows: [], pending: [], devices: [] };

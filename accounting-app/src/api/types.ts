@@ -683,6 +683,8 @@ export interface SyncStatus {
   pending: number;
   deferred: number;
   online: boolean;
+  // الجهاز محتاج باسورد المزامنة (أول مرة، أو بعد ما الباسورد اتغير).
+  needsLogin?: boolean;
   lastError: string | null;
   lastSyncAt: string | null;
 }

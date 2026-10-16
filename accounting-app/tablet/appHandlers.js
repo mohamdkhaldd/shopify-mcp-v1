@@ -3,6 +3,9 @@ import { registerPlugin } from "@capacitor/core";
 // طابعة أندرويد: plugin صغير جوه التطبيق (tablet/android/PrinterPlugin.java)
 // بيطبع الصفحة الحالية بنظام الطباعة بتاع أندرويد (طابعة أو حفظ PDF).
 const Printer = registerPlugin("Printer");
+// التحديث: plugin جوه التطبيق (tablet/android/UpdaterPlugin.java) بينزّل ملف
+// النسخة الجديدة ويفتح شاشة التثبيت بتاعة أندرويد.
+const Updater = registerPlugin("Updater");
 
 const REPO = "mohamdkhaldd/shopify-mcp-v1";
 // eslint-disable-next-line no-undef
@@ -78,7 +81,7 @@ function fitPrintToOnePage() {
   return () => printFont.remove();
 }
 
-export function tabletAppHandlers() {
+export function tabletAppHandlers(emit = () => {}) {
   return {
     "app:getVersion": () => VERSION,
     // نسخ التابلت بتتنشر على GitHub باسم tablet-vX.Y.Z — لو فيه أحدث من
@@ -101,7 +104,21 @@ export function tabletAppHandlers() {
         return { state: "error", message: String(err?.message ?? err) };
       }
     },
-    "app:installUpdate": () => ({ ok: true }),
+    "app:installUpdate": async (_e, { url } = {}) => {
+      if (!url) return { ok: false };
+      const sub = await Updater.addListener("progress", (info) => emit("app:updateProgress", info));
+      try {
+        await Updater.downloadAndInstall({ url });
+      } catch (err) {
+        // أول مرة: أندرويد لازم يسمح للبرنامج يسطّب تحديثات — الشاشة دي
+        // بتتفتح لوحدها، وبعد السماح المستخدم بيدوس "حمّل" تاني.
+        if (String(err?.message ?? err).includes("NEEDS_PERMISSION")) throw new Error("NEEDS_PERMISSION");
+        throw err;
+      } finally {
+        sub.remove();
+      }
+      return { ok: true };
+    },
     "print:preview": async () => {
       const cleanup = fitPrintToOnePage();
       try {

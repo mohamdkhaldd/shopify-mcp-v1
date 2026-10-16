@@ -43,6 +43,10 @@ jobs:
           JAVA_DIR=android/app/src/main/java/com/albunyan/tablet
           cp tablet/android/PrinterPlugin.java "$JAVA_DIR/"
           cp tablet/android/MainActivity.java "$JAVA_DIR/"
+          cp tablet/android/UpdaterPlugin.java "$JAVA_DIR/"
+          # التحديث من جوه البرنامج محتاج إذن تسطيب التحديثات
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />#' android/app/src/main/AndroidManifest.xml
+          grep -q REQUEST_INSTALL_PACKAGES android/app/src/main/AndroidManifest.xml
           cp tablet/android/release.keystore android/app/
           cat tablet/android/signing.gradle >> android/app/build.gradle
           sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"$APP_VERSION\"/" android/app/build.gradle

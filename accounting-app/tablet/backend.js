@@ -33,9 +33,10 @@ export async function startBackend() {
   sync.start();
   handlers["sync:status"] = () => sync.status();
   handlers["sync:now"] = () => sync.syncNow();
+  handlers["sync:login"] = (_e, { password }) => sync.login(password);
   handlers["sync:setDeviceName"] = (_e, { name }) => sync.setDeviceName(name);
   handlers["sync:activity"] = (_e, filters) => sync.activity(filters ?? {});
-  Object.assign(handlers, tabletAppHandlers());
+  Object.assign(handlers, tabletAppHandlers(emit));
 
   // حفظ القاعدة على الجهاز: كل ثانية لو فيه تعديل، وفورًا لو التطبيق اتقفل
   // أو راح في الخلفية.
