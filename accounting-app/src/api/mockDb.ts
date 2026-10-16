@@ -34,6 +34,8 @@ interface MonthlyExpenseRow {
   payment_method: string | null;
   note: string | null;
   receipt_image: string | null;
+  paid_amount?: number | null;
+  payee?: string | null;
 }
 
 interface EmployeeAdvanceRow {
@@ -104,6 +106,8 @@ interface TreasuryAccountRow {
   id: number;
   name: "wallet" | "instapay" | "cash" | "vodafone_cash";
   current_balance: number;
+  opening_balance?: number;
+  opening_date?: string | null;
 }
 
 interface SupplierRow {
@@ -169,6 +173,18 @@ interface MockState {
   employee_deductions: EmployeeDeductionRow[];
   hassan_ledger: HassanLedgerRow[];
   hassan_treasury_expenses: HassanTreasuryExpenseRow[];
+  expense_payments?: { id: number; expense_id: number; date: string; amount: number; method: string; note: string | null }[];
+  treasury_transfers?: { id: number; date: string; from_account: string; to_account: string; amount: number; note: string | null }[];
+  other_income?: { id: number; date: string; amount: number; method: string; description: string | null }[];
+  treasury_adjustments?: {
+    id: number;
+    account: string;
+    date: string;
+    amount: number;
+    expected: number | null;
+    counted: number | null;
+    note: string | null;
+  }[];
   hassan_penalties?: { id: number; date: string; amount: number; reason: string | null }[];
   hassan_workers?: { id: number; name: string; job: string | null; monthly_salary: number; start_month: string; active: number }[];
   hassan_worker_entries?: {
@@ -596,18 +612,78 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { count: sourceLogs.length };
   }
 
+  const expensePayments = (state.expense_payments ??= []);
+  const transfers = (state.treasury_transfers ??= []);
+  const otherIncome = (state.other_income ??= []);
+  const adjustments = (state.treasury_adjustments ??= []);
+  function expensePaidTotal(e: MonthlyExpenseRow): number {
+    return (e.paid_amount ?? e.amount) + expensePayments.filter((p) => p.expense_id === e.id).reduce((s, p) => s + p.amount, 0);
+  }
+  const ACCOUNT_AR: Record<string, string> = { wallet: "اكسيس باي", instapay: "انستا باي", cash: "كاش", vodafone_cash: "فودفون كاش" };
+  // نفس منطق cashMovements في ipc.js — كل فلوس دخلت أو خرجت فعلًا بتاريخها.
+  function cashMovements(account: string) {
+    type Movement = { date: string; direction: "in" | "out"; label: string; amount: number; balance?: number | null };
+    const rows: Movement[] = [];
+    const add = (date: string, direction: "in" | "out", label: string, amount: number) => {
+      if (amount) rows.push({ date, direction, label, amount });
+    };
+    const eqName = (id: number) => state.equipment.find((e) => e.id === id)?.name ?? "";
+    const catName = (id: number | null) => state.expense_categories.find((c) => c.id === id)?.name ?? "مصروف";
+    for (const e of state.monthly_expenses) {
+      if (e.payment_method === account) add(e.date ?? `${e.month}-01`, "out", `مصروف ${catName(e.category_id)} — ${eqName(e.equipment_id)}`, e.paid_amount ?? e.amount);
+    }
+    for (const p of expensePayments) {
+      const e = state.monthly_expenses.find((x) => x.id === p.expense_id);
+      if (e && p.method === account) add(p.date, "out", `دفعة آجل: ${catName(e.category_id)} — ${eqName(e.equipment_id)}`, p.amount);
+    }
+    const empName = (id: number) => state.employees.find((e) => e.id === id)?.name ?? "";
+    for (const a of state.employee_advances) if (a.payment_method === account) add(a.date, "out", `سلفة: ${empName(a.employee_id)}`, a.amount);
+    for (const b of state.employee_bonuses) if (b.payment_method === account) add(b.date, "out", `مكافأة: ${empName(b.employee_id)}`, b.amount);
+    for (const sp of state.salary_payments) if (sp.payment_method === account) add(sp.date, "out", `دفعة مرتب: ${empName(sp.employee_id)}`, sp.amount);
+    for (const pp of state.partner_payments) if (pp.method === account) add(pp.date, "out", "دفعة لشريك", pp.amount);
+    for (const sp of state.supplier_payments) if ((sp.method ?? "cash") === account) add(sp.date, "out", "دفعة لمورد", sp.amount);
+    for (const w of state.waste_entries) if ((w.payment_method ?? "cash") === account) add(w.date, "out", "هالك", w.amount);
+    for (const cp of state.contractor_payments) if (cp.method === account) add(cp.date, "in", "دفعة من مقاول", cp.amount);
+    for (const i of otherIncome) if (i.method === account) add(i.date, "in", `إيراد آخر${i.description ? `: ${i.description}` : ""}`, i.amount);
+    for (const t of transfers) {
+      if (t.from_account === account) add(t.date, "out", `تحويل إلى ${ACCOUNT_AR[t.to_account] ?? ""}`, t.amount);
+      if (t.to_account === account) add(t.date, "in", `تحويل من ${ACCOUNT_AR[t.from_account] ?? ""}`, t.amount);
+    }
+    for (const a of adjustments) if (a.account === account) add(a.date, a.amount >= 0 ? "in" : "out", "تسوية جرد", Math.abs(a.amount));
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    return rows;
+  }
+  function accountBalance(acc: TreasuryAccountRow, untilDate?: string) {
+    const from = acc.opening_date ?? "";
+    return cashMovements(acc.name)
+      .filter((m) => m.date >= from && (!untilDate || m.date <= untilDate))
+      .reduce((sum, m) => sum + (m.direction === "in" ? m.amount : -m.amount), acc.opening_balance ?? acc.current_balance ?? 0);
+  }
+
   if (channel === "monthlyExpenses:list") {
     return state.monthly_expenses
       .filter((e) => e.equipment_id === payload.equipment_id && e.month === payload.month)
       .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || a.id - b.id)
-      .map((e) => ({
-        ...e,
-        category_name: state.expense_categories.find((c) => c.id === e.category_id)?.name ?? null,
-      }));
+      .map((e) => {
+        const paid_total = expensePaidTotal(e);
+        return {
+          ...e,
+          category_name: state.expense_categories.find((c) => c.id === e.category_id)?.name ?? null,
+          paid_total,
+          remaining: Math.max(0, e.amount - paid_total),
+        };
+      });
   }
   if (channel === "monthlyExpenses:create") {
     const id = state.nextId++;
-    const record: MonthlyExpenseRow = { id, ...payload, date: payload.date ?? null };
+    const record: MonthlyExpenseRow = {
+      id,
+      ...payload,
+      date: payload.date ?? null,
+      paid_amount:
+        payload.paid_amount == null || Number(payload.paid_amount) >= Number(payload.amount) ? null : Math.max(0, Number(payload.paid_amount) || 0),
+      payee: payload.payee?.trim() || null,
+    };
     state.monthly_expenses.push(record);
     saveState(state);
     return {
@@ -1507,149 +1583,173 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
   if (channel === "treasury:list") {
     return state.treasury_accounts.map((a) => ({ ...a, name_ar: ACCOUNT_NAME_AR[a.name] ?? a.name }));
   }
-  if (channel === "treasury:updateBalance") {
-    const account = state.treasury_accounts.find((a) => a.id === payload.id)!;
-    account.current_balance = payload.current_balance;
+  if (channel === "treasury:setOpening") {
+    const acc = state.treasury_accounts.find((a) => a.id === payload.id)!;
+    acc.opening_balance = Number(payload.opening_balance) || 0;
+    acc.opening_date = payload.opening_date || null;
     saveState(state);
-    return account;
+    return { ok: true };
   }
   if (channel === "treasury:summary") {
     const { month } = payload;
-    const sumByMethod = (
-      rows: { amount: number; method?: string | null; payment_method?: string | null }[],
-      dateOk: boolean[]
-    ) => {
-      const acc: Record<string, number> = {};
-      rows.forEach((r, i) => {
-        if (!dateOk[i]) return;
-        const method = r.method ?? r.payment_method ?? "cash";
-        acc[method] = (acc[method] ?? 0) + r.amount;
-      });
-      return acc;
-    };
-    const incoming = sumByMethod(
-      state.contractor_payments,
-      state.contractor_payments.map((p) => p.date.startsWith(month))
-    );
-    const outPartners = sumByMethod(
-      state.partner_payments,
-      state.partner_payments.map((p) => p.date.startsWith(month))
-    );
-    const outExpenses = sumByMethod(
-      state.monthly_expenses,
-      state.monthly_expenses.map((e) => e.month === month)
-    );
-    const outSuppliers = sumByMethod(
-      state.supplier_payments,
-      state.supplier_payments.map((p) => p.date.startsWith(month))
-    );
-    // السلف والمكافآت ودفعات المرتب بتتحسب على الشهر اللي المرتب بيخصه، مش
-    // تاريخ الصرف الحقيقي — زي مصروفات المعدات بالظبط.
-    const outAdvances = sumByMethod(
-      state.employee_advances,
-      state.employee_advances.map((a) => a.month === month)
-    );
-    const outBonuses = sumByMethod(
-      state.employee_bonuses,
-      state.employee_bonuses.map((b) => b.month === month)
-    );
-    const outSalaryPayments = sumByMethod(
-      state.salary_payments,
-      state.salary_payments.map((p) => p.month === month)
-    );
-
     return state.treasury_accounts.map((acc) => {
-      const monthIncoming = incoming[acc.name] ?? 0;
-      const monthOutgoing =
-        (outPartners[acc.name] ?? 0) +
-        (outExpenses[acc.name] ?? 0) +
-        (outSuppliers[acc.name] ?? 0) +
-        (outAdvances[acc.name] ?? 0) +
-        (outBonuses[acc.name] ?? 0) +
-        (outSalaryPayments[acc.name] ?? 0);
-      const netMovement = monthIncoming - monthOutgoing;
+      const inMonth = cashMovements(acc.name).filter((m) => m.date.startsWith(month));
+      const monthIncoming = inMonth.filter((m) => m.direction === "in").reduce((s, m) => s + m.amount, 0);
+      const monthOutgoing = inMonth.filter((m) => m.direction === "out").reduce((s, m) => s + m.amount, 0);
+      const last = adjustments.filter((a) => a.account === acc.name).sort((a, b) => b.date.localeCompare(a.date))[0];
       return {
         id: acc.id,
         name: acc.name,
-        name_ar: ACCOUNT_NAME_AR[acc.name] ?? acc.name,
-        currentBalance: acc.current_balance,
+        name_ar: ACCOUNT_AR[acc.name] ?? acc.name,
+        openingBalance: acc.opening_balance ?? acc.current_balance ?? 0,
+        openingDate: acc.opening_date ?? null,
+        balance: accountBalance(acc),
         monthIncoming,
         monthOutgoing,
-        netMovement,
-        projectedBalance: acc.current_balance + netMovement,
+        netMovement: monthIncoming - monthOutgoing,
+        lastCountDate: last?.date ?? null,
       };
     });
   }
-
-  // بيرجع نص زي "مان لفت 42: 10 أيام، بوكيت: 5 أيام" لموظف اشتغل على أكتر من
-  // معدة في شهر معيّن — مستخدم في تفاصيل حركة الخزنة.
-  function equipmentDaysNote(employeeName: string, month: string): string | null {
-    const logs = state.daily_logs.filter((l) => l.role === "driver" && l.person_name === employeeName && l.date.startsWith(month));
-    if (logs.length === 0) return null;
-    const daysByEquipment = new Map<number, number>();
-    for (const l of logs) daysByEquipment.set(l.equipment_id, (daysByEquipment.get(l.equipment_id) ?? 0) + 1);
-    return [...daysByEquipment.entries()]
-      .map(([equipmentId, days]) => `${state.equipment.find((e) => e.id === equipmentId)?.name ?? "—"}: ${days} يوم`)
-      .join("، ");
-  }
-
   if (channel === "treasury:accountTransactions") {
     const { account_name, month } = payload;
-    const rows: { date: string; direction: "in" | "out"; label: string; amount: number }[] = [];
-
-    for (const e of state.monthly_expenses) {
-      if (e.payment_method !== account_name || e.month !== month) continue;
-      const equipmentName = state.equipment.find((eq) => eq.id === e.equipment_id)?.name ?? "—";
-      const categoryName = state.expense_categories.find((c) => c.id === e.category_id)?.name ?? "بدون نوع";
-      rows.push({ date: e.date ?? month, direction: "out", label: `مصروف ${categoryName} — ${equipmentName}`, amount: e.amount });
+    const acc = state.treasury_accounts.find((a) => a.name === account_name)!;
+    const from = acc.opening_date ?? "";
+    const movements = cashMovements(account_name);
+    let running = movements
+      .filter((m) => m.date >= from && m.date < `${month}-01`)
+      .reduce((sum, m) => sum + (m.direction === "in" ? m.amount : -m.amount), acc.opening_balance ?? acc.current_balance ?? 0);
+    const openingForMonth = running;
+    const rows = movements
+      .filter((m) => m.date.startsWith(month))
+      .map((m) => {
+        const counted = m.date >= from;
+        if (counted) running += m.direction === "in" ? m.amount : -m.amount;
+        return { ...m, balance: counted ? running : null };
+      });
+    return { openingForMonth, rows, closing: running };
+  }
+  if (channel === "treasury:previewCount") {
+    const acc = state.treasury_accounts.find((a) => a.name === payload.account_name)!;
+    return { expected: accountBalance(acc, payload.date) };
+  }
+  if (channel === "treasury:count") {
+    const acc = state.treasury_accounts.find((a) => a.name === payload.account_name)!;
+    const expected = accountBalance(acc, payload.date);
+    const difference = Number(payload.counted) - expected;
+    if (Math.abs(difference) >= 0.005) {
+      adjustments.push({
+        id: state.nextId++,
+        account: payload.account_name,
+        date: payload.date,
+        amount: difference,
+        expected,
+        counted: Number(payload.counted),
+        note: payload.note || null,
+      });
+      saveState(state);
     }
-
-    for (const a of state.employee_advances) {
-      if (a.payment_method !== account_name || a.month !== month) continue;
-      const employeeName = state.employees.find((e) => e.id === a.employee_id)?.name ?? "—";
-      const note = equipmentDaysNote(employeeName, month);
-      rows.push({ date: a.date, direction: "out", label: `سلفة: ${employeeName}${note ? ` (${note})` : ""}`, amount: a.amount });
-    }
-
-    for (const b of state.employee_bonuses) {
-      if (b.payment_method !== account_name || b.month !== month) continue;
-      const employeeName = state.employees.find((e) => e.id === b.employee_id)?.name ?? "—";
-      const note = equipmentDaysNote(employeeName, month);
-      rows.push({ date: b.date, direction: "out", label: `مكافأة: ${employeeName}${note ? ` (${note})` : ""}`, amount: b.amount });
-    }
-
-    for (const p of state.salary_payments) {
-      if (p.payment_method !== account_name || p.month !== month) continue;
-      const employeeName = state.employees.find((e) => e.id === p.employee_id)?.name ?? "—";
-      const note = equipmentDaysNote(employeeName, month);
-      rows.push({ date: p.date, direction: "out", label: `دفعة مرتب: ${employeeName}${note ? ` (${note})` : ""}`, amount: p.amount });
-    }
-
-    for (const p of state.partner_payments) {
-      if (p.method !== account_name || !p.date.startsWith(month)) continue;
-      const partnerName = state.partners.find((x) => x.id === p.partner_id)?.name ?? "—";
-      rows.push({ date: p.date, direction: "out", label: `دفعة للشريك: ${partnerName}`, amount: p.amount });
-    }
-
-    for (const p of state.supplier_payments) {
-      if (p.method !== account_name || !p.date.startsWith(month)) continue;
-      const supplierName = state.suppliers.find((x) => x.id === p.supplier_id)?.name ?? "—";
-      rows.push({ date: p.date, direction: "out", label: `دفعة للمورد: ${supplierName}`, amount: p.amount });
-    }
-
-    for (const w of state.waste_entries) {
-      if (w.payment_method !== account_name || !w.date.startsWith(month)) continue;
-      rows.push({ date: w.date, direction: "out", label: `هالك${w.note ? `: ${w.note}` : ""}`, amount: w.amount });
-    }
-
-    for (const p of state.contractor_payments) {
-      if (p.method !== account_name || !p.date.startsWith(month)) continue;
-      const contractorName = state.contractors.find((x) => x.id === p.contractor_id)?.name ?? "—";
-      rows.push({ date: p.date, direction: "in", label: `دفعة من المقاول: ${contractorName}`, amount: p.amount });
-    }
-
-    rows.sort((a, b) => a.date.localeCompare(b.date));
-    return rows;
+    return { expected, counted: Number(payload.counted), difference };
+  }
+  if (channel === "treasury:deleteAdjustment") {
+    state.treasury_adjustments = adjustments.filter((a) => a.id !== payload.id);
+    saveState(state);
+    return { ok: true };
+  }
+  if (channel === "treasury:createTransfer") {
+    transfers.push({ id: state.nextId++, ...payload, amount: Number(payload.amount) || 0, note: payload.note || null });
+    saveState(state);
+    return { ok: true };
+  }
+  if (channel === "treasury:deleteTransfer") {
+    state.treasury_transfers = transfers.filter((t) => t.id !== payload.id);
+    saveState(state);
+    return { ok: true };
+  }
+  if (channel === "otherIncome:create") {
+    otherIncome.push({ id: state.nextId++, ...payload, amount: Number(payload.amount) || 0, description: payload.description || null });
+    saveState(state);
+    return { ok: true };
+  }
+  if (channel === "otherIncome:delete") {
+    state.other_income = otherIncome.filter((i) => i.id !== payload.id);
+    saveState(state);
+    return { ok: true };
+  }
+  if (channel === "treasury:extras") {
+    const { month } = payload;
+    return {
+      transfers: transfers.filter((t) => t.date.startsWith(month)),
+      otherIncome: otherIncome.filter((i) => i.date.startsWith(month)),
+      adjustments: adjustments.filter((a) => a.date.startsWith(month)),
+    };
+  }
+  if (channel === "expensePayments:create") {
+    expensePayments.push({ id: state.nextId++, ...payload, amount: Number(payload.amount) || 0, note: payload.note || null });
+    saveState(state);
+    return { ok: true };
+  }
+  if (channel === "expensePayments:delete") {
+    state.expense_payments = expensePayments.filter((p) => p.id !== payload.id);
+    saveState(state);
+    return { ok: true };
+  }
+  if (channel === "payables:summary") {
+    const { month } = payload;
+    const eqName = (id: number) => state.equipment.find((e) => e.id === id)?.name ?? "";
+    const catName = (id: number | null) => state.expense_categories.find((c) => c.id === id)?.name ?? null;
+    const expenses = state.monthly_expenses
+      .filter((e) => e.paid_amount != null)
+      .map((e) => {
+        const paid = expensePaidTotal(e);
+        return {
+          id: e.id,
+          equipment_name: eqName(e.equipment_id),
+          category_name: catName(e.category_id),
+          payee: e.payee ?? null,
+          date: e.date ?? `${e.month}-01`,
+          note: e.note,
+          amount: e.amount,
+          paid,
+          remaining: e.amount - paid,
+        };
+      })
+      .filter((e) => e.remaining > 0.005);
+    const year = month.slice(0, 4);
+    const yearMonths = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
+    const partners = state.partners
+      .map((p) => {
+        const shareOf = (m: string) =>
+          state.equipment.reduce((sum, eq) => {
+            const sh = eq.shares.find((x) => x.partner_id === p.id);
+            return sh ? sum + (equipmentMonthNetProfit(eq.id, m) * sh.percentage) / 100 : sum;
+          }, 0);
+        const paidIn = (prefix: string) =>
+          state.partner_payments.filter((pp) => pp.partner_id === p.id && pp.date.startsWith(prefix)).reduce((s, pp) => s + pp.amount, 0);
+        return { id: p.id, name: p.name, monthDue: shareOf(month) - paidIn(month), yearDue: yearMonths.reduce((s, m) => s + shareOf(m), 0) - paidIn(year) };
+      })
+      .filter((p) => Math.abs(p.monthDue) > 0.005 || Math.abs(p.yearDue) > 0.005);
+    const suppliersDue =
+      state.supplier_purchases.reduce((s, x) => s + x.amount, 0) - state.supplier_payments.reduce((s, x) => s + x.amount, 0);
+    const recentPayments = expensePayments
+      .filter((p) => p.date.startsWith(month))
+      .map((p) => {
+        const e = state.monthly_expenses.find((x) => x.id === p.expense_id);
+        return { ...p, equipment_name: e ? eqName(e.equipment_id) : "", category_name: e ? catName(e.category_id) : null, payee: e?.payee ?? null };
+      });
+    const expensesDue = expenses.reduce((s, e) => s + e.remaining, 0);
+    const partnersYearDue = partners.reduce((s, p) => s + p.yearDue, 0);
+    return {
+      month,
+      expenses,
+      partners,
+      suppliersDue,
+      recentPayments,
+      expensesDue,
+      partnersMonthDue: partners.reduce((s, p) => s + p.monthDue, 0),
+      partnersYearDue,
+      totalDue: expensesDue + Math.max(0, partnersYearDue) + Math.max(0, suppliersDue),
+    };
   }
 
   function findOrCreateSupplier(name: string): SupplierRow {
@@ -1795,7 +1895,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
       netProfit: totalIncome - totalExpense,
       payrollTotal,
       hassanCommissionTotal,
-      treasuryBalances: state.treasury_accounts.map((a) => ({ name: a.name, name_ar: ACCOUNT_NAME_AR[a.name] ?? a.name, balance: a.current_balance })),
+      treasuryBalances: state.treasury_accounts.map((a) => ({ name: a.name, name_ar: ACCOUNT_NAME_AR[a.name] ?? a.name, balance: accountBalance(a) })),
     };
   }
 

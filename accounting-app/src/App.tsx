@@ -10,7 +10,7 @@ import Contractors from "./pages/Contractors";
 import Partners from "./pages/Partners";
 import Treasury from "./pages/Treasury";
 import OutgoingIncoming from "./pages/OutgoingIncoming";
-import Waste from "./pages/Waste";
+import Payables from "./pages/Payables";
 import Suppliers from "./pages/Suppliers";
 import Reports from "./pages/Reports";
 import { SectionId } from "./nav";
@@ -32,7 +32,7 @@ export default function App() {
           {active === "partners" && <Partners />}
           {active === "treasury" && <Treasury />}
           {active === "outgoingIncoming" && <OutgoingIncoming />}
-          {active === "waste" && <Waste />}
+          {active === "payables" && <Payables onGoToSuppliers={() => setActive("suppliers")} />}
           {active === "suppliers" && <Suppliers />}
           {active === "reports" && <Reports />}
         </main>

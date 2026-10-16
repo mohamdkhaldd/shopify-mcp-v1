@@ -84,6 +84,11 @@ export interface MonthlyExpense {
   payment_method: string | null;
   note: string | null;
   receipt_image: string | null;
+  // null = اتدفع كله وقت التسجيل؛ غير كده اللي اتدفع والباقي في الآجل.
+  paid_amount: number | null;
+  payee: string | null;
+  paid_total?: number;
+  remaining?: number;
 }
 
 export interface PartnerDistributionRow {
@@ -410,17 +415,69 @@ export interface TreasuryTransaction {
   direction: "in" | "out";
   label: string;
   amount: number;
+  balance: number | null;
+  transfer_id?: number;
+  other_income_id?: number;
+  adjustment_id?: number;
+}
+
+export interface TreasuryStatement {
+  openingForMonth: number;
+  rows: TreasuryTransaction[];
+  closing: number;
 }
 
 export interface TreasurySummaryRow {
   id: number;
   name: TreasuryAccountName;
   name_ar: string;
-  currentBalance: number;
+  openingBalance: number;
+  openingDate: string | null;
+  balance: number;
   monthIncoming: number;
   monthOutgoing: number;
   netMovement: number;
-  projectedBalance: number;
+  lastCountDate: string | null;
+}
+
+export interface TreasuryExtras {
+  transfers: { id: number; date: string; from_account: string; to_account: string; amount: number; note: string | null }[];
+  otherIncome: { id: number; date: string; amount: number; method: string; description: string | null }[];
+  adjustments: { id: number; account: string; date: string; amount: number; expected: number | null; counted: number | null; note: string | null }[];
+}
+
+export interface PayableExpense {
+  id: number;
+  equipment_name: string;
+  category_name: string | null;
+  payee: string | null;
+  date: string;
+  note: string | null;
+  amount: number;
+  paid: number;
+  remaining: number;
+}
+
+export interface PayablesSummary {
+  month: string;
+  expenses: PayableExpense[];
+  partners: { id: number; name: string; monthDue: number; yearDue: number }[];
+  suppliersDue: number;
+  recentPayments: {
+    id: number;
+    expense_id: number;
+    date: string;
+    amount: number;
+    method: string;
+    note: string | null;
+    equipment_name: string;
+    category_name: string | null;
+    payee: string | null;
+  }[];
+  expensesDue: number;
+  partnersMonthDue: number;
+  partnersYearDue: number;
+  totalDue: number;
 }
 
 export interface SupplierPurchase {

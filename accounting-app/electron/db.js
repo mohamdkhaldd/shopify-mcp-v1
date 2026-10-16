@@ -558,6 +558,67 @@ function initDatabase() {
     db.exec("ALTER TABLE daily_logs ADD COLUMN overtime_rate REAL");
   }
 
+  // مصروف المعدة ممكن يتدفع جزء منه بس: paid_amount = اللي اتدفع وقت
+  // التسجيل (NULL = اتدفع كله، زي كل المصروفات القديمة)، والباقي بيظهر في
+  // صفحة الآجل لحد ما يتدفع على دفعات (expense_payments). payee = لمين.
+  {
+    const cols = db.prepare("PRAGMA table_info(monthly_expenses)").all().map((c) => c.name);
+    if (!cols.includes("paid_amount")) db.exec("ALTER TABLE monthly_expenses ADD COLUMN paid_amount REAL");
+    if (!cols.includes("payee")) db.exec("ALTER TABLE monthly_expenses ADD COLUMN payee TEXT");
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS expense_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      expense_id INTEGER NOT NULL REFERENCES monthly_expenses(id) ON DELETE CASCADE,
+      date TEXT NOT NULL,
+      amount REAL NOT NULL,
+      method TEXT NOT NULL,
+      note TEXT
+    );
+    -- تحويل فلوس بين حسابين (زي سحب من انستا باي لكاش) — مش مصروف ولا دخل.
+    CREATE TABLE IF NOT EXISTS treasury_transfers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      from_account TEXT NOT NULL,
+      to_account TEXT NOT NULL,
+      amount REAL NOT NULL,
+      note TEXT
+    );
+    -- إيراد نادر مش من شغل المعدات (بيع خردة، شريك حط فلوس...) — بيزوّد
+    -- الخزنة بس، ومالوش دعوة بربح أي معدة.
+    CREATE TABLE IF NOT EXISTS other_income (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      amount REAL NOT NULL,
+      method TEXT NOT NULL,
+      description TEXT
+    );
+    -- تسوية الجرد: لما الفلوس المعدودة فعلًا تختلف عن المحسوبة، الفرق بيتسجل
+    -- هنا (موجب = زيادة، سالب = عجز) عشان الرصيد يتظبط على الحقيقة.
+    CREATE TABLE IF NOT EXISTS treasury_adjustments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account TEXT NOT NULL,
+      date TEXT NOT NULL,
+      amount REAL NOT NULL,
+      expected REAL,
+      counted REAL,
+      note TEXT
+    );
+  `);
+  // رصيد البداية لكل حساب: الرصيد بقى بيتحسب = البداية + كل حركة فلوس حقيقية
+  // من تاريخها. للحسابات القديمة الرصيد اليدوي بيبقى رصيد بداية أول الشهر
+  // الحالي — نفس الرقم اللي كان بيطلع "متوقع" قبل كده بالظبط.
+  {
+    const cols = db.prepare("PRAGMA table_info(treasury_accounts)").all().map((c) => c.name);
+    if (!cols.includes("opening_balance")) {
+      db.exec("ALTER TABLE treasury_accounts ADD COLUMN opening_balance REAL NOT NULL DEFAULT 0");
+      db.exec("ALTER TABLE treasury_accounts ADD COLUMN opening_date TEXT");
+      const now = new Date();
+      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      db.prepare("UPDATE treasury_accounts SET opening_balance = current_balance, opening_date = ?").run(monthStart);
+    }
+  }
+
   const accountCount = db.prepare("SELECT COUNT(*) AS c FROM treasury_accounts").get().c;
   if (accountCount === 0) {
     const insertAccount = db.prepare(

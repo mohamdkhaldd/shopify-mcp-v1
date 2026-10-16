@@ -47,7 +47,9 @@ import {
   TreasuryAccount,
   TreasuryAccountName,
   TreasurySummaryRow,
-  TreasuryTransaction,
+  TreasuryStatement,
+  TreasuryExtras,
+  PayablesSummary,
   WasteEntry,
 } from "./types";
 
@@ -144,7 +146,7 @@ export const equipmentShiftsApi = {
 export const monthlyExpensesApi = {
   list: (equipment_id: number, month: string): Promise<MonthlyExpense[]> =>
     invoke("monthlyExpenses:list", { equipment_id, month }),
-  create: (expense: Omit<MonthlyExpense, "id" | "category_name">): Promise<MonthlyExpense> =>
+  create: (expense: Omit<MonthlyExpense, "id" | "category_name" | "paid_total" | "remaining">): Promise<MonthlyExpense> =>
     invoke("monthlyExpenses:create", expense),
   remove: (id: number): Promise<void> => invoke("monthlyExpenses:delete", { id }),
 };
@@ -278,11 +280,35 @@ export const partnersDashboardApi = {
 
 export const treasuryApi = {
   list: (): Promise<TreasuryAccount[]> => invoke("treasury:list"),
-  updateBalance: (id: number, current_balance: number): Promise<TreasuryAccount> =>
-    invoke("treasury:updateBalance", { id, current_balance }),
+  setOpening: (id: number, opening_balance: number, opening_date: string | null): Promise<void> =>
+    invoke("treasury:setOpening", { id, opening_balance, opening_date }),
   summary: (month: string): Promise<TreasurySummaryRow[]> => invoke("treasury:summary", { month }),
-  accountTransactions: (account_name: TreasuryAccountName, month: string): Promise<TreasuryTransaction[]> =>
+  accountTransactions: (account_name: TreasuryAccountName, month: string): Promise<TreasuryStatement> =>
     invoke("treasury:accountTransactions", { account_name, month }),
+  previewCount: (account_name: TreasuryAccountName, date: string): Promise<{ expected: number }> =>
+    invoke("treasury:previewCount", { account_name, date }),
+  count: (
+    account_name: TreasuryAccountName,
+    date: string,
+    counted: number,
+    note: string | null
+  ): Promise<{ expected: number; counted: number; difference: number }> =>
+    invoke("treasury:count", { account_name, date, counted, note }),
+  deleteAdjustment: (id: number): Promise<void> => invoke("treasury:deleteAdjustment", { id }),
+  createTransfer: (t: { date: string; from_account: string; to_account: string; amount: number; note: string | null }): Promise<void> =>
+    invoke("treasury:createTransfer", t),
+  deleteTransfer: (id: number): Promise<void> => invoke("treasury:deleteTransfer", { id }),
+  createOtherIncome: (i: { date: string; amount: number; method: string; description: string | null }): Promise<void> =>
+    invoke("otherIncome:create", i),
+  deleteOtherIncome: (id: number): Promise<void> => invoke("otherIncome:delete", { id }),
+  extras: (month: string): Promise<TreasuryExtras> => invoke("treasury:extras", { month }),
+};
+
+export const payablesApi = {
+  summary: (month: string): Promise<PayablesSummary> => invoke("payables:summary", { month }),
+  pay: (p: { expense_id: number; date: string; amount: number; method: string; note: string | null }): Promise<void> =>
+    invoke("expensePayments:create", p),
+  removePayment: (id: number): Promise<void> => invoke("expensePayments:delete", { id }),
 };
 
 export const suppliersApi = {

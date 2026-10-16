@@ -26,6 +26,10 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
   const [loading, setLoading] = useState(true);
   const [categoryId, setCategoryId] = useState("");
   const [amount, setAmount] = useState("");
+  // "دفعت دلوقتي" بتتملي لوحدها بالقيمة كاملة لحد ما المستخدم يغيّرها بإيده.
+  const [paidNow, setPaidNow] = useState("");
+  const [paidTouched, setPaidTouched] = useState(false);
+  const [payee, setPayee] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [date, setDate] = useState(() => defaultDateForMonth(month));
   const [note, setNote] = useState("");
@@ -61,8 +65,13 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
       payment_method: paymentMethod,
       note: note.trim() || null,
       receipt_image: receiptImage,
+      paid_amount: paidTouched && paidNow.trim() !== "" ? Number(paidNow) : null,
+      payee: payee.trim() || null,
     });
     setAmount("");
+    setPaidNow("");
+    setPaidTouched(false);
+    setPayee("");
     setNote("");
     setReceiptImage(null);
     await refresh();
@@ -120,15 +129,39 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
           </select>
         </div>
         <div>
-          <label className="block text-xs text-slate-400 mb-1">القيمة</label>
+          <label className="block text-xs text-slate-400 mb-1">القيمة كاملة</label>
           <input
             type="number"
             min="0"
             step="any"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              setAmount(e.target.value);
+              if (!paidTouched) setPaidNow(e.target.value);
+            }}
             className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">دفعت دلوقتي</label>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={paidNow}
+            onChange={(e) => {
+              setPaidNow(e.target.value);
+              setPaidTouched(true);
+            }}
+            title="لو دفعت جزء بس، اكتب اللي دفعته — الباقي هيروح صفحة الآجل"
+            className={[
+              "w-28 rounded-lg border px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40",
+              amount && paidNow !== "" && Number(paidNow) < Number(amount) ? "border-rose-300 bg-rose-50" : "border-slate-200",
+            ].join(" ")}
+          />
+          {amount && paidNow !== "" && Number(paidNow) < Number(amount) && (
+            <div className="text-[11px] text-rose-600 mt-0.5">باقي {formatEGP(Number(amount) - Number(paidNow))} آجل</div>
+          )}
         </div>
         <div>
           <label className="block text-xs text-slate-400 mb-1">طريقة الدفع</label>
@@ -143,6 +176,16 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">لمين (اختياري)</label>
+          <input
+            type="text"
+            placeholder="الورشة / المحل"
+            value={payee}
+            onChange={(e) => setPayee(e.target.value)}
+            className="w-32 rounded-lg border border-slate-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
         </div>
         <div>
           <label className="block text-xs text-slate-400 mb-1">بيان</label>
@@ -209,7 +252,18 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
                 <tr key={exp.id} className="border-b border-slate-50 last:border-0">
                   <td className="py-2 text-slate-500">{exp.date ?? "—"}</td>
                   <td className="py-2 font-semibold text-slate-700">{exp.category_name ?? "—"}</td>
-                  <td className="py-2 text-slate-600">{formatEGP(exp.amount)}</td>
+                  <td className="py-2 text-slate-600 whitespace-nowrap">
+                    {formatEGP(exp.amount)}
+                    {/* للشاشة بس — الطباعة (اللي بتروح للشريك) فيها القيمة كاملة وبس. */}
+                    {(exp.remaining ?? 0) > 0 && (
+                      <span
+                        className="no-print ms-1.5 rounded-md bg-rose-100 text-rose-700 px-1.5 py-0.5 text-[11px] font-bold"
+                        title="الباقي ده متسجل في صفحة الآجل"
+                      >
+                        باقي {formatEGP(exp.remaining ?? 0)}
+                      </span>
+                    )}
+                  </td>
                   <td className="py-2 text-slate-500">{paymentMethodLabel(exp.payment_method)}</td>
                   <td className="py-2 text-slate-500">
                     {exp.note && <span>{exp.note}</span>}

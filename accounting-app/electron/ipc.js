@@ -641,20 +641,34 @@ function registerIpcHandlers(db) {
   ipcMain.handle("monthlyExpenses:list", (_e, { equipment_id, month }) =>
     db
       .prepare(
-        `SELECT me.*, ec.name AS category_name FROM monthly_expenses me
+        `SELECT me.*, ec.name AS category_name,
+                COALESCE(me.paid_amount, me.amount) + COALESCE((SELECT SUM(amount) FROM expense_payments WHERE expense_id = me.id), 0) AS paid_total
+         FROM monthly_expenses me
          LEFT JOIN expense_categories ec ON ec.id = me.category_id
          WHERE me.equipment_id = ? AND me.month = ? ORDER BY me.date, me.id`
       )
       .all(equipment_id, month)
+      .map((me) => ({ ...me, remaining: Math.max(0, me.amount - me.paid_total) }))
   );
 
   ipcMain.handle("monthlyExpenses:create", (_e, expense) => {
     const info = db
       .prepare(
-        `INSERT INTO monthly_expenses (equipment_id, month, date, category_id, amount, payment_method, note, receipt_image)
-         VALUES (@equipment_id, @month, @date, @category_id, @amount, @payment_method, @note, @receipt_image)`
+        `INSERT INTO monthly_expenses (equipment_id, month, date, category_id, amount, payment_method, note, receipt_image, paid_amount, payee)
+         VALUES (@equipment_id, @month, @date, @category_id, @amount, @payment_method, @note, @receipt_image, @paid_amount, @payee)`
       )
-      .run({ ...expense, date: expense.date ?? null, note: expense.note ?? null, receipt_image: expense.receipt_image ?? null });
+      .run({
+        ...expense,
+        date: expense.date ?? null,
+        note: expense.note ?? null,
+        receipt_image: expense.receipt_image ?? null,
+        // اتدفع كله = NULL (زي القديم)، غير كده بيتسجل اللي اتدفع والباقي آجل.
+        paid_amount:
+          expense.paid_amount == null || Number(expense.paid_amount) >= Number(expense.amount)
+            ? null
+            : Math.max(0, Number(expense.paid_amount) || 0),
+        payee: expense.payee?.trim() || null,
+      });
     const created = db
       .prepare(
         `SELECT me.*, ec.name AS category_name FROM monthly_expenses me
@@ -1624,166 +1638,348 @@ function registerIpcHandlers(db) {
     };
   });
 
-  // --- Treasury (doc section 9) ---
-  // Money in: contractor payments (they pay the company). Money out:
-  // partner payments, equipment expenses, supplier payments, employee
-  // advances — each already carries a payment_method/method tying it to
-  // one of the three accounts.
+  // --- Treasury: الكاش الحقيقي ---
+  // كل حساب (كاش/انستا باي/...) رصيده = رصيد البداية + كل حركة فلوس حقيقية
+  // من تاريخ البداية — زي كشف حساب البنك بالظبط. الحركة بتتحسب بتاريخ
+  // الدفع الفعلي، والمصروف بيدخل باللي اتدفع منه بس (الباقي في الآجل لحد ما
+  // يتدفع). مرتب السواق المحسوب على المعدة باليوم مش هنا — هنا بس اللي
+  // اتدفعله فعلًا (سلف/مكافآت/دفعات مرتب).
   const ACCOUNT_NAME_AR = { wallet: "اكسيس باي", instapay: "انستا باي", cash: "كاش", vodafone_cash: "فودفون كاش" };
+
+  function cashMovements(account) {
+    const rows = [];
+    const add = (date, direction, label, amount, extra = {}) => {
+      if (amount) rows.push({ date, direction, label, amount, ...extra });
+    };
+
+    db.prepare(
+      `SELECT me.id, COALESCE(me.date, me.month || '-01') AS date, COALESCE(me.paid_amount, me.amount) AS paid,
+              me.payee, e.name AS equipment_name, ec.name AS category_name
+       FROM monthly_expenses me
+       JOIN equipment e ON e.id = me.equipment_id
+       LEFT JOIN expense_categories ec ON ec.id = me.category_id
+       WHERE me.payment_method = ?`
+    )
+      .all(account)
+      .forEach((r) =>
+        add(r.date, "out", `مصروف ${r.category_name ?? "بدون نوع"} — ${r.equipment_name}${r.payee ? ` — ${r.payee}` : ""}`, r.paid)
+      );
+
+    db.prepare(
+      `SELECT ep.date, ep.amount, me.payee, e.name AS equipment_name, ec.name AS category_name
+       FROM expense_payments ep
+       JOIN monthly_expenses me ON me.id = ep.expense_id
+       JOIN equipment e ON e.id = me.equipment_id
+       LEFT JOIN expense_categories ec ON ec.id = me.category_id
+       WHERE ep.method = ?`
+    )
+      .all(account)
+      .forEach((r) =>
+        add(r.date, "out", `دفعة آجل: ${r.category_name ?? "مصروف"} — ${r.equipment_name}${r.payee ? ` — ${r.payee}` : ""}`, r.amount)
+      );
+
+    const employeeMoney = (table, label) =>
+      db
+        .prepare(
+          `SELECT t.date, t.month, t.amount, e.name AS employee_name FROM ${table} t
+           JOIN employees e ON e.id = t.employee_id WHERE t.payment_method = ?`
+        )
+        .all(account)
+        .forEach((r) => {
+          const note = equipmentDaysNote(db, r.employee_name, r.month ?? r.date.slice(0, 7));
+          add(r.date, "out", `${label}: ${r.employee_name}${note ? ` (${note})` : ""}`, r.amount);
+        });
+    employeeMoney("employee_advances", "سلفة");
+    employeeMoney("employee_bonuses", "مكافأة");
+    employeeMoney("salary_payments", "دفعة مرتب");
+
+    db.prepare(
+      `SELECT pp.date, pp.amount, p.name AS partner_name FROM partner_payments pp
+       JOIN partners p ON p.id = pp.partner_id WHERE pp.method = ?`
+    )
+      .all(account)
+      .forEach((r) => add(r.date, "out", `دفعة للشريك: ${r.partner_name}`, r.amount));
+
+    db.prepare(
+      `SELECT sp.date, sp.amount, s.name AS supplier_name FROM supplier_payments sp
+       JOIN suppliers s ON s.id = sp.supplier_id WHERE sp.method = ?`
+    )
+      .all(account)
+      .forEach((r) => add(r.date, "out", `دفعة للمورد: ${r.supplier_name}`, r.amount));
+
+    db.prepare("SELECT date, amount, note FROM waste_entries WHERE payment_method = ?")
+      .all(account)
+      .forEach((r) => add(r.date, "out", `هالك${r.note ? `: ${r.note}` : ""}`, r.amount));
+
+    db.prepare(
+      `SELECT cp.date, cp.amount, c.name AS contractor_name FROM contractor_payments cp
+       JOIN contractors c ON c.id = cp.contractor_id WHERE cp.method = ?`
+    )
+      .all(account)
+      .forEach((r) => add(r.date, "in", `دفعة من المقاول: ${r.contractor_name}`, r.amount));
+
+    db.prepare("SELECT * FROM other_income WHERE method = ?")
+      .all(account)
+      .forEach((r) => add(r.date, "in", `إيراد آخر${r.description ? `: ${r.description}` : ""}`, r.amount, { other_income_id: r.id }));
+
+    db.prepare("SELECT * FROM treasury_transfers WHERE from_account = ? OR to_account = ?")
+      .all(account, account)
+      .forEach((r) => {
+        const out = r.from_account === account;
+        const other = ACCOUNT_NAME_AR[out ? r.to_account : r.from_account] ?? "";
+        add(r.date, out ? "out" : "in", `تحويل ${out ? "إلى" : "من"} ${other}${r.note ? ` — ${r.note}` : ""}`, r.amount, {
+          transfer_id: r.id,
+        });
+      });
+
+    db.prepare("SELECT * FROM treasury_adjustments WHERE account = ?")
+      .all(account)
+      .forEach((r) =>
+        add(r.date, r.amount >= 0 ? "in" : "out", `تسوية جرد (${r.amount >= 0 ? "زيادة" : "عجز"})${r.note ? `: ${r.note}` : ""}`, Math.abs(r.amount), {
+          adjustment_id: r.id,
+        })
+      );
+
+    rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    return rows;
+  }
+
+  // الرصيد المحسوب لحساب لحد تاريخ معيّن (شامل) — البداية + حركته من تاريخ البداية.
+  function accountBalance(acc, untilDate) {
+    const from = acc.opening_date ?? "";
+    return cashMovements(acc.name)
+      .filter((m) => m.date >= from && (!untilDate || m.date <= untilDate))
+      .reduce((sum, m) => sum + (m.direction === "in" ? m.amount : -m.amount), acc.opening_balance ?? 0);
+  }
+
+  function todayISO() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
 
   ipcMain.handle("treasury:list", () => {
     const rows = db.prepare("SELECT * FROM treasury_accounts ORDER BY id").all();
     return rows.map((r) => ({ ...r, name_ar: ACCOUNT_NAME_AR[r.name] ?? r.name }));
   });
 
-  ipcMain.handle("treasury:updateBalance", (_e, { id, current_balance }) => {
-    db.prepare("UPDATE treasury_accounts SET current_balance = ? WHERE id = ?").run(current_balance, id);
-    return db.prepare("SELECT * FROM treasury_accounts WHERE id = ?").get(id);
+  ipcMain.handle("treasury:setOpening", (_e, { id, opening_balance, opening_date }) => {
+    db.prepare("UPDATE treasury_accounts SET opening_balance = ?, opening_date = ? WHERE id = ?").run(
+      Number(opening_balance) || 0,
+      opening_date || null,
+      id
+    );
+    return { ok: true };
   });
 
   ipcMain.handle("treasury:summary", (_e, { month }) => {
     const accounts = db.prepare("SELECT * FROM treasury_accounts ORDER BY id").all();
-    const sumByMethod = (table, methodCol, dateCol, dateLike) =>
-      db
-        .prepare(`SELECT ${methodCol} AS method, COALESCE(SUM(amount), 0) AS total FROM ${table} WHERE ${dateCol} LIKE ? GROUP BY ${methodCol}`)
-        .all(dateLike)
-        .reduce((acc, r) => ({ ...acc, [r.method]: r.total }), {});
-
-    const incoming = sumByMethod("contractor_payments", "method", "date", `${month}%`);
-    const outgoingPartners = sumByMethod("partner_payments", "method", "date", `${month}%`);
-    const outgoingExpenses = sumByMethod("monthly_expenses", "payment_method", "month", month);
-    const outgoingSuppliers = sumByMethod("supplier_payments", "method", "date", `${month}%`);
-    // السلف والمكافآت ودفعات المرتب بتتحسب على الشهر اللي المرتب بيخصه (زي
-    // مصروفات المعدات) — لو مرتب يونيو اتدفع في يوليو يفضل يسمع في يونيو هنا برضو.
-    const outgoingAdvances = sumByMethod("employee_advances", "payment_method", "month", month);
-    const outgoingBonuses = sumByMethod("employee_bonuses", "payment_method", "month", month);
-    const outgoingSalaryPayments = sumByMethod("salary_payments", "payment_method", "month", month);
-
     return accounts.map((acc) => {
-      const monthIncoming = incoming[acc.name] ?? 0;
-      const monthOutgoing =
-        (outgoingPartners[acc.name] ?? 0) +
-        (outgoingExpenses[acc.name] ?? 0) +
-        (outgoingSuppliers[acc.name] ?? 0) +
-        (outgoingAdvances[acc.name] ?? 0) +
-        (outgoingBonuses[acc.name] ?? 0) +
-        (outgoingSalaryPayments[acc.name] ?? 0);
-      const netMovement = monthIncoming - monthOutgoing;
+      const movements = cashMovements(acc.name);
+      const from = acc.opening_date ?? "";
+      const inMonth = movements.filter((m) => m.date.startsWith(month));
+      const monthIncoming = inMonth.filter((m) => m.direction === "in").reduce((s, m) => s + m.amount, 0);
+      const monthOutgoing = inMonth.filter((m) => m.direction === "out").reduce((s, m) => s + m.amount, 0);
+      const balance = movements
+        .filter((m) => m.date >= from)
+        .reduce((sum, m) => sum + (m.direction === "in" ? m.amount : -m.amount), acc.opening_balance ?? 0);
+      const lastCount = db
+        .prepare("SELECT * FROM treasury_adjustments WHERE account = ? ORDER BY date DESC, id DESC LIMIT 1")
+        .get(acc.name);
       return {
         id: acc.id,
         name: acc.name,
         name_ar: ACCOUNT_NAME_AR[acc.name] ?? acc.name,
-        currentBalance: acc.current_balance,
+        openingBalance: acc.opening_balance ?? 0,
+        openingDate: acc.opening_date,
+        balance,
         monthIncoming,
         monthOutgoing,
-        netMovement,
-        projectedBalance: acc.current_balance + netMovement,
+        netMovement: monthIncoming - monthOutgoing,
+        lastCountDate: lastCount?.date ?? null,
       };
     });
   });
 
-  // --- كشف حساب كل وسيلة دفع لوحدها — كل حركة فعلية دخلت أو خرجت من الحساب
-  // ده الشهر ده، بتاريخها وبيان واضح بيها. بيستخدم نفس منطق treasury:summary
-  // (بتاريخ الدفع الحقيقي، مش شهر الدفاتر) عشان الأرقام تتطابق مع بعضها. ---
+  // كشف حساب لشهر: كل حركة بتاريخها والرصيد بعدها. الحركات اللي قبل تاريخ
+  // رصيد البداية بتظهر بس من غير ما تأثر على الرصيد (البداية متعدّة بعدها).
   ipcMain.handle("treasury:accountTransactions", (_e, { account_name, month }) => {
-    const rows = [];
-
-    db.prepare(
-      `SELECT me.date, me.amount, e.name AS equipment_name, ec.name AS category_name
-       FROM monthly_expenses me
-       JOIN equipment e ON e.id = me.equipment_id
-       LEFT JOIN expense_categories ec ON ec.id = me.category_id
-       WHERE me.payment_method = ? AND me.month = ?`
-    )
-      .all(account_name, month)
-      .forEach((r) =>
-        rows.push({
-          date: r.date ?? month,
-          direction: "out",
-          label: `مصروف ${r.category_name ?? "بدون نوع"} — ${r.equipment_name}`,
-          amount: r.amount,
-        })
-      );
-
-    db.prepare(
-      `SELECT ea.date, ea.amount, e.name AS employee_name FROM employee_advances ea
-       JOIN employees e ON e.id = ea.employee_id
-       WHERE ea.payment_method = ? AND ea.month = ?`
-    )
-      .all(account_name, month)
-      .forEach((r) => {
-        const note = equipmentDaysNote(db, r.employee_name, month);
-        rows.push({
-          date: r.date,
-          direction: "out",
-          label: `سلفة: ${r.employee_name}${note ? ` (${note})` : ""}`,
-          amount: r.amount,
-        });
+    const acc = db.prepare("SELECT * FROM treasury_accounts WHERE name = ?").get(account_name);
+    const from = acc?.opening_date ?? "";
+    const movements = cashMovements(account_name);
+    let running = movements
+      .filter((m) => m.date >= from && m.date < `${month}-01`)
+      .reduce((sum, m) => sum + (m.direction === "in" ? m.amount : -m.amount), acc?.opening_balance ?? 0);
+    const openingForMonth = running;
+    const rows = movements
+      .filter((m) => m.date.startsWith(month))
+      .map((m) => {
+        const counted = m.date >= from;
+        if (counted) running += m.direction === "in" ? m.amount : -m.amount;
+        return { ...m, balance: counted ? running : null };
       });
-
-    db.prepare(
-      `SELECT eb.date, eb.amount, e.name AS employee_name FROM employee_bonuses eb
-       JOIN employees e ON e.id = eb.employee_id
-       WHERE eb.payment_method = ? AND eb.month = ?`
-    )
-      .all(account_name, month)
-      .forEach((r) => {
-        const note = equipmentDaysNote(db, r.employee_name, month);
-        rows.push({
-          date: r.date,
-          direction: "out",
-          label: `مكافأة: ${r.employee_name}${note ? ` (${note})` : ""}`,
-          amount: r.amount,
-        });
-      });
-
-    db.prepare(
-      `SELECT sp.date, sp.amount, e.name AS employee_name FROM salary_payments sp
-       JOIN employees e ON e.id = sp.employee_id
-       WHERE sp.payment_method = ? AND sp.month = ?`
-    )
-      .all(account_name, month)
-      .forEach((r) => {
-        const note = equipmentDaysNote(db, r.employee_name, month);
-        rows.push({
-          date: r.date,
-          direction: "out",
-          label: `دفعة مرتب: ${r.employee_name}${note ? ` (${note})` : ""}`,
-          amount: r.amount,
-        });
-      });
-
-    db.prepare(
-      `SELECT pp.date, pp.amount, p.name AS partner_name FROM partner_payments pp
-       JOIN partners p ON p.id = pp.partner_id
-       WHERE pp.method = ? AND pp.date LIKE ?`
-    )
-      .all(account_name, `${month}%`)
-      .forEach((r) => rows.push({ date: r.date, direction: "out", label: `دفعة للشريك: ${r.partner_name}`, amount: r.amount }));
-
-    db.prepare(
-      `SELECT sp.date, sp.amount, s.name AS supplier_name FROM supplier_payments sp
-       JOIN suppliers s ON s.id = sp.supplier_id
-       WHERE sp.method = ? AND sp.date LIKE ?`
-    )
-      .all(account_name, `${month}%`)
-      .forEach((r) => rows.push({ date: r.date, direction: "out", label: `دفعة للمورد: ${r.supplier_name}`, amount: r.amount }));
-
-    db.prepare(`SELECT date, amount, note FROM waste_entries WHERE payment_method = ? AND date LIKE ?`)
-      .all(account_name, `${month}%`)
-      .forEach((r) => rows.push({ date: r.date, direction: "out", label: `هالك${r.note ? `: ${r.note}` : ""}`, amount: r.amount }));
-
-    db.prepare(
-      `SELECT cp.date, cp.amount, c.name AS contractor_name FROM contractor_payments cp
-       JOIN contractors c ON c.id = cp.contractor_id
-       WHERE cp.method = ? AND cp.date LIKE ?`
-    )
-      .all(account_name, `${month}%`)
-      .forEach((r) => rows.push({ date: r.date, direction: "in", label: `دفعة من المقاول: ${r.contractor_name}`, amount: r.amount }));
-
-    rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-    return rows;
+    return { openingForMonth, rows, closing: running };
   });
+
+  // جرد: بتكتب الفلوس اللي عدّيتها فعلًا في يوم معيّن، والفرق عن المحسوب
+  // بيتسجل تسوية (لو فيه فرق) عشان الرصيد يبقى مطابق للحقيقة.
+  ipcMain.handle("treasury:count", (_e, { account_name, date, counted, note }) => {
+    const acc = db.prepare("SELECT * FROM treasury_accounts WHERE name = ?").get(account_name);
+    const expected = accountBalance(acc, date);
+    const difference = Number(counted) - expected;
+    if (Math.abs(difference) >= 0.005) {
+      db.prepare(
+        "INSERT INTO treasury_adjustments (account, date, amount, expected, counted, note) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run(account_name, date, difference, expected, Number(counted), note?.trim() || null);
+    }
+    return { expected, counted: Number(counted), difference };
+  });
+  ipcMain.handle("treasury:previewCount", (_e, { account_name, date }) => {
+    const acc = db.prepare("SELECT * FROM treasury_accounts WHERE name = ?").get(account_name);
+    return { expected: accountBalance(acc, date || todayISO()) };
+  });
+  ipcMain.handle("treasury:deleteAdjustment", (_e, { id }) => {
+    db.prepare("DELETE FROM treasury_adjustments WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
+  ipcMain.handle("treasury:createTransfer", (_e, { date, from_account, to_account, amount, note }) => {
+    if (from_account === to_account) throw new Error("لازم حسابين مختلفين");
+    db.prepare("INSERT INTO treasury_transfers (date, from_account, to_account, amount, note) VALUES (?, ?, ?, ?, ?)").run(
+      date,
+      from_account,
+      to_account,
+      Number(amount) || 0,
+      note?.trim() || null
+    );
+    return { ok: true };
+  });
+  ipcMain.handle("treasury:deleteTransfer", (_e, { id }) => {
+    db.prepare("DELETE FROM treasury_transfers WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
+  ipcMain.handle("otherIncome:create", (_e, { date, amount, method, description }) => {
+    db.prepare("INSERT INTO other_income (date, amount, method, description) VALUES (?, ?, ?, ?)").run(
+      date,
+      Number(amount) || 0,
+      method,
+      description?.trim() || null
+    );
+    return { ok: true };
+  });
+  ipcMain.handle("otherIncome:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM other_income WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
+  // --- الآجل (اللي علينا) ---
+  // مصروفات المعدات اللي لسه ليها باقي، ونصيب كل شريك اللي لسه متدفعلوش
+  // (الشهر ده والسنة دي)، وإجمالي المستحق للموردين.
+  function expensePaidTotal(expense) {
+    const later = db
+      .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM expense_payments WHERE expense_id = ?")
+      .get(expense.id).total;
+    return (expense.paid_amount ?? expense.amount) + later;
+  }
+
+  ipcMain.handle("expensePayments:create", (_e, { expense_id, date, amount, method, note }) => {
+    db.prepare("INSERT INTO expense_payments (expense_id, date, amount, method, note) VALUES (?, ?, ?, ?, ?)").run(
+      expense_id,
+      date,
+      Number(amount) || 0,
+      method,
+      note?.trim() || null
+    );
+    return { ok: true };
+  });
+  ipcMain.handle("expensePayments:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM expense_payments WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
+  ipcMain.handle("payables:summary", (_e, { month }) => {
+    const expenses = db
+      .prepare(
+        `SELECT me.*, e.name AS equipment_name, ec.name AS category_name FROM monthly_expenses me
+         JOIN equipment e ON e.id = me.equipment_id
+         LEFT JOIN expense_categories ec ON ec.id = me.category_id
+         WHERE me.paid_amount IS NOT NULL
+         ORDER BY COALESCE(me.date, me.month || '-01')`
+      )
+      .all()
+      .map((me) => {
+        const paid = expensePaidTotal(me);
+        return {
+          id: me.id,
+          equipment_name: me.equipment_name,
+          category_name: me.category_name,
+          payee: me.payee,
+          date: me.date ?? `${me.month}-01`,
+          note: me.note,
+          amount: me.amount,
+          paid,
+          remaining: me.amount - paid,
+        };
+      })
+      .filter((e) => e.remaining > 0.005);
+
+    const year = month.slice(0, 4);
+    const yearMonths = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
+    const profitCache = new Map();
+    const eqProfit = (equipmentId, m) => {
+      const key = `${equipmentId}|${m}`;
+      if (!profitCache.has(key)) profitCache.set(key, equipmentMonthNetProfit(db, equipmentId, m));
+      return profitCache.get(key);
+    };
+    const paidStmt = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM partner_payments WHERE partner_id = ? AND date LIKE ?");
+    const partners = db
+      .prepare("SELECT * FROM partners ORDER BY name")
+      .all()
+      .map((p) => {
+        const shares = db.prepare("SELECT equipment_id, percentage FROM equipment_partner_shares WHERE partner_id = ?").all(p.id);
+        const shareOf = (m) => shares.reduce((sum, sh) => sum + (eqProfit(sh.equipment_id, m) * sh.percentage) / 100, 0);
+        const monthDue = shareOf(month) - paidStmt.get(p.id, `${month}%`).total;
+        const yearDue = yearMonths.reduce((sum, m) => sum + shareOf(m), 0) - paidStmt.get(p.id, `${year}%`).total;
+        return { id: p.id, name: p.name, monthDue, yearDue };
+      })
+      .filter((p) => Math.abs(p.monthDue) > 0.005 || Math.abs(p.yearDue) > 0.005);
+
+    const suppliersDue = db
+      .prepare(
+        `SELECT COALESCE((SELECT SUM(amount) FROM supplier_purchases), 0) - COALESCE((SELECT SUM(amount) FROM supplier_payments), 0) AS total`
+      )
+      .get().total;
+
+    const recentPayments = db
+      .prepare(
+        `SELECT ep.*, e.name AS equipment_name, ec.name AS category_name, me.payee FROM expense_payments ep
+         JOIN monthly_expenses me ON me.id = ep.expense_id
+         JOIN equipment e ON e.id = me.equipment_id
+         LEFT JOIN expense_categories ec ON ec.id = me.category_id
+         WHERE ep.date LIKE ? ORDER BY ep.date DESC, ep.id DESC`
+      )
+      .all(`${month}%`);
+
+    const expensesDue = expenses.reduce((sum, e) => sum + e.remaining, 0);
+    const partnersYearDue = partners.reduce((sum, p) => sum + p.yearDue, 0);
+    return {
+      month,
+      expenses,
+      partners,
+      suppliersDue,
+      recentPayments,
+      expensesDue,
+      partnersMonthDue: partners.reduce((sum, p) => sum + p.monthDue, 0),
+      partnersYearDue,
+      totalDue: expensesDue + Math.max(0, partnersYearDue) + Math.max(0, suppliersDue),
+    };
+  });
+
+  ipcMain.handle("treasury:extras", (_e, { month }) => ({
+    transfers: db.prepare("SELECT * FROM treasury_transfers WHERE date LIKE ? ORDER BY date DESC, id DESC").all(`${month}%`),
+    otherIncome: db.prepare("SELECT * FROM other_income WHERE date LIKE ? ORDER BY date DESC, id DESC").all(`${month}%`),
+    adjustments: db.prepare("SELECT * FROM treasury_adjustments WHERE date LIKE ? ORDER BY date DESC, id DESC").all(`${month}%`),
+  }));
 
   // --- Suppliers (doc section 10) — no fixed list, created on first purchase/payment ---
   function findOrCreateSupplier(name) {
@@ -1962,7 +2158,7 @@ function registerIpcHandlers(db) {
       netProfit: totalIncome - totalExpense,
       payrollTotal,
       hassanCommissionTotal,
-      treasuryBalances: treasuryAccounts.map((a) => ({ name: a.name, name_ar: ACCOUNT_NAME_AR[a.name] ?? a.name, balance: a.current_balance })),
+      treasuryBalances: treasuryAccounts.map((a) => ({ name: a.name, name_ar: ACCOUNT_NAME_AR[a.name] ?? a.name, balance: accountBalance(a) })),
     };
   });
 
@@ -2288,7 +2484,10 @@ function registerIpcHandlers(db) {
       db.prepare("DELETE FROM supplier_purchases").run();
       db.prepare("DELETE FROM supplier_payments").run();
       db.prepare("DELETE FROM waste_entries").run();
-      db.prepare("UPDATE treasury_accounts SET current_balance = 0").run();
+      db.prepare("UPDATE treasury_accounts SET current_balance = 0, opening_balance = 0, opening_date = NULL").run();
+      db.prepare("DELETE FROM treasury_transfers").run();
+      db.prepare("DELETE FROM other_income").run();
+      db.prepare("DELETE FROM treasury_adjustments").run();
     });
     tx();
     return { ok: true };
