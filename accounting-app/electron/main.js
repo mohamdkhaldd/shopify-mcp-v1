@@ -4,7 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const { initDatabase } = require("./db");
 const { registerIpcHandlers } = require("./ipc");
-const { startCloudSync, pushAllToCloud, markAsSecondaryMachine, isSecondaryMachine } = require("./sync");
+const { startDeviceSync } = require("./sync");
 const { autoUpdater } = require("electron-updater");
 
 const isDev = !app.isPackaged;
@@ -155,10 +155,13 @@ ipcMain.handle("app:installUpdate", () => {
 app.whenReady().then(() => {
   const db = initDatabase();
   registerIpcHandlers(db);
-  startCloudSync(db);
-  ipcMain.handle("sync:pushAll", () => pushAllToCloud(db));
-  ipcMain.handle("sync:isSecondaryMachine", () => isSecondaryMachine());
-  ipcMain.handle("sync:markAsSecondaryMachine", () => markAsSecondaryMachine());
+  const sync = startDeviceSync(db, {
+    onRemoteChanges: (info) => mainWindow?.webContents.send("sync:remoteChanges", info),
+  });
+  ipcMain.handle("sync:status", () => sync.status());
+  ipcMain.handle("sync:now", () => sync.syncNow());
+  ipcMain.handle("sync:setDeviceName", (_e, { name }) => sync.setDeviceName(name));
+  ipcMain.handle("sync:activity", (_e, filters) => sync.activity(filters ?? {}));
   createWindow();
   setupAutoUpdate();
 

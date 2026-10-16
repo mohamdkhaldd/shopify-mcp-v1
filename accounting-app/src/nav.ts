@@ -10,6 +10,7 @@ export type SectionId =
   | "payables"
   | "suppliers"
   | "reports"
+  | "activity"
   | "settings";
 
 export interface NavItem {
@@ -30,5 +31,6 @@ export const navItems: NavItem[] = [
   { id: "payables", label: "الرصيد", icon: "balance" },
   { id: "suppliers", label: "الموردين", icon: "suppliers" },
   { id: "reports", label: "التقارير", icon: "reports" },
+  { id: "activity", label: "سجل التعديلات", icon: "history" },
   { id: "settings", label: "الإعدادات", icon: "settings" },
 ];

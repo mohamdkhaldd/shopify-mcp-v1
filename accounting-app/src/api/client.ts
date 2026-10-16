@@ -50,12 +50,17 @@ import {
   TreasuryStatement,
   TreasuryExtras,
   PayablesSummary,
+  SyncActivity,
+  SyncStatus,
   WasteEntry,
 } from "./types";
 
 declare global {
   interface Window {
-    api?: { invoke: (channel: string, payload?: unknown) => Promise<any> };
+    api?: {
+      invoke: (channel: string, payload?: unknown) => Promise<any>;
+      on?: (channel: string, callback: (data: any) => void) => () => void;
+    };
   }
 }
 
@@ -198,14 +203,14 @@ export const systemApi = {
 };
 
 export const syncApi = {
-  pushAll: (): Promise<{
-    pushed: number;
-    failed?: number;
-    errors?: { table: string; localId: number | string; error: string }[];
-    error?: string;
-  }> => invoke("sync:pushAll"),
-  isSecondaryMachine: (): Promise<boolean> => invoke("sync:isSecondaryMachine"),
-  markAsSecondaryMachine: (): Promise<string> => invoke("sync:markAsSecondaryMachine"),
+  status: (): Promise<SyncStatus> => invoke("sync:status"),
+  now: (): Promise<SyncStatus> => invoke("sync:now"),
+  setDeviceName: (name: string): Promise<SyncStatus> => invoke("sync:setDeviceName", { name }),
+  activity: (filters: { from?: string | null; to?: string | null; device?: string | null; limit?: number }): Promise<SyncActivity> =>
+    invoke("sync:activity", filters),
+  // إشعار لما تعديلات توصل من جهاز تاني — بيرجع دالة لإلغاء الاشتراك.
+  onRemoteChanges: (callback: (info: { count: number; devices: string[] }) => void): (() => void) =>
+    window.api?.on ? window.api.on("sync:remoteChanges", callback) : () => {},
 };
 
 export const appApi = {

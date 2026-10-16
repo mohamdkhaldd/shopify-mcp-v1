@@ -674,3 +674,32 @@ export interface EquipmentSheetMismatch {
   equipment_id: number;
   months: { month: string; days: number }[];
 }
+
+export interface SyncStatus {
+  deviceId: string;
+  deviceName: string;
+  pending: number;
+  deferred: number;
+  online: boolean;
+  lastError: string | null;
+  lastSyncAt: string | null;
+}
+
+export interface SyncActivityRow {
+  id: number | string;
+  tbl: string;
+  gid: string;
+  op: "insert" | "update" | "delete" | string;
+  data: Record<string, any>;
+  refs: Record<string, string>;
+  device_id: string;
+  device_name: string;
+  at: string;
+  pending: boolean;
+}
+
+export interface SyncActivity {
+  rows: SyncActivityRow[];
+  pending: SyncActivityRow[];
+  devices: string[];
+}

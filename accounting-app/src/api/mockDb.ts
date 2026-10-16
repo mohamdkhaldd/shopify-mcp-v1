@@ -441,6 +441,12 @@ function saveState(state: MockState) {
 export async function mockInvoke(channel: string, payload?: any): Promise<any> {
   const state = loadState();
 
+  // نسخة المعاينة في المتصفح مش متوصلة بالسحابة.
+  if (channel === "sync:status" || channel === "sync:now" || channel === "sync:setDeviceName") {
+    return { deviceId: "preview", deviceName: payload?.name ?? "معاينة", pending: 0, deferred: 0, online: false, lastError: "نسخة معاينة", lastSyncAt: null };
+  }
+  if (channel === "sync:activity") return { rows: [], pending: [], devices: [] };
+
   // نوع الأجر والسعر بتاع أي موظف في شهر معيّن — بياخد أحدث سطر تاريخ ساري
   // وقت الشهر ده، عشان تعديل المرتب دلوقتي ميغيرش حساب شهور فاتت.
   function getEmployeeStateForMonth(employeeId: number, month: string) {

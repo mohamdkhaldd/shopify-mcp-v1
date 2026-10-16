@@ -42,6 +42,10 @@ const paths: Record<string, JSX.Element> = {
   ),
   moon: <path d="M20.5 14.5a8.5 8.5 0 1 1-9-11 7 7 0 0 0 9 11Z" />,
   flow: <path d="M3 8h13l-3.5-3.5M21 16H8l3.5 3.5" />,
+  // ساعة — سجل التعديلات.
+  history: (
+    <path d="M12 7v5l3 2M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4" />
+  ),
   // ميزان — صفحة الرصيد (لينا وعلينا).
   balance: (
     <path d="M12 4v16M8 20h8M5 7h14M12 4l-1 3h2l-1-3M5 7l-3 6a3 3 0 0 0 6 0L5 7ZM19 7l-3 6a3 3 0 0 0 6 0l-3-6Z" />

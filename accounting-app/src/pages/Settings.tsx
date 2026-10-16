@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { appApi, syncApi, systemApi } from "../api/client";
-import { AppUpdateStatus } from "../api/types";
+import { AppUpdateStatus, SyncStatus } from "../api/types";
 import Icon from "../components/Icon";
 import DriversTab from "./settings/DriversTab";
 import EquipmentTab from "./settings/EquipmentTab";
@@ -27,14 +27,20 @@ export default function Settings() {
   const [updateResult, setUpdateResult] = useState<AppUpdateStatus | null>(null);
   const [installing, setInstalling] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{
-    pushed: number;
-    failed?: number;
-    errors?: { table: string; localId: number | string; error: string }[];
-    error?: string;
-  } | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [deviceName, setDeviceName] = useState("");
+  const [nameSaved, setNameSaved] = useState(false);
+
   useEffect(() => {
     appApi.getVersion().then(setVersion);
+    const load = () =>
+      syncApi.status().then((s) => {
+        setSyncStatus(s);
+        setDeviceName((prev) => prev || s.deviceName);
+      });
+    load();
+    const timer = setInterval(load, 3000);
+    return () => clearInterval(timer);
   }, []);
 
   async function handleCheckForUpdate() {
@@ -50,12 +56,17 @@ export default function Settings() {
     await appApi.installUpdate();
   }
 
-  async function handleSyncAll() {
+  async function handleSyncNow() {
     setSyncing(true);
-    setSyncResult(null);
-    const result = await syncApi.pushAll();
-    setSyncResult(result);
+    setSyncStatus(await syncApi.now());
     setSyncing(false);
+  }
+
+  async function handleSaveDeviceName() {
+    if (!deviceName.trim()) return;
+    setSyncStatus(await syncApi.setDeviceName(deviceName));
+    setNameSaved(true);
+    setTimeout(() => setNameSaved(false), 2000);
   }
 
   async function handleResetAll() {
@@ -151,33 +162,64 @@ export default function Settings() {
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-700 mb-1">مزامنة مع الموبايل</h2>
+        <h2 className="font-bold text-slate-700 mb-1">المزامنة بين الأجهزة (اللاب والتابلت)</h2>
         <p className="text-xs text-slate-400 mb-3">
-          بيبعت كل البيانات الموجودة في اللاب (المعدات، الشركاء، السائقين، السركي، المصروفات، المرتبات) للسحابة
-          دفعة واحدة — استخدمها أول مرة تربط اللاب بالمزامنة عشان كل التاريخ القديم يوصل للموبايل، مش بس اللي
-          هيتسجل من دلوقتي.
+          أي إضافة أو تعديل أو مسح على أي جهاز بيوصل التاني في ثواني لوحده. لو النت فصل، التعديلات بتستنى وبتتبعت أول ما يرجع.
         </p>
-        <button
-          onClick={handleSyncAll}
-          disabled={syncing}
-          className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
-        >
-          {syncing ? "جاري الإرسال... ممكن تاخد دقايق" : "🔄 ابعت كل بيانات اللاب للسحابة الآن"}
-        </button>
-        {syncResult && !syncResult.error && (
-          <p className="text-xs text-primary-dark mt-2">
-            تم إرسال {syncResult.pushed} سطر بنجاح
-            {!!syncResult.failed && <span className="text-rose-600"> — {syncResult.failed} سطر فشل (تفاصيله تحت)</span>}.
-          </p>
-        )}
-        {syncResult?.error && <p className="text-xs text-rose-500 mt-2">{syncResult.error}</p>}
-        {!!syncResult?.errors?.length && (
-          <div className="mt-2 bg-rose-50 rounded-lg p-2 space-y-1 text-xs text-rose-700">
-            {syncResult.errors.map((e, i) => (
-              <p key={i}>
-                {e.table} #{e.localId}: {e.error}
-              </p>
-            ))}
+        {!syncStatus ? (
+          <div className="text-sm text-slate-400">جاري التحميل...</div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-end gap-2">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">اسم الجهاز ده (بيظهر في سجل التعديلات)</label>
+                <input
+                  value={deviceName}
+                  onChange={(e) => setDeviceName(e.target.value)}
+                  placeholder="زي: اللاب أو التابلت"
+                  className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm w-48"
+                />
+              </div>
+              <button
+                onClick={handleSaveDeviceName}
+                disabled={!deviceName.trim() || deviceName.trim() === syncStatus.deviceName}
+                className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {nameSaved ? "✓ اتحفظ" : "حفظ الاسم"}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-sm">
+              <div className={`rounded-xl py-2.5 text-center ${syncStatus.online ? "bg-primary-light" : "bg-rose-50"}`}>
+                <div className="text-xs text-slate-500">الحالة</div>
+                <div className={`font-bold ${syncStatus.online ? "text-primary-dark" : "text-rose-600"}`}>
+                  {syncStatus.online ? "● متصل" : "● مش متصل"}
+                </div>
+              </div>
+              <div className="rounded-xl py-2.5 text-center bg-slate-50">
+                <div className="text-xs text-slate-500">آخر مزامنة</div>
+                <div className="font-bold text-slate-700">
+                  {syncStatus.lastSyncAt ? new Date(syncStatus.lastSyncAt).toLocaleTimeString("ar-EG") : "—"}
+                </div>
+              </div>
+              <div className={`rounded-xl py-2.5 text-center ${syncStatus.pending ? "bg-amber-50" : "bg-slate-50"}`}>
+                <div className="text-xs text-slate-500">تعديلات لسه متبعتتش</div>
+                <div className={`font-bold ${syncStatus.pending ? "text-amber-700" : "text-slate-700"}`}>{syncStatus.pending}</div>
+              </div>
+              <div className="rounded-xl py-2.5 text-center bg-slate-50">
+                <div className="text-xs text-slate-500">مستنية بيانات تانية</div>
+                <div className="font-bold text-slate-700">{syncStatus.deferred}</div>
+              </div>
+            </div>
+            {syncStatus.lastError && !syncStatus.online && (
+              <p className="text-xs text-rose-500">آخر خطأ: {syncStatus.lastError}</p>
+            )}
+            <button
+              onClick={handleSyncNow}
+              disabled={syncing}
+              className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
+            >
+              {syncing ? "جاري المزامنة..." : "🔄 زامن دلوقتي"}
+            </button>
           </div>
         )}
       </div>
