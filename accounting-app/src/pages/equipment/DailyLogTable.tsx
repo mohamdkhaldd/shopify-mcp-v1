@@ -50,6 +50,7 @@ interface RowDraft {
   hassan_commission: string;
   note: string;
   site_name: string;
+  overtime_rate: string;
   day_value: number;
   saving: boolean;
 }
@@ -68,6 +69,7 @@ function emptyRow(): RowDraft {
     hassan_commission: "",
     note: "",
     site_name: "",
+    overtime_rate: "",
     day_value: 0,
     saving: false,
   };
@@ -87,6 +89,13 @@ function overtimeFromHours(actualHours: string, baseHours: string): string {
 // عشان محسوب القيمة يفضل يعتبرها يوم كامل لحد ما تتكتب فعلاً، مش يصفّرها.
 function hoursOrNull(value: string): number | null {
   return value.trim() === "" ? null : Number(value) || 0;
+}
+
+// سعر ساعة الأوفر تايم بيتحفظ بس لو فيه أوفر تايم فعلاً في اليوم ده — لو
+// فاضي، السيرفر بيحسبه اليومية ÷ الساعات الأساسية زي الأول.
+function overtimeRateOrNull(row: { overtime_rate: string; overtime_hours: string; is_day_off: boolean }): number | null {
+  if (row.is_day_off || !(Number(row.overtime_hours) > 0) || row.overtime_rate.trim() === "") return null;
+  return Number(row.overtime_rate) || 0;
 }
 
 // بيقرا لستة أيام مكتوبة زي "3, 7, 15" أو مدى زي "14-31" أو خليط بينهم زي
@@ -143,6 +152,7 @@ export default function DailyLogTable({
 
   const [overtimeDays, setOvertimeDays] = useState("");
   const [overtimeValue, setOvertimeValue] = useState("");
+  const [overtimeRateValue, setOvertimeRateValue] = useState("");
   const [applyingOvertime, setApplyingOvertime] = useState(false);
 
   useEffect(() => {
@@ -188,6 +198,7 @@ export default function DailyLogTable({
       hassan_commission: log.hassan_commission?.toString() ?? "",
       note: log.note ?? "",
       site_name: log.site_name ?? "",
+      overtime_rate: log.overtime_rate?.toString() ?? "",
       day_value: log.day_value,
       saving: false,
     };
@@ -217,6 +228,7 @@ export default function DailyLogTable({
       hassan_commission: log.hassan_commission,
       note: log.note,
       site_name: log.site_name,
+      overtime_rate: log.overtime_rate,
     });
   }
 
@@ -306,6 +318,7 @@ export default function DailyLogTable({
       hassan_commission: mode === "fixed" && row.hassan_commission ? Number(row.hassan_commission) : null,
       note: row.note.trim() || null,
       site_name: row.site_name.trim() || null,
+      overtime_rate: overtimeRateOrNull(row),
     });
     updateRow(date, { id: saved.id, person_name: saved.person_name, day_value: saved.day_value, saving: false });
     onChanged?.();
@@ -345,6 +358,7 @@ export default function DailyLogTable({
       day_rate: "",
       actual_hours: "",
       overtime_hours: "",
+      overtime_rate: "",
       base_hours: "",
       is_paid_leave: false,
     };
@@ -413,6 +427,7 @@ export default function DailyLogTable({
         hassan_commission: null,
         note: rows[date]?.note.trim() || null,
         site_name: (role === MASTER_ROLE && bulkSite.trim()) || existing?.site_name.trim() || null,
+        overtime_rate: existing ? overtimeRateOrNull(existing) : null,
       });
     }
 
@@ -471,6 +486,7 @@ export default function DailyLogTable({
           hassan_commission: mode === "fixed" && row.hassan_commission ? Number(row.hassan_commission) : null,
           note: row.note.trim() || null,
           site_name: row.site_name.trim() || null,
+          overtime_rate: overtimeRateOrNull(row),
         });
       }
       for (const log of counterpartSnapshot) await restoreDailyLog(log);
@@ -537,7 +553,8 @@ export default function DailyLogTable({
     for (const date of targetDates) {
       const row = rows[date];
       const base = Number(row.base_hours) || 0;
-      const patch = { actual_hours: String(base + overtime), overtime_hours: String(overtime) };
+      const patch: Partial<RowDraft> = { actual_hours: String(base + overtime), overtime_hours: String(overtime) };
+      if (overtimeRateValue.trim()) patch.overtime_rate = overtimeRateValue.trim();
       updateRow(date, patch);
       await saveRow(date, patch);
     }
@@ -561,6 +578,7 @@ export default function DailyLogTable({
           hassan_commission: null,
           note: row.note.trim() || null,
           site_name: row.site_name.trim() || null,
+          overtime_rate: overtimeRateOrNull(row),
         });
         if (counterpart) await restoreDailyLog(counterpart);
       }
@@ -764,6 +782,18 @@ export default function DailyLogTable({
                 className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
               />
             </div>
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1">سعر الساعة (اختياري)</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={overtimeRateValue}
+                onChange={(e) => setOvertimeRateValue(e.target.value)}
+                placeholder="تلقائي"
+                className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+              />
+            </div>
             <button
               onClick={applyBulkOvertime}
               disabled={applyingOvertime || !overtimeDays.trim() || !overtimeValue}
@@ -791,6 +821,7 @@ export default function DailyLogTable({
                 <>
                   <th className="text-start font-semibold py-2">الساعات الفعلية</th>
                   <th className="text-start font-semibold py-2">أوفر تايم</th>
+                  <th className="text-start font-semibold py-2 whitespace-nowrap">سعر ساعة الأوفر</th>
                   <th className="text-start font-semibold py-2">الساعات الأساسية</th>
                   <th className="text-start font-semibold py-2">اليومية</th>
                   {role === "driver" && (
@@ -939,6 +970,24 @@ export default function DailyLogTable({
                         <input
                           type="number"
                           min="0"
+                          step="any"
+                          placeholder={Number(row.overtime_hours) > 0 ? "تلقائي" : "—"}
+                          value={Number(row.overtime_hours) > 0 ? row.overtime_rate : ""}
+                          onChange={(e) => updateRow(date, { overtime_rate: e.target.value })}
+                          onBlur={() => saveRow(date)}
+                          disabled={row.is_day_off || !(Number(row.overtime_hours) > 0)}
+                          title={
+                            Number(row.overtime_hours) > 0
+                              ? "سعر الساعة الإضافية — لو سبتها فاضية بتتحسب اليومية ÷ الساعات الأساسية"
+                              : "مفيش أوفر تايم في اليوم ده"
+                          }
+                          className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-100 disabled:text-slate-400"
+                        />
+                      </td>
+                      <td className="py-1.5">
+                        <input
+                          type="number"
+                          min="0"
                           step="0.5"
                           value={row.base_hours}
                           onChange={(e) => updateRow(date, { base_hours: e.target.value })}
@@ -1027,14 +1076,14 @@ export default function DailyLogTable({
                 <td colSpan={3} className="pt-3 text-sm font-bold text-slate-700">
                   إجمالي الأوفر تايم
                 </td>
-                <td colSpan={role === "driver" ? 5 : 4} className="pt-3 text-sm font-bold text-slate-600">
+                <td colSpan={role === "driver" ? 6 : 5} className="pt-3 text-sm font-bold text-slate-600">
                   {monthOvertimeHours} ساعة
                 </td>
               </tr>
             )}
             <tr>
               <td
-                colSpan={mode === "hours" ? (role === "driver" ? 8 : 7) : 5}
+                colSpan={mode === "hours" ? (role === "driver" ? 9 : 8) : 5}
                 className="pt-3 text-sm font-bold text-slate-700"
               >
                 إجمالي الشهر

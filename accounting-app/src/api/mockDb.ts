@@ -21,6 +21,7 @@ interface DailyLogRow {
   hassan_commission: number | null;
   note: string | null;
   site_name?: string | null;
+  overtime_rate?: number | null;
 }
 
 interface MonthlyExpenseRow {
@@ -191,6 +192,7 @@ function computeDayValue(log: DailyLogRow): number {
   const hourlyRate = dayRate / (baseHours || 8);
   const actualHours = log.actual_hours ?? baseHours;
   const diffHours = actualHours - baseHours;
+  if (diffHours > 0 && log.overtime_rate != null) return dayRate + diffHours * log.overtime_rate;
   return dayRate + diffHours * hourlyRate;
 }
 
@@ -223,7 +225,9 @@ function computePairedCommission(equipmentName: string, driverLog: DailyLogRow, 
   const h = driverLog.day_rate ?? 0;
   const baseHours = contractorLog.base_hours || 8;
   const overtimeHours = Math.max(0, (contractorLog.actual_hours ?? 0) - (contractorLog.base_hours ?? 0));
-  return k - h + overtimeHours * (k / baseHours - h / baseHours);
+  const kHour = contractorLog.overtime_rate ?? k / baseHours;
+  const hHour = driverLog.overtime_rate ?? h / baseHours;
+  return k - h + overtimeHours * (kHour - hHour);
 }
 
 const STORAGE_KEY = "al-bunyan-mock-db-v6";
@@ -507,6 +511,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     if (next.role === "contractor") next.is_paid_leave = false;
     if (next.is_day_off) {
       next.day_rate = null;
+      next.overtime_rate = null;
       next.actual_hours = null;
       next.base_hours = null;
       if (!next.is_paid_leave) next.person_name = "";

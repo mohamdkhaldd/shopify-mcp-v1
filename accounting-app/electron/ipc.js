@@ -20,6 +20,10 @@ function computeDayValue(log) {
   // النسبة — بس لما الساعات الفعلية تتكتب فعلاً.
   const actualHours = log.actual_hours ?? baseHours;
   const diffHours = actualHours - baseHours;
+  // سعر ساعة الأوفر تايم بيتكتب بإيده في الشيت لو فيه أوفر تايم — لو
+  // متكتبش بيفضل اليومية ÷ الساعات الأساسية زي الأول. الساعات الناقصة عن
+  // الأساسي بتتخصم دايمًا بسعر الساعة العادي.
+  if (diffHours > 0 && log.overtime_rate != null) return dayRate + diffHours * log.overtime_rate;
   return dayRate + diffHours * hourlyRate;
 }
 
@@ -417,8 +421,8 @@ function registerIpcHandlers(db) {
 
   const OTHER_HOURS_ROLE = { driver: "contractor", contractor: "driver" };
 
-  const UPSERT_DAILY_LOG_SQL = `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note, site_name)
-       VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note, @site_name)
+  const UPSERT_DAILY_LOG_SQL = `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note, site_name, overtime_rate)
+       VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note, @site_name, @overtime_rate)
        ON CONFLICT(equipment_id, date, role, shift_label) DO UPDATE SET
          person_name = excluded.person_name,
          actual_hours = excluded.actual_hours,
@@ -429,7 +433,8 @@ function registerIpcHandlers(db) {
          fixed_value = excluded.fixed_value,
          hassan_commission = excluded.hassan_commission,
          note = excluded.note,
-         site_name = excluded.site_name`;
+         site_name = excluded.site_name,
+         overtime_rate = excluded.overtime_rate`;
 
   function findDailyLog(db, equipmentId, date, role, shiftLabel) {
     return db
@@ -466,6 +471,7 @@ function registerIpcHandlers(db) {
       hassan_commission: existing?.hassan_commission ?? null,
       note: contractorLog.note ?? null,
       site_name: contractorLog.site_name ?? null,
+      overtime_rate: isDayOff ? null : existing?.overtime_rate ?? null,
     });
   }
 
@@ -489,6 +495,7 @@ function registerIpcHandlers(db) {
       hassan_commission: log.hassan_commission ?? null,
       note: log.note ?? null,
       site_name: log.site_name?.trim() || null,
+      overtime_rate: log.overtime_rate ?? null,
     };
     // صف السركي مبيقدرش يغيّر الحاجات المشتركة مع المقاول — لو فيه صف مقاول
     // لنفس اليوم، الساعات/البيان/الموقع/علامة "مشتغلش" بتتاخد منه هو.
@@ -506,6 +513,7 @@ function registerIpcHandlers(db) {
     if (log.role === "contractor") params.is_paid_leave = 0;
     if (params.is_day_off) {
       params.day_rate = null;
+      params.overtime_rate = null;
       params.actual_hours = null;
       params.base_hours = null;
       if (!params.is_paid_leave) params.person_name = "";
@@ -618,6 +626,7 @@ function registerIpcHandlers(db) {
             hassan_commission: existing?.hassan_commission ?? null,
             note: src.note,
             site_name: existing?.site_name ?? null,
+            overtime_rate: src.is_day_off ? null : existing?.overtime_rate ?? null,
           };
           db.prepare(UPSERT_DAILY_LOG_SQL).run(params);
           mirrorContractorToDriver(db, params);
@@ -998,7 +1007,9 @@ function registerIpcHandlers(db) {
     const h = driverLog.day_rate ?? 0;
     const baseHours = contractorLog.base_hours || 8;
     const overtimeHours = Math.max(0, (contractorLog.actual_hours ?? 0) - (contractorLog.base_hours ?? 0));
-    return (k - h) + overtimeHours * (k / baseHours - h / baseHours);
+    const kHour = contractorLog.overtime_rate ?? k / baseHours;
+    const hHour = driverLog.overtime_rate ?? h / baseHours;
+    return (k - h) + overtimeHours * (kHour - hHour);
   }
 
   // بيربط سطر السركي بسطر المقاول لنفس اليوم — لازم يبقى بالتاريخ والشيفت

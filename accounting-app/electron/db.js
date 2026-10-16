@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS daily_logs (
   note TEXT,
   shift_label TEXT NOT NULL DEFAULT '',
   site_name TEXT,
+  overtime_rate REAL,
   UNIQUE (equipment_id, date, role, shift_label)
 );
 
@@ -512,6 +513,15 @@ function initDatabase() {
     .some((col) => col.name === "site_name");
   if (!dailyLogsHasSiteName) {
     db.exec("ALTER TABLE daily_logs ADD COLUMN site_name TEXT");
+  }
+
+  // سعر ساعة الأوفر تايم اليدوي (لو فاضي بيتحسب اليومية ÷ الساعات الأساسية).
+  const dailyLogsHasOvertimeRate = db
+    .prepare("PRAGMA table_info(daily_logs)")
+    .all()
+    .some((col) => col.name === "overtime_rate");
+  if (!dailyLogsHasOvertimeRate) {
+    db.exec("ALTER TABLE daily_logs ADD COLUMN overtime_rate REAL");
   }
 
   const accountCount = db.prepare("SELECT COUNT(*) AS c FROM treasury_accounts").get().c;

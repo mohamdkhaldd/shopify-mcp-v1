@@ -167,9 +167,10 @@ function mergeDailyLog(db, data) {
   // متحدّثش — ساعتها بنسيب القيمة المحلية زي ما هي بدل ما نصفّرها.
   const hasPaidLeave = data.is_paid_leave !== undefined && data.is_paid_leave !== null;
   const hasSiteName = data.site_name !== undefined;
+  const hasOvertimeRate = data.overtime_rate !== undefined;
   db.prepare(
-    `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note, site_name)
-     VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note, @site_name)
+    `INSERT INTO daily_logs (equipment_id, date, role, shift_label, person_name, actual_hours, base_hours, day_rate, is_paid_leave, is_day_off, fixed_value, hassan_commission, note, site_name, overtime_rate)
+     VALUES (@equipment_id, @date, @role, @shift_label, @person_name, @actual_hours, @base_hours, @day_rate, @is_paid_leave, @is_day_off, @fixed_value, @hassan_commission, @note, @site_name, @overtime_rate)
      ON CONFLICT(equipment_id, date, role, shift_label) DO UPDATE SET
        person_name = excluded.person_name,
        actual_hours = excluded.actual_hours,
@@ -180,7 +181,7 @@ function mergeDailyLog(db, data) {
        hassan_commission = excluded.hassan_commission,
        note = excluded.note${hasPaidLeave ? ",\n       is_paid_leave = excluded.is_paid_leave" : ""}${
       hasSiteName ? ",\n       site_name = excluded.site_name" : ""
-    }`
+    }${hasOvertimeRate ? ",\n       overtime_rate = excluded.overtime_rate" : ""}`
   ).run({
     equipment_id: equipmentId,
     date: data.date,
@@ -196,6 +197,7 @@ function mergeDailyLog(db, data) {
     hassan_commission: data.hassan_commission ?? null,
     note: data.note ?? null,
     site_name: data.site_name ?? null,
+    overtime_rate: data.overtime_rate ?? null,
   });
 }
 
@@ -682,12 +684,17 @@ async function pushToCloud(table, localId, data) {
           hassan_commission: data.hassan_commission,
           note: data.note,
         };
-        const extended = { ...row, is_paid_leave: !!data.is_paid_leave, site_name: data.site_name ?? null };
+        const extended = {
+          ...row,
+          is_paid_leave: !!data.is_paid_leave,
+          site_name: data.site_name ?? null,
+          overtime_rate: data.overtime_rate ?? null,
+        };
         const result = await activeClient.from("daily_logs").upsert(extended, { onConflict: "equipment_id,date,role,shift_label" });
         // لو جدول السحابة لسه مضافلوش عمودين is_paid_leave/site_name (الـ SQL
         // الجديد في supabase/schema.sql متشغّلش)، بنبعت الصف من غيرهم بدل ما
         // المزامنة كلها تقف.
-        if (result.error && /is_paid_leave|site_name/.test(result.error.message ?? "")) {
+        if (result.error && /is_paid_leave|site_name|overtime_rate/.test(result.error.message ?? "")) {
           checkError(await activeClient.from("daily_logs").upsert(row, { onConflict: "equipment_id,date,role,shift_label" }));
         } else {
           checkError(result);

@@ -58,6 +58,7 @@ export interface DailyLog {
   note: string | null;
   shift_label: string;
   site_name: string | null;
+  overtime_rate: number | null;
   day_value: number;
 }
 
