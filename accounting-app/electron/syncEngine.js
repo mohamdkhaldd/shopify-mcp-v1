@@ -50,6 +50,7 @@ function createSyncEngine({
   let pulling = false;
   let pullAgain = false;
   let timers = [];
+  let refetchTables = [];
 
   const getState = (key, fallback = null) => {
     const row = db.prepare("SELECT value FROM sync_state WHERE key = ?").get(key);
@@ -168,6 +169,34 @@ function createSyncEngine({
       }
       setState("gid_ready", "1");
     }
+
+    // جدول جديد اتضاف في تحديث: جهاز تاني اتحدّث قبلنا ممكن يكون بعت صفوف
+    // فيه والنسخة القديمة هنا عدّتها (مكانش عندها الجدول) — فبنسحب صفوف
+    // الجداول الجديدة من السحابة من الأول مرة واحدة. لو الجهاز جاي من نسخة
+    // مكانتش بتسجل الجداول، بنعتبر أي جدول فاضي "جديد".
+    const known = getState("known_tables");
+    if (firstRun) refetchTables = [];
+    else if (known == null) refetchTables = tables.filter((t) => db.prepare(`SELECT COUNT(*) AS c FROM ${t}`).get().c === 0);
+    else {
+      const knownSet = new Set(JSON.parse(known));
+      refetchTables = tables.filter((t) => !knownSet.has(t));
+    }
+    if (!refetchTables.length) setState("known_tables", JSON.stringify(tables));
+  }
+
+  async function refetchNewTables() {
+    if (!refetchTables.length) return;
+    let cursor = 0;
+    for (let round = 0; round < 500; round++) {
+      const { data, error } = await sb.from("sync_rows").select("*").in("tbl", refetchTables).gt("seq", cursor).order("seq").limit(500);
+      if (error) throw error;
+      if (!data.length) break;
+      applyBatch(data);
+      cursor = data[data.length - 1].seq;
+      if (data.length < 500) break;
+    }
+    refetchTables = [];
+    setState("known_tables", JSON.stringify(tables));
   }
 
   // ---------- push ----------
@@ -585,6 +614,7 @@ function createSyncEngine({
         return;
       }
       needsLogin = false;
+      await refetchNewTables();
       if (!realtimeOn) {
         realtimeOn = true;
         sb.channel("sync_rows_changes")
@@ -666,7 +696,7 @@ function createSyncEngine({
 
   // سجل التعديلات: اللي اتزامن فعلًا (من السحابة، لكل الأجهزة) + اللي لسه
   // متبعتش من الجهاز ده. أسماء المعدات/الأشخاص بتتجاب من القاعدة المحلية.
-  const NAME_TABLES = ["equipment", "employees", "partners", "contractors", "suppliers", "expense_categories", "hassan_workers"];
+  const NAME_TABLES = ["equipment", "employees", "partners", "contractors", "suppliers", "expense_categories", "hassan_workers", "creditors"];
   function resolveRefs(t, data) {
     const refs = {};
     for (const [c, parent] of Object.entries(fks[t] ?? {})) {

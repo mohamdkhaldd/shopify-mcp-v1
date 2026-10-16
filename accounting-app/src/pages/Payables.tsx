@@ -4,6 +4,7 @@ import MonthPicker from "../components/equipment/MonthPicker";
 import PrintButton from "../components/PrintButton";
 import { PrintHeader } from "../components/PrintSignoff";
 import { payablesApi } from "../api/client";
+import CreditorsSection from "./payables/CreditorsSection";
 import { PayableExpense, PayablesSummary } from "../api/types";
 import { currentMonthKey, monthLabel } from "../utils/months";
 import { formatEGP } from "../utils/format";
@@ -119,6 +120,8 @@ export default function Payables({ onGoToSuppliers }: { onGoToSuppliers: () => v
   const [month, setMonth] = useState(currentMonthKey());
   const [data, setData] = useState<PayablesSummary | null>(null);
   const [paying, setPaying] = useState<PayableExpense | null>(null);
+  // كشف حساب جهة مفتوح = الطباعة تطلعه هو بس.
+  const [soloPrint, setSoloPrint] = useState(false);
 
   const refresh = () => payablesApi.summary(month).then(setData);
 
@@ -143,14 +146,14 @@ export default function Payables({ onGoToSuppliers }: { onGoToSuppliers: () => v
   }
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6${soloPrint ? " print-solo" : ""}`}>
       <PrintHeader title="الرصيد — اللي لينا واللي علينا" subtitle={`${monthLabel(month)} ${month.slice(0, 4)}`} />
 
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">الرصيد</h1>
           <p className="text-sm text-slate-500 mt-1">
-            اللي لينا عند المقاولين، واللي علينا (باقي مصروفات المعدات، الشركاء، الموردين)، والصافي بينهم.
+            اللي لينا عند المقاولين، واللي علينا (باقي مصروفات المعدات، الشركاء، الموردين، وأي جهة تانية)، والصافي بينهم.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -177,10 +180,15 @@ export default function Payables({ onGoToSuppliers }: { onGoToSuppliers: () => v
       </div>
 
       <h2 className="font-bold text-slate-700 -mb-2">تفصيل اللي علينا</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <SummaryBox label="باقي مصروفات المعدات" value={data.expensesDue} />
         <SummaryBox label="للشركاء (الإجمالي مع الرصيد الافتتاحي)" value={data.partnersTotalDue} />
         <SummaryBox label="للموردين" value={data.suppliersDue} onClick={onGoToSuppliers} />
+        <SummaryBox label="لجهات تانية" value={data.creditorsDue ?? 0} />
+      </div>
+
+      <div className="print-solo-keep">
+        <CreditorsSection creditorsDue={data.creditorsDue ?? 0} onChanged={refresh} onSoloPrint={setSoloPrint} />
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">

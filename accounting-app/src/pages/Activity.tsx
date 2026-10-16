@@ -75,6 +75,12 @@ function describe(r: SyncActivityRow): string {
       return `إيراد آخر ${money(d.amount)}${d.description ? ` — ${d.description}` : ""}`;
     case "treasury_adjustments":
       return `جرد الخزنة (فرق ${money(d.amount)})`;
+    case "creditors":
+      return `جهة علينا لها فلوس: ${d.name ?? ""}${d.opening_balance ? ` (رصيد قديم ${money(d.opening_balance)})` : ""}`;
+    case "creditor_entries":
+      return d.type === "payment"
+        ? `سداد لـ ${ref.creditor_id ?? ""} ${money(d.amount)}${d.note ? ` — ${d.note}` : ""}`
+        : `دين علينا لـ ${ref.creditor_id ?? ""} ${money(d.amount)}${d.note ? ` — ${d.note}` : ""}`;
     case "waste_entries":
       return `هالك ${money(d.amount)}`;
     default:

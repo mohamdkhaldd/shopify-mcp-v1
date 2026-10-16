@@ -446,6 +446,9 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { deviceId: "preview", deviceName: payload?.name ?? "معاينة", pending: 0, deferred: 0, online: false, lastError: "نسخة معاينة", lastSyncAt: null };
   }
   if (channel === "sync:activity") return { rows: [], pending: [], devices: [] };
+  // فلوس علينا لجهات تانية — مش متاحة في نسخة المعاينة.
+  if (channel === "creditors:list") return [];
+  if (channel.startsWith("creditors:") || channel.startsWith("creditorEntries:")) throw new Error("مش متاح في نسخة المعاينة");
 
   // نوع الأجر والسعر بتاع أي موظف في شهر معيّن — بياخد أحدث سطر تاريخ ساري
   // وقت الشهر ده، عشان تعديل المرتب دلوقتي ميغيرش حساب شهور فاتت.

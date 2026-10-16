@@ -230,6 +230,26 @@ CREATE TABLE IF NOT EXISTS supplier_payments (
   note TEXT
 );
 
+-- فلوس علينا لجهات/ناس تانية (غير الموردين والشركاء): قرض، محامي، إيجار
+-- متأخر... كل جهة ليها رصيد افتتاحي + حركات: دين جديد علينا (مبيلمسش
+-- الخزنة) أو سداد (طالع من حساب في الخزنة).
+CREATE TABLE IF NOT EXISTS creditors (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  opening_balance REAL NOT NULL DEFAULT 0,
+  note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS creditor_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  creditor_id INTEGER NOT NULL REFERENCES creditors(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('debt', 'payment')),
+  amount REAL NOT NULL,
+  method TEXT,
+  note TEXT
+);
+
 CREATE TABLE IF NOT EXISTS waste_entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   date TEXT NOT NULL,

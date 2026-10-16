@@ -481,6 +481,8 @@ export interface PayablesSummary {
   partnersOpening: number;
   partnersTotalDue: number;
   receivablesTotal: number;
+  creditors?: CreditorBalance[];
+  creditorsDue?: number;
   totalDue: number;
 }
 
@@ -626,6 +628,8 @@ export interface OutgoingSummary {
   partnerPaymentsTotal: number;
   supplierPayments: OutgoingSupplierPaymentRow[];
   supplierPaymentsTotal: number;
+  creditorPayments?: CreditorEntry[];
+  creditorPaymentsTotal?: number;
   payroll: OutgoingPayrollRow[];
   payrollTotal: number;
   waste: WasteEntry[];
@@ -706,4 +710,31 @@ export interface SyncActivity {
   rows: SyncActivityRow[];
   pending: SyncActivityRow[];
   devices: string[];
+}
+
+// فلوس علينا لجهات تانية (غير الموردين والشركاء).
+export interface CreditorBalance {
+  id: number;
+  name: string;
+  note: string | null;
+  openingBalance: number;
+  debts: number;
+  paid: number;
+  remaining: number;
+}
+
+export interface CreditorEntry {
+  id: number;
+  creditor_id: number;
+  creditor_name?: string;
+  date: string;
+  type: "debt" | "payment";
+  amount: number;
+  method: string | null;
+  note: string | null;
+  balance?: number;
+}
+
+export interface CreditorStatement extends CreditorBalance {
+  entries: CreditorEntry[];
 }

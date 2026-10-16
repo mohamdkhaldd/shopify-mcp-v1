@@ -195,6 +195,33 @@ function OutgoingView({ data }: { data: OutgoingSummary }) {
         )}
       </Section>
 
+      {(data.creditorPayments?.length ?? 0) > 0 && (
+        <Section title="سداد ديون لجهات تانية" total={data.creditorPaymentsTotal ?? 0}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-slate-400 border-b border-slate-100">
+                <th className="text-start font-semibold py-2">التاريخ</th>
+                <th className="text-start font-semibold py-2">الجهة</th>
+                <th className="text-start font-semibold py-2">طريقة الدفع</th>
+                <th className="text-start font-semibold py-2">ملاحظة</th>
+                <th className="text-start font-semibold py-2">المبلغ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.creditorPayments!.map((p) => (
+                <tr key={p.id} className="border-b border-slate-50 last:border-0">
+                  <td className="py-2 text-slate-500">{p.date}</td>
+                  <td className="py-2 font-semibold text-slate-700">{p.creditor_name}</td>
+                  <td className="py-2 text-slate-500">{paymentMethodLabel(p.method)}</td>
+                  <td className="py-2 text-slate-500">{p.note ?? "—"}</td>
+                  <td className="py-2 font-semibold text-slate-700">{formatEGP(p.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      )}
+
       <Section title="الرواتب (سلف ومكافآت ودفعات مرتبات)" total={data.payrollTotal}>
         {data.payroll.length === 0 ? (
           <div className="text-sm text-slate-400">لسه مفيش سلف ولا مكافآت ولا دفعات مرتبات مسجلة الشهر ده.</div>

@@ -1707,6 +1707,13 @@ function registerIpcHandlers(db) {
       .all(account)
       .forEach((r) => add(r.date, "out", `دفعة للمورد: ${r.supplier_name}`, r.amount));
 
+    db.prepare(
+      `SELECT ce.date, ce.amount, ce.note, c.name AS creditor_name FROM creditor_entries ce
+       JOIN creditors c ON c.id = ce.creditor_id WHERE ce.type = 'payment' AND ce.method = ?`
+    )
+      .all(account)
+      .forEach((r) => add(r.date, "out", `سداد لـ ${r.creditor_name}${r.note ? ` (${r.note})` : ""}`, r.amount));
+
     db.prepare("SELECT date, amount, note FROM waste_entries WHERE payment_method = ?")
       .all(account)
       .forEach((r) => add(r.date, "out", `هالك${r.note ? `: ${r.note}` : ""}`, r.amount));
@@ -1897,6 +1904,72 @@ function registerIpcHandlers(db) {
     return { ok: true };
   });
 
+  // --- فلوس علينا لجهات تانية ---
+  // الباقي = الرصيد الافتتاحي + كل الديون − كل السدادات.
+  function creditorBalances() {
+    const sumStmt = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM creditor_entries WHERE creditor_id = ? AND type = ?");
+    return db
+      .prepare("SELECT * FROM creditors ORDER BY name")
+      .all()
+      .map((c) => {
+        const debts = sumStmt.get(c.id, "debt").total;
+        const paid = sumStmt.get(c.id, "payment").total;
+        const opening = c.opening_balance ?? 0;
+        return { id: c.id, name: c.name, note: c.note, openingBalance: opening, debts, paid, remaining: opening + debts - paid };
+      });
+  }
+  ipcMain.handle("creditors:list", () => creditorBalances());
+  ipcMain.handle("creditors:create", (_e, { name, opening_balance, note }) => {
+    const trimmed = (name ?? "").trim();
+    if (!trimmed) throw new Error("لازم اسم الجهة");
+    if (db.prepare("SELECT 1 FROM creditors WHERE name = ?").get(trimmed)) throw new Error("الاسم ده موجود قبل كده");
+    const info = db
+      .prepare("INSERT INTO creditors (name, opening_balance, note) VALUES (?, ?, ?)")
+      .run(trimmed, Number(opening_balance) || 0, note?.trim() || null);
+    return db.prepare("SELECT * FROM creditors WHERE id = ?").get(info.lastInsertRowid);
+  });
+  ipcMain.handle("creditors:update", (_e, { id, name, opening_balance, note }) => {
+    const trimmed = (name ?? "").trim();
+    if (!trimmed) throw new Error("لازم اسم الجهة");
+    db.prepare("UPDATE creditors SET name = ?, opening_balance = ?, note = ? WHERE id = ?").run(
+      trimmed,
+      Number(opening_balance) || 0,
+      note?.trim() || null,
+      id
+    );
+    return db.prepare("SELECT * FROM creditors WHERE id = ?").get(id);
+  });
+  ipcMain.handle("creditors:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM creditors WHERE id = ?").run(id);
+    return { ok: true };
+  });
+  // كشف حساب جهة: كل الحركات بالترتيب والباقي بعد كل حركة.
+  ipcMain.handle("creditors:statement", (_e, { id }) => {
+    const c = creditorBalances().find((x) => x.id === id);
+    if (!c) throw new Error("الجهة مش موجودة");
+    let balance = c.openingBalance;
+    const entries = db
+      .prepare("SELECT * FROM creditor_entries WHERE creditor_id = ? ORDER BY date, id")
+      .all(id)
+      .map((e) => {
+        balance += e.type === "debt" ? e.amount : -e.amount;
+        return { ...e, balance };
+      });
+    return { ...c, entries };
+  });
+  ipcMain.handle("creditorEntries:create", (_e, { creditor_id, date, type, amount, method, note }) => {
+    if (!["debt", "payment"].includes(type)) throw new Error("نوع الحركة غلط");
+    if (!(Number(amount) > 0)) throw new Error("لازم مبلغ");
+    const info = db
+      .prepare("INSERT INTO creditor_entries (creditor_id, date, type, amount, method, note) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(creditor_id, date, type, Number(amount), type === "payment" ? method || "cash" : null, note?.trim() || null);
+    return db.prepare("SELECT * FROM creditor_entries WHERE id = ?").get(info.lastInsertRowid);
+  });
+  ipcMain.handle("creditorEntries:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM creditor_entries WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
   ipcMain.handle("payables:summary", (_e, { month }) => {
     const expenses = db
       .prepare(
@@ -1968,6 +2041,9 @@ function registerIpcHandlers(db) {
       )
       .get().total;
 
+    const creditors = creditorBalances().filter((c) => Math.abs(c.remaining) > 0.005);
+    const creditorsDue = creditors.reduce((sum, c) => sum + Math.max(0, c.remaining), 0);
+
     const recentPayments = db
       .prepare(
         `SELECT ep.*, e.name AS equipment_name, ec.name AS category_name, me.payee FROM expense_payments ep
@@ -1993,7 +2069,9 @@ function registerIpcHandlers(db) {
       partnersOpening: partners.reduce((sum, p) => sum + p.openingBalance, 0),
       partnersTotalDue,
       receivablesTotal: receivables.reduce((sum, c) => sum + Math.max(0, c.remaining), 0),
-      totalDue: expensesDue + partnersTotalDue + Math.max(0, suppliersDue),
+      creditors,
+      creditorsDue,
+      totalDue: expensesDue + partnersTotalDue + Math.max(0, suppliersDue) + creditorsDue,
     };
   });
 
@@ -2405,6 +2483,15 @@ function registerIpcHandlers(db) {
       .all(`${month}%`);
     const supplierPaymentsTotal = supplierPayments.reduce((sum, r) => sum + r.amount, 0);
 
+    const creditorPayments = db
+      .prepare(
+        `SELECT ce.*, c.name AS creditor_name FROM creditor_entries ce
+         JOIN creditors c ON c.id = ce.creditor_id
+         WHERE ce.type = 'payment' AND ce.date LIKE ? ORDER BY ce.date, ce.id`
+      )
+      .all(`${month}%`);
+    const creditorPaymentsTotal = creditorPayments.reduce((sum, r) => sum + r.amount, 0);
+
     // السلف والمكافآت ودفعات المرتب هنا بتتحسب على الشهر اللي بتخصه (زي
     // مصروفات المعدات) مش تاريخ الصرف الحقيقي — لو دفعت مرتب يونيو في 5 يوليو
     // يفضل يسمع في يونيو، هنا وفي الخزنة كمان.
@@ -2438,7 +2525,7 @@ function registerIpcHandlers(db) {
     const waste = db.prepare("SELECT * FROM waste_entries WHERE date LIKE ? ORDER BY date, id").all(`${month}%`);
     const wasteTotal = waste.reduce((sum, w) => sum + w.amount, 0);
 
-    const totalOutgoing = equipmentExpensesTotal + partnerPaymentsTotal + supplierPaymentsTotal + payrollTotal + wasteTotal;
+    const totalOutgoing = equipmentExpensesTotal + partnerPaymentsTotal + supplierPaymentsTotal + creditorPaymentsTotal + payrollTotal + wasteTotal;
 
     return {
       equipmentExpenses,
@@ -2448,6 +2535,8 @@ function registerIpcHandlers(db) {
       partnerPaymentsTotal,
       supplierPayments,
       supplierPaymentsTotal,
+      creditorPayments,
+      creditorPaymentsTotal,
       payroll,
       payrollTotal,
       waste,
@@ -2505,6 +2594,8 @@ function registerIpcHandlers(db) {
       db.prepare("DELETE FROM partner_payments").run();
       db.prepare("DELETE FROM supplier_purchases").run();
       db.prepare("DELETE FROM supplier_payments").run();
+      db.prepare("DELETE FROM creditor_entries").run();
+      db.prepare("UPDATE creditors SET opening_balance = 0").run();
       db.prepare("DELETE FROM waste_entries").run();
       db.prepare("UPDATE treasury_accounts SET current_balance = 0, opening_balance = 0, opening_date = NULL").run();
       db.prepare("DELETE FROM treasury_transfers").run();

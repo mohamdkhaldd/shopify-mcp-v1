@@ -25,6 +25,10 @@ body {
   .no-print {
     display: none !important;
   }
+  /* صفحة فيها كشف حساب مفتوح: الطباعة تطلع الكشف بس. */
+  .print-solo > :not(.print-solo-keep) {
+    display: none !important;
+  }
   .print-only {
     display: block;
   }

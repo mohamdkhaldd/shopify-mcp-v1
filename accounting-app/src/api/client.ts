@@ -1,5 +1,7 @@
 import { mockInvoke } from "./mockDb";
 import {
+  CreditorBalance,
+  CreditorStatement,
   AppUpdateStatus,
   Contractor,
   ContractorDetail,
@@ -359,4 +361,15 @@ export const wasteApi = {
 export const outgoingIncomingApi = {
   outgoing: (month: string): Promise<OutgoingSummary> => invoke("outgoing:list", { month }),
   incoming: (month: string): Promise<IncomingSummary> => invoke("incoming:list", { month }),
+};
+
+export const creditorsApi = {
+  list: (): Promise<CreditorBalance[]> => invoke("creditors:list"),
+  create: (c: { name: string; opening_balance: number; note: string | null }) => invoke("creditors:create", c),
+  update: (c: { id: number; name: string; opening_balance: number; note: string | null }) => invoke("creditors:update", c),
+  remove: (id: number) => invoke("creditors:delete", { id }),
+  statement: (id: number): Promise<CreditorStatement> => invoke("creditors:statement", { id }),
+  addEntry: (e: { creditor_id: number; date: string; type: "debt" | "payment"; amount: number; method: string | null; note: string | null }) =>
+    invoke("creditorEntries:create", e),
+  removeEntry: (id: number) => invoke("creditorEntries:delete", { id }),
 };
