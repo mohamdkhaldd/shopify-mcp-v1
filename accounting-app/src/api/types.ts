@@ -704,6 +704,8 @@ export interface SyncActivityRow {
   device_name: string;
   at: string;
   pending: boolean;
+  // اتعمله "تراجع" من الجهاز ده.
+  undone?: boolean;
 }
 
 export interface SyncActivity {

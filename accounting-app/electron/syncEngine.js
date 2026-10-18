@@ -124,6 +124,9 @@ function createSyncEngine({
         at TEXT
       );
     `);
+    if (!db.prepare("SELECT name FROM pragma_table_info('activity_log')").all().some((c) => c.name === "undone")) {
+      db.exec("ALTER TABLE activity_log ADD COLUMN undone INTEGER NOT NULL DEFAULT 0");
+    }
     if (!getState("device_id")) setState("device_id", newGid());
     if (getState("device_name") == null) setState("device_name", defaultDeviceName);
     setState("applying", "0");
@@ -144,16 +147,18 @@ function createSyncEngine({
           UPDATE ${t} SET gid = lower(hex(randomblob(16))) WHERE rowid = NEW.rowid AND gid IS NULL;
           INSERT INTO sync_outbox (tbl, rid, op, at) VALUES ('${t}', NEW.rowid, 'insert', ${NOW_SQL});
         END;
-        CREATE TRIGGER IF NOT EXISTS sync_au_${t} AFTER UPDATE ON ${t} ${guard} BEGIN
-          INSERT INTO sync_outbox (tbl, rid, op, at) VALUES ('${t}', NEW.rowid, 'update', ${NOW_SQL});
-        END;
       `);
       // تريجر المسح بيحفظ نسخة من الصف قبل ما يتمسح (عشان سجل التعديلات
-      // يقول "مسح مصروف كذا" مش "مسح" وبس) — بيتعمل من جديد كل تشغيل عشان
-      // يشمل أي عمود اتضاف للجدول بعد كده.
+      // يقول "مسح مصروف كذا" مش "مسح" وبس، وعشان "تراجع" يرجّعه)، وتريجر
+      // التعديل بيحفظ شكل الصف قبل التعديل (عشان "تراجع" يرجّع القيم القديمة).
+      // الاتنين بيتعملوا من جديد كل تشغيل عشان يشملوا أي عمود اتضاف بعد كده.
       const snapshotCols = cols[t].filter((c) => c !== "gid" && c !== "receipt_image");
       const snapshot = `json_object(${snapshotCols.map((c) => `'${c}', OLD.${c}`).join(", ")})`;
       db.exec(`
+        DROP TRIGGER IF EXISTS sync_au_${t};
+        CREATE TRIGGER sync_au_${t} AFTER UPDATE ON ${t} ${guard} BEGIN
+          INSERT INTO sync_outbox (tbl, rid, op, at, extra) VALUES ('${t}', NEW.rowid, 'update', ${NOW_SQL}, ${snapshot});
+        END;
         DROP TRIGGER IF EXISTS sync_ad_${t};
         CREATE TRIGGER sync_ad_${t} AFTER DELETE ON ${t} ${guard} BEGIN
           INSERT INTO sync_outbox (tbl, rid, gid, op, at, extra) VALUES ('${t}', OLD.rowid, OLD.gid, 'delete', ${NOW_SQL}, ${snapshot});
@@ -207,7 +212,14 @@ function createSyncEngine({
       const parent = fks[t][c];
       if (parent) {
         const v = row[c];
-        data[`${c}@gid`] = v == null ? null : db.prepare(`SELECT gid FROM ${parent} WHERE id = ?`).get(v)?.gid ?? null;
+        // لو الأب اتمسح في نفس العملية (مسح معدة بمصروفاتها مثلًا) هويته
+        // بتتاخد من سطر مسحه اللي لسه مستني يتبعت — عشان "تراجع" يربطهم تاني.
+        data[`${c}@gid`] =
+          v == null
+            ? null
+            : db.prepare(`SELECT gid FROM ${parent} WHERE id = ?`).get(v)?.gid ??
+              db.prepare("SELECT gid FROM sync_outbox WHERE tbl = ? AND rid = ? AND op = 'delete' ORDER BY id DESC LIMIT 1").get(parent, v)?.gid ??
+              null;
       } else {
         data[c] = row[c];
       }
@@ -236,7 +248,7 @@ function createSyncEngine({
       const idx = upsertIndex.get(key);
       if (idx == null) {
         upsertIndex.set(key, out.length);
-        out.push({ kind: "upsert", e, op: e.op, at: e.at });
+        out.push({ kind: "upsert", e, op: e.op, at: e.at, before: e.op === "update" ? e.extra : null });
       } else {
         const item = out[idx];
         item.at = e.at;
@@ -295,10 +307,20 @@ function createSyncEngine({
           }
         }
         pushedTimes.push([e.tbl, e.rid, item.at]);
+        const data = serialize(e.tbl, row);
+        // شكل الصف قبل التعديل — بيتبعت جوه البيانات باسم __before (الأجهزة
+        // بتتجاهل أي مفتاح مش عمود، فمبيأثرش على النسخ القديمة).
+        if (item.op === "update" && item.before) {
+          try {
+            data.__before = serialize(e.tbl, JSON.parse(item.before));
+          } catch {
+            /* snapshot unreadable */
+          }
+        }
         records.set(`${e.tbl}|${gid}`, {
           tbl: e.tbl,
           gid,
-          data: serialize(e.tbl, row),
+          data,
           deleted: false,
           op: item.op,
           updated_at: item.at,
@@ -708,6 +730,111 @@ function createSyncEngine({
     return refs;
   }
 
+  // ---------- تراجع عن تعديل من سجل التعديلات ----------
+  // التراجع نفسه تعديل عادي على الجهاز ده (بيتسجل ويتبعت للجهاز التاني):
+  // إضافة ← تتمسح، تعديل ← القيم القديمة ترجع، مسح ← الصف يرجع بنفس هويته
+  // ومعاه أي حاجة اتمسحت معاه (أو اتمسح هو معاها) في نفس اللحظة.
+  const markUndone = (id) => db.prepare("UPDATE activity_log SET undone = 1 WHERE id = ?").run(id);
+  const rowByGid = (t, gid) => db.prepare(`SELECT rowid AS __rid, * FROM ${t} WHERE gid = ?`).get(gid);
+  const parseData = (entry) => {
+    try {
+      return JSON.parse(entry.data || "{}");
+    } catch {
+      return {};
+    }
+  };
+  const withinSeconds = (a, b, sec) => Math.abs(Date.parse(a) - Date.parse(b)) <= sec * 1000;
+
+  function restoreDeleted(entry, visited) {
+    if (visited.has(entry.id)) return;
+    visited.add(entry.id);
+    const t = entry.tbl;
+    if (!tables.includes(t)) throw new Error("الجدول ده مش موجود في النسخة دي");
+    if (rowByGid(t, entry.gid)) {
+      markUndone(entry.id);
+      return;
+    }
+    const data = parseData(entry);
+    delete data.__before;
+    if (!Object.keys(data).length) throw new Error("مفيش نسخة محفوظة من اللي اتمسح ده");
+    // أي حاجة الصف ده مربوط بيها واتمسحت هي كمان (المعدة بتاعة المصروف مثلًا)
+    // بترجع الأول.
+    for (const [c, parent] of Object.entries(fks[t] ?? {})) {
+      const g = data[`${c}@gid`];
+      if (!g || db.prepare(`SELECT 1 FROM ${parent} WHERE gid = ?`).get(g)) continue;
+      const parentDel = db
+        .prepare("SELECT * FROM activity_log WHERE tbl = ? AND gid = ? AND op = 'delete' ORDER BY id DESC LIMIT 1")
+        .get(parent, g);
+      if (!parentDel) throw new Error("حاجة مربوطة بيه اتمسحت ومش لاقي نسختها");
+      restoreDeleted(parentDel, visited);
+    }
+    const vals = mapValues(t, data);
+    if (!vals) throw new Error("حاجة مربوطة بيه اتمسحت ومش لاقي نسختها");
+    const keys = Object.keys(vals);
+    try {
+      db.prepare(`INSERT INTO ${t} (${[...keys, "gid"].join(", ")}) VALUES (${[...keys, "gid"].map((k) => `@${k}`).join(", ")})`).run({
+        ...vals,
+        gid: entry.gid,
+      });
+    } catch (err) {
+      if (String(err?.message).includes("UNIQUE")) throw new Error("فيه حاجة تانية دلوقتي بنفس الاسم أو نفس اليوم — امسحها الأول");
+      throw err;
+    }
+    markUndone(entry.id);
+    // اللي اتمسح معاه في نفس اللحظة ومربوط بيه (مصروفات معدة اتمسحت مثلًا).
+    const siblings = db
+      .prepare("SELECT * FROM activity_log WHERE op = 'delete' AND device_id IS ? AND data LIKE ? AND id <> ?")
+      .all(entry.device_id, `%${entry.gid}%`, entry.id)
+      .filter((d) => withinSeconds(d.at, entry.at, 15));
+    for (const child of siblings) {
+      const cd = parseData(child);
+      const linked = Object.entries(fks[child.tbl] ?? {}).some(([c, parent]) => parent === t && cd[`${c}@gid`] === entry.gid);
+      if (linked) restoreDeleted(child, visited);
+    }
+  }
+
+  function undo(id) {
+    const entry = db.prepare("SELECT * FROM activity_log WHERE id = ?").get(id);
+    if (!entry) throw new Error("التعديل ده مش موجود");
+    if (entry.undone) throw new Error("التعديل ده اترجع قبل كده");
+    const t = entry.tbl;
+    if (!tables.includes(t)) throw new Error("الجدول ده مش موجود في النسخة دي");
+    db.transaction(() => {
+      if (entry.op === "insert") {
+        const row = rowByGid(t, entry.gid);
+        if (!row) throw new Error("الحاجة دي اتمسحت خلاص");
+        db.prepare(`DELETE FROM ${t} WHERE rowid = ?`).run(row.__rid);
+        markUndone(entry.id);
+      } else if (entry.op === "update") {
+        const row = rowByGid(t, entry.gid);
+        if (!row) throw new Error("الحاجة دي اتمسحت بعد التعديل — رجّع المسح الأول");
+        let before = parseData(entry).__before;
+        if (!before) {
+          const prev = db
+            .prepare("SELECT data FROM activity_log WHERE tbl = ? AND gid = ? AND id < ? AND op IN ('insert', 'update') ORDER BY id DESC LIMIT 1")
+            .get(t, entry.gid, entry.id);
+          if (prev) before = parseData(prev);
+        }
+        if (!before) throw new Error("الشكل القديم للتعديل ده مش متسجل (اتعمل قبل التحديث ده)");
+        delete before.__before;
+        const vals = mapValues(t, before);
+        if (!vals) throw new Error("حاجة مربوطة بيه اتمسحت — رجّعها الأول");
+        try {
+          updateRow(t, row.__rid, vals);
+        } catch (err) {
+          if (String(err?.message).includes("UNIQUE")) throw new Error("فيه حاجة تانية دلوقتي بنفس الاسم أو نفس اليوم");
+          throw err;
+        }
+        markUndone(entry.id);
+      } else if (entry.op === "delete") {
+        restoreDeleted(entry, new Set());
+      } else {
+        throw new Error("التعديل ده مينفعش يترجع");
+      }
+    })();
+    return { ok: true };
+  }
+
   function activity({ from = null, to = null, device = null, limit = 300 } = {}) {
     const where = [];
     const params = [];
@@ -730,7 +857,7 @@ function createSyncEngine({
       .all(...params, limit)
       .map((r) => {
         const data = JSON.parse(r.data || "{}");
-        return { ...r, data, refs: resolveRefs(r.tbl, data), pending: false };
+        return { ...r, data, refs: resolveRefs(r.tbl, data), pending: false, undone: !!r.undone };
       });
     // كل صف بيظهر مرة واحدة بس (إضافة صف بتسجل "إضافة" و"تعديل" ورا بعض
     // داخليًا) — العملية بتاعته هي أول عملية اتعملت عليه.
@@ -772,7 +899,7 @@ function createSyncEngine({
     return { rows, pending: pendingRows, devices };
   }
 
-  return { setup, start, stop, login, push, pull, syncNow, status, setDeviceName, activity, _applyBatch: applyBatch, _buildBatch: buildBatch };
+  return { setup, start, stop, login, undo, push, pull, syncNow, status, setDeviceName, activity, _applyBatch: applyBatch, _buildBatch: buildBatch };
 }
 
 module.exports = { createSyncEngine };

@@ -97,7 +97,15 @@ function formatAt(at: string) {
   })}`;
 }
 
-function Row({ r, currentDevice }: { r: SyncActivityRow; currentDevice: string }) {
+// رسالة التأكيد قبل التراجع — بتقول هيحصل إيه بالظبط.
+function undoQuestion(r: SyncActivityRow) {
+  const what = describe(r);
+  if (r.op === "insert") return `تتراجع عن الإضافة دي؟\n\n${what}\n\nهتتمسح (ومعاها أي حاجة متسجلة تحتها).`;
+  if (r.op === "update") return `تتراجع عن التعديل ده؟\n\n${what}\n\nهترجع للقيم اللي كانت قبل التعديل.`;
+  return `ترجّع اللي اتمسح؟\n\n${what}\n\nهيرجع زي ما كان (ومعاه أي حاجة اتمسحت معاه).`;
+}
+
+function Row({ r, currentDevice, onUndo }: { r: SyncActivityRow; currentDevice: string; onUndo?: (r: SyncActivityRow) => void }) {
   const isThis = r.device_name === currentDevice;
   return (
     <tr className="border-b border-slate-50 last:border-0">
@@ -123,6 +131,18 @@ function Row({ r, currentDevice }: { r: SyncActivityRow; currentDevice: string }
       <td className="py-2 text-slate-700">
         {describe(r)}
         {r.pending && <span className="ms-2 rounded bg-amber-50 text-amber-700 px-1.5 py-0.5 text-[11px] font-bold">لسه متبعتش</span>}
+      </td>
+      <td className="py-2 text-end whitespace-nowrap">
+        {r.undone ? (
+          <span className="rounded bg-slate-100 text-slate-500 px-1.5 py-0.5 text-[11px] font-bold">اترجع ✓</span>
+        ) : onUndo && !r.pending ? (
+          <button
+            onClick={() => onUndo(r)}
+            className="rounded-lg border border-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600 hover:bg-primary-light hover:text-primary-dark"
+          >
+            ↩ تراجع
+          </button>
+        ) : null}
       </td>
     </tr>
   );
@@ -159,13 +179,41 @@ export default function Activity() {
   }, [device, from, to]);
 
   const pending = (data?.pending ?? []).filter((r) => !device || r.device_name === device);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function handleUndo(r: SyncActivityRow) {
+    if (!window.confirm(undoQuestion(r))) return;
+    try {
+      await syncApi.undo(r.id);
+      setMessage({ ok: true, text: `اترجع: ${describe(r)}` });
+    } catch (err) {
+      setMessage({ ok: false, text: String((err as Error)?.message ?? err).replace(/^Error invoking remote method '[^']+': (Error: )?/, "") });
+    }
+    refresh();
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-slate-900">سجل التعديلات</h1>
-        <p className="text-sm text-slate-500 mt-1">كل إضافة أو تعديل أو مسح على اللاب أو التابلت — مين عمله وإمتى.</p>
+        <p className="text-sm text-slate-500 mt-1">
+          كل إضافة أو تعديل أو مسح على اللاب أو التابلت — مين عمله وإمتى. دوس "تراجع" جنب أي سطر عشان ترجّعه زي ما كان.
+        </p>
       </div>
+
+      {message && (
+        <div
+          className={[
+            "flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-semibold",
+            message.ok ? "bg-primary-light text-primary-dark" : "bg-rose-50 text-rose-700",
+          ].join(" ")}
+        >
+          <span>{message.ok ? "✓ " : "⚠ "}{message.text}</span>
+          <button onClick={() => setMessage(null)} className="text-xs font-semibold opacity-70">
+            إخفاء
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded-card shadow-card p-4 flex flex-wrap items-end gap-3">
         <div>
@@ -228,11 +276,12 @@ export default function Activity() {
                   <th className="text-start font-semibold py-2">الجهاز</th>
                   <th className="text-start font-semibold py-2">العملية</th>
                   <th className="text-start font-semibold py-2">التفاصيل</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {data.rows.map((r) => (
-                  <Row key={r.id} r={r} currentDevice={currentDevice} />
+                  <Row key={r.id} r={r} currentDevice={currentDevice} onUndo={handleUndo} />
                 ))}
               </tbody>
             </table>

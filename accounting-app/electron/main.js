@@ -161,6 +161,7 @@ app.whenReady().then(() => {
   ipcMain.handle("sync:status", () => sync.status());
   ipcMain.handle("sync:now", () => sync.syncNow());
   ipcMain.handle("sync:login", (_e, { password }) => sync.login(password));
+  ipcMain.handle("sync:undo", (_e, { id }) => sync.undo(id));
   ipcMain.handle("sync:setDeviceName", (_e, { name }) => sync.setDeviceName(name));
   ipcMain.handle("sync:activity", (_e, filters) => sync.activity(filters ?? {}));
   createWindow();

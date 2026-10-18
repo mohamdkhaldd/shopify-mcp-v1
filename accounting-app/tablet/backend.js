@@ -34,6 +34,7 @@ export async function startBackend() {
   handlers["sync:status"] = () => sync.status();
   handlers["sync:now"] = () => sync.syncNow();
   handlers["sync:login"] = (_e, { password }) => sync.login(password);
+  handlers["sync:undo"] = (_e, { id }) => sync.undo(id);
   handlers["sync:setDeviceName"] = (_e, { name }) => sync.setDeviceName(name);
   handlers["sync:activity"] = (_e, filters) => sync.activity(filters ?? {});
   Object.assign(handlers, tabletAppHandlers(emit));

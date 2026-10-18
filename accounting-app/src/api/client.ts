@@ -208,6 +208,7 @@ export const syncApi = {
   status: (): Promise<SyncStatus> => invoke("sync:status"),
   now: (): Promise<SyncStatus> => invoke("sync:now"),
   login: (password: string): Promise<SyncStatus> => invoke("sync:login", { password }),
+  undo: (id: number | string): Promise<{ ok: boolean }> => invoke("sync:undo", { id }),
   setDeviceName: (name: string): Promise<SyncStatus> => invoke("sync:setDeviceName", { name }),
   activity: (filters: { from?: string | null; to?: string | null; device?: string | null; limit?: number }): Promise<SyncActivity> =>
     invoke("sync:activity", filters),
