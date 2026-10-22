@@ -1,0 +1,682 @@
+<title>البنيان - التأجير</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Noto+Kufi+Arabic:wght@600;700;800&display=swap">
+<style>
+/* Layout: dark ink sidebar on the right (RTL), quiet light canvas, amber reserved for the active item and the one number that matters per screen. */
+:root {
+  --ink: #16233f;          /* logo navy — sidebar + headings */
+  --ink-2: #22335a;
+  --amber: #f0a21a;        /* logo amber — accent */
+  --amber-soft: #fdf1da;
+  --bg: #f2f4f8;
+  --surface: #ffffff;
+  --surface-2: #f7f8fb;
+  --line: #e1e5ee;
+  --fg: #1c2436;
+  --muted: #66708a;
+  --in: #1f8a5b;           /* money in */
+  --in-soft: #e3f4ec;
+  --out: #c2412d;          /* money out */
+  --out-soft: #fbe9e5;
+  --tax: #6b4fb3;          /* locked tax */
+  --tax-soft: #eee9fa;
+  --side-fg: #c9d2e6;
+  --hero: #16233f;
+  --font-display: "Noto Kufi Arabic", "Cairo", Tahoma, sans-serif;
+  --font-body: "Cairo", Tahoma, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #0c1426; --ink-2: #17233f; --amber: #f5b13c; --amber-soft: #3a2c10;
+    --bg: #0f1628; --surface: #172038; --surface-2: #1c2742; --line: #2a3658;
+    --fg: #e6ebf7; --muted: #98a3c0; --in: #4cc48d; --in-soft: #12352a;
+    --out: #f08068; --out-soft: #3d1c17; --tax: #a993ec; --tax-soft: #2a2148; --side-fg: #b3bed8; --hero: #283a66;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #0c1426; --ink-2: #17233f; --amber: #f5b13c; --amber-soft: #3a2c10;
+  --bg: #0f1628; --surface: #172038; --surface-2: #1c2742; --line: #2a3658;
+  --fg: #e6ebf7; --muted: #98a3c0; --in: #4cc48d; --in-soft: #12352a;
+  --out: #f08068; --out-soft: #3d1c17; --tax: #a993ec; --tax-soft: #2a2148; --side-fg: #b3bed8; --hero: #283a66;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.6; }
+.num, td.n, th.n { font-variant-numeric: tabular-nums; }
+.app { display: flex; min-height: 100%; }
+
+/* ---------- sidebar ---------- */
+.side { width: 248px; flex-shrink: 0; background: var(--ink); color: var(--side-fg); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+.brand { display: flex; align-items: center; gap: 12px; padding: 22px 18px 18px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.brand img { width: 46px; height: 46px; border-radius: 50%; background: #fff; }
+.brand b { display: block; color: #fff; font-family: var(--font-display); font-size: 15px; }
+.brand small { color: var(--amber); font-weight: 700; font-size: 12px; }
+.nav { flex: 1; padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.nav a { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; color: var(--side-fg); text-decoration: none; font-weight: 600; position: relative; }
+.nav a svg { width: 19px; height: 19px; flex-shrink: 0; opacity: .8; }
+.nav a:hover { background: rgba(255,255,255,.06); color: #fff; }
+.nav a.on { background: var(--ink-2); color: #fff; }
+.nav a.on::before { content: ""; position: absolute; inset-inline-start: -10px; top: 8px; bottom: 8px; width: 4px; border-radius: 0 4px 4px 0; background: var(--amber); }
+.nav a.on svg { color: var(--amber); opacity: 1; }
+.nav a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.side-foot { padding: 14px 16px 18px; border-top: 1px solid rgba(255,255,255,.07); font-size: 12px; display: grid; gap: 6px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--in); margin-inline-end: 6px; }
+
+/* ---------- main ---------- */
+main { flex: 1; min-width: 0; padding-block: 26px 60px; padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 20px; }
+.head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.head h1 { margin: 0; font-family: var(--font-display); font-size: 24px; color: var(--fg); text-wrap: balance; }
+.head p { margin: 2px 0 0; color: var(--muted); }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { font: inherit; font-weight: 700; font-size: 13px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 8px; padding: 7px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover { border-color: var(--amber); }
+.btn.pri { background: var(--ink); border-color: var(--ink); color: #fff; }
+:root[data-theme="dark"] .btn.pri { background: var(--amber); border-color: var(--amber); color: #1a1406; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.pri { background: var(--amber); border-color: var(--amber); color: #1a1406; } }
+.month { font: inherit; font-weight: 700; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 8px; padding: 6px 10px; }
+
+.grid { display: grid; gap: 14px; }
+.k6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 700px) { .k6 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.k4 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.two { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+@media (max-width: 1050px) { .two { grid-template-columns: minmax(0, 1fr); } }
+
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 2px; }
+.kpi .l { color: var(--muted); font-weight: 600; font-size: 13px; }
+.kpi .v { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.kpi .s { color: var(--muted); font-size: 12px; }
+.kpi.hero { background: var(--hero); border-color: var(--hero); color: #fff; }
+.kpi.hero .l, .kpi.hero .s { color: var(--side-fg); }
+.kpi.hero .v { color: var(--amber); }
+.kpi.tax .v { color: var(--tax); }
+.cur { font-size: .6em; font-weight: 700; margin-inline-start: 4px; opacity: .7; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.panel > h2, .ph { margin: 0; padding: 14px 16px; border-bottom: 1px solid var(--line); font-family: var(--font-display); font-size: 15px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ph h2 { margin: 0; font-size: 15px; font-family: var(--font-display); }
+.pb { padding: 14px 16px; }
+.hint { color: var(--muted); font-size: 12px; font-weight: 600; font-family: var(--font-body); }
+
+.tw { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: start; font-weight: 700; color: var(--muted); background: var(--surface-2); padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td.n, th.n { text-align: end; }
+tr:last-child td { border-bottom: 0; }
+tfoot td { font-weight: 800; background: var(--surface-2); border-top: 2px solid var(--line); }
+tbody tr:hover td { background: var(--surface-2); }
+td.edit { background: var(--amber-soft); }
+.in { color: var(--in); font-weight: 700; }
+.out { color: var(--out); font-weight: 700; }
+.taxc { color: var(--tax); font-weight: 700; }
+
+.pill { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.p-in { background: var(--in-soft); color: var(--in); }
+.p-out { background: var(--out-soft); color: var(--out); }
+.p-tax { background: var(--tax-soft); color: var(--tax); }
+.p-am { background: var(--amber-soft); color: #9a6200; }
+:root[data-theme="dark"] .p-am { color: var(--amber); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .p-am { color: var(--amber); } }
+.p-mu { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+
+/* deduction ladder: one scale (0 → 15,000) for every bar */
+.ladder { display: grid; gap: 8px; }
+.rung { display: grid; grid-template-columns: 150px minmax(0, 1fr) 96px; align-items: center; gap: 10px; }
+.rung .bar { height: 14px; background: var(--surface-2); border-radius: 3px; position: relative; overflow: hidden; }
+.rung .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.rung .lbl { font-weight: 600; }
+.rung .amt { text-align: end; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rung.tot { border-top: 1px dashed var(--line); padding-top: 8px; }
+@media (max-width: 560px) { .rung { grid-template-columns: 110px minmax(0, 1fr) 80px; } }
+
+.stack { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: var(--surface-2); }
+.stack i { display: block; height: 100%; }
+.legend { display: grid; gap: 8px; margin-top: 12px; }
+.legend div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; margin-inline-end: 8px; vertical-align: -1px; }
+
+.alert { display: flex; gap: 10px; align-items: flex-start; padding: 11px 14px; border-radius: 10px; border: 1px solid; font-weight: 600; }
+.alert.warn { background: var(--amber-soft); border-color: var(--amber); }
+.alert.ok { background: var(--in-soft); border-color: var(--in); color: var(--fg); }
+
+.party { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .party { grid-template-columns: minmax(0, 1fr); } }
+.plist { display: grid; }
+.plist button { font: inherit; text-align: start; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 12px 16px; cursor: pointer; color: var(--fg); display: grid; gap: 2px; }
+.plist button:last-child { border-bottom: 0; }
+.plist button.on { background: var(--amber-soft); box-shadow: inset -4px 0 0 var(--amber); }
+.plist small { color: var(--muted); }
+.plist .bal { font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); padding: 0 12px; overflow-x: auto; }
+.tabs button { font: inherit; font-weight: 700; background: none; border: 0; padding: 11px 12px; color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; }
+.tabs button.on { color: var(--fg); border-bottom-color: var(--amber); }
+
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; border-bottom: 1px solid var(--line); }
+.facts div { padding: 12px 16px; border-inline-start: 1px solid var(--line); }
+.facts div:first-child { border-inline-start: 0; }
+.facts span { display: block; color: var(--muted); font-size: 12px; font-weight: 600; }
+.facts b { font-size: 18px; font-variant-numeric: tabular-nums; }
+
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; cursor: pointer; }
+.toggle input { width: 38px; height: 22px; appearance: none; background: var(--line); border-radius: 999px; position: relative; cursor: pointer; transition: background .15s; }
+.toggle input::after { content: ""; position: absolute; top: 3px; inset-inline-start: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: inset-inline-start .15s; }
+.toggle input:checked { background: var(--in); }
+.toggle input:checked::after { inset-inline-start: 19px; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.filters select, .filters input { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 8px; padding: 6px 10px; }
+
+.note { font-size: 12px; color: var(--muted); padding: 10px 16px; border-top: 1px solid var(--line); }
+.mock-tag { background: var(--amber-soft); border: 1px dashed var(--amber); border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 600; }
+
+section[data-page] { display: none; }
+section[data-page].show { display: grid; }
+
+/* phone: sidebar becomes a top bar with a scrolling nav */
+@media (max-width: 900px) {
+  .app { flex-direction: column; }
+  .side { width: auto; height: auto; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
+  .brand { padding: 10px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); }
+  .brand img { width: 34px; height: 34px; }
+  .nav { flex-direction: row; overflow-x: auto; padding: 6px 10px 8px; }
+  .nav a { white-space: nowrap; padding: 7px 10px; }
+  .nav a.on::before { inset-inline-start: 8px; inset-inline-end: 8px; top: auto; bottom: 0; width: auto; height: 3px; border-radius: 3px 3px 0 0; }
+  .side-foot { display: none; }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--ink); }
+  main { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app" dir="rtl">
+  <aside class="side">
+    <div class="brand">
+      <img src="data:image/png;base64,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" alt="لوجو البنيان">
+      <div><b>البنيان</b><small>التأجير</small></div>
+    </div>
+    <nav class="nav" id="nav">
+      <a href="#home" data-go="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>الرئيسية</a>
+      <a href="#suppliers" data-go="suppliers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17h2l2-6h7l3 6h4M7 17a2 2 0 1 0 4 0M15 17a2 2 0 1 0 4 0M9 11V6h4l1 5"/></svg>أصحاب المعدات</a>
+      <a href="#clients" data-go="clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16M14 9h5a1 1 0 0 1 1 1v11M8 8h2M8 12h2M8 16h2M3 21h18"/></svg>الشركات والأفراد</a>
+      <a href="#management" data-go="management"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>الإدارة</a>
+      <a href="#investors" data-go="investors"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg>المستثمرين</a>
+      <a href="#treasury" data-go="treasury"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14.5h2"/></svg>الخزنة</a>
+      <a href="#tax" data-go="tax"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h8l4 4v14H7zM15 3v4h4M10 12l4 4M14 12h.01M10 16h.01"/></svg>الملف الضريبي</a>
+    </nav>
+    <div class="side-foot">
+      <div><span class="dot"></span>متزامن مع التابلت — من دقيقة</div>
+      <div>آخر نسخة احتياطية: النهارده 9:00 ص</div>
+      <div>الإصدار 0.1.0</div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="wrap">
+      <div class="mock-tag">نموذج ثابت للمراجعة (المرحلة ١) — كل الأرقام من المثال الإلزامي: عقد ٣٠ يوم، ٥٠٠ للعميل و ٤٠٠ للمورد، أكتوبر ٢٠٢٦. الأزرار للشكل بس.</div>
+
+      <!-- ================= 1. الرئيسية ================= -->
+      <section data-page="home" class="grid" style="gap:20px">
+        <div class="head">
+          <div><h1>الرئيسية</h1><p>ملخص شهر أكتوبر ٢٠٢٦</p></div>
+          <div class="tools"><select class="month" aria-label="الشهر"><option>أكتوبر ٢٠٢٦</option></select></div>
+        </div>
+
+        <div class="grid k6">
+          <div class="kpi hero"><span class="l">رصيد الخزنة</span><span class="v">97,700<span class="cur">ج</span></span><span class="s">المتاح للتشغيل 95,250</span></div>
+          <div class="kpi tax"><span class="l">ضرايب محجوزة</span><span class="v">1,200<span class="cur">ج</span></span><span class="s">١٤٪ محصّلة 1,050 + ٥٪ 150</span></div>
+          <div class="kpi"><span class="l">مستحق من العملاء</span><span class="v">8,550<span class="cur">ج</span></span><span class="s">من فواتير 17,100</span></div>
+          <div class="kpi"><span class="l">علينا للموردين</span><span class="v">1,500<span class="cur">ج</span></span><span class="s">بعد خصومات 500</span></div>
+          <div class="kpi"><span class="l">ربح الشهر</span><span class="v">2,500<span class="cur">ج</span></span><span class="s">المحصّل منه 1,250 (٥٠٪)</span></div>
+          <div class="kpi"><span class="l">عقود شغالة</span><span class="v">1</span><span class="s">معدة واحدة في الشغل</span></div>
+        </div>
+
+        <div class="grid two">
+          <div class="panel">
+            <div class="ph"><h2>من فاتورة العميل لحد التوزيع</h2><span class="hint">ع-٢٠٢٦-٠٠١ · أكتوبر</span></div>
+            <div class="pb ladder">
+              <div class="rung"><span class="lbl">المستحق من العميل</span><span class="bar"><i style="inset-inline-start:0;width:100%;background:var(--ink)"></i></span><span class="amt">15,000</span></div>
+              <div class="rung"><span class="lbl">− المستحق للمورد</span><span class="bar"><i style="inset-inline-start:20%;width:80%;background:var(--out)"></i></span><span class="amt out">12,000</span></div>
+              <div class="rung"><span class="lbl">= الهامش</span><span class="bar"><i style="inset-inline-start:0;width:20%;background:var(--amber)"></i></span><span class="amt">3,000</span></div>
+              <div class="rung"><span class="lbl">− ٥٪ من الهامش</span><span class="bar"><i style="inset-inline-start:19%;width:1%;background:var(--tax)"></i></span><span class="amt taxc">150</span></div>
+              <div class="rung"><span class="lbl">− مصروفات العقد</span><span class="bar"><i style="inset-inline-start:16.67%;width:2.33%;background:var(--out)"></i></span><span class="amt out">350</span></div>
+              <div class="rung tot"><span class="lbl"><b>= صافي الربح</b></span><span class="bar"><i style="inset-inline-start:0;width:16.67%;background:var(--in)"></i></span><span class="amt in">2,500</span></div>
+              <div class="rung"><span class="lbl">الإدارة ٥٠٪</span><span class="bar"><i style="inset-inline-start:0;width:8.33%;background:var(--ink-2)"></i></span><span class="amt">1,250</span></div>
+              <div class="rung"><span class="lbl">المستثمرين ٥٠٪</span><span class="bar"><i style="inset-inline-start:0;width:8.33%;background:var(--amber)"></i></span><span class="amt">1,250</span></div>
+            </div>
+            <div class="note">ضريبة القيمة المضافة 2,100 مش داخلة هنا خالص — دي أمانة للضرايب، مش إيراد.</div>
+          </div>
+
+          <div class="panel">
+            <div class="ph"><h2>الخزنة متقسمة إزاي</h2><span class="hint">97,700 ج</span></div>
+            <div class="pb">
+              <div class="stack" role="img" aria-label="تقسيم الخزنة">
+                <i style="width:97.49%;background:var(--in)"></i>
+                <i style="width:1.23%;background:var(--tax)"></i>
+                <i style="width:1.28%;background:var(--amber)"></i>
+              </div>
+              <div class="legend">
+                <div><span><span class="sw" style="background:var(--in)"></span>المتاح للتشغيل</span><b class="num">95,250</b></div>
+                <div><span><span class="sw" style="background:var(--tax)"></span>ضرايب محجوزة (مقفولة)</span><b class="num">1,200</b></div>
+                <div><span><span class="sw" style="background:var(--amber)"></span>أرباح مستحقة الصرف</span><b class="num">1,250</b></div>
+              </div>
+            </div>
+            <div class="note">رأس مال المستثمرين 100,000 — منه 3,350 شغال عند الموردين ولسه متحصّلش من العملاء.</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="ph"><h2>العقود الشغالة</h2></div>
+          <div class="tw"><table>
+            <thead><tr><th>العقد</th><th>العميل</th><th>المعدة</th><th>صاحب المعدة</th><th class="n">سعر العميل</th><th class="n">سعر المورد</th><th class="n">الأيام</th><th class="n">صافي الربح</th><th>الحالة</th></tr></thead>
+            <tbody><tr><td><b>ع-٢٠٢٦-٠٠١</b></td><td>شركة الأمل للمقاولات</td><td>لودر كاتربيلر 950</td><td>الحاج سيد عبد الله</td><td class="n">500 / يوم</td><td class="n">400 / يوم</td><td class="n">30</td><td class="n in">2,500</td><td><span class="pill p-in">شغال</span></td></tr></tbody>
+          </table></div>
+        </div>
+      </section>
+
+      <!-- ================= 2. أصحاب المعدات ================= -->
+      <section data-page="suppliers" class="grid" style="gap:20px">
+        <div class="head">
+          <div><h1>أصحاب المعدات</h1><p>اللي بنأجر منهم المعدات — من غير ضريبة</p></div>
+          <div class="tools"><button class="btn pri">+ صاحب معدة</button></div>
+        </div>
+        <div class="party">
+          <div class="panel plist">
+            <button class="on"><b>الحاج سيد عبد الله</b><small>معدة واحدة · 0100 234 5678</small><span class="bal out">باقي له 1,500</span></button>
+          </div>
+          <div class="panel">
+            <div class="ph"><h2>الحاج سيد عبد الله</h2><div class="tools"><button class="btn">طباعة كشف الحساب</button><button class="btn">Excel</button><button class="btn">PDF</button></div></div>
+            <div class="facts">
+              <div><span>إجمالي المستحق له</span><b>12,000</b></div>
+              <div><span>خصومات (دفعناها عنه)</span><b class="taxc">500</b></div>
+              <div><span>اتدفع له</span><b class="in">10,000</b></div>
+              <div><span>الباقي له</span><b class="out">1,500</b></div>
+            </div>
+            <div class="tabs" data-tabs="sup">
+              <button class="on" data-tab="sup-st">كشف الحساب</button>
+              <button data-tab="sup-eq">معداته</button>
+              <button data-tab="sup-log">السركي</button>
+              <button data-tab="sup-ded">الخصومات</button>
+              <button data-tab="sup-pay">الدفعات</button>
+            </div>
+            <div data-pane="sup-st" class="tw"><table>
+              <thead><tr><th>التاريخ</th><th>البيان</th><th class="n">له</th><th class="n">عليه / اتدفع</th><th class="n">الرصيد له</th></tr></thead>
+              <tbody>
+                <tr><td>05/10/2026</td><td>سولار دفعناه عنه — لودر 950</td><td class="n"></td><td class="n">500</td><td class="n">−500</td></tr>
+                <tr><td>15/10/2026</td><td>دفعة نقدي</td><td class="n"></td><td class="n">10,000</td><td class="n">−10,500</td></tr>
+                <tr><td>31/10/2026</td><td>سركي أكتوبر — ع-٢٠٢٦-٠٠١ — 30 يوم × 400</td><td class="n">12,000</td><td class="n"></td><td class="n">1,500</td></tr>
+              </tbody>
+              <tfoot><tr><td colspan="2">الإجمالي</td><td class="n">12,000</td><td class="n">10,500</td><td class="n out">1,500</td></tr></tfoot>
+            </table></div>
+            <div data-pane="sup-eq" class="tw" hidden><table>
+              <thead><tr><th>المعدة</th><th>النوع</th><th>رقم اللوحة</th><th>رقم الشاسيه</th><th>مع مين دلوقتي</th></tr></thead>
+              <tbody><tr><td><b>لودر كاتربيلر 950</b></td><td>لودر</td><td>ن ق ط 1234</td><td>CAT0950GJ01782</td><td>شركة الأمل للمقاولات</td></tr></tbody>
+            </table></div>
+            <div data-pane="sup-log" class="tw" hidden><table>
+              <thead><tr><th>الفترة</th><th>العقد</th><th class="n">الكمية (المورد)</th><th class="n">السعر</th><th class="n">المستحق له</th></tr></thead>
+              <tbody>
+                <tr><td>01 – 07 أكتوبر</td><td>ع-٢٠٢٦-٠٠١</td><td class="n">7 يوم</td><td class="n">400</td><td class="n">2,800</td></tr>
+                <tr><td>08 – 14 أكتوبر</td><td>ع-٢٠٢٦-٠٠١</td><td class="n">7 يوم</td><td class="n">400</td><td class="n">2,800</td></tr>
+                <tr><td>15 – 21 أكتوبر</td><td>ع-٢٠٢٦-٠٠١</td><td class="n">7 يوم</td><td class="n">400</td><td class="n">2,800</td></tr>
+                <tr><td>22 – 30 أكتوبر</td><td>ع-٢٠٢٦-٠٠١</td><td class="n">9 يوم</td><td class="n">400</td><td class="n">3,600</td></tr>
+              </tbody>
+              <tfoot><tr><td colspan="2">الإجمالي</td><td class="n">30 يوم</td><td></td><td class="n">12,000</td></tr></tfoot>
+            </table></div>
+            <div data-pane="sup-ded" class="tw" hidden><table>
+              <thead><tr><th>التاريخ</th><th>البيان</th><th>العقد</th><th class="n">المبلغ</th></tr></thead>
+              <tbody><tr><td>05/10/2026</td><td>سولار دفعناه عنه</td><td>ع-٢٠٢٦-٠٠١</td><td class="n">500</td></tr></tbody>
+            </table></div>
+            <div data-pane="sup-pay" class="tw" hidden><table>
+              <thead><tr><th>التاريخ</th><th>العقد</th><th>ملاحظة</th><th class="n">المبلغ</th></tr></thead>
+              <tbody><tr><td>15/10/2026</td><td>ع-٢٠٢٦-٠٠١</td><td>دفعة تحت الحساب</td><td class="n">10,000</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 3. الشركات والأفراد ================= -->
+      <section data-page="clients" class="grid" style="gap:20px">
+        <div class="head">
+          <div><h1>الشركات والأفراد</h1><p>العملاء اللي واخدين المعدات</p></div>
+          <div class="tools"><button class="btn pri">+ عميل</button></div>
+        </div>
+        <div class="party">
+          <div class="panel plist">
+            <button class="on"><b>شركة الأمل للمقاولات</b><small><span class="pill p-mu">شركة</span> · رقم ضريبي 512-845-307</small><span class="bal">باقي عليه 8,550</span></button>
+          </div>
+          <div class="panel">
+            <div class="ph"><h2>شركة الأمل للمقاولات</h2><div class="tools"><button class="btn">طباعة كشف الحساب</button><button class="btn">Excel</button><button class="btn">PDF</button></div></div>
+            <div class="facts">
+              <div><span>قيمة الشغل</span><b>15,000</b></div>
+              <div><span>ضريبة ١٤٪</span><b class="taxc">2,100</b></div>
+              <div><span>إجمالي الفواتير</span><b>17,100</b></div>
+              <div><span>دفع</span><b class="in">8,550</b></div>
+              <div><span>الباقي عليه</span><b class="out">8,550</b></div>
+            </div>
+            <div class="tabs" data-tabs="cli">
+              <button class="on" data-tab="cli-st">كشف الحساب</button>
+              <button data-tab="cli-inv">الفواتير</button>
+              <button data-tab="cli-log">السركي</button>
+              <button data-tab="cli-pay">الدفعات</button>
+            </div>
+            <div data-pane="cli-st" class="tw"><table>
+              <thead><tr><th>التاريخ</th><th>البيان</th><th class="n">عليه</th><th class="n">دفع</th><th class="n">الرصيد عليه</th></tr></thead>
+              <tbody>
+                <tr><td>20/10/2026</td><td>تحويل بنكي</td><td class="n"></td><td class="n">8,550</td><td class="n">−8,550</td></tr>
+                <tr><td>31/10/2026</td><td>فاتورة ف-٢٠٢٦-٠٠٠١ — أكتوبر (15,000 + ١٤٪ 2,100)</td><td class="n">17,100</td><td class="n"></td><td class="n">8,550</td></tr>
+              </tbody>
+              <tfoot><tr><td colspan="2">الإجمالي</td><td class="n">17,100</td><td class="n">8,550</td><td class="n out">8,550</td></tr></tfoot>
+            </table></div>
+            <div data-pane="cli-inv" class="tw" hidden><table>
+              <thead><tr><th>رقم الفاتورة</th><th>الشهر</th><th>العقد</th><th class="n">قيمة الشغل</th><th class="n">ضريبة ١٤٪</th><th class="n">الإجمالي</th><th class="n">اتحصّل</th><th>الحالة</th></tr></thead>
+              <tbody><tr><td><b>ف-٢٠٢٦-٠٠٠١</b></td><td>أكتوبر ٢٠٢٦</td><td>ع-٢٠٢٦-٠٠١</td><td class="n">15,000</td><td class="n taxc">2,100</td><td class="n"><b>17,100</b></td><td class="n">8,550</td><td><span class="pill p-am">مدفوعة جزئيًا ٥٠٪</span></td></tr></tbody>
+            </table></div>
+            <div data-pane="cli-log" class="tw" hidden><table>
+              <thead><tr><th>الفترة</th><th>المعدة</th><th class="n">الكمية (العميل)</th><th class="n">السعر</th><th class="n">القيمة</th></tr></thead>
+              <tbody>
+                <tr><td>01 – 07 أكتوبر</td><td>لودر كاتربيلر 950</td><td class="n">7 يوم</td><td class="n">500</td><td class="n">3,500</td></tr>
+                <tr><td>08 – 14 أكتوبر</td><td>لودر كاتربيلر 950</td><td class="n">7 يوم</td><td class="n">500</td><td class="n">3,500</td></tr>
+                <tr><td>15 – 21 أكتوبر</td><td>لودر كاتربيلر 950</td><td class="n">7 يوم</td><td class="n">500</td><td class="n">3,500</td></tr>
+                <tr><td>22 – 30 أكتوبر</td><td>لودر كاتربيلر 950</td><td class="n">9 يوم</td><td class="n">500</td><td class="n">4,500</td></tr>
+              </tbody>
+              <tfoot><tr><td colspan="2">الإجمالي</td><td class="n">30 يوم</td><td></td><td class="n">15,000</td></tr></tfoot>
+            </table></div>
+            <div data-pane="cli-pay" class="tw" hidden><table>
+              <thead><tr><th>التاريخ</th><th>العقد</th><th>ملاحظة</th><th class="n">المبلغ</th><th class="n">منه ضريبة</th></tr></thead>
+              <tbody><tr><td>20/10/2026</td><td>ع-٢٠٢٦-٠٠١</td><td>تحويل بنكي</td><td class="n in">8,550</td><td class="n taxc">1,050</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 4. الإدارة ================= -->
+      <section data-page="management" class="grid" style="gap:20px">
+        <div class="head">
+          <div><h1>الإدارة</h1><p>ربح كل عقد وكل معدة، ونصيب الإدارة كل شهر</p></div>
+          <div class="tools"><select class="month" aria-label="الشهر"><option>أكتوبر ٢٠٢٦</option></select><button class="btn pri">+ عقد جديد</button><button class="btn">Excel</button></div>
+        </div>
+        <div class="grid k4">
+          <div class="kpi"><span class="l">إجمالي الهامش</span><span class="v">3,000<span class="cur">ج</span></span></div>
+          <div class="kpi tax"><span class="l">٥٪ من الهامش</span><span class="v">150<span class="cur">ج</span></span></div>
+          <div class="kpi"><span class="l">مصروفات (عقود + عامة)</span><span class="v">350<span class="cur">ج</span></span><span class="s">عقود 350 · عامة 0</span></div>
+          <div class="kpi hero"><span class="l">نصيب الإدارة ٥٠٪</span><span class="v">1,250<span class="cur">ج</span></span><span class="s">المحصّل منه 625</span></div>
+        </div>
+
+        <div class="panel">
+          <div class="ph"><h2>العقود</h2><span class="hint">دوس على العقد يفتح السركي بتاعه</span></div>
+          <div class="tw"><table>
+            <thead><tr><th>العقد</th><th>المعدة</th><th>صاحبها</th><th>مع مين</th><th class="n">سعر العميل</th><th class="n">سعر المورد</th><th class="n">الهامش</th><th class="n">٥٪</th><th class="n">مصروفات</th><th class="n">الصافي</th></tr></thead>
+            <tbody><tr style="cursor:pointer"><td><b>ع-٢٠٢٦-٠٠١</b></td><td>لودر كاتربيلر 950</td><td>الحاج سيد عبد الله</td><td>شركة الأمل للمقاولات</td><td class="n">500</td><td class="n">400</td><td class="n">3,000</td><td class="n taxc">150</td><td class="n out">350</td><td class="n in">2,500</td></tr></tbody>
+            <tfoot><tr><td colspan="6">إجمالي العقود</td><td class="n">3,000</td><td class="n">150</td><td class="n">350</td><td class="n">2,500</td></tr></tfoot>
+          </table></div>
+        </div>
+
+        <div class="panel">
+          <div class="ph">
+            <h2>سركي العقد ع-٢٠٢٦-٠٠١ — لودر كاتربيلر 950</h2>
+            <div class="tools">
+              <label class="toggle"><input type="checkbox" id="vat-toggle" checked> إضافة ١٤٪ على العميل</label>
+              <button class="btn">+ فترة شغل</button><button class="btn">طباعة السركي</button>
+            </div>
+          </div>
+          <div class="facts">
+            <div><span>العميل</span><b style="font-size:15px">شركة الأمل للمقاولات</b></div>
+            <div><span>صاحب المعدة</span><b style="font-size:15px">الحاج سيد عبد الله</b></div>
+            <div><span>المحاسبة</span><b style="font-size:15px">باليوم</b></div>
+            <div><span>المدة</span><b style="font-size:15px">01/10 – 30/10/2026</b></div>
+          </div>
+          <div class="tw"><table>
+            <thead><tr><th>الفترة</th><th class="n">كمية العميل</th><th class="n">كمية المورد</th><th class="n">للعميل</th><th class="n">للمورد</th><th class="n">الهامش</th><th>ملاحظة</th></tr></thead>
+            <tbody>
+              <tr><td>01 – 07 أكتوبر</td><td class="n edit">7</td><td class="n edit">7</td><td class="n">3,500</td><td class="n">2,800</td><td class="n">700</td><td></td></tr>
+              <tr><td>08 – 14 أكتوبر</td><td class="n edit">7</td><td class="n edit">7</td><td class="n">3,500</td><td class="n">2,800</td><td class="n">700</td><td></td></tr>
+              <tr><td>15 – 21 أكتوبر</td><td class="n edit">7</td><td class="n edit">7</td><td class="n">3,500</td><td class="n">2,800</td><td class="n">700</td><td></td></tr>
+              <tr><td>22 – 30 أكتوبر</td><td class="n edit">9</td><td class="n edit">9</td><td class="n">4,500</td><td class="n">3,600</td><td class="n">900</td><td></td></tr>
+            </tbody>
+            <tfoot><tr><td>الإجمالي</td><td class="n">30</td><td class="n">30</td><td class="n">15,000</td><td class="n">12,000</td><td class="n">3,000</td><td></td></tr></tfoot>
+          </table></div>
+          <div class="note">الخانات الصفرا بتتكتب. كمية المورد بتساوي كمية العميل لوحدها، وتقدر تغيرها (مثلًا لو المعدة عطلت يومين على حساب المورد).</div>
+        </div>
+
+        <div class="grid two">
+          <div class="panel">
+            <div class="ph"><h2>مصروفات أكتوبر</h2><button class="btn">+ مصروف</button></div>
+            <div class="tw"><table>
+              <thead><tr><th>التاريخ</th><th>النوع</th><th>على</th><th>البيان</th><th class="n">المبلغ</th></tr></thead>
+              <tbody><tr><td>02/10/2026</td><td><span class="pill p-am">مصروف عقد</span></td><td>ع-٢٠٢٦-٠٠١</td><td>نقل المعدة للموقع</td><td class="n out">350</td></tr></tbody>
+              <tfoot><tr><td colspan="4">الإجمالي</td><td class="n">350</td></tr></tfoot>
+            </table></div>
+          </div>
+          <div class="panel">
+            <div class="ph"><h2>نصيب الإدارة كل شهر</h2></div>
+            <div class="tw"><table>
+              <thead><tr><th>الشهر</th><th class="n">صافي الربح</th><th class="n">نصيب الإدارة</th><th class="n">المحصّل</th><th>الحالة</th></tr></thead>
+              <tbody><tr><td>أكتوبر ٢٠٢٦</td><td class="n">2,500</td><td class="n"><b>1,250</b></td><td class="n">625</td><td><span class="pill p-mu">مفتوح</span></td></tr></tbody>
+            </table></div>
+            <div class="note"><button class="btn">قفل شهر أكتوبر</button> بعد القفل، أي تصحيح بيبقى قيد تسوية.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 5. المستثمرين ================= -->
+      <section data-page="investors" class="grid" style="gap:20px">
+        <div class="head">
+          <div><h1>المستثمرين</h1><p>رأس المال والأرباح — الأرباح بتتصرف كل ٣ شهور</p></div>
+          <div class="tools"><button class="btn pri">+ إيداع / سحب</button><button class="btn">صرف أرباح</button><button class="btn">Excel</button></div>
+        </div>
+        <div class="grid k4">
+          <div class="kpi"><span class="l">إجمالي رأس المال</span><span class="v">100,000<span class="cur">ج</span></span></div>
+          <div class="kpi"><span class="l">منه شغال عند الموردين</span><span class="v">3,350<span class="cur">ج</span></span><span class="s">اتدفع للموردين ولسه متحصّلش</span></div>
+          <div class="kpi hero"><span class="l">نصيب المستثمرين — أكتوبر</span><span class="v">1,250<span class="cur">ج</span></span><span class="s">ينفع يتصرف منه دلوقتي 625</span></div>
+          <div class="kpi"><span class="l">الصرف الجاي</span><span class="v" style="font-size:18px">آخر ديسمبر ٢٠٢٦</span><span class="s">ربع أكتوبر – ديسمبر</span></div>
+        </div>
+        <div class="panel">
+          <div class="ph"><h2>المستثمرين</h2><span class="hint">النصيب بيتحسب بالفلوس × عدد الأيام في الشهر</span></div>
+          <div class="tw"><table>
+            <thead><tr><th>المستثمر</th><th class="n">رأس المال</th><th class="n">نسبته</th><th class="n">فلوسه الشغالة</th><th class="n">ربح مستحق</th><th class="n">ينفع يتصرف (محصّل)</th><th class="n">اتصرف له</th><th class="n">الباقي له</th><th class="n">العائد الشهري</th></tr></thead>
+            <tbody>
+              <tr><td><b>م. أحمد سالم</b><br><small class="hint">0122 555 1010</small></td><td class="n">60,000</td><td class="n">60٪</td><td class="n">2,010</td><td class="n"><b>750</b></td><td class="n in">375</td><td class="n">0</td><td class="n">750</td><td class="n">1.25٪</td></tr>
+              <tr><td><b>أ. خالد منصور</b><br><small class="hint">0111 777 2020</small></td><td class="n">40,000</td><td class="n">40٪</td><td class="n">1,340</td><td class="n"><b>500</b></td><td class="n in">250</td><td class="n">0</td><td class="n">500</td><td class="n">1.25٪</td></tr>
+            </tbody>
+            <tfoot><tr><td>الإجمالي</td><td class="n">100,000</td><td class="n">100٪</td><td class="n">3,350</td><td class="n">1,250</td><td class="n">625</td><td class="n">0</td><td class="n">1,250</td><td class="n">1.25٪</td></tr></tfoot>
+          </table></div>
+          <div class="note">"ينفع يتصرف" = نصيبه × اللي العميل دفعه من فواتير الشهر (دفع ٥٠٪ → يتصرف نص النصيب). الباقي يتصرف لما العميل يكمّل.</div>
+        </div>
+        <div class="grid two">
+          <div class="panel">
+            <div class="ph"><h2>حركة رأس المال</h2></div>
+            <div class="tw"><table>
+              <thead><tr><th>التاريخ</th><th>المستثمر</th><th>النوع</th><th class="n">المبلغ</th><th class="n">أيامه في أكتوبر</th></tr></thead>
+              <tbody>
+                <tr><td>01/10/2026</td><td>م. أحمد سالم</td><td><span class="pill p-in">إيداع</span></td><td class="n">60,000</td><td class="n">31</td></tr>
+                <tr><td>01/10/2026</td><td>أ. خالد منصور</td><td><span class="pill p-in">إيداع</span></td><td class="n">40,000</td><td class="n">31</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+          <div class="panel">
+            <div class="ph"><h2>توزيع أكتوبر بالتفصيل</h2></div>
+            <div class="tw"><table>
+              <thead><tr><th>المستثمر</th><th class="n">فلوس × أيام</th><th class="n">النسبة</th><th class="n">النصيب</th></tr></thead>
+              <tbody>
+                <tr><td>م. أحمد سالم</td><td class="n">60,000 × 31</td><td class="n">60٪</td><td class="n">750.00</td></tr>
+                <tr><td>أ. خالد منصور</td><td class="n">40,000 × 31</td><td class="n">40٪</td><td class="n">500.00</td></tr>
+              </tbody>
+              <tfoot><tr><td colspan="3">نصيب المستثمرين · كسور القروش للإدارة: 0.00</td><td class="n">1,250.00</td></tr></tfoot>
+            </table></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 6. الخزنة ================= -->
+      <section data-page="treasury" class="grid" style="gap:20px">
+        <div class="head">
+          <div><h1>الخزنة</h1><p>كل جنيه داخل أو خارج</p></div>
+          <div class="tools"><button class="btn pri">+ حركة</button><button class="btn">Excel</button><button class="btn">PDF</button></div>
+        </div>
+        <div class="grid k4">
+          <div class="kpi hero"><span class="l">الرصيد الكلي</span><span class="v">97,700<span class="cur">ج</span></span></div>
+          <div class="kpi tax"><span class="l">ضرايب محجوزة — مقفولة</span><span class="v">1,200<span class="cur">ج</span></span><span class="s">ممنوع تتدفع منها للموردين</span></div>
+          <div class="kpi"><span class="l">أرباح مستحقة ومتصرفتش</span><span class="v">1,250<span class="cur">ج</span></span><span class="s">مستثمرين 625 · إدارة 625</span></div>
+          <div class="kpi"><span class="l">المتاح للتشغيل</span><span class="v in">95,250<span class="cur">ج</span></span><span class="s">97,700 − 1,200 − 1,250</span></div>
+        </div>
+        <div class="grid two">
+          <div class="panel">
+            <div class="ph"><h2>رأس مال المستثمرين</h2></div>
+            <div class="pb">
+              <div class="stack" role="img" aria-label="رأس المال">
+                <i style="width:96.65%;background:var(--in)"></i>
+                <i style="width:3.35%;background:var(--out)"></i>
+              </div>
+              <div class="legend">
+                <div><span><span class="sw" style="background:var(--in)"></span>في الخزنة</span><b class="num">96,650</b></div>
+                <div><span><span class="sw" style="background:var(--out)"></span>شغال عند الموردين</span><b class="num">3,350</b></div>
+                <div><span>الإجمالي</span><b class="num">100,000</b></div>
+              </div>
+            </div>
+          </div>
+          <div class="alert warn" style="align-self:start">
+            <span>⚠</span>
+            <span>تنبيه تجريبي: لو سجلت دفعة لمورد بـ 96,000 دلوقتي، المتاح للتشغيل هيبقى بالسالب (−750). البرنامج هيطلب منك تأكيد قبل الحفظ.</span>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="filters">
+            <input type="date" id="f-from" value="2026-10-01" aria-label="من">
+            <input type="date" id="f-to" value="2026-10-31" aria-label="إلى">
+            <select id="f-type" aria-label="النوع">
+              <option value="">كل الأنواع</option>
+              <option>إيداع مستثمر</option><option>سحب مستثمر</option><option>تحصيل عميل</option><option>دفعة مورد</option><option>خصم لحساب مورد</option><option>مصروف</option><option>دفع ضرايب</option><option>صرف أرباح</option>
+            </select>
+            <select id="f-party" aria-label="الطرف">
+              <option value="">كل الأطراف</option>
+              <option>م. أحمد سالم</option><option>أ. خالد منصور</option><option>شركة الأمل للمقاولات</option><option>الحاج سيد عبد الله</option><option>ع-٢٠٢٦-٠٠١</option>
+            </select>
+          </div>
+          <div class="tw"><table id="tx">
+            <thead><tr><th>التاريخ</th><th>النوع</th><th>الطرف</th><th>البيان</th><th class="n">داخل</th><th class="n">خارج</th><th class="n">الرصيد</th></tr></thead>
+            <tbody>
+              <tr data-d="2026-10-01" data-t="إيداع مستثمر" data-p="م. أحمد سالم"><td>01/10/2026</td><td><span class="pill p-in">إيداع مستثمر</span></td><td>م. أحمد سالم</td><td>رأس مال</td><td class="n in">60,000</td><td class="n"></td><td class="n">60,000</td></tr>
+              <tr data-d="2026-10-01" data-t="إيداع مستثمر" data-p="أ. خالد منصور"><td>01/10/2026</td><td><span class="pill p-in">إيداع مستثمر</span></td><td>أ. خالد منصور</td><td>رأس مال</td><td class="n in">40,000</td><td class="n"></td><td class="n">100,000</td></tr>
+              <tr data-d="2026-10-02" data-t="مصروف" data-p="ع-٢٠٢٦-٠٠١"><td>02/10/2026</td><td><span class="pill p-out">مصروف</span></td><td>ع-٢٠٢٦-٠٠١</td><td>نقل المعدة للموقع</td><td class="n"></td><td class="n out">350</td><td class="n">99,650</td></tr>
+              <tr data-d="2026-10-05" data-t="خصم لحساب مورد" data-p="الحاج سيد عبد الله"><td>05/10/2026</td><td><span class="pill p-out">خصم لحساب مورد</span></td><td>الحاج سيد عبد الله</td><td>سولار دفعناه عنه</td><td class="n"></td><td class="n out">500</td><td class="n">99,150</td></tr>
+              <tr data-d="2026-10-15" data-t="دفعة مورد" data-p="الحاج سيد عبد الله"><td>15/10/2026</td><td><span class="pill p-out">دفعة مورد</span></td><td>الحاج سيد عبد الله</td><td>دفعة تحت الحساب</td><td class="n"></td><td class="n out">10,000</td><td class="n">89,150</td></tr>
+              <tr data-d="2026-10-20" data-t="تحصيل عميل" data-p="شركة الأمل للمقاولات"><td>20/10/2026</td><td><span class="pill p-in">تحصيل عميل</span></td><td>شركة الأمل للمقاولات</td><td>تحويل بنكي (منه ضريبة 1,050)</td><td class="n in">8,550</td><td class="n"></td><td class="n">97,700</td></tr>
+            </tbody>
+            <tfoot><tr><td colspan="4" id="tx-count">6 حركات</td><td class="n" id="tx-in">108,550</td><td class="n" id="tx-out">10,850</td><td class="n">97,700</td></tr></tfoot>
+          </table></div>
+          <div class="note">الحركات مبتتمسحش. الإلغاء بيعمل حركة عكسية بنفس المبلغ، وكل تعديل بيتسجل في سجل التعديلات.</div>
+        </div>
+      </section>
+
+      <!-- ================= 7. الملف الضريبي ================= -->
+      <section data-page="tax" class="grid" style="gap:20px">
+        <div class="head">
+          <div><h1>الملف الضريبي</h1><p>ضريبة القيمة المضافة ١٤٪ و ٥٪ من الهامش</p></div>
+          <div class="tools"><button class="btn pri">+ دفع للضرايب</button><button class="btn">طباعة</button><button class="btn">Excel</button></div>
+        </div>
+        <div class="grid k4">
+          <div class="kpi tax"><span class="l">إجمالي الضرايب المستحقة</span><span class="v">2,250<span class="cur">ج</span></span><span class="s">١٤٪ 2,100 + ٥٪ 150</span></div>
+          <div class="kpi"><span class="l">اتدفع للضرايب</span><span class="v">0<span class="cur">ج</span></span></div>
+          <div class="kpi"><span class="l">محجوز في الخزنة</span><span class="v">1,200<span class="cur">ج</span></span><span class="s">١٤٪ اتحصّلت 1,050 + ٥٪ 150</span></div>
+          <div class="kpi"><span class="l">١٤٪ لسه عند العملاء</span><span class="v">1,050<span class="cur">ج</span></span><span class="s">بتتحجز أول ما تتحصّل</span></div>
+        </div>
+
+        <div class="panel">
+          <div class="ph"><h2>الإجمالي بالتفصيل</h2></div>
+          <div class="tw"><table>
+            <thead><tr><th>الضريبة</th><th class="n">مستحق (على الفواتير)</th><th class="n">اتحصّل</th><th class="n">اتدفع للضرايب</th><th class="n">الباقي علينا</th></tr></thead>
+            <tbody>
+              <tr><td><b>القيمة المضافة ١٤٪</b></td><td class="n">2,100</td><td class="n">1,050</td><td class="n">0</td><td class="n taxc">2,100</td></tr>
+              <tr><td><b>٥٪ من الهامش</b></td><td class="n">150</td><td class="n">—</td><td class="n">0</td><td class="n taxc">150</td></tr>
+            </tbody>
+            <tfoot><tr><td>الإجمالي</td><td class="n">2,250</td><td class="n">1,050</td><td class="n">0</td><td class="n">2,250</td></tr></tfoot>
+          </table></div>
+        </div>
+
+        <div class="panel">
+          <div class="tabs" data-tabs="tax">
+            <button class="on" data-tab="tx-cli">١٤٪ لكل عميل</button>
+            <button data-tab="tx-eq">١٤٪ لكل معدة</button>
+            <button data-tab="tx-mo">١٤٪ لكل شهر</button>
+            <button data-tab="tx-5">٥٪ لكل عقد / شهر</button>
+            <button data-tab="tx-paid">المدفوع للضرايب</button>
+          </div>
+          <div data-pane="tx-cli" class="tw"><table>
+            <thead><tr><th>العميل</th><th>الرقم الضريبي</th><th class="n">قيمة الشغل</th><th class="n">الضريبة</th><th class="n">اتحصّل منها</th></tr></thead>
+            <tbody><tr><td>شركة الأمل للمقاولات</td><td>512-845-307</td><td class="n">15,000</td><td class="n taxc">2,100</td><td class="n">1,050</td></tr></tbody>
+          </table></div>
+          <div data-pane="tx-eq" class="tw" hidden><table>
+            <thead><tr><th>المعدة</th><th>صاحبها</th><th class="n">قيمة الشغل</th><th class="n">الضريبة</th></tr></thead>
+            <tbody><tr><td>لودر كاتربيلر 950</td><td>الحاج سيد عبد الله</td><td class="n">15,000</td><td class="n taxc">2,100</td></tr></tbody>
+          </table></div>
+          <div data-pane="tx-mo" class="tw" hidden><table>
+            <thead><tr><th>الشهر</th><th class="n">قيمة الشغل</th><th class="n">الضريبة</th><th class="n">اتحصّل</th><th class="n">اتدفع</th></tr></thead>
+            <tbody><tr><td>أكتوبر ٢٠٢٦</td><td class="n">15,000</td><td class="n taxc">2,100</td><td class="n">1,050</td><td class="n">0</td></tr></tbody>
+          </table></div>
+          <div data-pane="tx-5" class="tw" hidden><table>
+            <thead><tr><th>العقد</th><th>الشهر</th><th class="n">الهامش</th><th class="n">٥٪</th><th class="n">اتدفع</th></tr></thead>
+            <tbody><tr><td>ع-٢٠٢٦-٠٠١</td><td>أكتوبر ٢٠٢٦</td><td class="n">3,000</td><td class="n taxc">150</td><td class="n">0</td></tr></tbody>
+          </table></div>
+          <div data-pane="tx-paid" class="tw" hidden><table>
+            <thead><tr><th>التاريخ</th><th>الضريبة</th><th>عن شهر</th><th>رقم الإيصال</th><th class="n">المبلغ</th></tr></thead>
+            <tbody><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">لسه مفيش مدفوعات للضرايب. دوس "+ دفع للضرايب" لما تدفع.</td></tr></tbody>
+          </table></div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  var pages = ["home", "suppliers", "clients", "management", "investors", "treasury", "tax"];
+  function show(id) {
+    if (pages.indexOf(id) < 0) id = "home";
+    document.querySelectorAll("section[data-page]").forEach(function (s) { s.classList.toggle("show", s.dataset.page === id); });
+    document.querySelectorAll("#nav a").forEach(function (a) { a.classList.toggle("on", a.dataset.go === id); });
+  }
+  document.getElementById("nav").addEventListener("click", function (e) {
+    var a = e.target.closest("a[data-go]");
+    if (!a) return;
+    e.preventDefault();
+    show(a.dataset.go);
+    try { history.replaceState(null, "", "#" + a.dataset.go); } catch (_) {}
+    window.scrollTo(0, 0);
+  });
+  show((location.hash || "#home").slice(1));
+
+  // tabs inside a panel
+  document.querySelectorAll("[data-tabs]").forEach(function (bar) {
+    bar.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-tab]");
+      if (!b) return;
+      var panel = bar.parentElement;
+      bar.querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x === b); });
+      panel.querySelectorAll("[data-pane]").forEach(function (p) { p.hidden = p.dataset.pane !== b.dataset.tab; });
+    });
+  });
+
+  // treasury filters (all money in whole pounds in this mockup)
+  var rows = Array.prototype.slice.call(document.querySelectorAll("#tx tbody tr"));
+  function num(s) { return Number((s || "").replace(/[^\d]/g, "")) || 0; }
+  function filter() {
+    var from = document.getElementById("f-from").value, to = document.getElementById("f-to").value;
+    var t = document.getElementById("f-type").value, p = document.getElementById("f-party").value;
+    var n = 0, tin = 0, tout = 0;
+    rows.forEach(function (r) {
+      var ok = (!from || r.dataset.d >= from) && (!to || r.dataset.d <= to) && (!t || r.dataset.t === t) && (!p || r.dataset.p === p);
+      r.hidden = !ok;
+      if (ok) { n++; tin += num(r.cells[4].textContent); tout += num(r.cells[5].textContent); }
+    });
+    document.getElementById("tx-count").textContent = n + (n === 1 ? " حركة" : " حركات");
+    document.getElementById("tx-in").textContent = tin.toLocaleString("en-US");
+    document.getElementById("tx-out").textContent = tout.toLocaleString("en-US");
+  }
+  ["f-from", "f-to", "f-type", "f-party"].forEach(function (id) { document.getElementById(id).addEventListener("change", filter); });
+})();
+</script>
