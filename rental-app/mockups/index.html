@@ -172,6 +172,12 @@ td.edit { background: var(--amber-soft); }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .filters select, .filters input { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 8px; padding: 6px 10px; }
 
+.sheet select, .sheet input { font: inherit; border: 1px solid var(--line); background: var(--amber-soft); color: var(--fg); border-radius: 6px; padding: 3px 8px; }
+.sheet input.q { width: 64px; text-align: end; }
+.sheet input.r { width: 220px; }
+.sheet tr.off td { background: var(--surface-2); color: var(--muted); }
+.sheet tr.diff td { background: var(--out-soft); }
+.sheet .fri { color: var(--muted); }
 .note { font-size: 12px; color: var(--muted); padding: 10px 16px; border-top: 1px solid var(--line); }
 .mock-tag { background: var(--amber-soft); border: 1px dashed var(--amber); border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 600; }
 
@@ -202,6 +208,7 @@ section[data-page].show { display: grid; }
     </div>
     <nav class="nav" id="nav">
       <a href="#home" data-go="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>الرئيسية</a>
+      <a href="#sarki" data-go="sarki"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>السركي</a>
       <a href="#suppliers" data-go="suppliers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17h2l2-6h7l3 6h4M7 17a2 2 0 1 0 4 0M15 17a2 2 0 1 0 4 0M9 11V6h4l1 5"/></svg>أصحاب المعدات</a>
       <a href="#clients" data-go="clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16M14 9h5a1 1 0 0 1 1 1v11M8 8h2M8 12h2M8 16h2M3 21h18"/></svg>الشركات والأفراد</a>
       <a href="#management" data-go="management"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg>الإدارة</a>
@@ -229,7 +236,7 @@ section[data-page].show { display: grid; }
 
         <div class="grid k6">
           <div class="kpi hero"><span class="l">رصيد الخزنة</span><span class="v">97,700<span class="cur">ج</span></span><span class="s">المتاح للتشغيل 95,250</span></div>
-          <div class="kpi tax"><span class="l">ضرايب محجوزة</span><span class="v">1,200<span class="cur">ج</span></span><span class="s">١٤٪ محصّلة 1,050 + ٥٪ 150</span></div>
+          <div class="kpi tax"><span class="l">فلوس ضرايب في الخزنة</span><span class="v">1,200<span class="cur">ج</span></span><span class="s">مش بتاعتنا — ممنوع تتصرف</span></div>
           <div class="kpi"><span class="l">مستحق من العملاء</span><span class="v">8,550<span class="cur">ج</span></span><span class="s">من فواتير 17,100</span></div>
           <div class="kpi"><span class="l">علينا للموردين</span><span class="v">1,500<span class="cur">ج</span></span><span class="s">بعد خصومات 500</span></div>
           <div class="kpi"><span class="l">ربح الشهر</span><span class="v">2,500<span class="cur">ج</span></span><span class="s">المحصّل منه 1,250 (٥٠٪)</span></div>
@@ -262,7 +269,7 @@ section[data-page].show { display: grid; }
               </div>
               <div class="legend">
                 <div><span><span class="sw" style="background:var(--in)"></span>المتاح للتشغيل</span><b class="num">95,250</b></div>
-                <div><span><span class="sw" style="background:var(--tax)"></span>ضرايب محجوزة (مقفولة)</span><b class="num">1,200</b></div>
+                <div><span><span class="sw" style="background:var(--tax)"></span>فلوس ضرايب (مش بتاعتنا)</span><b class="num">1,200</b></div>
                 <div><span><span class="sw" style="background:var(--amber)"></span>أرباح مستحقة الصرف</span><b class="num">1,250</b></div>
               </div>
             </div>
@@ -276,6 +283,52 @@ section[data-page].show { display: grid; }
             <thead><tr><th>العقد</th><th>العميل</th><th>المعدة</th><th>صاحب المعدة</th><th class="n">سعر العميل</th><th class="n">سعر المورد</th><th class="n">الأيام</th><th class="n">صافي الربح</th><th>الحالة</th></tr></thead>
             <tbody><tr><td><b>ع-٢٠٢٦-٠٠١</b></td><td>شركة الأمل للمقاولات</td><td>لودر كاتربيلر 950</td><td>الحاج سيد عبد الله</td><td class="n">500 / يوم</td><td class="n">400 / يوم</td><td class="n">30</td><td class="n in">2,500</td><td><span class="pill p-in">شغال</span></td></tr></tbody>
           </table></div>
+        </div>
+      </section>
+
+      <!-- ================= السركي ================= -->
+      <section data-page="sarki" class="grid" style="gap:20px">
+        <div class="head">
+          <div><h1>السركي</h1><p>بتكتبه بنفسك يوم بيوم — سركي الشركة وسركي صاحب المعدة</p></div>
+          <div class="tools"><select class="month" aria-label="الشهر"><option>أكتوبر ٢٠٢٦</option></select><button class="btn pri">+ عقد جديد</button></div>
+        </div>
+
+        <div class="panel">
+          <div class="ph">
+            <h2>عقد ع-٢٠٢٦-٠٠١ — لودر كاتربيلر 950</h2>
+            <div class="tools"><select class="month" aria-label="العقد"><option>ع-٢٠٢٦-٠٠١ · لودر 950 · شركة الأمل</option></select>
+              <label class="toggle"><input type="checkbox" id="vat-toggle" checked> إضافة ١٤٪ على الشركة</label></div>
+          </div>
+          <div class="facts">
+            <div><span>الشركة (العميل)</span><b style="font-size:15px">شركة الأمل للمقاولات</b></div>
+            <div><span>صاحب المعدة</span><b style="font-size:15px">الحاج سيد عبد الله</b></div>
+            <div><span>السعر</span><b style="font-size:15px">500 للشركة · 400 لصاحبها / يوم</b></div>
+            <div><span>المدة</span><b style="font-size:15px">01/10 – 31/10/2026</b></div>
+          </div>
+          <div class="facts" id="sk-compare">
+            <div><span>سركي الشركة</span><b id="sk-c-days">30 يوم</b></div>
+            <div><span>سركي صاحب المعدة</span><b id="sk-s-days">30 يوم</b></div>
+            <div><span>للشركة</span><b id="sk-c-val">15,000</b></div>
+            <div><span>لصاحب المعدة</span><b id="sk-s-val">12,000</b></div>
+            <div><span>المطابقة</span><b id="sk-match" class="in">متطابقين ✓</b></div>
+          </div>
+          <div class="tabs" data-tabs="sk">
+            <button class="on" data-tab="sk-client">سركي الشركة <small class="hint">(بستلمه من الشركة)</small></button>
+            <button data-tab="sk-supplier">سركي صاحب المعدة <small class="hint">(بسلّمه لصاحب المعدة)</small></button>
+          </div>
+          <div data-pane="sk-client" class="tw"><table class="sheet" data-sheet="client">
+            <thead><tr><th>اليوم</th><th>التاريخ</th><th>الحالة</th><th class="n">الكمية</th><th>البيان / السبب</th><th class="n">القيمة</th><th></th></tr></thead>
+            <tbody></tbody>
+            <tfoot><tr><td colspan="3">الإجمالي</td><td class="n" data-tot="qty"></td><td></td><td class="n" data-tot="val"></td><td></td></tr></tfoot>
+          </table></div>
+          <div data-pane="sk-supplier" class="tw" hidden>
+            <div class="filters"><button class="btn" id="sk-copy">انسخ من سركي الشركة</button><span class="hint" style="align-self:center">بيتملى لوحده زي سركي الشركة، وتقدر تغير أي يوم.</span></div>
+            <table class="sheet" data-sheet="supplier">
+            <thead><tr><th>اليوم</th><th>التاريخ</th><th>الحالة</th><th class="n">الكمية</th><th>البيان / السبب</th><th class="n">القيمة</th><th></th></tr></thead>
+            <tbody></tbody>
+            <tfoot><tr><td colspan="3">الإجمالي</td><td class="n" data-tot="qty"></td><td></td><td class="n" data-tot="val"></td><td></td></tr></tfoot>
+          </table></div>
+          <div class="note">جرّب: غيّر حالة أي يوم في سركي صاحب المعدة لـ "عطل" — هيظهر تنبيه أحمر إن السركيين مختلفين في اليوم ده، والأرقام فوق تتحدث. كل يوم مش شغال لازم يتكتب سببه.</div>
         </div>
       </section>
 
@@ -318,14 +371,8 @@ section[data-page].show { display: grid; }
               <tbody><tr><td><b>لودر كاتربيلر 950</b></td><td>لودر</td><td>ن ق ط 1234</td><td>CAT0950GJ01782</td><td>شركة الأمل للمقاولات</td></tr></tbody>
             </table></div>
             <div data-pane="sup-log" class="tw" hidden><table>
-              <thead><tr><th>الفترة</th><th>العقد</th><th class="n">الكمية (المورد)</th><th class="n">السعر</th><th class="n">المستحق له</th></tr></thead>
-              <tbody>
-                <tr><td>01 – 07 أكتوبر</td><td>ع-٢٠٢٦-٠٠١</td><td class="n">7 يوم</td><td class="n">400</td><td class="n">2,800</td></tr>
-                <tr><td>08 – 14 أكتوبر</td><td>ع-٢٠٢٦-٠٠١</td><td class="n">7 يوم</td><td class="n">400</td><td class="n">2,800</td></tr>
-                <tr><td>15 – 21 أكتوبر</td><td>ع-٢٠٢٦-٠٠١</td><td class="n">7 يوم</td><td class="n">400</td><td class="n">2,800</td></tr>
-                <tr><td>22 – 30 أكتوبر</td><td>ع-٢٠٢٦-٠٠١</td><td class="n">9 يوم</td><td class="n">400</td><td class="n">3,600</td></tr>
-              </tbody>
-              <tfoot><tr><td colspan="2">الإجمالي</td><td class="n">30 يوم</td><td></td><td class="n">12,000</td></tr></tfoot>
+              <thead><tr><th>الشهر</th><th>العقد</th><th class="n">أيام شغل</th><th class="n">إجازة / عطل</th><th class="n">السعر</th><th class="n">المستحق له</th><th></th></tr></thead>
+              <tbody><tr><td>أكتوبر ٢٠٢٦</td><td>ع-٢٠٢٦-٠٠١</td><td class="n">30</td><td class="n">1</td><td class="n">400</td><td class="n">12,000</td><td><a class="btn" href="#sarki" data-go-link="sarki">افتح سركي صاحب المعدة</a></td></tr></tbody>
             </table></div>
             <div data-pane="sup-ded" class="tw" hidden><table>
               <thead><tr><th>التاريخ</th><th>البيان</th><th>العقد</th><th class="n">المبلغ</th></tr></thead>
@@ -377,14 +424,8 @@ section[data-page].show { display: grid; }
               <tbody><tr><td><b>ف-٢٠٢٦-٠٠٠١</b></td><td>أكتوبر ٢٠٢٦</td><td>ع-٢٠٢٦-٠٠١</td><td class="n">15,000</td><td class="n taxc">2,100</td><td class="n"><b>17,100</b></td><td class="n">8,550</td><td><span class="pill p-am">مدفوعة جزئيًا ٥٠٪</span></td></tr></tbody>
             </table></div>
             <div data-pane="cli-log" class="tw" hidden><table>
-              <thead><tr><th>الفترة</th><th>المعدة</th><th class="n">الكمية (العميل)</th><th class="n">السعر</th><th class="n">القيمة</th></tr></thead>
-              <tbody>
-                <tr><td>01 – 07 أكتوبر</td><td>لودر كاتربيلر 950</td><td class="n">7 يوم</td><td class="n">500</td><td class="n">3,500</td></tr>
-                <tr><td>08 – 14 أكتوبر</td><td>لودر كاتربيلر 950</td><td class="n">7 يوم</td><td class="n">500</td><td class="n">3,500</td></tr>
-                <tr><td>15 – 21 أكتوبر</td><td>لودر كاتربيلر 950</td><td class="n">7 يوم</td><td class="n">500</td><td class="n">3,500</td></tr>
-                <tr><td>22 – 30 أكتوبر</td><td>لودر كاتربيلر 950</td><td class="n">9 يوم</td><td class="n">500</td><td class="n">4,500</td></tr>
-              </tbody>
-              <tfoot><tr><td colspan="2">الإجمالي</td><td class="n">30 يوم</td><td></td><td class="n">15,000</td></tr></tfoot>
+              <thead><tr><th>الشهر</th><th>العقد</th><th>المعدة</th><th class="n">أيام شغل</th><th class="n">إجازة / عطل</th><th class="n">السعر</th><th class="n">القيمة</th><th></th></tr></thead>
+              <tbody><tr><td>أكتوبر ٢٠٢٦</td><td>ع-٢٠٢٦-٠٠١</td><td>لودر كاتربيلر 950</td><td class="n">30</td><td class="n">1</td><td class="n">500</td><td class="n">15,000</td><td><a class="btn" href="#sarki" data-go-link="sarki">افتح سركي الشركة</a></td></tr></tbody>
             </table></div>
             <div data-pane="cli-pay" class="tw" hidden><table>
               <thead><tr><th>التاريخ</th><th>العقد</th><th>ملاحظة</th><th class="n">المبلغ</th><th class="n">منه ضريبة</th></tr></thead>
@@ -398,7 +439,7 @@ section[data-page].show { display: grid; }
       <section data-page="management" class="grid" style="gap:20px">
         <div class="head">
           <div><h1>الإدارة</h1><p>ربح كل عقد وكل معدة، ونصيب الإدارة كل شهر</p></div>
-          <div class="tools"><select class="month" aria-label="الشهر"><option>أكتوبر ٢٠٢٦</option></select><button class="btn pri">+ عقد جديد</button><button class="btn">Excel</button></div>
+          <div class="tools"><select class="month" aria-label="الشهر"><option>أكتوبر ٢٠٢٦</option></select><button class="btn">Excel</button></div>
         </div>
         <div class="grid k4">
           <div class="kpi"><span class="l">إجمالي الهامش</span><span class="v">3,000<span class="cur">ج</span></span></div>
@@ -408,39 +449,12 @@ section[data-page].show { display: grid; }
         </div>
 
         <div class="panel">
-          <div class="ph"><h2>العقود</h2><span class="hint">دوس على العقد يفتح السركي بتاعه</span></div>
+          <div class="ph"><h2>العقود</h2><a class="btn" href="#sarki" data-go-link="sarki">افتح السركي</a></div>
           <div class="tw"><table>
             <thead><tr><th>العقد</th><th>المعدة</th><th>صاحبها</th><th>مع مين</th><th class="n">سعر العميل</th><th class="n">سعر المورد</th><th class="n">الهامش</th><th class="n">٥٪</th><th class="n">مصروفات</th><th class="n">الصافي</th></tr></thead>
             <tbody><tr style="cursor:pointer"><td><b>ع-٢٠٢٦-٠٠١</b></td><td>لودر كاتربيلر 950</td><td>الحاج سيد عبد الله</td><td>شركة الأمل للمقاولات</td><td class="n">500</td><td class="n">400</td><td class="n">3,000</td><td class="n taxc">150</td><td class="n out">350</td><td class="n in">2,500</td></tr></tbody>
             <tfoot><tr><td colspan="6">إجمالي العقود</td><td class="n">3,000</td><td class="n">150</td><td class="n">350</td><td class="n">2,500</td></tr></tfoot>
           </table></div>
-        </div>
-
-        <div class="panel">
-          <div class="ph">
-            <h2>سركي العقد ع-٢٠٢٦-٠٠١ — لودر كاتربيلر 950</h2>
-            <div class="tools">
-              <label class="toggle"><input type="checkbox" id="vat-toggle" checked> إضافة ١٤٪ على العميل</label>
-              <button class="btn">+ فترة شغل</button><button class="btn">طباعة السركي</button>
-            </div>
-          </div>
-          <div class="facts">
-            <div><span>العميل</span><b style="font-size:15px">شركة الأمل للمقاولات</b></div>
-            <div><span>صاحب المعدة</span><b style="font-size:15px">الحاج سيد عبد الله</b></div>
-            <div><span>المحاسبة</span><b style="font-size:15px">باليوم</b></div>
-            <div><span>المدة</span><b style="font-size:15px">01/10 – 30/10/2026</b></div>
-          </div>
-          <div class="tw"><table>
-            <thead><tr><th>الفترة</th><th class="n">كمية العميل</th><th class="n">كمية المورد</th><th class="n">للعميل</th><th class="n">للمورد</th><th class="n">الهامش</th><th>ملاحظة</th></tr></thead>
-            <tbody>
-              <tr><td>01 – 07 أكتوبر</td><td class="n edit">7</td><td class="n edit">7</td><td class="n">3,500</td><td class="n">2,800</td><td class="n">700</td><td></td></tr>
-              <tr><td>08 – 14 أكتوبر</td><td class="n edit">7</td><td class="n edit">7</td><td class="n">3,500</td><td class="n">2,800</td><td class="n">700</td><td></td></tr>
-              <tr><td>15 – 21 أكتوبر</td><td class="n edit">7</td><td class="n edit">7</td><td class="n">3,500</td><td class="n">2,800</td><td class="n">700</td><td></td></tr>
-              <tr><td>22 – 30 أكتوبر</td><td class="n edit">9</td><td class="n edit">9</td><td class="n">4,500</td><td class="n">3,600</td><td class="n">900</td><td></td></tr>
-            </tbody>
-            <tfoot><tr><td>الإجمالي</td><td class="n">30</td><td class="n">30</td><td class="n">15,000</td><td class="n">12,000</td><td class="n">3,000</td><td></td></tr></tfoot>
-          </table></div>
-          <div class="note">الخانات الصفرا بتتكتب. كمية المورد بتساوي كمية العميل لوحدها، وتقدر تغيرها (مثلًا لو المعدة عطلت يومين على حساب المورد).</div>
         </div>
 
         <div class="grid two">
@@ -499,14 +513,15 @@ section[data-page].show { display: grid; }
             </table></div>
           </div>
           <div class="panel">
-            <div class="ph"><h2>توزيع أكتوبر بالتفصيل</h2></div>
+            <div class="ph"><h2>نصيب كل مستثمر اتحسب إزاي؟</h2></div>
+            <div class="pb hint" style="font-size:13px;line-height:1.9">نصيب المستثمرين في أكتوبر 1,250. بيتقسم على قد فلوس كل واحد <b>وعدد الأيام اللي فلوسه قعدتها معانا في الشهر</b>. الاتنين حطوا فلوسهم يوم ١ أكتوبر، يعني قعدت ٣١ يوم كاملين، فالقسمة بقت ٦٠٪ و ٤٠٪.<br>لو خالد كان حط فلوسه يوم ١٦، كانت هتتحسب له ١٦ يوم بس، ونصيبه يقل.</div>
             <div class="tw"><table>
-              <thead><tr><th>المستثمر</th><th class="n">فلوس × أيام</th><th class="n">النسبة</th><th class="n">النصيب</th></tr></thead>
+              <thead><tr><th>المستثمر</th><th class="n">فلوسه</th><th class="n">أيامها في أكتوبر</th><th class="n">النسبة</th><th class="n">النصيب</th></tr></thead>
               <tbody>
-                <tr><td>م. أحمد سالم</td><td class="n">60,000 × 31</td><td class="n">60٪</td><td class="n">750.00</td></tr>
-                <tr><td>أ. خالد منصور</td><td class="n">40,000 × 31</td><td class="n">40٪</td><td class="n">500.00</td></tr>
+                <tr><td>م. أحمد سالم</td><td class="n">60,000</td><td class="n">31</td><td class="n">60٪</td><td class="n">750.00</td></tr>
+                <tr><td>أ. خالد منصور</td><td class="n">40,000</td><td class="n">31</td><td class="n">40٪</td><td class="n">500.00</td></tr>
               </tbody>
-              <tfoot><tr><td colspan="3">نصيب المستثمرين · كسور القروش للإدارة: 0.00</td><td class="n">1,250.00</td></tr></tfoot>
+              <tfoot><tr><td colspan="4">الإجمالي (لو فضل كسر أقل من قرش بيروح للإدارة)</td><td class="n">1,250.00</td></tr></tfoot>
             </table></div>
           </div>
         </div>
@@ -520,7 +535,7 @@ section[data-page].show { display: grid; }
         </div>
         <div class="grid k4">
           <div class="kpi hero"><span class="l">الرصيد الكلي</span><span class="v">97,700<span class="cur">ج</span></span></div>
-          <div class="kpi tax"><span class="l">ضرايب محجوزة — مقفولة</span><span class="v">1,200<span class="cur">ج</span></span><span class="s">ممنوع تتدفع منها للموردين</span></div>
+          <div class="kpi tax"><span class="l">فلوس ضرايب في الخزنة</span><span class="v">1,200<span class="cur">ج</span></span><span class="s">مش بتاعتنا — ممنوع تتدفع منها للموردين</span></div>
           <div class="kpi"><span class="l">أرباح مستحقة ومتصرفتش</span><span class="v">1,250<span class="cur">ج</span></span><span class="s">مستثمرين 625 · إدارة 625</span></div>
           <div class="kpi"><span class="l">المتاح للتشغيل</span><span class="v in">95,250<span class="cur">ج</span></span><span class="s">97,700 − 1,200 − 1,250</span></div>
         </div>
@@ -582,8 +597,18 @@ section[data-page].show { display: grid; }
         <div class="grid k4">
           <div class="kpi tax"><span class="l">إجمالي الضرايب المستحقة</span><span class="v">2,250<span class="cur">ج</span></span><span class="s">١٤٪ 2,100 + ٥٪ 150</span></div>
           <div class="kpi"><span class="l">اتدفع للضرايب</span><span class="v">0<span class="cur">ج</span></span></div>
-          <div class="kpi"><span class="l">محجوز في الخزنة</span><span class="v">1,200<span class="cur">ج</span></span><span class="s">١٤٪ اتحصّلت 1,050 + ٥٪ 150</span></div>
+          <div class="kpi"><span class="l">منها قاعد في الخزنة</span><span class="v">1,200<span class="cur">ج</span></span><span class="s">١٤٪ اتحصّلت 1,050 + ٥٪ 150</span></div>
           <div class="kpi"><span class="l">١٤٪ لسه عند العملاء</span><span class="v">1,050<span class="cur">ج</span></span><span class="s">بتتحجز أول ما تتحصّل</span></div>
+        </div>
+
+        <div class="panel">
+          <div class="ph"><h2>يعني إيه "فلوس ضرايب في الخزنة"؟</h2></div>
+          <div class="pb" style="line-height:2">
+            الشركة دفعت لنا <b>8,550</b> (نص الفاتورة). جوه المبلغ ده <b class="taxc">1,050</b> ضريبة ١٤٪ — دي فلوس الحكومة، إحنا بس شايلينها لحد ما ندفعها.<br>
+            وكمان <b class="taxc">150</b> ضريبة الـ ٥٪ على الهامش لازم نشيلها على جنب.<br>
+            يبقى <b class="taxc">1,200</b> في الخزنة <b>مش بتاعتنا</b>، والبرنامج مش هيخليك تصرف منهم للموردين. أول ما تدفعهم للضرايب بيتشالوا من هنا.<br>
+            الـ <b>1,050</b> التانيين (ضريبة النص التاني من الفاتورة) لسه عند الشركة، وهيدخلوا الخزنة لما تدفع الباقي.
+          </div>
         </div>
 
         <div class="panel">
@@ -634,7 +659,7 @@ section[data-page].show { display: grid; }
 
 <script>
 (function () {
-  var pages = ["home", "suppliers", "clients", "management", "investors", "treasury", "tax"];
+  var pages = ["home", "sarki", "suppliers", "clients", "management", "investors", "treasury", "tax"];
   function show(id) {
     if (pages.indexOf(id) < 0) id = "home";
     document.querySelectorAll("section[data-page]").forEach(function (s) { s.classList.toggle("show", s.dataset.page === id); });
@@ -678,5 +703,75 @@ section[data-page].show { display: grid; }
     document.getElementById("tx-out").textContent = tout.toLocaleString("en-US");
   }
   ["f-from", "f-to", "f-type", "f-party"].forEach(function (id) { document.getElementById(id).addEventListener("change", filter); });
+
+  // in-page links to another section
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest("[data-go-link]");
+    if (!a) return;
+    e.preventDefault();
+    show(a.dataset.goLink);
+    try { history.replaceState(null, "", "#" + a.dataset.goLink); } catch (_) {}
+    window.scrollTo(0, 0);
+  });
+
+  // ---- daily sarki sheets (October 2026 starts on a Thursday) ----
+  var DAYS = ["الأحد", "الاتنين", "التلات", "الأربع", "الخميس", "الجمعة", "السبت"];
+  var STATUS = { work: "شغال", off: "إجازة", broken: "عطل", idle: "مشتغلش" };
+  var RATE = { client: 500, supplier: 400 };
+  function blank() {
+    var a = [];
+    for (var d = 1; d <= 31; d++) a.push({ st: "work", q: 1, r: "" });
+    a[8] = { st: "off", q: 0, r: "إجازة الجمعة — الموقع قافل" };
+    return a;
+  }
+  var data = { client: blank(), supplier: blank() };
+  function fmt(n) { return n.toLocaleString("en-US"); }
+  function render() {
+    ["client", "supplier"].forEach(function (k) {
+      var other = data[k === "client" ? "supplier" : "client"];
+      var tb = document.querySelector('.sheet[data-sheet="' + k + '"] tbody');
+      var html = "", tq = 0, tv = 0;
+      data[k].forEach(function (row, i) {
+        var dow = (4 + i) % 7, diff = row.q !== other[i].q;
+        tq += row.q; tv += row.q * RATE[k];
+        html += '<tr class="' + (row.st !== "work" ? "off " : "") + (diff ? "diff" : "") + '">' +
+          '<td class="' + (dow === 5 ? "fri" : "") + '">' + DAYS[dow] + "</td>" +
+          "<td>" + String(i + 1).padStart(2, "0") + "/10</td>" +
+          '<td><select data-i="' + i + '" data-k="' + k + '" data-f="st" aria-label="الحالة">' +
+          Object.keys(STATUS).map(function (s) { return '<option value="' + s + '"' + (s === row.st ? " selected" : "") + ">" + STATUS[s] + "</option>"; }).join("") +
+          "</select></td>" +
+          '<td class="n"><input class="q" data-i="' + i + '" data-k="' + k + '" data-f="q" value="' + row.q + '" inputmode="decimal" aria-label="الكمية"></td>' +
+          '<td><input class="r" data-i="' + i + '" data-k="' + k + '" data-f="r" value="' + row.r.replace(/"/g, "&quot;") + '" placeholder="' + (row.st !== "work" ? "اكتب السبب" : "") + '" aria-label="البيان"></td>' +
+          '<td class="n">' + fmt(row.q * RATE[k]) + "</td>" +
+          "<td>" + (diff ? '<span class="pill p-out">مختلف عن ' + (k === "client" ? "سركي صاحب المعدة" : "سركي الشركة") + "</span>" : "") + "</td></tr>";
+      });
+      tb.innerHTML = html;
+      var tf = tb.parentElement.tFoot;
+      tf.querySelector('[data-tot="qty"]').textContent = fmt(tq) + " يوم";
+      tf.querySelector('[data-tot="val"]').textContent = fmt(tv);
+      document.getElementById(k === "client" ? "sk-c-days" : "sk-s-days").textContent = fmt(tq) + " يوم";
+      document.getElementById(k === "client" ? "sk-c-val" : "sk-s-val").textContent = fmt(tv);
+    });
+    var n = data.client.filter(function (r, i) { return r.q !== data.supplier[i].q; }).length;
+    var m = document.getElementById("sk-match");
+    m.textContent = n ? n + " يوم مختلف" : "متطابقين ✓";
+    m.className = n ? "out" : "in";
+  }
+  document.querySelectorAll(".sheet").forEach(function (t) {
+    t.addEventListener("change", function (e) {
+      var el = e.target, i = +el.dataset.i, k = el.dataset.k, f = el.dataset.f;
+      if (!k) return;
+      var row = data[k][i];
+      if (f === "st") { row.st = el.value; row.q = el.value === "work" ? 1 : 0; }
+      else if (f === "q") { row.q = Math.max(0, Number(el.value) || 0); }
+      else row.r = el.value;
+      render();
+    });
+  });
+  document.getElementById("sk-copy").addEventListener("click", function () {
+    data.supplier = data.client.map(function (r) { return { st: r.st, q: r.q, r: r.r }; });
+    render();
+  });
+  render();
 })();
 </script>

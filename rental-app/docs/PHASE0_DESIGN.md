@@ -121,11 +121,15 @@ contracts (id, code, client_id, equipment_id, supplier_id,
            client_rate_pt INTEGER, supplier_rate_pt INTEGER,
            start_date, end_date NULL, status CHECK(status IN('draft','active','ended','cancelled')), notes)
 
-work_logs (id, contract_id, period_from, period_to,
-           client_qty_milli INTEGER, supplier_qty_milli INTEGER,   -- بيبقوا متساويين افتراضيًا
-           client_rate_pt, supplier_rate_pt,                        -- نسخة من العقد وقت التسجيل
-           note, status, reversal_of)
+work_logs (id, contract_id, date, side CHECK(side IN('client','supplier')),   -- سركي الشركة / سركي صاحب المعدة
+           status CHECK(status IN('work','off','broken','idle')),               -- شغال / إجازة / عطل / مشتغلش
+           qty_milli INTEGER,                                                   -- يوم = 1000، ساعات للعقد بالساعة
+           rate_pt INTEGER,                                                     -- نسخة من سعر العقد وقت التسجيل
+           note,                                                                -- السبب لازم لو اليوم مش شغال
+           UNIQUE(contract_id, date, side))
 ```
+السركي يوم بيوم زي القديم: صف لكل يوم في الشهر لكل سركي، وتنبيه أحمر لو السركيين مختلفين في يوم.
+```sql
 (السعر بيتنسخ في السطر عشان لو اتغير سعر العقد بعدين الماضي ميتغيرش.)
 
 ### الفواتير والتحصيل
@@ -253,3 +257,10 @@ audit_log (id, at, tbl, row_id, op, before_json, after_json, summary_ar, undone)
 | ١١ | (أ) عقد بالشهر: سعر الشهر ÷ ٣٠ × عدد الأيام |
 | ٢ | جهازين: لاب (Windows) + تابلت (Android) — نسخة تابلت منفصلة `com.albunyan.rental` ومشروع Supabase منفصل |
 
+
+## ٨. تعديلات بعد مراجعة المرحلة ١
+
+- السركي اتنقل لصفحة لوحده "السركي" (مش جوه الإدارة).
+- سركيين لكل عقد، الاتنين بيتكتبوا يوم بيوم بإيد المستخدم: **سركي الشركة** (بستلمه من الشركة) و **سركي صاحب المعدة** (بسلّمه لصاحب المعدة)، مع زرار "انسخ من سركي الشركة".
+- حالة كل يوم: شغال / إجازة / عطل / مشتغلش، والسبب لازم يتكتب لو اليوم مش شغال.
+- كلمة "محجوزة" اتغيرت لـ "فلوس ضرايب في الخزنة (مش بتاعتنا)" مع شرح في الملف الضريبي.
