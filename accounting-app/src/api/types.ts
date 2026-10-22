@@ -256,10 +256,12 @@ export interface HassanPartyBalance {
 }
 
 export interface HassanTreasuryExpense {
-  id: number;
+  id: number | string;
   date: string;
   amount: number;
   description: string;
+  // سطر محسوب (الخاص من العربية الملاكي) — مبيتمسحش من هنا.
+  computed?: boolean;
 }
 
 export interface HassanTreasuryBalance {
@@ -739,4 +741,92 @@ export interface CreditorEntry {
 
 export interface CreditorStatement extends CreditorBalance {
   entries: CreditorEntry[];
+}
+
+// العهد
+export interface Custody {
+  id: number;
+  holder: string;
+  date: string;
+  amount: number;
+  method: string;
+  warn_amount: number;
+  note: string | null;
+  closed: boolean;
+  given: number;
+  topups: number;
+  spent: number;
+  returned: number;
+  remaining: number;
+  low: boolean;
+}
+
+export interface CustodyEntry {
+  id: number;
+  custody_id: number;
+  date: string;
+  type: "expense" | "topup" | "return";
+  amount: number;
+  description: string | null;
+  method: string | null;
+  expense_id: number | null;
+  equipment_name: string | null;
+  category_name: string | null;
+  balance: number;
+}
+
+export interface CustodyStatement extends Custody {
+  entries: CustodyEntry[];
+}
+
+// العربية الملاكي
+export interface CarFuel {
+  id: number;
+  date: string;
+  kind: string;
+  amount: number;
+  note: string | null;
+}
+
+export interface CarSummary {
+  month: string;
+  fuel: CarFuel[];
+  trips: { id: number; date: string | null; month: string; amount: number; note: string | null; equipment_name: string }[];
+  byEquipment: { equipment_name: string; amount: number }[];
+  fuelTotal: number;
+  tripsTotal: number;
+  personal: number;
+  over: number;
+  categoryId: number | null;
+  yearPersonal: number;
+}
+
+// الالتزامات
+export interface Obligation {
+  id: number;
+  title: string;
+  kind: string;
+  amount: number | null;
+  due_date: string;
+  repeat_monthly: number;
+  done_at: string | null;
+  note: string | null;
+}
+
+export interface DashboardAlert {
+  kind: "custody" | "obligation";
+  level: "warn" | "danger";
+  id: number;
+  title: string;
+  amount: number | null;
+  due_date?: string;
+  days?: number;
+}
+
+export type AttendanceStatus = "present" | "absent" | "leave_paid" | "leave_unpaid";
+export interface AttendanceRow {
+  id: number;
+  worker_id: number;
+  date: string;
+  status: AttendanceStatus;
 }

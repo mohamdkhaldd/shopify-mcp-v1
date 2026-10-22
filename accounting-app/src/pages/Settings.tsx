@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { appApi, syncApi, systemApi } from "../api/client";
+import { appApi, confirmSetting, syncApi, systemApi } from "../api/client";
 import { AppUpdateStatus, SyncStatus } from "../api/types";
 import Icon from "../components/Icon";
 import DriversTab from "./settings/DriversTab";
@@ -18,6 +18,31 @@ const tabs: { id: TabId; label: string; icon: string }[] = [
   { id: "contractors", label: "المقاولين", icon: "contractors" },
   { id: "expenseCategories", label: "أنواع المصروفات", icon: "treasury" },
 ];
+
+// تأكيد قبل أي إضافة أو مسح — بيتحفظ على الجهاز ده بس.
+function ConfirmToggle() {
+  const [on, setOn] = useState(confirmSetting.get());
+  return (
+    <div className="bg-white rounded-card shadow-card p-5 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 className="font-bold text-slate-700 mb-1">تأكيد قبل الإضافة والمسح</h2>
+        <p className="text-xs text-slate-400">قبل ما أي حاجة تتسجل أو تتمسح، البرنامج يقولك "إنت بتسجّل كذا — موافق؟".</p>
+      </div>
+      <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) => {
+            confirmSetting.set(e.target.checked);
+            setOn(e.target.checked);
+          }}
+          className="w-5 h-5 accent-[#2F8F63]"
+        />
+        {on ? "شغال" : "مقفول"}
+      </label>
+    </div>
+  );
+}
 
 export default function Settings() {
   const [active, setActive] = useState<TabId>("partners");
@@ -121,6 +146,8 @@ export default function Settings() {
       {active === "contractors" && <ContractorsTab />}
 
       {active === "expenseCategories" && <ExpenseCategoriesTab />}
+
+      <ConfirmToggle />
 
       <div className="bg-white rounded-card shadow-card p-5">
         <h2 className="font-bold text-slate-700 mb-1">الإصدار والتحديثات</h2>

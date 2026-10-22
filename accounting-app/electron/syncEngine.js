@@ -718,13 +718,13 @@ function createSyncEngine({
 
   // سجل التعديلات: اللي اتزامن فعلًا (من السحابة، لكل الأجهزة) + اللي لسه
   // متبعتش من الجهاز ده. أسماء المعدات/الأشخاص بتتجاب من القاعدة المحلية.
-  const NAME_TABLES = ["equipment", "employees", "partners", "contractors", "suppliers", "expense_categories", "hassan_workers", "creditors"];
+  const NAME_TABLES = ["equipment", "employees", "partners", "contractors", "suppliers", "expense_categories", "hassan_workers", "creditors", "custodies"];
   function resolveRefs(t, data) {
     const refs = {};
     for (const [c, parent] of Object.entries(fks[t] ?? {})) {
       const g = data?.[`${c}@gid`];
       if (!g || !NAME_TABLES.includes(parent)) continue;
-      const row = db.prepare(`SELECT name FROM ${parent} WHERE gid = ?`).get(g);
+      const row = db.prepare(`SELECT ${parent === "custodies" ? "holder" : "name"} AS name FROM ${parent} WHERE gid = ?`).get(g);
       if (row) refs[c] = row.name;
     }
     return refs;

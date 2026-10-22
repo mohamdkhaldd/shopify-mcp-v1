@@ -22,8 +22,11 @@ public class PrinterPlugin extends Plugin {
         WebView webView = getBridge().getWebView();
         PrintManager printManager = (PrintManager) getActivity().getSystemService(Context.PRINT_SERVICE);
         PrintDocumentAdapter adapter = webView.createPrintDocumentAdapter(name);
+        // من غير هوامش من أندرويد — الهوامش بتيجي من CSS الطباعة (8 مم) بس،
+        // عشان متتحطش هوامش فوق هوامش وتضيّق الصفحة فتطلع مقطوعة أو في ورقتين.
         PrintAttributes attributes = new PrintAttributes.Builder()
-          .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+          .setMediaSize(PrintAttributes.MediaSize.ISO_A4.asPortrait())
+          .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
           .build();
         printManager.print(name, adapter, attributes);
         call.resolve();

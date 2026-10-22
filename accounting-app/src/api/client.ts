@@ -1,5 +1,12 @@
 import { mockInvoke } from "./mockDb";
 import {
+  AttendanceRow,
+  AttendanceStatus,
+  CarSummary,
+  Custody,
+  CustodyStatement,
+  DashboardAlert,
+  Obligation,
   CreditorBalance,
   CreditorStatement,
   AppUpdateStatus,
@@ -66,7 +73,143 @@ declare global {
   }
 }
 
+// ---------- تأكيد قبل أي إضافة أو مسح ----------
+// قبل أي إضافة أو مسح بيسأل "إنت بتضيف كذا — موافق؟". العمليات اللي بتتكرر
+// ورا بعض بسرعة (تعبئة أيام كتير في السركي مثلًا) بتتسأل مرة واحدة، والمسح
+// اللي سأل "متأكد؟" لوحده مبيتسألش تاني. ممكن يتقفل من الإعدادات.
+const CONFIRM_KEY = "albunyan.confirmChanges";
+export const confirmSetting = {
+  get: (): boolean => {
+    try {
+      return localStorage.getItem(CONFIRM_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  },
+  set: (on: boolean) => {
+    try {
+      localStorage.setItem(CONFIRM_KEY, on ? "1" : "0");
+    } catch {
+      /* storage blocked */
+    }
+  },
+};
+
+export class CancelledError extends Error {
+  constructor() {
+    super("اتلغى");
+    this.name = "CancelledError";
+  }
+}
+
+const ENTITY_LABELS: Record<string, string> = {
+  partners: "شريك",
+  employees: "سواق / موظف",
+  contractors: "مقاول",
+  expenseCategories: "نوع مصروف",
+  equipment: "معدة",
+  dailyLogs: "يوم في الشيت",
+  equipmentShifts: "شيفت",
+  monthlyExpenses: "مصروف معدة",
+  employeeAdvances: "سلفة",
+  employeeBonuses: "حافز",
+  employeeDeductions: "خصم",
+  salaryPayments: "دفعة مرتب",
+  hassanPenalties: "جزاء على حسن",
+  hassanWorkers: "عامل لحسن",
+  hassanWorkerEntries: "حركة مرتب عامل حسن",
+  hassanTreasury: "مصروف من خزنة حسن",
+  hassanLedger: "حركة في حساب حسن الشخصي",
+  contractorPayments: "دفعة من مقاول",
+  partnerPayments: "دفعة لشريك",
+  treasury: "حركة خزنة",
+  otherIncome: "إيراد آخر",
+  expensePayments: "دفعة آجل",
+  creditors: "جهة علينا لها فلوس",
+  creditorEntries: "دين / سداد لجهة",
+  supplierPurchases: "مشتريات من مورد",
+  supplierPayments: "دفعة لمورد",
+  waste: "هالك",
+  custodies: "عهدة",
+  custodyEntries: "حركة في عهدة",
+  carFuel: "بنزين / زيت العربية",
+  obligations: "ميعاد التزام",
+};
+
+function changeKind(channel: string): "add" | "delete" | null {
+  const [entity, op] = channel.split(":");
+  if (!ENTITY_LABELS[entity]) return null;
+  if (op === "create" || op === "upsert" || op === "createTransfer" || op === "count") return "add";
+  if (op === "delete" || op === "deleteTransfer" || op === "deleteAdjustment") return "delete";
+  return null;
+}
+
+function describePayload(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const p = payload as Record<string, unknown>;
+  const parts: string[] = [];
+  const text = (k: string) => (typeof p[k] === "string" && (p[k] as string).trim() ? (p[k] as string).trim() : null);
+  for (const k of ["name", "holder", "title", "person_name", "kind"]) {
+    const v = text(k);
+    // أنواع داخلية بالإنجليزي (salaries...) متظهرش في الرسالة.
+    if (v && !/^[a-z_]+$/.test(v)) parts.push(v);
+  }
+  if (typeof p.amount === "number" || (typeof p.amount === "string" && p.amount !== "")) {
+    parts.push(`${Number(p.amount).toLocaleString("en-US")} ج.م`);
+  } else if (typeof p.counted === "number") {
+    parts.push(`المعدود ${p.counted.toLocaleString("en-US")} ج.م`);
+  }
+  if (typeof p.day_rate === "number" && p.day_rate) parts.push(`يومية ${p.day_rate.toLocaleString("en-US")}`);
+  const date = text("date") ?? text("due_date") ?? text("month");
+  if (date) parts.push(`يوم ${date}`);
+  for (const k of ["description", "reason", "note"]) {
+    const v = text(k);
+    if (v) {
+      parts.push(v);
+      break;
+    }
+  }
+  return parts.join(" — ");
+}
+
+let lastNativeConfirm = 0;
+let lastApproved = { channel: "", at: 0 };
+if (typeof window !== "undefined" && !(window as unknown as { __confirmWrapped?: boolean }).__confirmWrapped) {
+  const nativeConfirm = window.confirm.bind(window);
+  window.confirm = (message?: string) => {
+    const ok = nativeConfirm(message);
+    lastNativeConfirm = Date.now();
+    return ok;
+  };
+  (window as unknown as { __confirmWrapped?: boolean }).__confirmWrapped = true;
+  // إلغاء التأكيد مش خطأ — منطلعش رسالة خطأ في الكونسول.
+  window.addEventListener("unhandledrejection", (e) => {
+    if ((e.reason as Error)?.name === "CancelledError") e.preventDefault();
+  });
+}
+
+function confirmChange(channel: string, payload: unknown): boolean {
+  const kind = changeKind(channel);
+  if (!kind || !confirmSetting.get()) return true;
+  const now = Date.now();
+  if (lastApproved.channel === channel && now - lastApproved.at < 4000) {
+    lastApproved.at = now;
+    return true;
+  }
+  if (kind === "delete" && now - lastNativeConfirm < 4000) return true;
+  const label = ENTITY_LABELS[channel.split(":")[0]];
+  const details = describePayload(payload);
+  const message =
+    kind === "add"
+      ? `إنت بتسجّل ${label}${details ? `:\n${details}` : ""}\n\nموافق؟`
+      : `إنت بتمسح ${label}.\n\nموافق؟`;
+  const ok = window.confirm(message);
+  if (ok) lastApproved = { channel, at: Date.now() };
+  return ok;
+}
+
 function invoke(channel: string, payload?: unknown): Promise<any> {
+  if (!confirmChange(channel, payload)) return Promise.reject(new CancelledError());
   if (window.api) return window.api.invoke(channel, payload);
   return mockInvoke(channel, payload);
 }
@@ -373,4 +516,50 @@ export const creditorsApi = {
   addEntry: (e: { creditor_id: number; date: string; type: "debt" | "payment"; amount: number; method: string | null; note: string | null }) =>
     invoke("creditorEntries:create", e),
   removeEntry: (id: number) => invoke("creditorEntries:delete", { id }),
+};
+
+export const custodyApi = {
+  list: (): Promise<Custody[]> => invoke("custodies:list"),
+  create: (c: { holder: string; date: string; amount: number; method: string; warn_amount: number | ""; note: string | null }): Promise<Custody> =>
+    invoke("custodies:create", c),
+  update: (c: { id: number; holder: string; warn_amount: number; note: string | null }) => invoke("custodies:update", c),
+  setClosed: (id: number, closed: boolean) => invoke("custodies:setClosed", { id, closed }),
+  remove: (id: number) => invoke("custodies:delete", { id }),
+  statement: (id: number): Promise<CustodyStatement> => invoke("custodies:statement", { id }),
+  addEntry: (e: {
+    custody_id: number;
+    date: string;
+    type: "expense" | "topup" | "return";
+    amount: number;
+    description: string | null;
+    method?: string | null;
+    equipment_id?: number | null;
+    category_id?: number | null;
+  }): Promise<Custody> => invoke("custodyEntries:create", e),
+  removeEntry: (id: number) => invoke("custodyEntries:delete", { id }),
+};
+
+export const carApi = {
+  summary: (month: string): Promise<CarSummary> => invoke("car:summary", { month }),
+  ensureCategory: (): Promise<{ id: number }> => invoke("car:ensureCategory"),
+  addFuel: (f: { date: string; kind: string; amount: number; note: string | null }): Promise<CarSummary> => invoke("carFuel:create", f),
+  removeFuel: (id: number) => invoke("carFuel:delete", { id }),
+};
+
+export const obligationsApi = {
+  list: (): Promise<Obligation[]> => invoke("obligations:list"),
+  create: (o: { title: string; kind: string; amount: number | null; due_date: string; repeat_monthly: boolean; note: string | null }) =>
+    invoke("obligations:create", o),
+  remove: (id: number) => invoke("obligations:delete", { id }),
+  done: (id: number) => invoke("obligations:done", { id }),
+  reopen: (id: number) => invoke("obligations:reopen", { id }),
+};
+
+export const alertsApi = {
+  dashboard: (): Promise<DashboardAlert[]> => invoke("alerts:dashboard"),
+};
+
+export const attendanceApi = {
+  list: (worker_id: number, month: string): Promise<AttendanceRow[]> => invoke("hassanAttendance:list", { worker_id, month }),
+  set: (worker_id: number, date: string, status: AttendanceStatus | null) => invoke("hassanAttendance:set", { worker_id, date, status }),
 };

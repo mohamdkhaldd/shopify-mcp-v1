@@ -1,4 +1,5 @@
 import Icon from "./Icon";
+import { EyeButton, Secret } from "./Privacy";
 
 interface KpiCardProps {
   label: string;
@@ -7,6 +8,8 @@ interface KpiCardProps {
   tone?: "positive" | "negative" | "neutral";
   sub?: string;
   onClick?: () => void;
+  // لو متحدد: الرقم عليه بلور وجنبه عين تظهره (الصفحة الرئيسية).
+  privacyId?: string;
 }
 
 const toneStyles: Record<NonNullable<KpiCardProps["tone"]>, string> = {
@@ -15,7 +18,7 @@ const toneStyles: Record<NonNullable<KpiCardProps["tone"]>, string> = {
   neutral: "text-slate-600 bg-slate-100",
 };
 
-export default function KpiCard({ label, value, icon, tone = "neutral", sub, onClick }: KpiCardProps) {
+export default function KpiCard({ label, value, icon, tone = "neutral", sub, onClick, privacyId }: KpiCardProps) {
   return (
     <div
       role={onClick ? "button" : undefined}
@@ -44,13 +47,16 @@ export default function KpiCard({ label, value, icon, tone = "neutral", sub, onC
             tone === "negative" ? "text-rose-600" : "text-slate-900",
           ].join(" ")}
         >
-          {value}
+          {privacyId ? <Secret id={privacyId}>{value}</Secret> : value}
         </div>
         {sub && <div className="mt-1 text-xs text-slate-400">{sub}</div>}
-        {onClick && <div className="mt-1 text-[11px] text-primary font-semibold">دوس للتفاصيل</div>}
+        {onClick && <div className="no-print mt-1 text-[11px] text-primary font-semibold">دوس للتفاصيل</div>}
       </div>
-      <div className={["w-11 h-11 rounded-xl flex items-center justify-center", toneStyles[tone]].join(" ")}>
-        <Icon name={icon} className="w-5 h-5" />
+      <div className="flex flex-col items-center gap-1">
+        <div className={["w-11 h-11 rounded-xl flex items-center justify-center", toneStyles[tone]].join(" ")}>
+          <Icon name={icon} className="w-5 h-5" />
+        </div>
+        {privacyId && <EyeButton id={privacyId} />}
       </div>
     </div>
   );

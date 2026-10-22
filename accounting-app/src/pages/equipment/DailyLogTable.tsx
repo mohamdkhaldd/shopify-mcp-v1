@@ -303,7 +303,9 @@ export default function DailyLogTable({
     }
 
     updateRow(date, { saving: true });
-    const saved = await dailyLogsApi.upsert({
+    // لو اتلغى من رسالة التأكيد، الصف بيرجع لآخر حاجة متسجلة.
+    const saved = await dailyLogsApi
+      .upsert({
       equipment_id: equipmentId,
       date,
       role,
@@ -319,7 +321,16 @@ export default function DailyLogTable({
       note: row.note.trim() || null,
       site_name: row.site_name.trim() || null,
       overtime_rate: overtimeRateOrNull(row),
-    });
+    })
+      .catch(async (err) => {
+        updateRow(date, { saving: false });
+        if (err?.name === "CancelledError") {
+          await refresh();
+          return null;
+        }
+        throw err;
+      });
+    if (!saved) return;
     updateRow(date, { id: saved.id, person_name: saved.person_name, day_value: saved.day_value, saving: false });
     onChanged?.();
   }

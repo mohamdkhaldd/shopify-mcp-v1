@@ -1,5 +1,6 @@
 const { ipcMain } = require("electron");
 const { pushToCloud } = require("./sync");
+const { registerExtraHandlers, carPersonalAllMonths } = require("./extras");
 
 // Overtime rule (doc section 3), applied identically to السركي and المقاول:
 // hourly rate = day_rate / 8, overtime = MAX(0, actual - base) hours,
@@ -1267,10 +1268,13 @@ function registerIpcHandlers(db) {
     // الكوميشن هنا صافي بعد الجزاءات — ده اللي فعلاً بيدخل خزنة حسن.
     const allTimeCommission = computeCommissionRows(null).total - allTimePenalties;
     const monthCommission = computeCommissionRows(month).total - monthPenalties;
-    const allTimeSpent = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_treasury_expenses").get().total;
-    const monthSpent = db
-      .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_treasury_expenses WHERE date LIKE ?")
-      .get(`${month}%`).total;
+    // الجزء الخاص من بنزين العربية الملاكي بيتخصم من كوميشن حسن.
+    const car = carPersonalAllMonths(db);
+    const allTimeSpent =
+      db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_treasury_expenses").get().total + car.reduce((s, c) => s + c.personal, 0);
+    const monthSpent =
+      db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_treasury_expenses WHERE date LIKE ?").get(`${month}%`).total +
+      (car.find((c) => c.month === month)?.personal ?? 0);
     return {
       balance: allTimeCommission - allTimeSpent,
       allTimeCommission,
@@ -1282,9 +1286,21 @@ function registerIpcHandlers(db) {
     };
   });
 
-  ipcMain.handle("hassanTreasury:list", (_e, { month }) =>
-    db.prepare("SELECT * FROM hassan_treasury_expenses WHERE date LIKE ? ORDER BY date DESC").all(`${month}%`)
-  );
+  ipcMain.handle("hassanTreasury:list", (_e, { month }) => {
+    const rows = db.prepare("SELECT * FROM hassan_treasury_expenses WHERE date LIKE ? ORDER BY date DESC").all(`${month}%`);
+    // سطر محسوب (مش متسجل): الخاص من العربية الملاكي الشهر ده.
+    const car = carPersonalAllMonths(db).find((c) => c.month === month);
+    if (car && car.personal > 0) {
+      rows.unshift({
+        id: `car-${month}`,
+        date: car.lastDate,
+        amount: car.personal,
+        description: `العربية الملاكي — خاص (بنزين وزيت ${Math.round(car.fuelTotal).toLocaleString("en-US")} − مشاوير شغل ${Math.round(car.tripsTotal).toLocaleString("en-US")})`,
+        computed: true,
+      });
+    }
+    return rows;
+  });
   ipcMain.handle("hassanTreasury:create", (_e, expense) => {
     const info = db
       .prepare("INSERT INTO hassan_treasury_expenses (date, amount, description) VALUES (@date, @amount, @description)")
@@ -1713,6 +1729,19 @@ function registerIpcHandlers(db) {
     )
       .all(account)
       .forEach((r) => add(r.date, "out", `سداد لـ ${r.creditor_name}${r.note ? ` (${r.note})` : ""}`, r.amount));
+
+    // العهد: المبلغ اللي اتسلم (وأي زيادة) طالع من الخزنة، والباقي اللي رجع داخل.
+    db.prepare("SELECT date, amount, holder FROM custodies WHERE method = ?")
+      .all(account)
+      .forEach((r) => add(r.date, "out", `عهدة لـ ${r.holder}`, r.amount));
+    db.prepare(
+      `SELECT ce.date, ce.amount, ce.type, c.holder FROM custody_entries ce
+       JOIN custodies c ON c.id = ce.custody_id WHERE ce.type IN ('topup', 'return') AND ce.method = ?`
+    )
+      .all(account)
+      .forEach((r) =>
+        add(r.date, r.type === "topup" ? "out" : "in", r.type === "topup" ? `زيادة عهدة ${r.holder}` : `رجوع باقي عهدة ${r.holder}`, r.amount)
+      );
 
     db.prepare("SELECT date, amount, note FROM waste_entries WHERE payment_method = ?")
       .all(account)
@@ -2595,6 +2624,10 @@ function registerIpcHandlers(db) {
       db.prepare("DELETE FROM supplier_purchases").run();
       db.prepare("DELETE FROM supplier_payments").run();
       db.prepare("DELETE FROM creditor_entries").run();
+      db.prepare("DELETE FROM custodies").run();
+      db.prepare("DELETE FROM car_fuel").run();
+      db.prepare("DELETE FROM obligations").run();
+      db.prepare("DELETE FROM hassan_worker_attendance").run();
       db.prepare("UPDATE creditors SET opening_balance = 0").run();
       db.prepare("DELETE FROM waste_entries").run();
       db.prepare("UPDATE treasury_accounts SET current_balance = 0, opening_balance = 0, opening_date = NULL").run();
@@ -2605,6 +2638,8 @@ function registerIpcHandlers(db) {
     tx();
     return { ok: true };
   });
+
+  registerExtraHandlers(db);
 }
 
 module.exports = { registerIpcHandlers };

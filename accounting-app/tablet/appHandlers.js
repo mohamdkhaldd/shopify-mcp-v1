@@ -47,7 +47,9 @@ function fitPrintToOnePage() {
   // بنقيس في إطار مخفي بعرض ورقة A4 بالظبط — عشان التقسيمات اللي بتتغير حسب
   // العرض (زي 4 مربعات جنب بعض على الشاشة) تترص زي ما هتطلع على الورق.
   const frame = document.createElement("iframe");
-  frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${A4_PRINTABLE_PX.width}px;height:${A4_PRINTABLE_PX.height}px;border:0;visibility:hidden;`;
+  // الإطار نفسه قصير جدًا: لو طوله طول الورقة، أي صفحة فيها min-h-screen
+  // بتتقاس على إنها طول الورقة كله حتى لو المحتوى قصير — فكانت بتتصغر على الفاضي.
+  frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${A4_PRINTABLE_PX.width}px;height:10px;border:0;visibility:hidden;`;
   document.body.appendChild(frame);
   const clone = document.documentElement.cloneNode(true);
   clone.querySelectorAll("script, link[rel='stylesheet'], style").forEach((el) => el.remove());
@@ -57,19 +59,30 @@ function fitPrintToOnePage() {
   doc.close();
   const style = doc.createElement("style");
   doc.head.appendChild(style);
-  const heightAt = (fontPx) => {
+  // لازم يدخل في الورقة طولًا وعرضًا (جدول عريض كان بيطلع مقطوع من الجنب) —
+  // وبهامش أمان، لأن أندرويد بيرسم الطباعة بفروق بسيطة عن القياس هنا.
+  const measure = (fontPx) => {
     style.textContent = `${allCss.join("\n")}\n${printCss.join("\n")}\nhtml { font-size: ${fontPx}px !important; }`;
-    return Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight);
+    return {
+      h: Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight),
+      w: Math.max(doc.body.scrollWidth, doc.documentElement.scrollWidth),
+    };
   };
-  const limit = A4_PRINTABLE_PX.height * 0.97;
+  // العرض بيتحسب بس لو تصغير الخط بيفرق فيه (جدول عريض) — الرسوم البيانية
+  // عرضها ثابت ومش بتصغر مع الخط، فمنصغّرش الصفحة كلها عشانها.
+  const widthMatters = measure(3).w <= A4_PRINTABLE_PX.width + 2;
+  const fits = (fontPx) => {
+    const { h, w } = measure(fontPx);
+    return h <= A4_PRINTABLE_PX.height * 0.88 && (!widthMatters || w <= A4_PRINTABLE_PX.width + 2);
+  };
   let font = BASE_PRINT_FONT_PX;
-  if (heightAt(font) > limit) {
+  if (!fits(font)) {
     let lo = 3;
     let hi = BASE_PRINT_FONT_PX;
     for (let i = 0; i < 8; i++) {
       const mid = (lo + hi) / 2;
-      if (heightAt(mid) > limit) hi = mid;
-      else lo = mid;
+      if (fits(mid)) lo = mid;
+      else hi = mid;
     }
     font = lo;
   }

@@ -11,6 +11,9 @@ export type SectionId =
   | "suppliers"
   | "reports"
   | "activity"
+  | "custody"
+  | "car"
+  | "obligations"
   | "settings";
 
 export interface NavItem {
@@ -27,6 +30,9 @@ export const navItems: NavItem[] = [
   { id: "contractors", label: "المقاولين", icon: "contractors" },
   { id: "partners", label: "الشركاء", icon: "partners" },
   { id: "treasury", label: "الخزنة", icon: "treasury" },
+  { id: "custody", label: "العهد", icon: "custody" },
+  { id: "obligations", label: "المواعيد والالتزامات", icon: "calendar" },
+  { id: "car", label: "العربية الملاكي", icon: "car" },
   { id: "outgoingIncoming", label: "الصادر والوارد", icon: "flow" },
   { id: "payables", label: "الرصيد", icon: "balance" },
   { id: "suppliers", label: "الموردين", icon: "suppliers" },

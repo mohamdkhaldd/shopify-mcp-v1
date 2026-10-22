@@ -8,5 +8,6 @@ export const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
 ];
 
 export function paymentMethodLabel(value: string | null): string {
+  if (value === "custody") return "عهدة";
   return PAYMENT_METHODS.find((m) => m.value === value)?.label ?? value ?? "—";
 }

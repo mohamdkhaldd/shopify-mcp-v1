@@ -81,6 +81,22 @@ function describe(r: SyncActivityRow): string {
       return d.type === "payment"
         ? `سداد لـ ${ref.creditor_id ?? ""} ${money(d.amount)}${d.note ? ` — ${d.note}` : ""}`
         : `دين علينا لـ ${ref.creditor_id ?? ""} ${money(d.amount)}${d.note ? ` — ${d.note}` : ""}`;
+    case "custodies":
+      return `عهدة لـ ${d.holder ?? ""} ${money(d.amount)}`;
+    case "custody_entries":
+      return d.type === "expense"
+        ? `صرف من عهدة ${ref.custody_id ?? ""} ${money(d.amount)}${d.description ? ` — ${d.description}` : ""}`
+        : d.type === "topup"
+          ? `زيادة على عهدة ${ref.custody_id ?? ""} ${money(d.amount)}`
+          : `رجوع باقي عهدة ${ref.custody_id ?? ""} ${money(d.amount)}`;
+    case "car_fuel":
+      return `العربية الملاكي: ${d.kind ?? ""} ${money(d.amount)}`;
+    case "obligations":
+      return `ميعاد التزام: ${d.title ?? ""}${d.amount ? ` ${money(d.amount)}` : ""} — ${d.due_date ?? ""}${d.done_at ? " (اتدفع)" : ""}`;
+    case "hassan_worker_attendance": {
+      const st: Record<string, string> = { present: "حاضر", absent: "غايب", leave_paid: "إجازة مدفوعة", leave_unpaid: "إجازة مش مدفوعة" };
+      return `حضور ${ref.worker_id ?? "عامل حسن"} يوم ${day(d.date)}: ${st[d.status] ?? d.status ?? ""}`;
+    }
     case "waste_entries":
       return `هالك ${money(d.amount)}`;
     default:

@@ -16,15 +16,18 @@ import DayCountBadge from "../components/DayCountBadge";
 import EquipmentTick from "../components/EquipmentTick";
 import KpiCard from "../components/KpiCard";
 import Modal from "../components/Modal";
+import { Blurrable, EyeAllButton, PrivacyProvider } from "../components/Privacy";
+import DashboardAlerts from "../components/DashboardAlerts";
 import { useTheme } from "../theme";
 import { contractorsDashboardApi, dashboardApi, partnersDashboardApi, suppliersApi } from "../api/client";
 import { ContractorSummary, DashboardMonthDues, DashboardSummary, MonthDueRow, PartnerSummary, SupplierDashboardRow } from "../api/types";
 import { currentMonthKey } from "../utils/months";
 import { formatEGP } from "../utils/format";
+import { SectionId } from "../nav";
 
 type DrilldownKind = "expense" | "contractors" | "partners" | "suppliers" | "monthContractors" | "monthPartners" | null;
 
-export default function Dashboard() {
+export default function Dashboard({ onNavigate }: { onNavigate?: (id: SectionId) => void }) {
   const { theme } = useTheme();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [drilldown, setDrilldown] = useState<DrilldownKind>(null);
@@ -61,14 +64,21 @@ export default function Dashboard() {
   const equipmentChartHeight = Math.max(240, summary.equipmentExpenses.length * 38);
 
   return (
+    <PrivacyProvider>
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold text-slate-900">لوحة التحكم الرئيسية</h1>
-        <p className="text-sm text-slate-500 mt-1">نظرة عامة على أداء الشركة — أرقام حية من بيانات النظام الفعلية</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold text-slate-900">لوحة التحكم الرئيسية</h1>
+          <p className="text-sm text-slate-500 mt-1">نظرة عامة على أداء الشركة — أرقام حية من بيانات النظام الفعلية</p>
+        </div>
+        <EyeAllButton />
       </div>
+
+      <DashboardAlerts onNavigate={onNavigate} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <KpiCard
+          privacyId="kpi1"
           label="صافي الربح السنوي"
           value={formatEGP(summary.totalAnnualProfit)}
           icon={summary.totalAnnualProfit >= 0 ? "trendUp" : "trendDown"}
@@ -76,6 +86,7 @@ export default function Dashboard() {
           sub="إجمالي كل المعدات — السنة الحالية"
         />
         <KpiCard
+          privacyId="kpi2"
           label="عدد المعدات"
           value={summary.equipmentCount.toLocaleString("en-US")}
           icon="equipment"
@@ -83,6 +94,7 @@ export default function Dashboard() {
           sub="معدات مسجلة في النظام"
         />
         <KpiCard
+          privacyId="kpi3"
           label="إجمالي المصروف السنوي"
           value={formatEGP(summary.totalAnnualExpense)}
           icon="treasury"
@@ -91,6 +103,7 @@ export default function Dashboard() {
           onClick={() => openDrilldown("expense")}
         />
         <KpiCard
+          privacyId="kpi4"
           label={`صافي ربح شهر ${summary.currentMonthLabel}`}
           value={formatEGP(summary.currentMonthProfit)}
           icon={summary.currentMonthProfit >= 0 ? "trendUp" : "trendDown"}
@@ -98,6 +111,7 @@ export default function Dashboard() {
           sub="أحدث شهر مسجّل"
         />
         <KpiCard
+          privacyId="kpi5"
           label="مستحق للشركة"
           value={formatEGP(summary.totalReceivables)}
           icon="contractors"
@@ -106,6 +120,7 @@ export default function Dashboard() {
           onClick={() => openDrilldown("contractors")}
         />
         <KpiCard
+          privacyId="kpi6"
           label="مستحق للشركاء"
           value={formatEGP(summary.totalPartnersDue)}
           icon="partners"
@@ -114,6 +129,7 @@ export default function Dashboard() {
           onClick={() => openDrilldown("partners")}
         />
         <KpiCard
+          privacyId="kpi7"
           label={`مستحق للشركة — شهر ${summary.currentMonthLabel}`}
           value={monthDues ? formatEGP(monthDues.contractorsRemaining) : "..."}
           icon="contractors"
@@ -122,6 +138,7 @@ export default function Dashboard() {
           onClick={() => openDrilldown("monthContractors")}
         />
         <KpiCard
+          privacyId="kpi8"
           label={`مستحق للشركاء — شهر ${summary.currentMonthLabel}`}
           value={monthDues ? formatEGP(monthDues.partnersRemaining) : "..."}
           icon="partners"
@@ -130,6 +147,7 @@ export default function Dashboard() {
           onClick={() => openDrilldown("monthPartners")}
         />
         <KpiCard
+          privacyId="kpi9"
           label="مستحق للموردين"
           value={formatEGP(summary.totalSuppliersDue)}
           icon="suppliers"
@@ -139,7 +157,7 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="bg-white rounded-card shadow-card p-5">
+      <Blurrable id="sec142" className="bg-white rounded-card shadow-card p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-slate-800">اتجاه صافي الربح الشهري</h2>
           <span className="text-xs text-slate-400">السنة الحالية</span>
@@ -159,10 +177,10 @@ export default function Dashboard() {
             <Area type="monotone" dataKey="profit" stroke="#2F8F63" strokeWidth={2.5} fill="url(#profitFill)" />
           </AreaChart>
         </ResponsiveContainer>
-      </div>
+      </Blurrable>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div className="bg-white rounded-card shadow-card p-5">
+        <Blurrable id="sec165" className="bg-white rounded-card shadow-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-slate-800">مصروف كل معدة (سنويًا)</h2>
           </div>
@@ -183,9 +201,9 @@ export default function Dashboard() {
               <Bar dataKey="annualExpense" fill="#C2853A" radius={[0, 6, 6, 0]} barSize={14} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        </Blurrable>
 
-        <div className="bg-white rounded-card shadow-card p-5">
+        <Blurrable id="sec188" className="bg-white rounded-card shadow-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-slate-800">صافي ربح كل معدة (سنويًا)</h2>
             <span className="text-xs text-slate-400">الدخل − المصروف</span>
@@ -212,10 +230,10 @@ export default function Dashboard() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        </Blurrable>
       </div>
 
-      <div className="bg-white rounded-card shadow-card p-5">
+      <Blurrable id="sec218" className="bg-white rounded-card shadow-card p-5">
         <h2 className="font-bold text-slate-800 mb-4">قائمة المعدات</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -269,7 +287,7 @@ export default function Dashboard() {
             </tfoot>
           </table>
         </div>
-      </div>
+      </Blurrable>
 
       {drilldown === "expense" && (
         <Modal title="مصروف كل معدة (سنويًا)" onClose={() => setDrilldown(null)}>
@@ -397,6 +415,7 @@ export default function Dashboard() {
         </Modal>
       )}
     </div>
+    </PrivacyProvider>
   );
 }
 

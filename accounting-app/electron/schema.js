@@ -250,6 +250,62 @@ CREATE TABLE IF NOT EXISTS creditor_entries (
   note TEXT
 );
 
+-- العهد: مبلغ بيتسلم لشخص (طالع من حساب في الخزنة)، وهو بيصرف منه — المصروف
+-- بيتخصم من العهدة مش من الخزنة. لو المصروف على معدة بيتسجل كمان في مصروفات
+-- المعدة (طريقة الدفع "عهدة") ومربوط بسطر العهدة.
+CREATE TABLE IF NOT EXISTS custodies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  holder TEXT NOT NULL,
+  date TEXT NOT NULL,
+  amount REAL NOT NULL,
+  method TEXT NOT NULL DEFAULT 'cash',
+  warn_amount REAL NOT NULL DEFAULT 0,
+  note TEXT,
+  closed INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS custody_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  custody_id INTEGER NOT NULL REFERENCES custodies(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('expense', 'topup', 'return')),
+  amount REAL NOT NULL,
+  description TEXT,
+  method TEXT,
+  expense_id INTEGER REFERENCES monthly_expenses(id) ON DELETE CASCADE
+);
+
+-- العربية الملاكي: كل مرة بنزين/زيت/صيانة. المشاوير بتتسجل مصروف "عربية
+-- ملاكي" على المعدة (من الخزنة)، والباقي من البنزين خاص — بيتخصم من كوميشن حسن.
+CREATE TABLE IF NOT EXISTS car_fuel (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  amount REAL NOT NULL,
+  note TEXT
+);
+
+-- مواعيد الاستحقاقات والالتزامات (مرتبات قبل يوم كذا، دفع للشركاء...).
+CREATE TABLE IF NOT EXISTS obligations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'other',
+  amount REAL,
+  due_date TEXT NOT NULL,
+  repeat_monthly INTEGER NOT NULL DEFAULT 0,
+  done_at TEXT,
+  note TEXT
+);
+
+-- حضور وغياب عمال حسن (تسجيل بس — مبيخصمش من المرتب).
+CREATE TABLE IF NOT EXISTS hassan_worker_attendance (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  worker_id INTEGER NOT NULL REFERENCES hassan_workers(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('present', 'absent', 'leave_paid', 'leave_unpaid')),
+  UNIQUE (worker_id, date)
+);
+
 CREATE TABLE IF NOT EXISTS waste_entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   date TEXT NOT NULL,

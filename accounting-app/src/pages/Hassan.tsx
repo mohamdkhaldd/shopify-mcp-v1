@@ -3,8 +3,10 @@ import MonthPicker from "../components/equipment/MonthPicker";
 import PrintButton from "../components/PrintButton";
 import { PrintHeader, PrintSignoff } from "../components/PrintSignoff";
 import Icon from "../components/Icon";
-import { hassanApi } from "../api/client";
+import { attendanceApi, hassanApi } from "../api/client";
 import {
+  AttendanceRow,
+  AttendanceStatus,
   HassanBalance,
   HassanCommissionSummary,
   HassanEquipmentCommissionDetail,
@@ -392,9 +394,13 @@ function TreasuryTab({ month }: { month: string }) {
                 <span className="text-slate-600">
                   {e.date} — {formatEGP(e.amount)} <span className="text-slate-400">({e.description})</span>
                 </span>
-                <button onClick={() => handleDelete(e.id)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
-                  حذف
-                </button>
+                {e.computed ? (
+                  <span className="no-print text-[11px] text-slate-400">بيتحسب من صفحة العربية الملاكي</span>
+                ) : (
+                  <button onClick={() => handleDelete(e.id as number)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
+                    حذف
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -645,6 +651,87 @@ function WorkerEntryForm({
   );
 }
 
+const ATTENDANCE: { value: AttendanceStatus; label: string; short: string; cls: string }[] = [
+  { value: "present", label: "حاضر", short: "ح", cls: "bg-primary text-white" },
+  { value: "absent", label: "غايب", short: "غ", cls: "bg-rose-500 text-white" },
+  { value: "leave_paid", label: "إجازة مدفوعة", short: "م", cls: "bg-sky-500 text-white" },
+  { value: "leave_unpaid", label: "إجازة مش مدفوعة", short: "ب", cls: "bg-amber-500 text-white" },
+];
+
+// شيت حضور وغياب العامل في الشهر — تسجيل بس، مبيخصمش من المرتب. دوس على اليوم
+// واختار: حاضر / غايب / إجازة (مدفوعة أو لأ).
+function AttendanceSheet({ workerId, month }: { workerId: number; month: string }) {
+  const [rows, setRows] = useState<AttendanceRow[]>([]);
+  const [picking, setPicking] = useState<string | null>(null);
+  const refresh = () => attendanceApi.list(workerId, month).then(setRows);
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workerId, month]);
+
+  const [y, m] = month.split("-").map(Number);
+  const days = new Date(y, m, 0).getDate();
+  const byDate = new Map(rows.map((r) => [r.date, r.status]));
+  const count = (s: AttendanceStatus) => rows.filter((r) => r.status === s).length;
+
+  async function set(date: string, status: AttendanceStatus | null) {
+    setPicking(null);
+    await attendanceApi.set(workerId, date, status);
+    refresh();
+  }
+
+  return (
+    <div className="mt-5 pt-4 border-t border-slate-100">
+      <div className="text-xs font-bold text-slate-500 mb-2">الحضور والغياب — {monthLabel(month)}</div>
+      <div className="flex flex-wrap gap-2 mb-3 text-xs">
+        {ATTENDANCE.map((a) => (
+          <span key={a.value} className="flex items-center gap-1">
+            <span className={`inline-flex w-5 h-5 rounded items-center justify-center font-bold ${a.cls}`}>{a.short}</span>
+            {a.label}: <b>{count(a.value)}</b>
+          </span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 sm:grid-cols-10 gap-1.5">
+        {Array.from({ length: days }, (_, i) => {
+          const date = `${month}-${String(i + 1).padStart(2, "0")}`;
+          const status = byDate.get(date);
+          const meta = ATTENDANCE.find((a) => a.value === status);
+          return (
+            <div key={date} className="relative">
+              <button
+                onClick={() => setPicking(picking === date ? null : date)}
+                className={[
+                  "w-full rounded-lg py-1.5 text-xs font-bold border",
+                  meta ? `${meta.cls} border-transparent` : "bg-white border-slate-200 text-slate-500",
+                ].join(" ")}
+                title={meta?.label ?? "مش متسجل"}
+              >
+                {i + 1}
+                {meta && <span className="block text-[10px] font-semibold opacity-90">{meta.short}</span>}
+              </button>
+              {picking === date && (
+                <div className="no-print absolute z-20 top-full mt-1 start-0 bg-white rounded-xl shadow-card border border-slate-100 p-1.5 space-y-1 min-w-[130px]">
+                  {ATTENDANCE.map((a) => (
+                    <button key={a.value} onClick={() => set(date, a.value)} className="w-full text-start rounded-lg px-2 py-1 text-xs font-semibold hover:bg-slate-50">
+                      <span className={`inline-flex w-4 h-4 rounded me-1.5 items-center justify-center text-[10px] ${a.cls}`}>{a.short}</span>
+                      {a.label}
+                    </button>
+                  ))}
+                  {status && (
+                    <button onClick={() => set(date, null)} className="w-full text-start rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-slate-50">
+                      امسح
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // شيت مرتب عامل واحد لشهر — زي شيت مرتب السواق في صفحة الرواتب بالظبط:
 // المرتب والسلف والحوافز والخصومات ودفعات المرتب، كل حركة بتاريخها وسببها،
 // وبيتطبع لوحده.
@@ -802,6 +889,8 @@ function WorkerSlip({
           <p className="no-print text-xs text-slate-400">
             دفعة المرتب والسلفة بيتخصموا من خزنة حسن على طول ويظهروا هناك باسم العامل. الحافز والخصم بيغيّروا المستحق بس.
           </p>
+
+          <AttendanceSheet workerId={row.worker_id} month={month} />
         </div>
       </td>
     </tr>

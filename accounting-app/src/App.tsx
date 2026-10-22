@@ -14,6 +14,9 @@ import Payables from "./pages/Payables";
 import Suppliers from "./pages/Suppliers";
 import Reports from "./pages/Reports";
 import Activity from "./pages/Activity";
+import Custody from "./pages/Custody";
+import Car from "./pages/Car";
+import Obligations from "./pages/Obligations";
 import { syncApi } from "./api/client";
 import { SyncLoginBar, TabletUpdatePrompt } from "./components/DeviceBars";
 import { SectionId } from "./nav";
@@ -66,7 +69,7 @@ export default function App() {
               </span>
             </div>
           )}
-          {active === "home" && <Dashboard />}
+          {active === "home" && <Dashboard onNavigate={setActive} />}
           {active === "settings" && <Settings />}
           {active === "equipment" && <Equipment />}
           {active === "salaries" && <Salaries />}
@@ -79,6 +82,9 @@ export default function App() {
           {active === "suppliers" && <Suppliers />}
           {active === "reports" && <Reports />}
           {active === "activity" && <Activity />}
+          {active === "custody" && <Custody />}
+          {active === "car" && <Car />}
+          {active === "obligations" && <Obligations />}
         </main>
       </div>
       {isTablet && <TabletUpdatePrompt />}
