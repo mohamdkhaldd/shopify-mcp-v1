@@ -1,6 +1,6 @@
 const { ipcMain } = require("electron");
 const { pushToCloud } = require("./sync");
-const { registerExtraHandlers, carPersonalAllMonths } = require("./extras");
+const { registerExtraHandlers, carPersonalAllMonths, CAR_CATEGORY } = require("./extras");
 
 // Overtime rule (doc section 3), applied identically to السركي and المقاول:
 // hourly rate = day_rate / 8, overtime = MAX(0, actual - base) hours,
@@ -652,7 +652,11 @@ function registerIpcHandlers(db) {
       .map((me) => ({ ...me, remaining: Math.max(0, me.amount - me.paid_total) }))
   );
 
-  ipcMain.handle("monthlyExpenses:create", (_e, expense) => {
+  ipcMain.handle("monthlyExpenses:create", (_e, input) => {
+    // مصروف "عربية ملاكي" (مشوار بالعربية) بيتخصم من فلوس العربية اللي
+    // اتدفعت، مش من الخزنة — مهما كانت طريقة الدفع اللي اتختارت.
+    const carCat = db.prepare("SELECT id FROM expense_categories WHERE name = ?").get(CAR_CATEGORY)?.id;
+    const expense = carCat && Number(input.category_id) === carCat ? { ...input, payment_method: "car", paid_amount: null } : input;
     const info = db
       .prepare(
         `INSERT INTO monthly_expenses (equipment_id, month, date, category_id, amount, payment_method, note, receipt_image, paid_amount, payee)
@@ -1136,19 +1140,22 @@ function registerIpcHandlers(db) {
   ipcMain.handle("hassanWorkers:list", () =>
     db.prepare("SELECT * FROM hassan_workers WHERE active = 1 ORDER BY name").all()
   );
-  ipcMain.handle("hassanWorkers:create", (_e, { name, job, monthly_salary, start_month }) => {
+  const rateOrNull = (v) => (v === "" || v == null || !(Number(v) > 0) ? null : Number(v));
+  ipcMain.handle("hassanWorkers:create", (_e, { name, job, monthly_salary, start_month, day_rate, leave_rate }) => {
     const trimmed = (name ?? "").trim();
     if (!trimmed) throw new Error("لازم اسم العامل");
     const info = db
-      .prepare("INSERT INTO hassan_workers (name, job, monthly_salary, start_month) VALUES (?, ?, ?, ?)")
-      .run(trimmed, job?.trim() || null, Number(monthly_salary) || 0, start_month);
+      .prepare("INSERT INTO hassan_workers (name, job, monthly_salary, start_month, day_rate, leave_rate) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(trimmed, job?.trim() || null, Number(monthly_salary) || 0, start_month, rateOrNull(day_rate), rateOrNull(leave_rate));
     return db.prepare("SELECT * FROM hassan_workers WHERE id = ?").get(info.lastInsertRowid);
   });
-  ipcMain.handle("hassanWorkers:update", (_e, { id, name, job, monthly_salary }) => {
-    db.prepare("UPDATE hassan_workers SET name = ?, job = ?, monthly_salary = ? WHERE id = ?").run(
+  ipcMain.handle("hassanWorkers:update", (_e, { id, name, job, monthly_salary, day_rate, leave_rate }) => {
+    db.prepare("UPDATE hassan_workers SET name = ?, job = ?, monthly_salary = ?, day_rate = ?, leave_rate = ? WHERE id = ?").run(
       (name ?? "").trim(),
       job?.trim() || null,
       Number(monthly_salary) || 0,
+      rateOrNull(day_rate),
+      rateOrNull(leave_rate),
       id
     );
     return db.prepare("SELECT * FROM hassan_workers WHERE id = ?").get(id);
@@ -1227,12 +1234,27 @@ function registerIpcHandlers(db) {
     const sumStmt = db.prepare(
       "SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_worker_entries WHERE worker_id = ? AND month = ? AND type = ?"
     );
+    const attendanceStmt = db.prepare(
+      "SELECT status, COUNT(*) AS c FROM hassan_worker_attendance WHERE worker_id = ? AND date LIKE ? GROUP BY status"
+    );
     const rows = workers.map((w) => {
       const payments = sumStmt.get(w.id, month, "payment").total;
       const advances = sumStmt.get(w.id, month, "advance").total;
       const bonuses = sumStmt.get(w.id, month, "bonus").total;
       const deductions = sumStmt.get(w.id, month, "deduction").total;
-      const salary = w.active || w.start_month <= month ? w.monthly_salary : 0;
+      const att = Object.fromEntries(attendanceStmt.all(w.id, `${month}%`).map((r) => [r.status, r.c]));
+      const daysWorked = att.present ?? 0;
+      const paidLeaveDays = att.leave_paid ?? 0;
+      const unpaidDays = (att.leave_unpaid ?? 0) + (att.absent ?? 0);
+      // باليومية: يوم الشغل بيومية، والإجازة المدفوعة بيومية الإجازة (لو
+      // متكتبتش = نفس اليومية)، والإجازة غير المدفوعة والغياب ملهمش فلوس.
+      const daily = w.day_rate != null && w.day_rate > 0;
+      const leaveRate = w.leave_rate != null && w.leave_rate > 0 ? w.leave_rate : w.day_rate;
+      const salary = daily
+        ? daysWorked * w.day_rate + paidLeaveDays * leaveRate
+        : w.active || w.start_month <= month
+          ? w.monthly_salary
+          : 0;
       const net = salary + bonuses - deductions;
       const paid = payments + advances;
       return {
@@ -1241,6 +1263,12 @@ function registerIpcHandlers(db) {
         job: w.job,
         active: !!w.active,
         monthly_salary: salary,
+        daily,
+        day_rate: w.day_rate,
+        leave_rate: daily ? leaveRate : null,
+        days_worked: daysWorked,
+        paid_leave_days: paidLeaveDays,
+        unpaid_days: unpaidDays,
         bonuses,
         deductions,
         net,

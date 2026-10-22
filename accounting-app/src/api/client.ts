@@ -389,9 +389,23 @@ export const hassanApi = {
   penaltyCreate: (penalty: Omit<HassanPenalty, "id">): Promise<HassanPenalty> => invoke("hassanPenalties:create", penalty),
   penaltyRemove: (id: number): Promise<void> => invoke("hassanPenalties:delete", { id }),
   workersList: (): Promise<HassanWorker[]> => invoke("hassanWorkers:list"),
-  workerCreate: (worker: { name: string; job: string | null; monthly_salary: number; start_month: string }): Promise<HassanWorker> =>
+  workerCreate: (worker: {
+    name: string;
+    job: string | null;
+    monthly_salary: number;
+    start_month: string;
+    day_rate: number | null;
+    leave_rate: number | null;
+  }): Promise<HassanWorker> =>
     invoke("hassanWorkers:create", worker),
-  workerUpdate: (worker: { id: number; name: string; job: string | null; monthly_salary: number }): Promise<HassanWorker> =>
+  workerUpdate: (worker: {
+    id: number;
+    name: string;
+    job: string | null;
+    monthly_salary: number;
+    day_rate: number | null;
+    leave_rate: number | null;
+  }): Promise<HassanWorker> =>
     invoke("hassanWorkers:update", worker),
   workerRemove: (id: number): Promise<void> => invoke("hassanWorkers:delete", { id }),
   workerEntriesList: (month: string): Promise<HassanWorkerEntry[]> => invoke("hassanWorkerEntries:list", { month }),

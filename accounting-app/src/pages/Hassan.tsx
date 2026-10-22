@@ -652,15 +652,15 @@ function WorkerEntryForm({
 }
 
 const ATTENDANCE: { value: AttendanceStatus; label: string; short: string; cls: string }[] = [
-  { value: "present", label: "حاضر", short: "ح", cls: "bg-primary text-white" },
+  { value: "present", label: "اشتغل", short: "ش", cls: "bg-primary text-white" },
   { value: "absent", label: "غايب", short: "غ", cls: "bg-rose-500 text-white" },
   { value: "leave_paid", label: "إجازة مدفوعة", short: "م", cls: "bg-sky-500 text-white" },
   { value: "leave_unpaid", label: "إجازة مش مدفوعة", short: "ب", cls: "bg-amber-500 text-white" },
 ];
 
-// شيت حضور وغياب العامل في الشهر — تسجيل بس، مبيخصمش من المرتب. دوس على اليوم
-// واختار: حاضر / غايب / إجازة (مدفوعة أو لأ).
-function AttendanceSheet({ workerId, month }: { workerId: number; month: string }) {
+// شيت حضور العامل في الشهر (سركي عمال حسن): دوس على اليوم واختار اشتغل /
+// إجازة مدفوعة / إجازة مش مدفوعة / غايب — ولو العامل باليومية مرتبه بيتحسب منه.
+function AttendanceSheet({ workerId, month, onChanged }: { workerId: number; month: string; onChanged?: () => void }) {
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const [picking, setPicking] = useState<string | null>(null);
   const refresh = () => attendanceApi.list(workerId, month).then(setRows);
@@ -678,6 +678,7 @@ function AttendanceSheet({ workerId, month }: { workerId: number; month: string 
     setPicking(null);
     await attendanceApi.set(workerId, date, status);
     refresh();
+    onChanged?.();
   }
 
   return (
@@ -799,7 +800,7 @@ function WorkerSlip({
 
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mb-4">
             <div className="text-center bg-primary-light rounded-xl py-2.5">
-              <div className="text-xs text-slate-500">المرتب الشهري</div>
+              <div className="text-xs text-slate-500">{row.daily ? "المرتب (من الحضور)" : "المرتب الشهري"}</div>
               <div className="font-bold text-slate-800">{formatEGP(row.monthly_salary)}</div>
             </div>
             <div className="text-center bg-emerald-50 rounded-xl py-2.5">
@@ -890,7 +891,19 @@ function WorkerSlip({
             دفعة المرتب والسلفة بيتخصموا من خزنة حسن على طول ويظهروا هناك باسم العامل. الحافز والخصم بيغيّروا المستحق بس.
           </p>
 
-          <AttendanceSheet workerId={row.worker_id} month={month} />
+          {row.daily && (
+            <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 space-y-0.5">
+              <div>
+                {row.days_worked} يوم شغل × {formatEGP(row.day_rate ?? 0)} = <b>{formatEGP(row.days_worked * (row.day_rate ?? 0))}</b>
+              </div>
+              <div>
+                {row.paid_leave_days} يوم إجازة مدفوعة × {formatEGP(row.leave_rate ?? 0)} = <b>{formatEGP(row.paid_leave_days * (row.leave_rate ?? 0))}</b>
+              </div>
+              <div className="text-slate-400">{row.unpaid_days} يوم إجازة غير مدفوعة / غياب — من غير فلوس</div>
+            </div>
+          )}
+
+          <AttendanceSheet workerId={row.worker_id} month={month} onChanged={onChanged} />
         </div>
       </td>
     </tr>
@@ -908,11 +921,15 @@ function WorkersTab({ month }: { month: string }) {
   const [newName, setNewName] = useState("");
   const [newJob, setNewJob] = useState("");
   const [newSalary, setNewSalary] = useState("");
+  const [newDayRate, setNewDayRate] = useState("");
+  const [newLeaveRate, setNewLeaveRate] = useState("");
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editJob, setEditJob] = useState("");
   const [editSalary, setEditSalary] = useState("");
+  const [editDayRate, setEditDayRate] = useState("");
+  const [editLeaveRate, setEditLeaveRate] = useState("");
 
   const refresh = () => {
     hassanApi.workersList().then(setWorkers);
@@ -925,10 +942,19 @@ function WorkersTab({ month }: { month: string }) {
   async function handleAddWorker(e: FormEvent) {
     e.preventDefault();
     if (!newName.trim()) return;
-    await hassanApi.workerCreate({ name: newName, job: newJob || null, monthly_salary: Number(newSalary) || 0, start_month: month });
+    await hassanApi.workerCreate({
+      name: newName,
+      job: newJob || null,
+      monthly_salary: Number(newSalary) || 0,
+      start_month: month,
+      day_rate: newDayRate ? Number(newDayRate) : null,
+      leave_rate: newLeaveRate ? Number(newLeaveRate) : null,
+    });
     setNewName("");
     setNewJob("");
     setNewSalary("");
+    setNewDayRate("");
+    setNewLeaveRate("");
     refresh();
   }
 
@@ -937,11 +963,20 @@ function WorkersTab({ month }: { month: string }) {
     setEditName(w.name);
     setEditJob(w.job ?? "");
     setEditSalary(String(w.monthly_salary));
+    setEditDayRate(w.day_rate ? String(w.day_rate) : "");
+    setEditLeaveRate(w.leave_rate ? String(w.leave_rate) : "");
   }
 
   async function saveEdit() {
     if (editingId == null || !editName.trim()) return;
-    await hassanApi.workerUpdate({ id: editingId, name: editName, job: editJob || null, monthly_salary: Number(editSalary) || 0 });
+    await hassanApi.workerUpdate({
+      id: editingId,
+      name: editName,
+      job: editJob || null,
+      monthly_salary: Number(editSalary) || 0,
+      day_rate: editDayRate ? Number(editDayRate) : null,
+      leave_rate: editLeaveRate ? Number(editLeaveRate) : null,
+    });
     setEditingId(null);
     refresh();
   }
@@ -986,7 +1021,7 @@ function WorkersTab({ month }: { month: string }) {
                 <tr className="text-slate-400 border-b border-slate-100">
                   <th className="text-start font-semibold py-2">العامل</th>
                   <th className="text-start font-semibold py-2">الوظيفة</th>
-                  <th className="text-start font-semibold py-2">المرتب الشهري</th>
+                  <th className="text-start font-semibold py-2">المرتب</th>
                   <th className="text-start font-semibold py-2">حوافز</th>
                   <th className="text-start font-semibold py-2">خصومات</th>
                   <th className="text-start font-semibold py-2">المستحق</th>
@@ -1010,7 +1045,14 @@ function WorkersTab({ month }: { month: string }) {
                         </button>
                       </td>
                       <td className="py-2 text-slate-500">{r.job ?? "—"}</td>
-                      <td className="py-2 text-slate-600">{formatEGP(r.monthly_salary)}</td>
+                      <td className="py-2 text-slate-600">
+                        {formatEGP(r.monthly_salary)}
+                        {r.daily && (
+                          <span className="block text-[11px] text-slate-400">
+                            {r.days_worked} يوم شغل{r.paid_leave_days ? ` + ${r.paid_leave_days} إجازة مدفوعة` : ""}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2 text-slate-600">{formatEGP(r.bonuses)}</td>
                       <td className="py-2 text-rose-500">{formatEGP(r.deductions)}</td>
                       <td className="py-2 font-semibold text-slate-800">{formatEGP(r.net)}</td>
@@ -1063,13 +1105,37 @@ function WorkersTab({ month }: { month: string }) {
             />
           </div>
           <div>
-            <label className="block text-xs text-slate-400 mb-1">المرتب الشهري</label>
+            <label className="block text-xs text-slate-400 mb-1">يومية يوم الشغل</label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={newDayRate}
+              onChange={(e) => setNewDayRate(e.target.value)}
+              className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">يومية الإجازة المدفوعة</label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={newLeaveRate}
+              onChange={(e) => setNewLeaveRate(e.target.value)}
+              placeholder={newDayRate || "نفس اليومية"}
+              className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">أو مرتب شهري ثابت</label>
             <input
               type="number"
               min="0"
               step="any"
               value={newSalary}
               onChange={(e) => setNewSalary(e.target.value)}
+              placeholder="لو مش باليومية"
               className="w-28 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
             />
           </div>
@@ -1081,7 +1147,10 @@ function WorkersTab({ month }: { month: string }) {
             إضافة عامل
           </button>
         </form>
-        <p className="text-xs text-slate-400 mb-3">العامل الجديد بيظهر في الشيت من الشهر اللي إنت فاتحه دلوقتي ورايح.</p>
+        <p className="text-xs text-slate-400 mb-3">
+          العامل الجديد بيظهر في الشيت من الشهر اللي إنت فاتحه دلوقتي ورايح. لو ليه يومية، مرتبه بيتحسب من شيت الحضور: يوم الشغل بيوميته، والإجازة
+          المدفوعة بيومية الإجازة، والإجازة غير المدفوعة والغياب من غير فلوس.
+        </p>
 
         {workers.length === 0 ? (
           <div className="text-sm text-slate-400">لسه مفيش عمال.</div>
@@ -1091,7 +1160,9 @@ function WorkersTab({ month }: { month: string }) {
               <tr className="text-slate-400 border-b border-slate-100">
                 <th className="text-start font-semibold py-2">الاسم</th>
                 <th className="text-start font-semibold py-2">الوظيفة</th>
-                <th className="text-start font-semibold py-2">المرتب الشهري</th>
+                <th className="text-start font-semibold py-2">اليومية</th>
+                <th className="text-start font-semibold py-2">يومية الإجازة</th>
+                <th className="text-start font-semibold py-2">مرتب شهري ثابت</th>
                 <th></th>
               </tr>
             </thead>
@@ -1110,9 +1181,30 @@ function WorkersTab({ month }: { month: string }) {
                         type="number"
                         min="0"
                         step="any"
+                        value={editDayRate}
+                        onChange={(e) => setEditDayRate(e.target.value)}
+                        className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                      />
+                    </td>
+                    <td className="py-1.5">
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={editLeaveRate}
+                        onChange={(e) => setEditLeaveRate(e.target.value)}
+                        placeholder={editDayRate}
+                        className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                      />
+                    </td>
+                    <td className="py-1.5">
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
                         value={editSalary}
                         onChange={(e) => setEditSalary(e.target.value)}
-                        className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                        className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-sm"
                       />
                     </td>
                     <td className="py-1.5 whitespace-nowrap">
@@ -1128,7 +1220,9 @@ function WorkersTab({ month }: { month: string }) {
                   <tr key={w.id} className="border-b border-slate-50 last:border-0">
                     <td className="py-2 font-semibold text-slate-700">{w.name}</td>
                     <td className="py-2 text-slate-500">{w.job ?? "—"}</td>
-                    <td className="py-2 text-slate-600">{formatEGP(w.monthly_salary)}</td>
+                    <td className="py-2 text-slate-600">{w.day_rate ? formatEGP(w.day_rate) : "—"}</td>
+                    <td className="py-2 text-slate-600">{w.day_rate ? formatEGP(w.leave_rate ?? w.day_rate) : "—"}</td>
+                    <td className="py-2 text-slate-600">{w.day_rate ? "—" : formatEGP(w.monthly_salary)}</td>
                     <td className="py-2 whitespace-nowrap">
                       <button onClick={() => startEdit(w)} className="text-xs text-primary font-semibold me-3">
                         تعديل

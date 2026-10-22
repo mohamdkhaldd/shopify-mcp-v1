@@ -87,6 +87,11 @@ function carPersonalAllMonths(db) {
 }
 
 function registerExtraHandlers(db) {
+  // مشاوير العربية اللي اتسجلت قبل كده بطريقة دفع من الخزنة — بقت من فلوس
+  // العربية (مبتتخصمش من الخزنة).
+  const carCat = carCategoryId(db);
+  if (carCat) db.prepare("UPDATE monthly_expenses SET payment_method = 'car' WHERE category_id = ? AND payment_method IS NOT 'car'").run(carCat);
+
   // ===== العهد =====
   ipcMain.handle("custodies:list", () => custodyBalances(db));
   ipcMain.handle("custodies:create", (_e, { holder, date, amount, method, warn_amount, note }) => {

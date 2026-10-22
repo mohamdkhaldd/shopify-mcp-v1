@@ -6,7 +6,6 @@ import { carApi, equipmentApi, monthlyExpensesApi } from "../api/client";
 import { CarSummary, Equipment } from "../api/types";
 import { currentMonthKey, monthLabel } from "../utils/months";
 import { formatEGP } from "../utils/format";
-import { PAYMENT_METHODS } from "../utils/paymentMethods";
 
 function todayISO(): string {
   const d = new Date();
@@ -17,8 +16,8 @@ const inputCls = "rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-whit
 const KINDS = ["بنزين", "زيت", "صيانة", "غسيل", "أخرى"];
 
 // العربية الملاكي: البنزين والزيت حسابك الخاص، ولما تاخدها مشوار شغل بتسجل
-// سعر المشوار على المعدة (مصروف "عربية ملاكي" من الخزنة) — ويتخصم من فلوس
-// البنزين. الباقي خاص وبيتخصم من كوميشن حسن.
+// سعر المشوار على المعدة (مصروف "عربية ملاكي") — بيتخصم من فلوس العربية اللي
+// اتدفعت، مش من الخزنة. الباقي خاص وبيتخصم من كوميشن حسن.
 export default function Car() {
   const [month, setMonth] = useState(currentMonthKey());
   const [data, setData] = useState<CarSummary | null>(null);
@@ -30,7 +29,6 @@ export default function Car() {
   const [tDate, setTDate] = useState(todayISO());
   const [tEquipment, setTEquipment] = useState("");
   const [tAmount, setTAmount] = useState("");
-  const [tMethod, setTMethod] = useState("cash");
   const [tNote, setTNote] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -71,7 +69,7 @@ export default function Car() {
       date: tDate,
       category_id: categoryId,
       amount: Number(tAmount),
-      payment_method: tMethod,
+      payment_method: "car",
       note: tNote || "مشوار بالعربية الملاكي",
       receipt_image: null,
       paid_amount: null,
@@ -103,7 +101,7 @@ export default function Car() {
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">العربية الملاكي</h1>
           <p className="text-sm text-slate-500 mt-1">
-            سجّل البنزين والزيت كل مرة. مشوار الشغل بيتسجل على المعدة ويتخصم من فلوس البنزين — والباقي خاص بيتخصم من كوميشن حسن.
+            سجّل البنزين والزيت كل مرة. مشوار الشغل بيتسجل على المعدة ويتخصم من فلوس العربية (مش من الخزنة) — والباقي خاص بيتخصم من كوميشن حسن.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -128,7 +126,7 @@ export default function Car() {
             <div className="mt-1 text-xl font-extrabold text-slate-800">{formatEGP(data.fuelTotal)}</div>
           </div>
           <div className="bg-white rounded-card shadow-card p-4">
-            <div className="text-xs text-slate-500 font-semibold">مشاوير شغل (من الخزنة)</div>
+            <div className="text-xs text-slate-500 font-semibold">مشاوير شغل على المعدات</div>
             <div className="mt-1 text-xl font-extrabold text-primary-dark">{formatEGP(data.tripsTotal)}</div>
           </div>
           <div className="bg-white rounded-card shadow-card p-4">
@@ -158,7 +156,7 @@ export default function Car() {
               </tr>
               {data.byEquipment.map((b) => (
                 <tr key={b.equipment_name} className="border-b border-slate-50">
-                  <td className="py-2 text-slate-600">على {b.equipment_name} — من الخزنة</td>
+                  <td className="py-2 text-slate-600">على {b.equipment_name}</td>
                   <td className="py-2 font-bold text-primary-dark">{formatEGP(b.amount)}</td>
                 </tr>
               ))}
@@ -212,7 +210,9 @@ export default function Car() {
 
         <div className="bg-white rounded-card shadow-card p-5">
           <h2 className="font-bold text-slate-800 mb-1">مشاوير شغل</h2>
-          <p className="no-print text-xs text-slate-400 mb-3">بيتسجل مصروف "عربية ملاكي" على المعدة (من الخزنة)، وبيظهر في مصروفات المعدة كمان.</p>
+          <p className="no-print text-xs text-slate-400 mb-3">
+            بيتسجل مصروف "عربية ملاكي" على المعدة ويظهر في مصروفاتها — بيتخصم من فلوس العربية اللي دفعتها، مش من الخزنة.
+          </p>
           <form onSubmit={addTrip} className="no-print flex flex-wrap items-end gap-2 mb-4">
             <input type="date" value={tDate} onChange={(e) => setTDate(e.target.value)} className={inputCls} />
             <select value={tEquipment} onChange={(e) => setTEquipment(e.target.value)} className={inputCls}>
@@ -224,13 +224,6 @@ export default function Car() {
               ))}
             </select>
             <input type="number" min="0" step="any" placeholder="سعر المشوار" value={tAmount} onChange={(e) => setTAmount(e.target.value)} className={`${inputCls} w-28`} />
-            <select value={tMethod} onChange={(e) => setTMethod(e.target.value)} className={inputCls}>
-              {PAYMENT_METHODS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
             <input placeholder="رايح فين؟" value={tNote} onChange={(e) => setTNote(e.target.value)} className={inputCls} />
             <button type="submit" disabled={!tEquipment || !tAmount} className="bg-primary text-white rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50">
               سجّل المشوار

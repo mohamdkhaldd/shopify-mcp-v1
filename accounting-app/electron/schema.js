@@ -276,7 +276,7 @@ CREATE TABLE IF NOT EXISTS custody_entries (
 );
 
 -- العربية الملاكي: كل مرة بنزين/زيت/صيانة. المشاوير بتتسجل مصروف "عربية
--- ملاكي" على المعدة (من الخزنة)، والباقي من البنزين خاص — بيتخصم من كوميشن حسن.
+-- ملاكي" على المعدة (من فلوس العربية — مش من الخزنة)، والباقي خاص من كوميشن حسن.
 CREATE TABLE IF NOT EXISTS car_fuel (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   date TEXT NOT NULL,
@@ -429,6 +429,12 @@ function setupDatabase(db, { seed = true } = {}) {
       db.exec(`ALTER TABLE ${table} ADD COLUMN opening_balance REAL NOT NULL DEFAULT 0`);
     }
   }
+
+  // عمال حسن باليومية: يومية يوم الشغل ويومية الإجازة المدفوعة — المرتب بيتحسب
+  // من شيت الحضور. لو اليومية فاضية بيفضل المرتب الشهري الثابت زي الأول.
+  const workerCols = db.prepare("PRAGMA table_info(hassan_workers)").all().map((c) => c.name);
+  if (!workerCols.includes("day_rate")) db.exec("ALTER TABLE hassan_workers ADD COLUMN day_rate REAL");
+  if (!workerCols.includes("leave_rate")) db.exec("ALTER TABLE hassan_workers ADD COLUMN leave_rate REAL");
 
   const dailyLogsHasPaidLeave = db
     .prepare("PRAGMA table_info(daily_logs)")

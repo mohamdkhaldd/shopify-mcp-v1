@@ -94,7 +94,7 @@ function describe(r: SyncActivityRow): string {
     case "obligations":
       return `ميعاد التزام: ${d.title ?? ""}${d.amount ? ` ${money(d.amount)}` : ""} — ${d.due_date ?? ""}${d.done_at ? " (اتدفع)" : ""}`;
     case "hassan_worker_attendance": {
-      const st: Record<string, string> = { present: "حاضر", absent: "غايب", leave_paid: "إجازة مدفوعة", leave_unpaid: "إجازة مش مدفوعة" };
+      const st: Record<string, string> = { present: "اشتغل", absent: "غايب", leave_paid: "إجازة مدفوعة", leave_unpaid: "إجازة مش مدفوعة" };
       return `حضور ${ref.worker_id ?? "عامل حسن"} يوم ${day(d.date)}: ${st[d.status] ?? d.status ?? ""}`;
     }
     case "waste_entries":

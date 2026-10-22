@@ -288,6 +288,9 @@ export interface HassanWorker {
   monthly_salary: number;
   start_month: string;
   active: number;
+  // باليومية — المرتب من شيت الحضور (لو فاضي: مرتب شهري ثابت).
+  day_rate: number | null;
+  leave_rate: number | null;
 }
 
 export type HassanWorkerEntryType = "payment" | "advance" | "bonus" | "deduction";
@@ -309,6 +312,12 @@ export interface HassanWorkerPayrollRow {
   job: string | null;
   active: boolean;
   monthly_salary: number;
+  daily: boolean;
+  day_rate: number | null;
+  leave_rate: number | null;
+  days_worked: number;
+  paid_leave_days: number;
+  unpaid_days: number;
   bonuses: number;
   deductions: number;
   net: number;

@@ -9,5 +9,6 @@ export const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
 
 export function paymentMethodLabel(value: string | null): string {
   if (value === "custody") return "عهدة";
+  if (value === "car") return "من فلوس العربية";
   return PAYMENT_METHODS.find((m) => m.value === value)?.label ?? value ?? "—";
 }
