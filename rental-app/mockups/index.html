@@ -172,21 +172,23 @@ td.edit { background: var(--amber-soft); }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .filters select, .filters input { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 8px; padding: 6px 10px; }
 
-.sheet select, .sheet input { font: inherit; border: 1px solid var(--line); background: var(--amber-soft); color: var(--fg); border-radius: 6px; padding: 3px 8px; }
-.sheet input.q { width: 64px; text-align: end; }
-.sheet input.r { width: 220px; }
-.sheet tr.off td { background: var(--surface-2); color: var(--muted); }
-.sheet tr.diff td { background: var(--out-soft); }
-.sheet .fri { color: var(--muted); }
-.paper { margin: 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
-.paper-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 2px solid var(--fg); }
-.paper-head img { width: 44px; height: 44px; border-radius: 50%; background: #fff; }
-.paper-head b { display: block; font-family: var(--font-display); }
-.paper-head span { color: var(--muted); font-size: 13px; }
-.paper-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-.paper-facts span { display: block; color: var(--muted); font-size: 12px; }
-.paper-sign { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 36px 16px 16px; text-align: center; font-weight: 700; font-size: 13px; }
-.paper-sign div { border-top: 1px solid var(--fg); padding-top: 6px; }
+.sheet input { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 6px; padding: 3px 6px; width: 70px; text-align: end; }
+.sheet input.site { width: 170px; text-align: start; }
+.sheet input.nt { width: 160px; text-align: start; }
+.sheet input:disabled { background: var(--surface-2); color: var(--muted); }
+.sheet td { padding: 5px 8px; }
+.sheet tr.off td { background: var(--out-soft); }
+.offdot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--out); background: transparent; cursor: pointer; vertical-align: middle; margin-inline-end: 6px; padding: 0; }
+.offdot.on { background: var(--out); }
+.mm { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--out); margin-inline-end: 6px; vertical-align: middle; }
+.fri { color: var(--muted); font-size: 12px; }
+.bulk { display: grid; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.bulk-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.bulk-row > b { width: 100%; font-size: 12px; color: var(--muted); }
+.bulk label { display: grid; gap: 2px; font-size: 11px; color: var(--muted); font-weight: 600; }
+.bulk input { font: inherit; font-size: 13px; width: 80px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 6px; padding: 5px 8px; }
+.bulk input.w { width: 190px; }
+.btn.danger { color: var(--out); border-color: var(--out-soft); }
 .sheet-view tr.off td { color: var(--muted); }
 .note { font-size: 12px; color: var(--muted); padding: 10px 16px; border-top: 1px solid var(--line); }
 .mock-tag { background: var(--amber-soft); border: 1px dashed var(--amber); border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 600; }
@@ -299,7 +301,7 @@ section[data-page].show { display: grid; }
       <!-- ================= السركي ================= -->
       <section data-page="sarki" class="grid" style="gap:20px">
         <div class="head">
-          <div><h1>السركي</h1><p>بتكتبه بنفسك يوم بيوم — سركي الشركة وسركي صاحب المعدة</p></div>
+          <div><h1>السركي</h1><p>نفس سركي النظام القديم — من غير اسم السواق</p></div>
           <div class="tools"><select class="month" aria-label="الشهر"><option>أكتوبر ٢٠٢٦</option></select><button class="btn pri">+ عقد جديد</button></div>
         </div>
 
@@ -312,33 +314,74 @@ section[data-page].show { display: grid; }
           <div class="facts">
             <div><span>الشركة (العميل)</span><b style="font-size:15px">شركة الأمل للمقاولات</b></div>
             <div><span>صاحب المعدة</span><b style="font-size:15px">الحاج سيد عبد الله</b></div>
-            <div><span>السعر</span><b style="font-size:15px">500 للشركة · 400 لصاحبها / يوم</b></div>
+            <div><span>اليومية المتفق عليها</span><b style="font-size:15px">500 للشركة · 400 لصاحبها</b></div>
             <div><span>المدة</span><b style="font-size:15px">01/10 – 31/10/2026</b></div>
           </div>
-          <div class="facts" id="sk-compare">
-            <div><span>سركي الشركة</span><b id="sk-c-days">30 يوم</b></div>
-            <div><span>سركي صاحب المعدة</span><b id="sk-s-days">30 يوم</b></div>
-            <div><span>للشركة</span><b id="sk-c-val">15,000</b></div>
-            <div><span>لصاحب المعدة</span><b id="sk-s-val">12,000</b></div>
-            <div><span>المطابقة</span><b id="sk-match" class="in">متطابقين ✓</b></div>
+          <div class="facts">
+            <div><span>سركي الشركة</span><b id="sk-c-days"></b></div>
+            <div><span>سركي صاحب المعدة</span><b id="sk-s-days"></b></div>
+            <div><span>للشركة</span><b id="sk-c-val"></b></div>
+            <div><span>لصاحب المعدة</span><b id="sk-s-val"></b></div>
+            <div><span>المطابقة</span><b id="sk-match"></b></div>
           </div>
           <div class="tabs" data-tabs="sk">
             <button class="on" data-tab="sk-client">سركي الشركة <small class="hint">(بستلمه من الشركة)</small></button>
             <button data-tab="sk-supplier">سركي صاحب المعدة <small class="hint">(بسلّمه لصاحب المعدة)</small></button>
           </div>
-          <div data-pane="sk-client" class="tw"><table class="sheet" data-sheet="client">
-            <thead><tr><th>اليوم</th><th>التاريخ</th><th>الحالة</th><th class="n">الكمية</th><th>البيان / السبب</th><th class="n">القيمة</th><th></th></tr></thead>
+          <div data-pane="sk-client">
+          <div class="bulk" data-bulk="client">
+            <div class="bulk-row">
+              <b>املا أيام مرة واحدة</b>
+              <label>من يوم<input data-b="from" value="1" inputmode="numeric"></label>
+              <label>لحد يوم<input data-b="to" value="31" inputmode="numeric"></label>
+              <label>سعر اليوم<input data-b="rate" value="500" inputmode="decimal"></label>
+              <label>اسم الموقع<input data-b="site" class="w" value="كمبوند الياسمين — التجمع"></label>
+              <label>الساعات الأساسية<input data-b="base" value="8" inputmode="decimal"></label>
+              <button class="btn pri" data-act="fill">تطبيق على الأيام</button>
+              <button class="btn danger" data-act="clear">افرغ الأيام دي (مشتغلش)</button>
+            </div>
+            <div class="bulk-row">
+              <b>أوفر تايم لأيام معيّنة</b>
+              <label>الأيام (مثلًا 3, 7, 15 أو 14-31)<input data-b="otdays" class="w" placeholder="1-5, 7-10, 15"></label>
+              <label>عدد الساعات<input data-b="othours" inputmode="decimal"></label>
+              <label>سعر الساعة<input data-b="otrate" placeholder="تلقائي" inputmode="decimal"></label>
+              <button class="btn pri" data-act="ot">طبّق</button>
+            </div>
+          </div>
+          <div class="tw"><table class="sheet" data-sheet="client">
+            <thead><tr><th>اليوم</th><th>الموقع</th><th class="n">الساعات الفعلية</th><th class="n">أوفر تايم</th><th class="n">سعر ساعة الأوفر</th><th class="n">الساعات الأساسية</th><th class="n">اليومية</th><th>بيان</th><th class="n">الإجمالي</th></tr></thead>
             <tbody></tbody>
-            <tfoot><tr><td colspan="3">الإجمالي</td><td class="n" data-tot="qty"></td><td></td><td class="n" data-tot="val"></td><td></td></tr></tfoot>
+            <tfoot><tr><td colspan="3" data-tot="days"></td><td class="n" data-tot="ot"></td><td colspan="4"></td><td class="n" data-tot="val"></td></tr></tfoot>
           </table></div>
-          <div data-pane="sk-supplier" class="tw" hidden>
-            <div class="filters"><button class="btn" id="sk-copy">انسخ من سركي الشركة</button><span class="hint" style="align-self:center">بيتملى لوحده زي سركي الشركة، وتقدر تغير أي يوم.</span></div>
-            <table class="sheet" data-sheet="supplier">
-            <thead><tr><th>اليوم</th><th>التاريخ</th><th>الحالة</th><th class="n">الكمية</th><th>البيان / السبب</th><th class="n">القيمة</th><th></th></tr></thead>
+          </div>
+          <div data-pane="sk-supplier" hidden>
+          <div class="filters"><button class="btn" id="sk-copy">انسخ الأيام والساعات من سركي الشركة</button><span class="hint" style="align-self:center">بينسخ الأيام والموقع والساعات والأوفر تايم والبيان — اليومية (400) بتفضل بتاعة صاحب المعدة.</span></div>
+          <div class="bulk" data-bulk="supplier">
+            <div class="bulk-row">
+              <b>املا أيام مرة واحدة</b>
+              <label>من يوم<input data-b="from" value="1" inputmode="numeric"></label>
+              <label>لحد يوم<input data-b="to" value="31" inputmode="numeric"></label>
+              <label>سعر اليوم<input data-b="rate" value="400" inputmode="decimal"></label>
+              <label>اسم الموقع<input data-b="site" class="w" value="كمبوند الياسمين — التجمع"></label>
+              <label>الساعات الأساسية<input data-b="base" value="8" inputmode="decimal"></label>
+              <button class="btn pri" data-act="fill">تطبيق على الأيام</button>
+              <button class="btn danger" data-act="clear">افرغ الأيام دي (مشتغلش)</button>
+            </div>
+            <div class="bulk-row">
+              <b>أوفر تايم لأيام معيّنة</b>
+              <label>الأيام (مثلًا 3, 7, 15 أو 14-31)<input data-b="otdays" class="w" placeholder="1-5, 7-10, 15"></label>
+              <label>عدد الساعات<input data-b="othours" inputmode="decimal"></label>
+              <label>سعر الساعة<input data-b="otrate" placeholder="تلقائي" inputmode="decimal"></label>
+              <button class="btn pri" data-act="ot">طبّق</button>
+            </div>
+          </div>
+          <div class="tw"><table class="sheet" data-sheet="supplier">
+            <thead><tr><th>اليوم</th><th>الموقع</th><th class="n">الساعات الفعلية</th><th class="n">أوفر تايم</th><th class="n">سعر ساعة الأوفر</th><th class="n">الساعات الأساسية</th><th class="n">اليومية</th><th>بيان</th><th class="n">الإجمالي</th></tr></thead>
             <tbody></tbody>
-            <tfoot><tr><td colspan="3">الإجمالي</td><td class="n" data-tot="qty"></td><td></td><td class="n" data-tot="val"></td><td></td></tr></tfoot>
+            <tfoot><tr><td colspan="3" data-tot="days"></td><td class="n" data-tot="ot"></td><td colspan="4"></td><td class="n" data-tot="val"></td></tr></tfoot>
           </table></div>
-          <div class="note">جرّب: غيّر حالة أي يوم في سركي صاحب المعدة لـ "عطل" — هيظهر تنبيه أحمر إن السركيين مختلفين في اليوم ده، والأرقام فوق تتحدث. كل يوم مش شغال لازم يتكتب سببه.</div>
+          </div>
+          <div class="note">الدايرة الحمرا جنب اليوم = "مشتغلش" (دوس عليها). النقطة الحمرا = الساعات مختلفة بين السركيين. الساعات الفعلية فاضية = يوم كامل. الأوفر تايم = الفعلية − الأساسية، وسعر ساعته لو فاضي = اليومية ÷ الساعات الأساسية. الإجمالي = اليومية + (أوفر تايم × سعر الساعة).</div>
         </div>
       </section>
 
@@ -391,12 +434,12 @@ section[data-page].show { display: grid; }
                   <div><span>صاحب المعدة</span><b>الحاج سيد عبد الله</b></div>
                   <div><span>المعدة</span><b>لودر كاتربيلر 950</b></div>
                   <div><span>رقم اللوحة</span><b>ن ق ط 1234</b></div>
-                  <div><span>السعر</span><b>400 / يوم</b></div>
+                  <div><span>الشهر</span><b>أكتوبر ٢٠٢٦</b></div>
                 </div>
                 <div class="tw"><table class="sheet-view" data-view="supplier">
-                  <thead><tr><th>اليوم</th><th>التاريخ</th><th>الحالة</th><th class="n">الكمية</th><th>البيان</th><th class="n">القيمة</th></tr></thead>
+                  <thead><tr><th>اليوم</th><th>الموقع</th><th class="n">الساعات الفعلية</th><th class="n">أوفر تايم</th><th class="n">سعر ساعة الأوفر</th><th class="n">الساعات الأساسية</th><th class="n">اليومية</th><th>بيان</th><th class="n">الإجمالي</th></tr></thead>
                   <tbody></tbody>
-                  <tfoot><tr><td colspan="3">الإجمالي</td><td class="n" data-tot="qty"></td><td></td><td class="n" data-tot="val"></td></tr></tfoot>
+                  <tfoot><tr><td colspan="3" data-tot="days"></td><td class="n" data-tot="ot"></td><td colspan="4"></td><td class="n" data-tot="val"></td></tr></tfoot>
                 </table></div>
                 <div class="paper-sign"><div>توقيع شركة البنيان</div><div>توقيع صاحب المعدة</div><div>الختم</div></div>
               </div>
@@ -461,12 +504,12 @@ section[data-page].show { display: grid; }
                   <div><span>الشركة</span><b>شركة الأمل للمقاولات</b></div>
                   <div><span>المعدة</span><b>لودر كاتربيلر 950</b></div>
                   <div><span>رقم اللوحة</span><b>ن ق ط 1234</b></div>
-                  <div><span>السعر</span><b>500 / يوم</b></div>
+                  <div><span>الشهر</span><b>أكتوبر ٢٠٢٦</b></div>
                 </div>
                 <div class="tw"><table class="sheet-view" data-view="client">
-                  <thead><tr><th>اليوم</th><th>التاريخ</th><th>الحالة</th><th class="n">الكمية</th><th>البيان</th><th class="n">القيمة</th></tr></thead>
+                  <thead><tr><th>اليوم</th><th>الموقع</th><th class="n">الساعات الفعلية</th><th class="n">أوفر تايم</th><th class="n">سعر ساعة الأوفر</th><th class="n">الساعات الأساسية</th><th class="n">اليومية</th><th>بيان</th><th class="n">الإجمالي</th></tr></thead>
                   <tbody></tbody>
-                  <tfoot><tr><td colspan="3">الإجمالي</td><td class="n" data-tot="qty"></td><td></td><td class="n" data-tot="val"></td></tr></tfoot>
+                  <tfoot><tr><td colspan="3" data-tot="days"></td><td class="n" data-tot="ot"></td><td colspan="4"></td><td class="n" data-tot="val"></td></tr></tfoot>
                 </table></div>
                 <div class="paper-sign"><div>توقيع شركة البنيان</div><div>توقيع مندوب الشركة</div><div>الختم</div></div>
               </div>
@@ -758,74 +801,138 @@ section[data-page].show { display: grid; }
     window.scrollTo(0, 0);
   });
 
-  // ---- daily sarki sheets (October 2026 starts on a Thursday) ----
+  // ---- daily sarki sheets — same rules as the old app's sarki (October 2026 starts on a Thursday) ----
   var DAYS = ["الأحد", "الاتنين", "التلات", "الأربع", "الخميس", "الجمعة", "السبت"];
-  var STATUS = { work: "شغال", off: "إجازة", broken: "عطل", idle: "مشتغلش" };
-  var RATE = { client: 500, supplier: 400 };
-  function blank() {
+  var SITE = "كمبوند الياسمين — التجمع";
+  function blank(rate) {
     var a = [];
-    for (var d = 1; d <= 31; d++) a.push({ st: "work", q: 1, r: "" });
-    a[8] = { st: "off", q: 0, r: "إجازة الجمعة — الموقع قافل" };
+    for (var d = 1; d <= 31; d++) a.push({ off: false, site: SITE, actual: "", base: "8", ot: "", otRate: "", rate: String(rate), note: "" });
+    a[8] = { off: true, site: "", actual: "", base: "8", ot: "", otRate: "", rate: "", note: "إجازة الجمعة — الموقع قافل" };
     return a;
   }
-  var data = { client: blank(), supplier: blank() };
-  function fmt(n) { return n.toLocaleString("en-US"); }
+  var data = { client: blank(500), supplier: blank(400) };
+  function n(v) { return Number(v) || 0; }
+  function fmt(x) { return (Math.round(x * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 }); }
+  function otHours(r) { return r.off ? 0 : r.actual.trim() === "" ? n(r.ot) : Math.max(0, n(r.actual) - n(r.base)); }
+  function otRate(r) { return r.otRate.trim() !== "" ? n(r.otRate) : n(r.base) > 0 ? n(r.rate) / n(r.base) : 0; }
+  function total(r) { return r.off ? 0 : n(r.rate) + otHours(r) * otRate(r); }
+  function hoursKey(r) { return r.off ? "off" : (r.actual.trim() === "" ? n(r.base) + n(r.ot) : n(r.actual)) + "/" + n(r.base); }
+  function esc(v) { return String(v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+  function dayCell(i, k, r, other, editable) {
+    var dow = (4 + i) % 7;
+    var mm = hoursKey(r) !== hoursKey(other[i]) ? '<span class="mm" title="الساعات مختلفة عن السركي التاني"></span>' : "";
+    var dot = editable ? '<button type="button" class="offdot' + (r.off ? " on" : "") + '" data-k="' + k + '" data-i="' + i + '" data-f="off" title="مشتغلش"></button>' : "";
+    return "<td>" + dot + mm + String(i + 1).padStart(2, "0") + ' <span class="fri">(' + DAYS[dow] + ")</span>" + (r.off && !editable ? " مشتغلش" : "") + "</td>";
+  }
+  function inp(k, i, f, v, cls, dis) {
+    return '<input class="' + (cls || "") + '" data-k="' + k + '" data-i="' + i + '" data-f="' + f + '" value="' + esc(v) + '"' + (dis ? " disabled" : "") + ">";
+  }
+  function totals(k) {
+    var d = 0, o = 0, v = 0;
+    data[k].forEach(function (r) { if (!r.off) d++; o += otHours(r); v += total(r); });
+    return { d: d, o: o, v: v };
+  }
+  function fillFoot(t, k) {
+    var x = totals(k);
+    t.tFoot.querySelector('[data-tot="days"]').textContent = "الإجمالي — " + x.d + " يوم شغل";
+    t.tFoot.querySelector('[data-tot="ot"]').textContent = fmt(x.o) + " س";
+    t.tFoot.querySelector('[data-tot="val"]').textContent = fmt(x.v);
+  }
   function render() {
     ["client", "supplier"].forEach(function (k) {
       var other = data[k === "client" ? "supplier" : "client"];
-      var tb = document.querySelector('.sheet[data-sheet="' + k + '"] tbody');
-      var html = "", tq = 0, tv = 0;
-      data[k].forEach(function (row, i) {
-        var dow = (4 + i) % 7, diff = row.q !== other[i].q;
-        tq += row.q; tv += row.q * RATE[k];
-        html += '<tr class="' + (row.st !== "work" ? "off " : "") + (diff ? "diff" : "") + '">' +
-          '<td class="' + (dow === 5 ? "fri" : "") + '">' + DAYS[dow] + "</td>" +
-          "<td>" + String(i + 1).padStart(2, "0") + "/10</td>" +
-          '<td><select data-i="' + i + '" data-k="' + k + '" data-f="st" aria-label="الحالة">' +
-          Object.keys(STATUS).map(function (s) { return '<option value="' + s + '"' + (s === row.st ? " selected" : "") + ">" + STATUS[s] + "</option>"; }).join("") +
-          "</select></td>" +
-          '<td class="n"><input class="q" data-i="' + i + '" data-k="' + k + '" data-f="q" value="' + row.q + '" inputmode="decimal" aria-label="الكمية"></td>' +
-          '<td><input class="r" data-i="' + i + '" data-k="' + k + '" data-f="r" value="' + row.r.replace(/"/g, "&quot;") + '" placeholder="' + (row.st !== "work" ? "اكتب السبب" : "") + '" aria-label="البيان"></td>' +
-          '<td class="n">' + fmt(row.q * RATE[k]) + "</td>" +
-          "<td>" + (diff ? '<span class="pill p-out">مختلف عن ' + (k === "client" ? "سركي صاحب المعدة" : "سركي الشركة") + "</span>" : "") + "</td></tr>";
-      });
-      tb.innerHTML = html;
-      var tf = tb.parentElement.tFoot;
-      tf.querySelector('[data-tot="qty"]').textContent = fmt(tq) + " يوم";
-      tf.querySelector('[data-tot="val"]').textContent = fmt(tv);
-      document.getElementById(k === "client" ? "sk-c-days" : "sk-s-days").textContent = fmt(tq) + " يوم";
-      document.getElementById(k === "client" ? "sk-c-val" : "sk-s-val").textContent = fmt(tv);
+      var t = document.querySelector('.sheet[data-sheet="' + k + '"]');
+      t.tBodies[0].innerHTML = data[k].map(function (r, i) {
+        var ot = otHours(r), hasOt = ot > 0;
+        return '<tr class="' + (r.off ? "off" : "") + '">' + dayCell(i, k, r, other, true) +
+          "<td>" + inp(k, i, "site", r.site, "site", r.off) + "</td>" +
+          '<td class="n">' + inp(k, i, "actual", r.actual, "", r.off) + "</td>" +
+          '<td class="n">' + inp(k, i, "ot", hasOt ? fmt(ot) : "", "", r.off) + "</td>" +
+          '<td class="n">' + inp(k, i, "otRate", hasOt ? r.otRate : "", "", r.off || !hasOt).replace('value=""', 'value="" placeholder="' + (hasOt ? "تلقائي" : "—") + '"') + "</td>" +
+          '<td class="n">' + inp(k, i, "base", r.off ? "" : r.base, "", r.off) + "</td>" +
+          '<td class="n">' + inp(k, i, "rate", r.rate, "", r.off) + "</td>" +
+          "<td>" + inp(k, i, "note", r.note, "nt", false) + "</td>" +
+          '<td class="n"><b>' + (r.off ? "—" : fmt(total(r))) + "</b></td></tr>";
+      }).join("");
+      fillFoot(t, k);
+      var x = totals(k);
+      document.getElementById(k === "client" ? "sk-c-days" : "sk-s-days").textContent = x.d + " يوم" + (x.o ? " + " + fmt(x.o) + " س أوفر" : "");
+      document.getElementById(k === "client" ? "sk-c-val" : "sk-s-val").textContent = fmt(x.v);
     });
+    // printable party views (no other party, no profit)
     document.querySelectorAll(".sheet-view").forEach(function (t) {
-      var k = t.dataset.view, tq = 0, html = "";
-      data[k].forEach(function (row, i) {
-        var dow = (4 + i) % 7;
-        tq += row.q;
-        html += '<tr class="' + (row.st !== "work" ? "off" : "") + '"><td>' + DAYS[dow] + "</td><td>" + String(i + 1).padStart(2, "0") + "/10</td><td>" + STATUS[row.st] +
-          '</td><td class="n">' + row.q + "</td><td>" + row.r.replace(/</g, "&lt;") + '</td><td class="n">' + fmt(row.q * RATE[k]) + "</td></tr>";
-      });
-      t.tBodies[0].innerHTML = html;
-      t.tFoot.querySelector('[data-tot="qty"]').textContent = fmt(tq) + " يوم";
-      t.tFoot.querySelector('[data-tot="val"]').textContent = fmt(tq * RATE[k]);
+      var k = t.dataset.view, other = data[k === "client" ? "supplier" : "client"];
+      t.tBodies[0].innerHTML = data[k].map(function (r, i) {
+        var ot = otHours(r);
+        return '<tr class="' + (r.off ? "off" : "") + '">' + dayCell(i, k, r, data[k], false) +
+          "<td>" + esc(r.site) + '</td><td class="n">' + esc(r.actual) + '</td><td class="n">' + (ot ? fmt(ot) : "") +
+          '</td><td class="n">' + (ot ? fmt(otRate(r)) : "") + '</td><td class="n">' + (r.off ? "" : esc(r.base)) + '</td><td class="n">' + esc(r.rate) +
+          "</td><td>" + esc(r.note) + '</td><td class="n">' + (r.off ? "" : fmt(total(r))) + "</td></tr>";
+      }).join("");
+      fillFoot(t, k);
     });
-    var n = data.client.filter(function (r, i) { return r.q !== data.supplier[i].q; }).length;
+    var diff = data.client.filter(function (r, i) { return hoursKey(r) !== hoursKey(data.supplier[i]); }).length;
     var m = document.getElementById("sk-match");
-    m.textContent = n ? n + " يوم مختلف" : "متطابقين ✓";
-    m.className = n ? "out" : "in";
+    m.textContent = diff ? diff + " يوم مختلف" : "متطابقين ✓";
+    m.className = diff ? "out" : "in";
   }
   document.querySelectorAll(".sheet").forEach(function (t) {
+    t.addEventListener("click", function (e) {
+      var b = e.target.closest("button.offdot");
+      if (!b) return;
+      var r = data[b.dataset.k][+b.dataset.i];
+      r.off = !r.off;
+      if (r.off) { r.site = ""; r.actual = ""; r.ot = ""; r.otRate = ""; r.rate = ""; }
+      else { r.site = SITE; r.base = "8"; r.rate = b.dataset.k === "client" ? "500" : "400"; }
+      render();
+    });
     t.addEventListener("change", function (e) {
-      var el = e.target, i = +el.dataset.i, k = el.dataset.k, f = el.dataset.f;
-      if (!k) return;
-      var row = data[k][i];
-      if (f === "st") { row.st = el.value; row.q = el.value === "work" ? 1 : 0; }
-      else if (f === "q") { row.q = Math.max(0, Number(el.value) || 0); }
-      else row.r = el.value;
+      var el = e.target, k = el.dataset.k, f = el.dataset.f;
+      if (!k || f === "off") return;
+      var r = data[k][+el.dataset.i];
+      if (f === "ot") { r.ot = el.value; r.actual = el.value.trim() === "" ? "" : String(n(r.base) + n(el.value)); }
+      else r[f] = el.value;
+      render();
+    });
+  });
+  // "3, 7, 15" / "14-31" / "1-5, 7-10" → set of day numbers (same parser as the old app)
+  function parseDays(spec) {
+    var out = {};
+    spec.split(/[,،]+/).map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (tok) {
+      var m = tok.match(/^(\d+)\s*-\s*(\d+)$/);
+      if (m) { for (var d = Math.min(+m[1], +m[2]); d <= Math.max(+m[1], +m[2]); d++) out[d] = 1; }
+      else tok.split(/\s+/).forEach(function (p) { if (+p) out[+p] = 1; });
+    });
+    return out;
+  }
+  document.querySelectorAll("[data-bulk]").forEach(function (box) {
+    var k = box.dataset.bulk;
+    function v(name) { return box.querySelector('[data-b="' + name + '"]').value; }
+    box.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-act]");
+      if (!b) return;
+      var act = b.dataset.act;
+      if (act === "ot") {
+        var days = parseDays(v("otdays"));
+        data[k].forEach(function (r, i) {
+          if (!days[i + 1] || r.off) return;
+          r.ot = v("othours"); r.actual = String(n(r.base) + n(v("othours"))); r.otRate = v("otrate");
+        });
+      } else {
+        var from = Math.max(1, n(v("from"))), to = Math.min(31, n(v("to")));
+        for (var d = from; d <= to; d++) {
+          var r = data[k][d - 1];
+          if (act === "fill") { r.off = false; r.rate = v("rate"); r.site = v("site"); r.base = v("base"); r.actual = ""; r.ot = ""; r.otRate = ""; }
+          else { r.off = true; r.site = ""; r.actual = ""; r.ot = ""; r.otRate = ""; r.rate = ""; }
+        }
+      }
       render();
     });
   });
   document.getElementById("sk-copy").addEventListener("click", function () {
-    data.supplier = data.client.map(function (r) { return { st: r.st, q: r.q, r: r.r }; });
+    data.supplier = data.client.map(function (r) {
+      return { off: r.off, site: r.site, actual: r.actual, base: r.base, ot: r.ot, otRate: "", rate: r.off ? "" : "400", note: r.note };
+    });
     render();
   });
   render();
