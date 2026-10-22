@@ -1,0 +1,227 @@
+# البنيان - التأجير — المرحلة ٠: الفهم + تصميم القاعدة + الأسئلة
+
+> الملف ده للمراجعة والموافقة. مفيش كود لسه.
+
+---
+
+## ١. اللي فهمته من البرنامج القديم (`accounting-app/` على فرع `claude/heavy-equipment-accounting-app-em2egj`)
+
+| الحاجة | في القديم | هنعمل إيه في الجديد |
+|---|---|---|
+| التقنية | Electron 32 + React 18 + TS + Vite 5 + Tailwind 3 + better-sqlite3 + Recharts | نفس النسخ بالظبط + Vitest |
+| الشكل | Sidebar يمين `w-64`، أخضر `#2F8F63`، `rounded-card` 16px، `shadow-card`، خلفية `#F5F7F6`، وضع ليلي (navy) بـ override للكلاسات | ننقل `tailwind.config.js` و `index.css` و `theme.tsx` و `Sidebar` و `KpiCard` و `Modal` و `Icon` زي ما هم |
+| الخط | `@fontsource/cairo` (أوفلاين) | نفسه |
+| الطباعة | `print:preview` في `main.js`: بيعمل PDF مقاس A4 وبيصغّر لحد ما يدخل صفحة واحدة، وبيفتحه في نافذة معاينة؛ `PrintHeader` / `PrintSignoff` (توقيع وختم)؛ `.no-print` / `.print-only` | ننقله كما هو. كشوف الحساب الطويلة هنسمح فيها بأكتر من صفحة (خيار) |
+| سجل التعديلات + التراجع | مربوط بمحرك المزامنة (`syncEngine.js`): تريجرات SQLite بتاخد نسخة من الصف قبل التعديل/المسح، و"تراجع" بيمسح أو بيرجّع القيم. `UndoContext` = شريط "تراجع (Ctrl+Z)" ١٢ ثانية | ناخد فكرة التريجرات في موديول مستقل **من غير مزامنة**. والتراجع هيتغير: أي حركة مالية **مبتتمسحش** — التراجع عنها = قيد عكسي. التراجع بالمسح/الرجوع للقيم القديمة يفضل بس للبيانات الأساسية (اسم مورد، رقم تليفون…) |
+| النسخ الاحتياطي | **مش موجود** في القديم | جديد: نسخة يومية تلقائية بـ `db.backup()` + زرارين نسخ/استرجاع |
+| تصدير Excel | **مش موجود** | جديد: مكتبة `exceljs` (RTL + فورمات أرقام). PDF = نفس آلية الطباعة |
+| التحديث التلقائي | `electron-updater` من GitHub Releases لنفس الريبو `mohamdkhaldd/shopify-mcp-v1` (آخر إصدار `v0.1.39`) | نفس الكود بس **ريبو إصدارات مختلف** — شوف سؤال ١ |
+| المزامنة | Supabase (لاب + تابلت) | مش هنستخدمها إلا لو طلبت — ولو طلبت، مشروع Supabase منفصل |
+| الفلوس | `REAL` (أرقام عشرية) | **قروش صحيحة `INTEGER`** |
+| البناء | `build-windows.yml` (workflow_dispatch) + نسخة stub على `main` عشان GitHub يسجله | ملف جديد `build-rental-windows.yml` بـ `working-directory: rental-app` + stub على `main` في المرحلة ٤ |
+
+**مش هنلمس** فولدر `accounting-app/` ولا فرعه. الشغل كله على فرع `claude/albunyan-rental-app` في فولدر `rental-app/`.
+
+### العزل عن القديم
+
+| | القديم | الجديد |
+|---|---|---|
+| appId | `com.albunyan.accounting` | `com.albunyan.rental` |
+| productName | `حسابات البنيان` | `البنيان - التأجير` |
+| package name | `al-bunyan-accounting` | `al-bunyan-rental` |
+| ملف القاعدة | `%APPDATA%/حسابات البنيان/al-bunyan.db` | `%APPDATA%/البنيان - التأجير/albunyan-rental.db` (فولدر مختلف تلقائيًا لأن productName مختلف) |
+| GUID بتاع NSIS | مشتق من appId القديم | مشتق من appId الجديد → يتثبتوا جنب بعض |
+| التحديثات | releases بتاعة `shopify-mcp-v1` | ريبو/قناة منفصلة (سؤال ١) |
+| localStorage | `al-bunyan-theme` | `albunyan-rental-theme` |
+
+---
+
+## ٢. فهمي للحسابات
+
+### المثال الإلزامي (عقد ٣٠ يوم)
+
+| البند | المبلغ |
+|---|---:|
+| المستحق من العميل ٥٠٠ × ٣٠ | 15,000 |
+| ضريبة القيمة المضافة ١٤٪ (مش إيراد — أمانة للضرايب) | 2,100 |
+| فاتورة العميل | 17,100 |
+| المستحق للمورد ٤٠٠ × ٣٠ | 12,000 |
+| الهامش | 3,000 |
+| ٥٪ من الهامش | 150 |
+| بعد الـ ٥٪ | 2,850 |
+| مصروفات العقد | 350 |
+| **صافي الربح** | **2,500** |
+| الإدارة ٥٠٪ | 1,250 |
+| المستثمرين ٥٠٪ | 1,250 |
+| مستثمر أ (60,000 من 100,000) | 750 |
+| مستثمر ب (40,000 من 100,000) | 500 |
+
+### المعادلات (لكل عقد × شهر)
+
+```
+client_base   = Σ client_qty × client_rate        (من السركي)
+supplier_cost = Σ supplier_qty × supplier_rate
+vat           = client_base × VAT%                (أمانة، برا الأرباح)
+margin        = client_base − supplier_cost
+tax5          = max(0, margin) × 5%
+net_contract  = margin − tax5 − contract_expenses
+
+month_net     = Σ net_contract − general_expenses
+investors_pool= floor(month_net × investors%)
+management    = month_net − investors_pool         (الباقي للإدارة)
+investor_i    = floor(investors_pool × w_i / Σw)   ، w_i = Σ (رأس المال × عدد أيامه في الشهر)
+management   += investors_pool − Σ investor_i      (كسور القروش للإدارة)
+```
+
+- الخصومات من المورد (حاجات دفعناها عنه) بتقلل اللي علينا ليه بس — **مبتأثرش على الهامش**.
+- المورد مفيش عليه ضريبة.
+- العميل بيدفع الفاتورة كاملة بالضريبة، من غير خصم من المنبع.
+- كل نسبة ليها تاريخ سريان؛ الحساب بياخد النسبة السارية في تاريخ الشغل (أو أول الشهر للتوزيع)، فتغيير النسبة مبيغيرش الماضي.
+- ترتيب الخصم ثابت: هامش ← ٥٪ ← مصروفات ← توزيع.
+
+### المستحق vs المحصّل
+
+- **الربح المستحق** = من السركي (أساس الاستحقاق) — اللي فوق.
+- **الربح المحصّل** (اللي يتصرف فعلًا للمستثمرين) — اقتراحي: لكل شهر مقفول، نسبة التحصيل = اللي اتحصّل من فواتير الشهر ده (من غير الضريبة) ÷ إجمالي فواتير الشهر (من غير الضريبة). المسموح صرفه لكل مستثمر = نصيبه × نسبة التحصيل. التحصيلات بتتوزع على الفواتير الأقدم فالأحدث، إلا لو الدفعة مربوطة بعقد معين. (سؤال ٤)
+
+### "قد إيه من فلوسه شغالة"
+
+```
+deployed = Σ على العقود max(0, المدفوع للمورد + مصروفات العقد المدفوعة − المحصّل من العميل بدون الضريبة)
+used_i   = deployed × (رأس مال المستثمر الحالي ÷ إجمالي رأس المال)
+```
+
+### التقريب
+
+- كل الفلوس قروش صحيحة. الكميات كمان صحيحة: `qty_milli` (٧.٥ ساعة = 7500). النسب بالـ basis points (١٤٪ = 1400).
+- دالة تقريب واحدة بس في الكود كله (`calc/money.ts`): half-up للضريبة والـ ٥٪ والسطور، و floor للتوزيع والباقي للإدارة. (سؤال ٣)
+
+### قفل الشهر
+
+`month_closes` بيحفظ snapshot للتوزيع. بعد القفل: أي إضافة/تعديل بتاريخ في الشهر ده بيترفض، والتصحيح بيبقى **قيد تسوية** بتاريخ النهارده وسبب، وبيدخل في الشهر المفتوح.
+
+---
+
+## ٣. تصميم القاعدة (SQLite)
+
+قواعد عامة: كل جدول فيه `id`, `created_at`. الحركات المالية فيها `status` ('active' / 'reversed') و `reversal_of` — **مفيش DELETE** على الجداول المالية (تريجر `BEFORE DELETE` بيرمي خطأ). كل الفلوس `INTEGER` قروش وفيها `CHECK (typeof(x)='integer')`.
+
+### بيانات أساسية
+```sql
+investors      (id, name, phone, notes, active)
+suppliers      (id, name, phone, notes, active)
+clients        (id, kind CHECK(kind IN('company','individual')), name, phone, tax_id NULL, active)
+equipment      (id, name, type, plate_no, chassis_no, supplier_id → suppliers, active)
+```
+
+### العقود والسركي
+```sql
+contracts (id, code, client_id, equipment_id, supplier_id,
+           unit CHECK(unit IN('day','hour','month')),
+           client_rate_pt INTEGER, supplier_rate_pt INTEGER,
+           start_date, end_date NULL, status CHECK(status IN('draft','active','ended','cancelled')), notes)
+
+work_logs (id, contract_id, period_from, period_to,
+           client_qty_milli INTEGER, supplier_qty_milli INTEGER,   -- بيبقوا متساويين افتراضيًا
+           client_rate_pt, supplier_rate_pt,                        -- نسخة من العقد وقت التسجيل
+           note, status, reversal_of)
+```
+(السعر بيتنسخ في السطر عشان لو اتغير سعر العقد بعدين الماضي ميتغيرش.)
+
+### الفواتير والتحصيل
+```sql
+invoices (id, serial, client_id, contract_id, month,                -- فاتورة لكل عقد × شهر
+          base_pt, vat_bp, vat_pt, total_pt, issued_at, status)
+client_payments  (id, client_id, contract_id NULL, date, amount_pt, method, ref_no, note, status, reversal_of)
+payment_allocations (payment_id, invoice_id, amount_pt)            -- توزيع التحصيل على الفواتير
+```
+
+### الموردين
+```sql
+supplier_payments   (id, supplier_id, contract_id NULL, date, amount_pt, method, note, status, reversal_of)
+supplier_deductions (id, supplier_id, contract_id NULL, date, amount_pt, reason, paid_from_treasury INTEGER, status, reversal_of)
+```
+
+### المصروفات
+```sql
+expense_categories (id, name)
+expenses (id, kind CHECK(kind IN('contract','general')), contract_id NULL, category_id,
+          date, amount_pt, method, note, status, reversal_of)
+```
+
+### المستثمرين
+```sql
+capital_movements (id, investor_id, date, kind CHECK(kind IN('deposit','withdrawal')), amount_pt, method, note, status, reversal_of)
+profit_payouts    (id, payee_kind CHECK(payee_kind IN('investor','management')), investor_id NULL, month, date, amount_pt, method, status, reversal_of)
+```
+
+### الضرايب
+```sql
+tax_payments (id, tax CHECK(tax IN('vat','tax5')), period_month, date, amount_pt, receipt_no, status, reversal_of)
+```
+
+### الخزنة (دفتر واحد لكل جنيه)
+```sql
+treasury_entries (id, date, direction CHECK(direction IN('in','out')), amount_pt, method,
+                  type  -- investor_deposit | investor_withdrawal | client_collection | supplier_payment
+                        -- | supplier_deduction | expense | tax_payment | profit_payout | adjustment
+                  source_table, source_id, party_kind, party_id, note, status)
+```
+كل حركة في الجداول اللي فوق بتعمل قيد هنا جوه نفس الـ transaction (من طبقة الخدمات، مش من الشاشة).
+
+### الإعدادات والقفل والتسويات
+```sql
+rate_settings (id, key CHECK(key IN('vat','tax5','management_share','investors_share')),
+               value_bp INTEGER, effective_from DATE, UNIQUE(key, effective_from))
+month_closes  (month PRIMARY KEY, closed_at, snapshot_json, closed_by_note)
+adjustments   (id, target_month, applied_month, kind, amount_pt, reason, ref_table, ref_id)
+app_settings  (key PRIMARY KEY, value)       -- اسم الشركة، مسار النسخ الاحتياطي، ...
+```
+
+### السجل
+```sql
+audit_log (id, at, tbl, row_id, op, before_json, after_json, summary_ar, undone)
+```
+بيتملى بتريجرات (نفس فكرة القديم بس من غير sync).
+
+### محرك الحسابات
+`src/calc/` — دوال TypeScript **pure** (من غير قاعدة بيانات) مشتركة بين Electron والتيستات:
+`money.ts` (التقريب الوحيد)، `contractMonth.ts`، `distribution.ts`، `timeWeight.ts`، `collections.ts`، `treasury.ts`. التيستات بـ Vitest أولها المثال الإلزامي بالقرش.
+
+---
+
+## ٤. الأسئلة (محتاج ردك قبل ما أبدأ)
+
+**١. ريبو الإصدارات (مهم جدًا للعزل).** البرنامج القديم بيدور على تحديثات في "آخر إصدار" في ريبو `shopify-mcp-v1`. لو الجديد نزّل إصداراته في نفس الريبو، القديم هيشوفها كأنها تحديث ليه (أو هيقف عن التحديث). الحل اللي أقترحه: تعمل ريبو فاضي جديد مثلًا `mohamdkhaldd/albunyan-rental-releases` (ممكن يبقى private)، والكود يفضل هنا، والـ workflow ينشر هناك بـ token (Personal Access Token تحطه secret اسمه `RENTAL_RELEASES_TOKEN`). موافق؟ ولو private، البرنامج محتاج token للقراءة — فأفضّل يبقى public (الريبو ده فيه الـ installer بس، مش الكود).
+
+**٢. المزامنة/التابلت:** محتاج الجديد يشتغل على أكتر من جهاز (زي القديم)؟ اقتراحي: لأ في الأول (جهاز واحد أوفلاين)، ونضيفها بعدين بمشروع Supabase منفصل لو احتجت.
+
+**٣. التقريب:** موافق على: half-up للسطور والضريبة والـ ٥٪ (لكل فاتورة/عقد-شهر)، و floor لتوزيع المستثمرين، وكل كسور القروش للإدارة؟ (المثال بيطلع مظبوط بالقرش في الحالتين.)
+
+**٤. الربح المحصّل:** موافق على طريقة "نسبة تحصيل فواتير الشهر" اللي فوق؟ والتحصيل اللي مش مربوط بعقد يتوزع على الأقدم فالأحدث؟
+
+**٥. الخزنة المتاحة:** لو طبقت التعريف حرفيًا (الإجمالي − رأس مال المستثمرين − الضرايب − الأرباح)، الرقم هيطلع بالسالب طول الوقت، لأن رأس المال نفسه متصرف للموردين ومش قاعد في الخزنة. اقتراحي:
+- رأس مال المستثمرين يتعرض كـ: الإجمالي / منه شغال عند الموردين / منه في الخزنة.
+- **المتاح للتشغيل = الرصيد − الضرايب المحجوزة − الأرباح المستحقة الصرف ومتصرفتش.**
+- التنبيه يظهر لو أي صرف هيخلّي المتاح سالب.
+موافق؟
+
+**٦. ضريبة الـ ١٤٪:** الأمانة تتحسب على الفاتورة (أول ما تصدر) ولا على التحصيل (أول ما الفلوس تدخل)؟ اقتراحي: الملف الضريبي يعرض الاتنين، والمحجوز في الخزنة = الضريبة اللي اتحصّلت فعلًا − اللي اتدفع. وهل الأفراد كمان عليهم ١٤٪ زي الشركات؟ (افتراضي: آه، الكل.)
+
+**٧. لو الهامش سالب** (العميل اتحاسب أقل من المورد): الـ ٥٪ = صفر والخسارة تقلل ربح الشهر؟
+
+**٨. الفواتير:** فاتورة لكل عقد كل شهر ميلادي؟ ولا محتاجين فترات تانية (كل ١٥ يوم / آخر العقد)؟
+
+**٩. طرق الدفع:** خزنة واحدة وكل حركة عليها طريقة (كاش / انستا باي / تحويل بنكي / محفظة) مع رصيد لكل طريقة؟ ولا عايز حسابات منفصلة زي القديم؟
+
+**١٠. حساب الأيام للمستثمر:** يوم الإيداع بيتحسب، ويوم السحب مبيتحسبش؟ والأرباح **مبتتضافش** لرأس المال تلقائيًا (لو عايز يعيد استثمارها = صرف + إيداع)؟
+
+**١١. العقد بالشهر:** لو اشتغل نص شهر، الكمية في السركي تبقى 0.5؟ ولا نحسبها بالأيام (مثلًا ١٥/٣٠)؟
+
+**١٢. اسم/لوجو:** نستخدم نفس لوجو `public/logo.png` بتاع القديم؟
+
+---
+
+## ٥. اللي جاي بعد موافقتك
+
+المرحلة ١: صفحات HTML ثابتة (الـ ٧ صفحات) بنفس الشكل، مليانة بأرقام المثال، تتفتح في المتصفح.
