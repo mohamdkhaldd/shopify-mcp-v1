@@ -1,0 +1,31 @@
+name: Cloud keep-alive
+
+# مشاريع Supabase المجانية بتتقفل لوحدها لو فضلت أسبوع من غير أي استخدام.
+# ده بيكلّم المشروعين مرة كل يوم (طلب صغير جدًا) عشان ميتقفلوش أبدًا:
+#  - El Bonya: سحابة برنامج الحسابات القديم
+#  - Albunyan Rental: سحابة برنامج التأجير (المزامنة + أكواد التفعيل)
+# المفاتيح هنا هي المفاتيح العامة (anon) اللي جوه البرامج نفسها — مبتفتحش بيانات.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: El Bonya (old accounting app)
+        run: |
+          KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhwbmt3bXB6d3ZjZmV6aW1rbHdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxODg2OTIsImV4cCI6MjEwMTc2NDY5Mn0.J76_zFG4UuycVYsG4rXbfkux1KUnACizTYbZ6JF7ZEA"
+          curl -sS --fail-with-body -o /dev/null -w "%{http_code}\n" \
+            "https://xpnkwmpzwvcfezimklwa.supabase.co/rest/v1/sync_rows?select=gid&limit=1" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY"
+      - name: Albunyan Rental (rental app)
+        run: |
+          curl -sS --fail-with-body -o /dev/null -w "%{http_code}\n" -X POST \
+            "https://dbzgiaxsxadzkfqppknm.supabase.co/functions/v1/license" \
+            -H "Content-Type: application/json" -d '{"key":"keepalive","deviceId":"keepalive"}'
