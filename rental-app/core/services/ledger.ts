@@ -183,7 +183,7 @@ export function reverse(db: Db, table: keyof typeof REVERSIBLE, id: number, date
   if (!reason.trim()) throw new UserError("اكتب سبب الإلغاء");
   return db.transaction(() => {
     const row = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
-    if (!row) throw new UserError("الحركة دي مش موجودة");
+    if (!row || row.deleted_at) throw new UserError("الحركة دي مش موجودة");
     if (row.reversal_of != null) throw new UserError("دي حركة إلغاء أصلًا");
     if (db.prepare(`SELECT 1 FROM ${table} WHERE reversal_of = ?`).get(id)) throw new UserError("الحركة دي اتلغت قبل كده");
     const allCols = [...cols, "date", "amount_pt", "note", "reversal_of"];
@@ -192,7 +192,7 @@ export function reverse(db: Db, table: keyof typeof REVERSIBLE, id: number, date
         .prepare(`INSERT INTO ${table} (${allCols.join(", ")}) VALUES (${allCols.map(() => "?").join(", ")})`)
         .run(...cols.map((c) => row[c]), date, -row.amount_pt, `إلغاء: ${reason}`, id),
     );
-    for (const t of db.prepare("SELECT * FROM treasury_entries WHERE source_table = ? AND source_id = ?").all(table, id)) {
+    for (const t of db.prepare("SELECT * FROM treasury_entries WHERE source_table = ? AND source_id = ? AND deleted_at IS NULL").all(table, id)) {
       treasury(db, {
         date,
         direction: t.direction,

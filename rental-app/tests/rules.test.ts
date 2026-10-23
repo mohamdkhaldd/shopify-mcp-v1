@@ -125,12 +125,26 @@ describe("profit split", () => {
     expect(m.monthNetPt).toBe(egp(3_000 - 150 - 500));
     expect(m.distribution.investorsPoolPt).toBe(egp(1_175));
   });
-  it("negative margin: no 5%, loss reduces the month, investors get nothing", () => {
+  it("negative margin: no 5%, nobody is paid that month, the loss carries forward", () => {
     const { db } = setup({ clientRate: 300, supplierRate: 400 });
     const m = october(db);
     expect(m.contracts[0].tax5Pt).toBe(0);
     expect(m.monthNetPt).toBe(-egp(3_000));
+    expect(m.distribution.managementPt).toBe(0);
     expect(m.distribution.investors.every((x) => x.sharePt === 0)).toBe(true);
+    expect(m.carryOutPt).toBe(egp(3_000));
+  });
+  it("a carried loss comes off the next months' profit until it's used up", () => {
+    const { db, contract } = setup({ clientRate: 300, supplierRate: 400 }); // October: −3,000
+    db.prepare("UPDATE contracts SET end_date = NULL").run();
+    // November: 1,000/day to the client, 400 to the supplier, 10 days → margin 6,000, 5% 300, net 5,700
+    for (const side of ["client", "supplier"] as const)
+      fillRange(db, contract, side, "2026-11-01", "2026-11-10", { dayRatePt: side === "client" ? egp(1_000) : egp(400) });
+    const nov = computeBooks(db, "2026-11-30").months.find((m) => m.month === "2026-11")!;
+    expect(nov.monthNetPt).toBe(egp(5_700));
+    expect(nov.carryInPt).toBe(egp(3_000));
+    expect(nov.carryOutPt).toBe(0);
+    expect(nov.distribution.investorsPoolPt).toBe(egp(1_350)); // (5,700 − 3,000) × 50%
   });
 });
 

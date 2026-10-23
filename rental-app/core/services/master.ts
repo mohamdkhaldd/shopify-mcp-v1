@@ -71,7 +71,7 @@ export interface ContractInput {
 }
 
 export function createContract(db: Db, v: ContractInput) {
-  const eq = db.prepare("SELECT supplier_id, site_name FROM equipment WHERE id = ?").get(v.equipmentId);
+  const eq = db.prepare("SELECT supplier_id, site_name FROM equipment WHERE id = ? AND deleted_at IS NULL").get(v.equipmentId);
   if (!eq) throw new UserError("المعدة دي مش موجودة");
   const year = v.startDate.slice(0, 4);
   const seq = db.prepare("SELECT COUNT(*) AS n FROM contracts WHERE code LIKE ?").get(`ع-${year}-%`).n + 1;
@@ -87,7 +87,7 @@ export function createContract(db: Db, v: ContractInput) {
 }
 
 export function getContract(db: Db, contractId: number) {
-  const c = db.prepare("SELECT * FROM contracts WHERE id = ?").get(contractId);
+  const c = db.prepare("SELECT * FROM contracts WHERE id = ? AND deleted_at IS NULL").get(contractId);
   if (!c) throw new UserError("العقد ده مش موجود");
   return c as {
     id: number;

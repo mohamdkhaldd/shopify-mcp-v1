@@ -49,7 +49,7 @@ function assertInContract(c: Contract, date: string) {
 }
 
 export function getDay(db: Db, contractId: number, date: string, side: Side): WorkLogRow | undefined {
-  return db.prepare("SELECT * FROM work_logs WHERE contract_id = ? AND date = ? AND side = ?").get(contractId, date, side);
+  return db.prepare("SELECT * FROM work_logs WHERE contract_id = ? AND date = ? AND side = ? AND deleted_at IS NULL").get(contractId, date, side);
 }
 
 /** Creates or updates one day on one sheet (the cell-by-cell save of the sheet). */
@@ -90,7 +90,7 @@ export function upsertDay(db: Db, contractId: number, date: string, side: Side, 
      ON CONFLICT (contract_id, date, side) DO UPDATE SET
        is_day_off = excluded.is_day_off, site_name = excluded.site_name, actual_hours_milli = excluded.actual_hours_milli,
        base_hours_milli = excluded.base_hours_milli, day_rate_pt = excluded.day_rate_pt, overtime_rate_pt = excluded.overtime_rate_pt,
-       note = excluded.note, updated_at = datetime('now')`,
+       note = excluded.note, deleted_at = NULL, delete_reason = NULL, updated_at = datetime('now')`,
   ).run({ contract_id: contractId, date, side, ...next });
   return getDay(db, contractId, date, side)!;
 }
@@ -170,7 +170,9 @@ export function copyClientToSupplier(db: Db, contractId: number, month: string) 
 }
 
 export function sheetRows(db: Db, contractId: number, month: string, side: Side): WorkLogRow[] {
-  return db.prepare("SELECT * FROM work_logs WHERE contract_id = ? AND side = ? AND substr(date, 1, 7) = ? ORDER BY date").all(contractId, side, month);
+  return db
+    .prepare("SELECT * FROM work_logs WHERE contract_id = ? AND side = ? AND substr(date, 1, 7) = ? AND deleted_at IS NULL ORDER BY date")
+    .all(contractId, side, month);
 }
 
 /** The full internal sheet for the السركي page: every day of the month, with totals and mismatch flags. */

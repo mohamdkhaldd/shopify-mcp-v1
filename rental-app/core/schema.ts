@@ -1,9 +1,9 @@
 import { Db } from "./db";
 
 // Money columns are INTEGER piasters, enforced with CHECK(typeof(x) = 'integer').
-// Financial rows are never deleted or edited: a mistake is cancelled by a
-// reversal row (same amount, negative, reversal_of = original id) and every
-// change to any table is written to audit_log by triggers.
+// Rows are never physically deleted: "حذف" in the app sets deleted_at (the row
+// drops out of every list and total but can be restored), money rows can't be
+// edited (only their note), and every change is written to audit_log.
 
 const pt = (col: string, nullable = false) =>
   `${col} INTEGER${nullable ? "" : " NOT NULL"} CHECK (${col} IS NULL OR typeof(${col}) = 'integer')`;
@@ -23,31 +23,37 @@ CREATE TABLE IF NOT EXISTS rate_settings (
 
 CREATE TABLE IF NOT EXISTS investors (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   phone TEXT,
   notes TEXT,
   active INTEGER NOT NULL DEFAULT 1,
+  deleted_at TEXT,
+  delete_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS suppliers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   phone TEXT,
   notes TEXT,
   active INTEGER NOT NULL DEFAULT 1,
+  deleted_at TEXT,
+  delete_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS clients (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   kind TEXT NOT NULL CHECK (kind IN ('company', 'individual')),
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   phone TEXT,
   tax_id TEXT,
   vat_applies INTEGER NOT NULL,
   tax5_applies INTEGER NOT NULL,
   active INTEGER NOT NULL DEFAULT 1,
+  deleted_at TEXT,
+  delete_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -58,6 +64,8 @@ CREATE TABLE IF NOT EXISTS equipment (
   site_name TEXT,
   ${pt("supplier_rate_pt", true)},
   active INTEGER NOT NULL DEFAULT 1,
+  deleted_at TEXT,
+  delete_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -75,6 +83,8 @@ CREATE TABLE IF NOT EXISTS contracts (
   end_date TEXT,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'ended', 'cancelled')),
   notes TEXT,
+  deleted_at TEXT,
+  delete_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -91,6 +101,8 @@ CREATE TABLE IF NOT EXISTS work_logs (
   ${pt("day_rate_pt", true)},
   ${pt("overtime_rate_pt", true)},
   note TEXT,
+  deleted_at TEXT,
+  delete_reason TEXT,
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (contract_id, date, side)
 );
@@ -103,6 +115,8 @@ CREATE TABLE IF NOT EXISTS client_payments (
   ${pt("amount_pt")},
   note TEXT,
   reversal_of INTEGER,
+  deleted_at TEXT,
+  delete_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   ${reversalCheck}
 );
@@ -115,6 +129,8 @@ CREATE TABLE IF NOT EXISTS supplier_payments (
   ${pt("amount_pt")},
   note TEXT,
   reversal_of INTEGER,
+  deleted_at TEXT,
+  delete_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   ${reversalCheck}
 );
@@ -129,13 +145,17 @@ CREATE TABLE IF NOT EXISTS supplier_deductions (
   note TEXT,
   paid_from_treasury INTEGER NOT NULL DEFAULT 1,
   reversal_of INTEGER,
+  deleted_at TEXT,
+  delete_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   ${reversalCheck}
 );
 
 CREATE TABLE IF NOT EXISTS expense_categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE
+  name TEXT NOT NULL,
+  deleted_at TEXT,
+  delete_reason TEXT
 );
 
 CREATE TABLE IF NOT EXISTS expenses (
@@ -147,6 +167,8 @@ CREATE TABLE IF NOT EXISTS expenses (
   ${pt("amount_pt")},
   note TEXT,
   reversal_of INTEGER,
+  deleted_at TEXT,
+  delete_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   ${reversalCheck},
   CHECK ((kind = 'contract') = (contract_id IS NOT NULL))
@@ -160,6 +182,8 @@ CREATE TABLE IF NOT EXISTS capital_movements (
   ${pt("amount_pt")},
   note TEXT,
   reversal_of INTEGER,
+  deleted_at TEXT,
+  delete_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   ${reversalCheck}
 );
@@ -172,6 +196,8 @@ CREATE TABLE IF NOT EXISTS profit_payouts (
   ${pt("amount_pt")},
   note TEXT,
   reversal_of INTEGER,
+  deleted_at TEXT,
+  delete_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   ${reversalCheck},
   CHECK ((payee_kind = 'investor') = (investor_id IS NOT NULL))
@@ -186,6 +212,8 @@ CREATE TABLE IF NOT EXISTS tax_payments (
   receipt_no TEXT,
   note TEXT,
   reversal_of INTEGER,
+  deleted_at TEXT,
+  delete_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   ${reversalCheck}
 );
@@ -203,6 +231,8 @@ CREATE TABLE IF NOT EXISTS treasury_entries (
   party_kind TEXT,
   party_id INTEGER,
   note TEXT,
+  deleted_at TEXT,
+  delete_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   CHECK (amount_pt <> 0)
 );
@@ -249,6 +279,11 @@ CREATE TABLE IF NOT EXISTS audit_log (
   undone INTEGER NOT NULL DEFAULT 0
 );
 
+-- names only need to be unique among rows that weren't deleted
+CREATE UNIQUE INDEX IF NOT EXISTS ux_investors_name ON investors (name) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_suppliers_name ON suppliers (name) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_clients_name ON clients (name) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_expense_categories_name ON expense_categories (name) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS ix_work_logs_contract_date ON work_logs (contract_id, date);
 CREATE INDEX IF NOT EXISTS ix_treasury_date ON treasury_entries (date);
 CREATE INDEX IF NOT EXISTS ix_audit_at ON audit_log (at);
@@ -320,7 +355,7 @@ function installGuards(db: Db) {
   `);
   for (const t of FINANCIAL_TABLES) {
     const changed = columnsOf(db, t)
-      .filter((c) => c !== "note")
+      .filter((c) => !["note", "deleted_at", "delete_reason"].includes(c))
       .map((c) => `NEW.${c} IS NOT OLD.${c}`)
       .join(" OR ");
     db.exec(`

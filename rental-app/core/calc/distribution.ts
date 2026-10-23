@@ -16,9 +16,10 @@ export interface Distribution {
 }
 
 /**
- * Splits a month's net profit. The investors' pool is split by time-weighted
- * capital; whatever can't be split to the piaster goes to management. A month
- * with no profit (or a loss) distributes nothing to investors.
+ * Splits a month's distributable profit (net after any loss carried from
+ * earlier months). The investors' pool is split by time-weighted capital;
+ * whatever can't be split to the piaster goes to management. Nothing to
+ * distribute → nobody gets anything (the loss is carried forward by the caller).
  */
 export function distribute(monthNetPt: Piasters, investorsBp: number, weights: InvestorWeight[]): Distribution {
   const totalWeight = weights.reduce((s, w) => s + w.weight, 0n);
@@ -26,7 +27,7 @@ export function distribute(monthNetPt: Piasters, investorsBp: number, weights: I
     return {
       monthNetPt,
       investorsPoolPt: 0,
-      managementPt: monthNetPt,
+      managementPt: Math.max(0, monthNetPt),
       remainderToManagementPt: 0,
       investors: weights.map((w) => ({ investorId: w.investorId, sharePt: 0, weight: w.weight })),
     };

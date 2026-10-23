@@ -30,6 +30,10 @@ export interface MonthResult {
   contracts: ContractMonthRow[];
   generalExpensesPt: Piasters;
   monthNetPt: Piasters;
+  /** Loss brought from earlier months, taken off this month's profit before splitting it. */
+  carryInPt: Piasters;
+  /** Loss still left to carry into next month. */
+  carryOutPt: Piasters;
   distribution: Distribution;
   /** Σ invoice base (ex-VAT) for the month, and how much of it clients paid so far. */
   invoicedBasePt: Piasters;
@@ -40,10 +44,11 @@ export interface MonthResult {
 
 type Row = Record<string, any>;
 
-/** Rows that still count: drops cancelled originals and their reversals. */
+/** Rows that still count: drops deleted rows, cancelled originals and their reversals. */
 function live<T extends Row>(rows: T[]): T[] {
-  const reversed = new Set(rows.filter((r) => r.reversal_of != null).map((r) => r.reversal_of));
-  return rows.filter((r) => r.reversal_of == null && !reversed.has(r.id));
+  const kept = rows.filter((r) => !r.deleted_at);
+  const reversed = new Set(kept.filter((r) => r.reversal_of != null).map((r) => r.reversal_of));
+  return kept.filter((r) => r.reversal_of == null && !reversed.has(r.id));
 }
 
 const sum = <T>(rows: T[], f: (r: T) => number) => rows.reduce((s, r) => s + f(r), 0);
@@ -61,10 +66,10 @@ function monthsBetween(from: string, to: string): string[] {
 
 export function computeBooks(db: Db, asOf: string = today()) {
   const q = (sql: string, ...p: unknown[]) => db.prepare(sql).all(...p) as Row[];
-  const contracts = q("SELECT * FROM contracts ORDER BY id");
+  const contracts = q("SELECT * FROM contracts WHERE deleted_at IS NULL ORDER BY id");
   const clients = new Map(q("SELECT * FROM clients").map((c) => [c.id, c]));
-  const investors = q("SELECT * FROM investors ORDER BY id");
-  const logs = q("SELECT * FROM work_logs WHERE date <= ? ORDER BY date", asOf) as WorkLogRow[];
+  const investors = q("SELECT * FROM investors WHERE deleted_at IS NULL ORDER BY id");
+  const logs = q("SELECT * FROM work_logs WHERE date <= ? AND deleted_at IS NULL ORDER BY date", asOf) as WorkLogRow[];
   const expenses = live(q("SELECT * FROM expenses WHERE date <= ?", asOf));
   const adjustments = q("SELECT * FROM adjustments WHERE applied_month <= ?", monthOf(asOf));
   const capital = live(q("SELECT * FROM capital_movements WHERE date <= ?", asOf));
@@ -85,9 +90,14 @@ export function computeBooks(db: Db, asOf: string = today()) {
       .map((c) => ({ date: c.date, signedPt: c.kind === "deposit" ? c.amount_pt : -c.amount_pt }));
 
   // ---- per month (accrual, from the sarki) ----
+  let carry = 0; // loss carried forward ("الخسارة بتترحّل")
   const monthResults: MonthResult[] = months.map((month) => {
     const snap = closes.get(month);
-    if (snap) return reviveSnapshot(snap);
+    if (snap) {
+      const m = reviveSnapshot(snap);
+      carry = m.carryOutPt ?? 0;
+      return m;
+    }
     const start = `${month}-01`;
     const rates = {
       vat: rateAt(db, "vat", start),
@@ -131,6 +141,9 @@ export function computeBooks(db: Db, asOf: string = today()) {
     );
     const monthNetPt = sum(rows, (r) => r.netPt) - generalExpensesPt;
     const weights = investors.map((i) => ({ investorId: i.id, weight: capitalWeight(movementsOf(i.id), month) })).filter((w) => w.weight > 0n);
+    const carryInPt = carry;
+    const distributable = monthNetPt - carryInPt;
+    carry = distributable < 0 ? -distributable : 0;
     return {
       month,
       closed: false,
@@ -138,7 +151,9 @@ export function computeBooks(db: Db, asOf: string = today()) {
       contracts: rows,
       generalExpensesPt,
       monthNetPt,
-      distribution: distribute(monthNetPt, rates.investors, weights),
+      carryInPt,
+      carryOutPt: carry,
+      distribution: distribute(distributable, rates.investors, weights),
       invoicedBasePt: 0,
       collectedBasePt: 0,
       releasableManagementPt: 0,
@@ -223,7 +238,7 @@ export function computeBooks(db: Db, asOf: string = today()) {
   const taxHeldPt = vatCollectedPt - vatPaidPt + (tax5AccruedPt - tax5PaidPt);
 
   // ---- treasury ----
-  const treasury = q("SELECT direction, amount_pt FROM treasury_entries WHERE date <= ?", asOf);
+  const treasury = q("SELECT direction, amount_pt FROM treasury_entries WHERE date <= ? AND deleted_at IS NULL", asOf);
   const balancePt = sum(treasury, (t) => (t.direction === "in" ? t.amount_pt : -t.amount_pt));
   const profitsDuePt =
     sum(investorRows, (i) => Math.max(0, i.releasablePt - i.paidPt)) + Math.max(0, mgmtReleasablePt - mgmtPaidPt);

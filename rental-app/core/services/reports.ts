@@ -31,7 +31,7 @@ export function supplierStatement(db: Db, supplierId: number, asOf: string = tod
     deductionsPt: sum(rows, (r) => r.deductionsPt),
     paidPt: sum(rows, (r) => r.paidPt),
   };
-  const equipment = db.prepare("SELECT id, name, site_name, supplier_rate_pt FROM equipment WHERE supplier_id = ? ORDER BY id").all(supplierId);
+  const equipment = db.prepare("SELECT id, name, site_name, supplier_rate_pt FROM equipment WHERE supplier_id = ? AND deleted_at IS NULL ORDER BY id").all(supplierId);
   return {
     supplier,
     equipment,
@@ -92,7 +92,7 @@ export function taxFile(db: Db, asOf: string = today(), books: Books = computeBo
     }
     return [...m.entries()].map(([k, v]) => ({ key: k, ...v }));
   };
-  const payments = db.prepare("SELECT * FROM tax_payments WHERE date <= ? ORDER BY date").all(asOf);
+  const payments = db.prepare("SELECT * FROM tax_payments WHERE date <= ? AND deleted_at IS NULL ORDER BY date").all(asOf);
   const t = books.tax;
   return {
     vatByClient: group((i) => i.clientId),
