@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, appApi, SettingsView } from "../../api/client";
+import { api, appApi, SettingsView, syncApi } from "../../api/client";
 import { Button, ErrorBox, Loading, Note, PageHeader, Panel } from "../../components/ui";
 import { Labeled, TextInput } from "../../components/Field";
+import { syncLine, useSyncStatus } from "../../components/Sync";
 import { monthLabel, percentFromBp } from "../../utils/format";
 
 const toBp = (t: string) => {
@@ -148,6 +149,54 @@ function Backups() {
   );
 }
 
+function SyncPanel() {
+  const [status, setStatus] = useSyncStatus();
+  const [name, setName] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const line = syncLine(status);
+  if (status?.disabled) return null;
+  return (
+    <Panel title="المزامنة بين الأجهزة">
+      <div className="px-4 py-3.5 grid gap-3">
+        <div>
+          أي تعديل على الجهاز ده بيوصل للأجهزة التانية لوحده في ثواني. لو النت فاصل، التعديلات بتستنى وبتتبعت أول ما يرجع. الحالة: <b>{line.text}</b>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Labeled label="اسم الجهاز ده (بيظهر للأجهزة التانية)">
+            <input
+              aria-label="اسم الجهاز"
+              value={name ?? status?.deviceName ?? ""}
+              onChange={(e) => setName(e.target.value)}
+              className="font-[inherit] text-[13px] border border-line bg-surface text-fg rounded-md px-2 py-1 w-[180px]"
+            />
+          </Labeled>
+          <Button
+            disabled={name == null || !name.trim() || name === status?.deviceName}
+            onClick={async () => {
+              setStatus(await syncApi.setDeviceName(name!.trim()));
+              setName(null);
+            }}
+          >
+            احفظ الاسم
+          </Button>
+          <Button
+            primary
+            disabled={busy || !!status?.needsLogin}
+            onClick={async () => {
+              setBusy(true);
+              setStatus(await syncApi.now());
+              setBusy(false);
+            }}
+          >
+            {busy ? "بيزامن..." : "زامن دلوقتي"}
+          </Button>
+        </div>
+        {status && status.deferred > 0 && <div className="text-xs text-muted">فيه {status.deferred} تعديل مستني بيانات من جهاز تاني — هيتطبق لوحده.</div>}
+      </div>
+    </Panel>
+  );
+}
+
 function Updates() {
   const [version, setVersion] = useState("");
   const [state, setState] = useState<string | null>(null);
@@ -203,6 +252,7 @@ export default function Settings() {
       <div className="grid gap-3.5 items-start grid-cols-2 max-[1000px]:grid-cols-1">
         <Backups />
         <Updates />
+        <SyncPanel />
       </div>
     </div>
   );

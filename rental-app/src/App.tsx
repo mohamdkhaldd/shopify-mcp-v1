@@ -13,6 +13,7 @@ import Tax from "./pages/tax/Tax";
 import Activity from "./pages/activity/Activity";
 import Settings from "./pages/settings/Settings";
 import { SectionId } from "./nav";
+import { SyncBars } from "./components/Sync";
 
 export default function App() {
   const [active, setActive] = useState<SectionId>("home");
@@ -27,6 +28,9 @@ export default function App() {
       <div className="flex min-h-screen" dir="rtl">
         <Sidebar active={active} onSelect={setActive} />
         <main className="flex-1 min-w-0 px-6 xl:px-8 pt-[26px] pb-14">
+          <div className="max-w-[1240px] mx-auto">
+            <SyncBars />
+          </div>
           <div className="max-w-[1240px] mx-auto" key={pageKey}>
             {active === "home" ? (
               <Dashboard onNavigate={setActive} />

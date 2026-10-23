@@ -3,6 +3,7 @@ import { footerItems, navItems, NavItem, SectionId } from "../nav";
 import { appApi } from "../api/client";
 import { useTheme } from "../theme";
 import Icon from "./Icon";
+import { syncLine, useSyncStatus } from "./Sync";
 
 function NavButton({ item, active, onSelect }: { item: NavItem; active: boolean; onSelect: (id: SectionId) => void }) {
   return (
@@ -26,6 +27,8 @@ export default function Sidebar({ active, onSelect }: { active: SectionId; onSel
   const { theme, toggle } = useTheme();
   const [version, setVersion] = useState("");
   const [backup, setBackup] = useState<string | null>(null);
+  const [sync] = useSyncStatus();
+  const line = syncLine(sync);
 
   useEffect(() => {
     appApi.version().then(setVersion);
@@ -60,6 +63,10 @@ export default function Sidebar({ active, onSelect }: { active: SectionId; onSel
           <Icon name={theme === "dark" ? "sun" : "moon"} className="w-4 h-4" />
           {theme === "dark" ? "الوضع العادي" : "الوضع الليلي"}
         </button>
+        <div className="flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${line.tone === "ok" ? "bg-in" : line.tone === "warn" ? "bg-amber" : "bg-white/30"}`} />
+          {line.text}
+        </div>
         <div>{backup ? `آخر نسخة احتياطية: ${backup}` : "لسه مفيش نسخة احتياطية"}</div>
         <div>{version ? `الإصدار ${version}` : ""}</div>
       </div>

@@ -9,6 +9,7 @@ import { setupAutoUpdate } from "./updater";
 import { callCore, makeRegistry } from "./ipc";
 import { exportExcel, ExcelSheet } from "./excel";
 import { seedDemo } from "../core/demo";
+import { startDeviceSync } from "./sync";
 
 const isDev = !app.isPackaged;
 const root = path.join(__dirname, "..");
@@ -45,6 +46,21 @@ app.whenReady().then(async () => {
   if (process.env.RENTAL_DEMO === "1" && !raw.prepare("SELECT 1 FROM contracts LIMIT 1").get()) seedDemo(db);
   let registry = makeRegistry(db);
 
+  // ---- laptop ↔ tablet sync (never in demo / screenshot mode) ----
+  const notifyRemote = (info: { count: number; devices: string[] }) => mainWindow?.webContents.send("sync:remoteChanges", info);
+  let sync = process.env.RENTAL_DEMO === "1" ? null : startDeviceSync(db, notifyRemote);
+  const offline = { deviceId: "", deviceName: "", pending: 0, deferred: 0, online: false, needsLogin: false, lastError: null, lastSyncAt: null, disabled: true };
+  ipcMain.handle("sync:status", () => sync?.status() ?? offline);
+  ipcMain.handle("sync:now", () => sync?.syncNow() ?? offline);
+  ipcMain.handle("sync:login", async (_e, { password }: { password: string }) => {
+    try {
+      return { ok: true, status: sync ? await sync.login(password) : offline };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  ipcMain.handle("sync:setDeviceName", (_e, { name }: { name: string }) => sync?.setDeviceName(name) ?? offline);
+
   ipcMain.handle("core:call", (_e, { fn, args }) => callCore(db, registry, fn, args));
 
   ipcMain.handle("print:preview", (_e, opts?: { singlePage?: boolean }) => mainWindow && printPreview(mainWindow, iconPath, opts?.singlePage ?? true));
@@ -76,11 +92,13 @@ app.whenReady().then(async () => {
     if (r.canceled || !file) return { ok: false };
     if (!looksLikeRentalDb(file, (f) => new Database(f, { readonly: true }))) return { ok: false, message: "الملف ده مش نسخة من برنامج التأجير" };
     await dailyBackup(raw); // keep today's state before replacing it
+    sync?.stop();
     raw.close();
     for (const ext of ["", "-wal", "-shm"]) fs.rmSync(dbPath() + ext, { force: true });
     fs.copyFileSync(file, dbPath());
     ({ raw, db } = openDatabase());
     registry = makeRegistry(db);
+    if (sync) sync = startDeviceSync(db, notifyRemote);
     mainWindow.webContents.reload();
     return { ok: true };
   });

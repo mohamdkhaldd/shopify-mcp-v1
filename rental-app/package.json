@@ -20,13 +20,15 @@
   "dependencies": {
     "@fontsource/cairo": "^5.1.0",
     "@fontsource/noto-kufi-arabic": "^5.1.0",
+    "@supabase/supabase-js": "^2.118.0",
     "better-sqlite3": "^11.3.0",
     "electron": "^32.1.2",
     "electron-updater": "^6.3.9",
     "exceljs": "^4.4.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "recharts": "^2.12.7"
+    "recharts": "^2.12.7",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.6.2",
@@ -34,6 +36,7 @@
     "@types/node": "^22.7.4",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.0.1",

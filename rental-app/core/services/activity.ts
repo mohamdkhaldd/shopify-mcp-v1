@@ -65,7 +65,9 @@ export function undoAction(db: Db, actionId: string) {
         db.prepare(`UPDATE ${r.tbl} SET deleted_at = ?, delete_reason = 'تراجع' WHERE id = ? AND deleted_at IS NULL`).run(`undo:${actionId}`, r.row_id);
       } else if (r.op === "update") {
         const before = JSON.parse(r.before_json ?? "{}") as Record<string, unknown>;
-        const cols = columns(db, r.tbl).filter((c) => c !== "id" && c in before);
+        // the sync engine's row id (gid) is never put back
+        const cols = columns(db, r.tbl).filter((c) => c !== "id" && c !== "gid" && c in before);
+        if (!cols.length) continue;
         db.prepare(`UPDATE ${r.tbl} SET ${cols.map((c) => `${c} = @${c}`).join(", ")} WHERE id = @__id`).run({ ...Object.fromEntries(cols.map((c) => [c, before[c]])), __id: r.row_id });
       } else {
         throw new UserError("الحاجة دي مينفعش تترجع");

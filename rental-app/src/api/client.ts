@@ -124,6 +124,30 @@ export const appApi = {
   savePdf: (name: string) => window.api?.invoke("print:savePdf", { name }),
 };
 
+export interface SyncStatus {
+  deviceId: string;
+  deviceName: string;
+  pending: number;
+  deferred: number;
+  online: boolean;
+  needsLogin: boolean;
+  lastError: string | null;
+  lastSyncAt: string | null;
+  disabled?: boolean;
+}
+
+const noSync: SyncStatus = { deviceId: "", deviceName: "", pending: 0, deferred: 0, online: false, needsLogin: false, lastError: null, lastSyncAt: null, disabled: true };
+
+export const syncApi = {
+  status: (): Promise<SyncStatus> => window.api?.invoke("sync:status") ?? Promise.resolve(noSync),
+  now: (): Promise<SyncStatus> => window.api?.invoke("sync:now") ?? Promise.resolve(noSync),
+  login: (password: string): Promise<{ ok: boolean; status?: SyncStatus; message?: string }> =>
+    window.api?.invoke("sync:login", { password }) ?? Promise.resolve({ ok: false, message: "البرنامج لازم يشتغل من نسخة الويندوز" }),
+  setDeviceName: (name: string): Promise<SyncStatus> => window.api?.invoke("sync:setDeviceName", { name }) ?? Promise.resolve(noSync),
+  /** Another device's edits just landed here. */
+  onRemoteChanges: (cb: (info: { count: number; devices: string[] }) => void) => window.api?.on("sync:remoteChanges", cb as (d: unknown) => void) ?? (() => {}),
+};
+
 export type { ActivityView, SettingsView, TaxView, TreasuryView, TreasuryFilters, InvestorsView, ManagementView, ClientsView, ContractOptions, DashboardView, Deletable, NewContractInput, SarkiView, SuppliersView };
 /** The السركي view once a contract is open. */
 export type OpenSarki = Exclude<SarkiView, { contract: null }>;

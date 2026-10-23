@@ -349,13 +349,19 @@ const columnsOf = (db: Db, t: string): string[] => db.prepare(`PRAGMA table_info
 
 function installGuards(db: Db) {
   const closed = (expr: string) => `EXISTS (SELECT 1 FROM month_closes WHERE month = substr(${expr}, 1, 7))`;
+  // true when an UPDATE changes more than the sync engine's global row id (gid)
+  const realChange = (t: string) =>
+    columnsOf(db, t)
+      .filter((c) => c !== "gid")
+      .map((c) => `NEW.${c} IS NOT OLD.${c}`)
+      .join(" OR ");
   for (const t of DATED_TABLES) {
     db.exec(`
       DROP TRIGGER IF EXISTS lock_ins_${t};
       CREATE TRIGGER lock_ins_${t} BEFORE INSERT ON ${t} WHEN ${closed("NEW.date")}
       BEGIN SELECT RAISE(ABORT, 'الشهر ده اتقفل — التصحيح بيتعمل بتسوية في شهر مفتوح'); END;
       DROP TRIGGER IF EXISTS lock_upd_${t};
-      CREATE TRIGGER lock_upd_${t} BEFORE UPDATE ON ${t} WHEN ${closed("OLD.date")} OR ${closed("NEW.date")}
+      CREATE TRIGGER lock_upd_${t} BEFORE UPDATE ON ${t} WHEN (${closed("OLD.date")} OR ${closed("NEW.date")}) AND (${realChange(t)})
       BEGIN SELECT RAISE(ABORT, 'الشهر ده اتقفل — التصحيح بيتعمل بتسوية في شهر مفتوح'); END;
     `);
   }
@@ -366,7 +372,7 @@ function installGuards(db: Db) {
   `);
   for (const t of FINANCIAL_TABLES) {
     const changed = columnsOf(db, t)
-      .filter((c) => !["note", "deleted_at", "delete_reason"].includes(c))
+      .filter((c) => !["note", "deleted_at", "delete_reason", "gid"].includes(c)) // gid: the sync engine's global row id
       .map((c) => `NEW.${c} IS NOT OLD.${c}`)
       .join(" OR ");
     db.exec(`
@@ -381,7 +387,7 @@ function installGuards(db: Db) {
     CREATE TRIGGER lock_ins_rate_settings BEFORE INSERT ON rate_settings WHEN ${closed("NEW.effective_from")}
     BEGIN SELECT RAISE(ABORT, 'مينفعش تغيّر نسبة في شهر اتقفل'); END;
     DROP TRIGGER IF EXISTS immutable_rate_settings;
-    CREATE TRIGGER immutable_rate_settings BEFORE UPDATE ON rate_settings
+    CREATE TRIGGER immutable_rate_settings BEFORE UPDATE ON rate_settings WHEN ${realChange("rate_settings")}
     BEGIN SELECT RAISE(ABORT, 'النسب مبتتعدلش — ضيف نسبة جديدة بتاريخ سريان جديد'); END;
   `);
   for (const t of REVERSIBLE_TABLES) {
@@ -411,14 +417,16 @@ const ACTION = "(SELECT value FROM app_settings WHERE key = 'current_action')";
 
 function installAudit(db: Db, tables: string[]) {
   for (const t of tables) {
-    const cols = columnsOf(db, t);
+    const cols = columnsOf(db, t).filter((c) => c !== "gid");
+    // the sync engine stamping a row's gid is not a user change: never logged, never undone
+    const changed = cols.map((c) => `NEW.${c} IS NOT OLD.${c}`).join(" OR ");
     const json = (p: "NEW" | "OLD") => `json_object(${cols.map((c) => `'${c}', ${p}.${c}`).join(", ")})`;
     db.exec(`
       DROP TRIGGER IF EXISTS audit_ins_${t};
       CREATE TRIGGER audit_ins_${t} AFTER INSERT ON ${t}
       BEGIN INSERT INTO audit_log (tbl, row_id, op, after_json, action_id) VALUES ('${t}', NEW.rowid, 'insert', ${json("NEW")}, ${ACTION}); END;
       DROP TRIGGER IF EXISTS audit_upd_${t};
-      CREATE TRIGGER audit_upd_${t} AFTER UPDATE ON ${t}
+      CREATE TRIGGER audit_upd_${t} AFTER UPDATE ON ${t} WHEN ${changed}
       BEGIN INSERT INTO audit_log (tbl, row_id, op, before_json, after_json, action_id) VALUES ('${t}', NEW.rowid, 'update', ${json("OLD")}, ${json("NEW")}, ${ACTION}); END;
       DROP TRIGGER IF EXISTS audit_del_${t};
       CREATE TRIGGER audit_del_${t} AFTER DELETE ON ${t}
@@ -433,7 +441,7 @@ export function setupDatabase(db: Db): Db {
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(DDL);
   const business = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('audit_log', 'app_settings', 'actions')")
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'sync_%' AND name NOT IN ('audit_log', 'app_settings', 'actions', 'activity_log')")
     .all()
     .map((r: any) => r.name as string);
   installGuards(db);
