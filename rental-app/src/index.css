@@ -1,0 +1,159 @@
+@import "@fontsource/cairo/400.css";
+@import "@fontsource/cairo/600.css";
+@import "@fontsource/cairo/700.css";
+@import "@fontsource/cairo/800.css";
+@import "@fontsource/noto-kufi-arabic/600.css";
+@import "@fontsource/noto-kufi-arabic/700.css";
+@import "@fontsource/noto-kufi-arabic/800.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Approved mockup palette: logo navy + logo amber, quiet light canvas.
+   Values are RGB triplets so Tailwind's /opacity modifiers work. */
+:root {
+  --ink: 22 35 63;
+  --ink-2: 34 51 90;
+  --amber: 240 162 26;
+  --amber-soft: 253 241 218;
+  --amber-deep: 154 98 0;
+  --bg: 242 244 248;
+  --surface: 255 255 255;
+  --surface-2: 247 248 251;
+  --line: 225 229 238;
+  --fg: 28 36 54;
+  --muted: 102 112 138;
+  --in: 31 138 91;
+  --in-soft: 227 244 236;
+  --out: 194 65 45;
+  --out-soft: 251 233 229;
+  --tax: 107 79 179;
+  --tax-soft: 238 233 250;
+  --side-fg: 201 210 230;
+  --hero: 22 35 63;
+}
+
+.dark {
+  --ink: 12 20 38;
+  --ink-2: 23 35 63;
+  --amber: 245 177 60;
+  --amber-soft: 58 44 16;
+  --amber-deep: 245 177 60;
+  --bg: 15 22 40;
+  --surface: 23 32 56;
+  --surface-2: 28 39 66;
+  --line: 42 54 88;
+  --fg: 230 235 247;
+  --muted: 152 163 192;
+  --in: 76 196 141;
+  --in-soft: 18 53 42;
+  --out: 240 128 104;
+  --out-soft: 61 28 23;
+  --tax: 169 147 236;
+  --tax-soft: 42 33 72;
+  --side-fg: 179 190 216;
+  --hero: 40 58 102;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-canvas text-fg font-body text-[14px] leading-relaxed;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* data tables (same look as the mockup) */
+.tbl {
+  @apply w-full border-collapse text-[13px];
+}
+.tbl th {
+  @apply bg-surface-2 text-muted font-bold text-start px-3 py-2 border-b border-line whitespace-nowrap;
+}
+.tbl td {
+  @apply px-3 py-2 border-b border-line whitespace-nowrap;
+}
+.tbl tbody tr:hover td {
+  @apply bg-surface-2;
+}
+.tbl tbody tr:last-child td {
+  @apply border-b-0;
+}
+.tbl tfoot td {
+  @apply font-extrabold bg-surface-2 border-t-2 border-line;
+}
+.tbl .n {
+  @apply text-end num;
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--amber));
+  outline-offset: 2px;
+}
+
+.print-only {
+  display: none;
+}
+
+/* Print rules ported from the old app: interactive bits hidden, header +
+   signature shown, always black on white whatever the theme. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block;
+  }
+  :root,
+  .dark {
+    --bg: 255 255 255;
+    --surface: 255 255 255;
+    --surface-2: 245 245 245;
+    --line: 200 200 200;
+    --fg: 15 23 42;
+    --muted: 71 85 105;
+    color-scheme: light;
+  }
+  body {
+    background: #fff;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  @page {
+    size: A4;
+    margin: 8mm;
+  }
+  html {
+    font-size: 10px;
+  }
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+  tr {
+    page-break-inside: avoid;
+  }
+  input,
+  select,
+  textarea {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

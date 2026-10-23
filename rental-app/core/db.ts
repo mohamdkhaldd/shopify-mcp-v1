@@ -34,6 +34,7 @@ export class CashWarning extends UserError {
   }
 }
 
-// local calendar date (Egypt), not UTC — right after midnight they differ
-export const today = () => new Date().toLocaleDateString("en-CA");
+// local calendar date (Egypt), not UTC — right after midnight they differ.
+// Demo/screenshot mode can pin it with globalThis.__RENTAL_TODAY__.
+export const today = (): string => (globalThis as { __RENTAL_TODAY__?: string }).__RENTAL_TODAY__ ?? new Date().toLocaleDateString("en-CA");
 export const monthOf = (date: string) => date.slice(0, 7);

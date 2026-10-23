@@ -5,17 +5,74 @@
   "description": "البنيان - التأجير: نظام تأجير المعدات بتمويل المستثمرين",
   "author": "شركة البنيان للمعدات الثقيلة",
   "scripts": {
+    "dev": "vite",
+    "build:renderer": "vite build",
+    "build:electron": "node scripts/build-electron.mjs",
+    "build": "npm run typecheck && npm run build:renderer && npm run build:electron",
+    "electron:dev": "npm run build:electron && concurrently -k \"vite\" \"wait-on tcp:5174 && VITE_DEV_SERVER_URL=http://localhost:5174 electron .\"",
+    "electron:build": "npm run build && electron-builder",
+    "rebuild:electron": "electron-rebuild -f -o better-sqlite3",
+    "rebuild:node": "npm rebuild better-sqlite3",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0"
+    "@fontsource/cairo": "^5.1.0",
+    "@fontsource/noto-kufi-arabic": "^5.1.0",
+    "better-sqlite3": "^11.3.0",
+    "electron": "^32.1.2",
+    "electron-updater": "^6.3.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.6.2",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.7.4",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.0.1",
+    "electron-builder": "^25.1.7",
+    "esbuild": "^0.21.5",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
     "typescript": "^5.5.4",
-    "vitest": "^2.1.2"
+    "vite": "^5.4.8",
+    "vitest": "^2.1.2",
+    "wait-on": "^8.0.1"
+  },
+  "main": "dist-electron/main.cjs",
+  "build": {
+    "appId": "com.albunyan.rental",
+    "productName": "البنيان - التأجير",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "artifactName": "albunyan-rental-setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "البنيان - التأجير"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "mohamdkhaldd",
+      "repo": "albunyan-rental-releases",
+      "releaseType": "release"
+    }
   }
 }
