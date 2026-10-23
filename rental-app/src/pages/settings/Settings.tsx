@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, appApi, isTablet, SettingsView, syncApi } from "../../api/client";
+import { api, appApi, isTablet, licenseApi, LicenseStatus, SettingsView, syncApi } from "../../api/client";
 import { Button, ErrorBox, Loading, Note, PageHeader, Panel } from "../../components/ui";
 import { Labeled, TextInput } from "../../components/Field";
 import { syncLine, useSyncStatus } from "../../components/Sync";
@@ -210,6 +210,25 @@ function SyncPanel() {
   );
 }
 
+function License() {
+  const [s, setS] = useState<LicenseStatus | null>(null);
+  useEffect(() => {
+    licenseApi.status().then(setS);
+  }, []);
+  if (s?.state !== "active") return null;
+  return (
+    <Panel title="الترخيص">
+      <div className="px-4 py-3.5 grid gap-1.5">
+        <div>
+          البرنامج متفعّل باسم: <b>{s.customer}</b>
+        </div>
+        <div>الاشتراك: {s.expiresAt ? <b className="num">لحد يوم {s.expiresAt}</b> : <b>مفتوح</b>}</div>
+        <div className="text-xs text-muted">البرنامج بيتأكد من الترخيص لوحده كل ما يكون فيه نت، ويقدر يشتغل من غير نت لحد ١٤ يوم.</div>
+      </div>
+    </Panel>
+  );
+}
+
 function Updates() {
   const [version, setVersion] = useState("");
   const [state, setState] = useState<string | null>(null);
@@ -282,6 +301,7 @@ export default function Settings() {
         <Backups />
         <Updates />
         <SyncPanel />
+        <License />
       </div>
     </div>
   );

@@ -10,6 +10,9 @@ import { callCore, makeRegistry } from "./ipc";
 import { exportExcel, ExcelSheet } from "./excel";
 import { seedDemo } from "../core/demo";
 import { startDeviceSync } from "./sync";
+import { deviceIdentity } from "./device";
+import { createLicenseManager, LicenseManager } from "../core/license/manager";
+import { licenseServer } from "../core/license/config";
 
 const isDev = !app.isPackaged;
 const root = path.join(__dirname, "..");
@@ -61,7 +64,22 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("sync:setDeviceName", (_e, { name }: { name: string }) => sync?.setDeviceName(name) ?? offline);
 
-  ipcMain.handle("core:call", (_e, { fn, args }) => callCore(db, registry, fn, args));
+  // ---- activation: nothing works until this copy has a valid code ----
+  const identity = deviceIdentity();
+  const demo = process.env.RENTAL_DEMO === "1";
+  const makeLicense = () => createLicenseManager({ db, ...identity, appVersion: app.getVersion(), ...licenseServer });
+  let license: LicenseManager = makeLicense();
+  const licenseStatus = () => (demo ? { state: "active" as const, customer: "نسخة عرض", expiresAt: null, checkBy: "" } : license.status());
+  if (!demo) {
+    license.refresh().catch(() => {});
+    setInterval(() => license.refresh().catch(() => {}), 6 * 60 * 60 * 1000);
+  }
+  ipcMain.handle("license:status", () => licenseStatus());
+  ipcMain.handle("license:activate", (_e, { key }: { key: string }) => license.activate(key));
+
+  ipcMain.handle("core:call", (_e, { fn, args }) =>
+    licenseStatus().state === "active" ? callCore(db, registry, fn, args) : { ok: false, code: "license", message: "البرنامج محتاج كود تفعيل" },
+  );
 
   ipcMain.handle("print:preview", (_e, opts?: { singlePage?: boolean }) => mainWindow && printPreview(mainWindow, iconPath, opts?.singlePage ?? true));
   ipcMain.handle("print:savePdf", async (_e, { name }: { name: string }) => {
@@ -98,6 +116,7 @@ app.whenReady().then(async () => {
     fs.copyFileSync(file, dbPath());
     ({ raw, db } = openDatabase());
     registry = makeRegistry(db);
+    license = makeLicense();
     if (sync) sync = startDeviceSync(db, notifyRemote);
     mainWindow.webContents.reload();
     return { ok: true };

@@ -150,6 +150,16 @@ export interface SyncStatus {
 
 const noSync: SyncStatus = { deviceId: "", deviceName: "", pending: 0, deferred: 0, online: false, needsLogin: false, lastError: null, lastSyncAt: null, disabled: true };
 
+export type LicenseStatus =
+  | { state: "active"; customer: string; expiresAt: string | null; checkBy: string }
+  | { state: "needed"; message: string | null };
+
+export const licenseApi = {
+  status: (): Promise<LicenseStatus> => window.api?.invoke("license:status") ?? Promise.resolve({ state: "needed", message: "البرنامج لازم يشتغل من نسخة الويندوز أو التابلت" }),
+  activate: (key: string): Promise<{ ok: true; status: LicenseStatus } | { ok: false; message: string }> =>
+    window.api?.invoke("license:activate", { key }) ?? Promise.resolve({ ok: false, message: "البرنامج لازم يشتغل من نسخة الويندوز أو التابلت" }),
+};
+
 export const syncApi = {
   status: (): Promise<SyncStatus> => window.api?.invoke("sync:status") ?? Promise.resolve(noSync),
   now: (): Promise<SyncStatus> => window.api?.invoke("sync:now") ?? Promise.resolve(noSync),

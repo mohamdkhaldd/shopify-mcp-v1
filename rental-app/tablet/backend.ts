@@ -8,6 +8,23 @@ import { callCore, makeRegistry } from "../electron/ipc";
 import { createDatabase } from "./sqlAdapter";
 import { loadSaved, save } from "./storage";
 import { tabletAppHandlers } from "./appHandlers";
+import { Device } from "@capacitor/device";
+import { sha256 } from "@noble/hashes/sha256";
+import { bytesToHex } from "@noble/hashes/utils";
+import { createLicenseManager } from "../core/license/manager";
+import { licenseServer } from "../core/license/config";
+
+declare const __APP_VERSION__: string;
+
+/** Android's id for this app on this tablet (same on reinstall, different on another tablet). */
+async function tabletIdentity() {
+  const [{ identifier }, info] = await Promise.all([Device.getId(), Device.getInfo()]);
+  return {
+    deviceId: bytesToHex(sha256(`albunyan-rental:${identifier}`)).slice(0, 32),
+    deviceName: [info.manufacturer, info.model].filter(Boolean).join(" ") || "تابلت",
+    platform: "android" as const,
+  };
+}
 
 // The app itself on the tablet: same schema, same calculations (core/) and the
 // same registry the laptop's main process serves (electron/ipc.ts), only
@@ -19,6 +36,11 @@ export async function startBackend() {
   const db = createDatabase(SQL, await loadSaved());
   setupDatabase(db);
   const registry = makeRegistry(db);
+
+  // activation: nothing works until this tablet has a valid code
+  const license = createLicenseManager({ db, ...(await tabletIdentity()), appVersion: typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.0.0", ...licenseServer });
+  license.refresh().catch(() => {});
+  setInterval(() => license.refresh().catch(() => {}), 6 * 60 * 60 * 1000);
 
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const emit = (channel: string, data: unknown) => (listeners.get(channel) ?? []).forEach((cb) => cb(data));
@@ -52,7 +74,10 @@ export async function startBackend() {
   window.addEventListener("pagehide", () => flush());
 
   const handlers: Record<string, Handler> = {
-    "core:call": ({ fn, args }) => callCore(db, registry, fn, args),
+    "core:call": ({ fn, args }) =>
+      license.status().state === "active" ? callCore(db, registry, fn, args) : { ok: false, code: "license", message: "البرنامج محتاج كود تفعيل" },
+    "license:status": () => license.status(),
+    "license:activate": ({ key }) => license.activate(key),
     "sync:status": () => sync.status(),
     "sync:now": () => sync.syncNow(),
     "sync:login": async ({ password }) => {

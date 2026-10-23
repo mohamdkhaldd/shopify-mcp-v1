@@ -10,7 +10,8 @@ const common = {
   platform: "node",
   target: "node20",
   format: "cjs",
-  sourcemap: true,
+  sourcemap: false, // a map would ship the readable source with the installer
+  minify: true,
   external: ["electron", "better-sqlite3", "bufferutil", "utf-8-validate"],
   logLevel: "info",
 };
