@@ -170,3 +170,25 @@ describe("investors view", () => {
     expect(after.totals.capitalPt - before.totals.capitalPt).toBe(egp(1_300));
   });
 });
+
+import { treasuryView } from "../core/services/views";
+
+describe("treasury view", () => {
+  it("balance split, every movement with a running balance, and filters", () => {
+    const db = freshDb();
+    seedDemo(db);
+    const v = treasuryView(db, {}, "2026-10-31");
+    expect(v.split).toMatchObject({ balancePt: egp(97_050), taxHeldPt: egp(7_050), vatHeldPt: egp(6_300), tax5HeldPt: egp(750), profitsDuePt: egp(6_500), investorsDuePt: egp(3_250), managementDuePt: egp(3_250), availablePt: egp(83_500) });
+    expect(v.rows.map((r) => [r.date, r.typeLabel, r.party, r.inPt || -r.outPt, r.balancePt]).reverse()).toEqual([
+      ["2026-10-01", "إيداع مستثمر", "م. أحمد سالم", egp(60_000), egp(60_000)],
+      ["2026-10-01", "إيداع مستثمر", "أ. خالد منصور", egp(40_000), egp(100_000)],
+      ["2026-10-02", "مصروف", "ع-2026-001", -egp(1_250), egp(98_750)],
+      ["2026-10-05", "خصم لحساب صاحب معدة", "الحاج سيد عبد الله", -egp(3_000), egp(95_750)],
+      ["2026-10-15", "دفعة لصاحب معدة", "الحاج سيد عبد الله", -egp(50_000), egp(45_750)],
+      ["2026-10-20", "تحصيل من عميل", "شركة الأمل للمقاولات", egp(51_300), egp(97_050)],
+    ]);
+    const f = treasuryView(db, { type: "investor_deposit" }, "2026-10-31");
+    expect(f.totals).toEqual({ inPt: egp(100_000), outPt: 0, count: 2 });
+    expect(treasuryView(db, { from: "2026-10-10", to: "2026-10-20" }, "2026-10-31").totals.count).toBe(2);
+  });
+});

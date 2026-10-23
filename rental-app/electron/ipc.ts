@@ -1,5 +1,5 @@
 import { Db, UserError } from "../core/db";
-import { clientsView, contractOptions, dashboardView, investorsView, managementView, sarkiView, suppliersView } from "../core/services/views";
+import { clientsView, contractOptions, dashboardView, investorsView, managementView, sarkiView, suppliersView, TreasuryFilters, treasuryView } from "../core/services/views";
 import { closeMonth, recordAdjustment } from "../core/services/close";
 import { today } from "../core/db";
 import { deleteEntity, deletePreview, restoreDeleted } from "../core/services/deletion";
@@ -69,6 +69,9 @@ export function makeRegistry(db: Db) {
     investorPayout: (a: { investorId: number; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
       recordPayout(db, { payee: "investor", investorId: a.investorId, date: a.date, amountPt: a.amountPt, note: a.note }, { confirmNegative: a.confirmNegative }),
     reinvest: (a: { investorId: number; date: string; amountPt: number }) => reinvestProfit(db, a),
+
+    // الخزنة
+    treasury: (a: TreasuryFilters) => treasuryView(db, a),
 
     // حذف
     deletePreview: (a: { entity: Parameters<typeof deletePreview>[1]; id: number }) => deletePreview(db, a.entity, a.id),

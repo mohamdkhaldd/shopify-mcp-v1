@@ -1,4 +1,4 @@
-import type { ClientsView, ContractOptions, DashboardView, InvestorsView, ManagementView, SarkiView, SuppliersView } from "../../core/services/views";
+import type { ClientsView, ContractOptions, DashboardView, InvestorsView, ManagementView, SarkiView, SuppliersView, TreasuryFilters, TreasuryView } from "../../core/services/views";
 import type { NewContractInput } from "../../core/services/master";
 import type { DayPatch } from "../../core/services/sarki";
 import type { Deletable } from "../../core/services/deletion";
@@ -71,6 +71,7 @@ export const api = {
   capital: (v: { investorId: number; kind: "deposit" | "withdrawal"; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) => call<number>("capital", v),
   investorPayout: (v: { investorId: number; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) => call<number>("investorPayout", v),
   reinvest: (v: { investorId: number; date: string; amountPt: number }) => call<number>("reinvest", v),
+  treasury: (f: TreasuryFilters) => call<TreasuryView>("treasury", f),
   setSupplierRate: (contractId: number, from: string, to: string, v: { dayRatePt?: number | null; overtimeRatePt?: number | null }) =>
     call("setSupplierRate", { contractId, from, to, ...v }),
   deletePreview: (entity: Deletable, id: number) => call<DeletePreview>("deletePreview", { entity, id }),
@@ -101,6 +102,6 @@ export const appApi = {
   savePdf: (name: string) => window.api?.invoke("print:savePdf", { name }),
 };
 
-export type { InvestorsView, ManagementView, ClientsView, ContractOptions, DashboardView, Deletable, NewContractInput, SarkiView, SuppliersView };
+export type { TreasuryView, TreasuryFilters, InvestorsView, ManagementView, ClientsView, ContractOptions, DashboardView, Deletable, NewContractInput, SarkiView, SuppliersView };
 /** The السركي view once a contract is open. */
 export type OpenSarki = Exclude<SarkiView, { contract: null }>;

@@ -469,3 +469,79 @@ export function investorsView(db: Db, month?: string, now: string = today()) {
 }
 
 export type InvestorsView = ReturnType<typeof investorsView>;
+
+// ---------------- الخزنة ----------------
+
+export const TREASURY_TYPES: Record<string, string> = {
+  investor_deposit: "إيداع مستثمر",
+  investor_withdrawal: "سحب مستثمر",
+  client_collection: "تحصيل من عميل",
+  supplier_payment: "دفعة لصاحب معدة",
+  supplier_deduction: "خصم لحساب صاحب معدة",
+  expense: "مصروف",
+  tax_payment: "دفع ضرايب",
+  profit_payout: "صرف أرباح",
+};
+
+export interface TreasuryFilters {
+  from?: string;
+  to?: string;
+  type?: string;
+  /** "client:3", "supplier:1", "investor:2", "contract:5", "management" */
+  party?: string;
+}
+
+export function treasuryView(db: Db, f: TreasuryFilters = {}, now: string = today()) {
+  const books = computeBooks(db, now);
+  const names: Record<string, Map<number, string>> = {
+    client: new Map((db.prepare("SELECT id, name FROM clients").all() as { id: number; name: string }[]).map((r) => [r.id, r.name])),
+    supplier: new Map((db.prepare("SELECT id, name FROM suppliers").all() as { id: number; name: string }[]).map((r) => [r.id, r.name])),
+    investor: new Map((db.prepare("SELECT id, name FROM investors").all() as { id: number; name: string }[]).map((r) => [r.id, r.name])),
+    contract: new Map((db.prepare("SELECT id, code FROM contracts").all() as { id: number; code: string }[]).map((r) => [r.id, r.code])),
+  };
+  const partyName = (kind: string | null, id: number | null) =>
+    kind === "management" ? "الإدارة" : kind && id != null ? names[kind]?.get(id) ?? "" : kind === null && id === null ? "" : "";
+  const all = db
+    .prepare("SELECT id, date, direction, amount_pt, type, party_kind, party_id, note FROM treasury_entries WHERE deleted_at IS NULL AND date <= ? ORDER BY date, id")
+    .all(now) as { id: number; date: string; direction: "in" | "out"; amount_pt: number; type: string; party_kind: string | null; party_id: number | null; note: string | null }[];
+  let running = 0;
+  const withBalance = all.map((e) => {
+    const signed = e.direction === "in" ? e.amount_pt : -e.amount_pt;
+    running += signed;
+    return {
+      id: e.id,
+      date: e.date,
+      type: e.type,
+      typeLabel: TREASURY_TYPES[e.type] ?? e.type,
+      party: partyName(e.party_kind, e.party_id),
+      partyKey: e.party_kind === "management" ? "management" : e.party_kind ? `${e.party_kind}:${e.party_id}` : "",
+      note: e.note,
+      inPt: signed > 0 ? signed : 0,
+      outPt: signed < 0 ? -signed : 0,
+      cancelled: e.amount_pt < 0,
+      balancePt: running,
+    };
+  });
+  const rows = withBalance.filter(
+    (e) => (!f.from || e.date >= f.from) && (!f.to || e.date <= f.to) && (!f.type || e.type === f.type) && (!f.party || e.partyKey === f.party),
+  );
+  const parties = [...new Map(withBalance.filter((e) => e.partyKey).map((e) => [e.partyKey, e.party])).entries()].map(([key, label]) => ({ key, label }));
+  const t = books.tax;
+  const inv = books.investors.reduce((s, i) => s + Math.max(0, i.releasablePt - i.paidPt), 0);
+  return {
+    split: {
+      ...books.treasury,
+      vatHeldPt: t.vatCollectedPt - t.vatPaidPt,
+      tax5HeldPt: t.tax5AccruedPt - t.tax5PaidPt,
+      investorsDuePt: inv,
+      managementDuePt: books.treasury.profitsDuePt - inv,
+    },
+    capital: books.capital,
+    rows: rows.reverse(),
+    totals: { inPt: rows.reduce((s, r) => s + r.inPt, 0), outPt: rows.reduce((s, r) => s + r.outPt, 0), count: rows.length },
+    parties,
+    types: Object.entries(TREASURY_TYPES).map(([key, label]) => ({ key, label })),
+  };
+}
+
+export type TreasuryView = ReturnType<typeof treasuryView>;
