@@ -179,7 +179,7 @@ describe("treasury view", () => {
     seedDemo(db);
     const v = treasuryView(db, {}, "2026-10-31");
     expect(v.split).toMatchObject({ balancePt: egp(97_050), taxHeldPt: egp(7_050), vatHeldPt: egp(6_300), tax5HeldPt: egp(750), profitsDuePt: egp(6_500), investorsDuePt: egp(3_250), managementDuePt: egp(3_250), availablePt: egp(83_500) });
-    expect(v.rows.map((r) => [r.date, r.typeLabel, r.party, r.inPt || -r.outPt, r.balancePt]).reverse()).toEqual([
+    expect(v.rows.map((r) => [r.date, r.typeLabel, r.party, r.inPt || -r.outPt, r.balancePt])).toEqual([
       ["2026-10-01", "إيداع مستثمر", "م. أحمد سالم", egp(60_000), egp(60_000)],
       ["2026-10-01", "إيداع مستثمر", "أ. خالد منصور", egp(40_000), egp(100_000)],
       ["2026-10-02", "مصروف", "ع-2026-001", -egp(1_250), egp(98_750)],
@@ -190,5 +190,25 @@ describe("treasury view", () => {
     const f = treasuryView(db, { type: "investor_deposit" }, "2026-10-31");
     expect(f.totals).toEqual({ inPt: egp(100_000), outPt: 0, count: 2 });
     expect(treasuryView(db, { from: "2026-10-10", to: "2026-10-20" }, "2026-10-31").totals.count).toBe(2);
+  });
+});
+
+import { taxView } from "../core/services/views";
+import { recordTaxPayment } from "../core/services/ledger";
+
+describe("tax view", () => {
+  it("14% by client / machine / month, 5% by contract-month, payments and what's left", () => {
+    const db = freshDb();
+    seedDemo(db);
+    recordTaxPayment(db, { tax: "vat", periodMonth: "2026-10", date: "2026-10-28", amountPt: egp(6_300), receiptNo: "123" });
+    const v = taxView(db, "2026-10-31");
+    expect(v.vatByClient).toEqual([expect.objectContaining({ name: "شركة الأمل للمقاولات", taxId: "512-845-307", basePt: egp(90_000), vatPt: egp(12_600), collectedVatPt: egp(6_300) })]);
+    expect(v.vatByEquipment).toEqual([expect.objectContaining({ name: "لودر كاتربيلر 950", vatPt: egp(12_600) })]);
+    expect(v.vatByMonth).toEqual([expect.objectContaining({ month: "2026-10", vatPt: egp(12_600), paidPt: egp(6_300) })]);
+    expect(v.tax5).toEqual([expect.objectContaining({ code: "ع-2026-001", month: "2026-10", marginPt: egp(15_000), tax5Pt: egp(750) })]);
+    expect(v.totals.vat).toEqual({ invoicedPt: egp(12_600), collectedPt: egp(6_300), paidPt: egp(6_300), owedPt: egp(6_300), heldPt: 0 });
+    expect(v.totals.owedPt).toBe(egp(6_300 + 750));
+    expect(v.totals.heldInTreasuryPt).toBe(egp(750));
+    expect(v.payments).toHaveLength(1);
   });
 });

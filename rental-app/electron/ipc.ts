@@ -1,10 +1,10 @@
 import { Db, UserError } from "../core/db";
-import { clientsView, contractOptions, dashboardView, investorsView, managementView, sarkiView, suppliersView, TreasuryFilters, treasuryView } from "../core/services/views";
+import { clientsView, contractOptions, dashboardView, investorsView, managementView, sarkiView, suppliersView, taxView, TreasuryFilters, treasuryView } from "../core/services/views";
 import { closeMonth, recordAdjustment } from "../core/services/close";
 import { today } from "../core/db";
 import { deleteEntity, deletePreview, restoreDeleted } from "../core/services/deletion";
 import { createClient, createEquipment, createExpenseCategory, createInvestor, createSupplier, updateInvestor, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier } from "../core/services/master";
-import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, reinvestProfit } from "../core/services/ledger";
+import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, recordTaxPayment, reinvestProfit } from "../core/services/ledger";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
 
 // Every screen call goes through one channel ("core:call") to a named function
@@ -72,6 +72,10 @@ export function makeRegistry(db: Db) {
 
     // الخزنة
     treasury: (a: TreasuryFilters) => treasuryView(db, a),
+
+    // الملف الضريبي
+    tax: () => taxView(db),
+    taxPayment: (a: { tax: "vat" | "tax5"; periodMonth?: string; date: string; amountPt: number; receiptNo?: string; note?: string }) => recordTaxPayment(db, a),
 
     // حذف
     deletePreview: (a: { entity: Parameters<typeof deletePreview>[1]; id: number }) => deletePreview(db, a.entity, a.id),

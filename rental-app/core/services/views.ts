@@ -1,6 +1,6 @@
 import { Db, monthOf, today } from "../db";
 import { computeBooks } from "./books";
-import { clientStatement, dashboard, supplierStatement } from "./reports";
+import { clientStatement, dashboard, supplierStatement, taxFile } from "./reports";
 import { getSheet } from "./sarki";
 import { daysPresent } from "../calc/timeWeight";
 
@@ -537,7 +537,7 @@ export function treasuryView(db: Db, f: TreasuryFilters = {}, now: string = toda
       managementDuePt: books.treasury.profitsDuePt - inv,
     },
     capital: books.capital,
-    rows: rows.reverse(),
+    rows, // oldest first, by date — a new movement shows at the bottom
     totals: { inPt: rows.reduce((s, r) => s + r.inPt, 0), outPt: rows.reduce((s, r) => s + r.outPt, 0), count: rows.length },
     parties,
     types: Object.entries(TREASURY_TYPES).map(([key, label]) => ({ key, label })),
@@ -545,3 +545,42 @@ export function treasuryView(db: Db, f: TreasuryFilters = {}, now: string = toda
 }
 
 export type TreasuryView = ReturnType<typeof treasuryView>;
+
+// ---------------- الملف الضريبي ----------------
+
+export function taxView(db: Db, now: string = today()) {
+  const books = computeBooks(db, now);
+  const tf = taxFile(db, now, books);
+  const clients = new Map((db.prepare("SELECT id, name, tax_id FROM clients").all() as { id: number; name: string; tax_id: string | null }[]).map((r) => [r.id, r]));
+  const equipment = new Map((db.prepare("SELECT e.id, e.name, s.name AS supplier FROM equipment e JOIN suppliers s ON s.id = e.supplier_id").all() as { id: number; name: string; supplier: string }[]).map((r) => [r.id, r]));
+  const contractEq = new Map(books.raw.contracts.map((c) => [c.id as number, c.equipment_id as number]));
+  const paidByMonth = (tax: "vat" | "tax5", month: string) =>
+    (tf.payments as { tax: string; period_month: string | null; amount_pt: number; reversal_of: number | null; id: number }[])
+      .filter((p) => p.tax === tax && p.period_month === month)
+      .reduce((s, p) => s + p.amount_pt, 0);
+  const livePayments = (
+    db
+      .prepare(
+        `SELECT t.id, t.tax, t.period_month, t.date, t.amount_pt, t.receipt_no, t.note FROM tax_payments t
+         WHERE t.deleted_at IS NULL AND t.reversal_of IS NULL AND NOT EXISTS (SELECT 1 FROM tax_payments r WHERE r.reversal_of = t.id AND r.deleted_at IS NULL)
+         ORDER BY t.date, t.id`,
+      )
+      .all() as { id: number; tax: "vat" | "tax5"; period_month: string | null; date: string; amount_pt: number; receipt_no: string | null; note: string | null }[]
+  );
+  return {
+    totals: tf.totals,
+    vatByClient: tf.vatByClient.map((g) => ({ ...g, name: clients.get(g.key)?.name ?? "", taxId: clients.get(g.key)?.tax_id ?? null })),
+    vatByEquipment: tf.vatByEquipment.map((g) => ({ ...g, name: equipment.get(g.key)?.name ?? "", supplier: equipment.get(g.key)?.supplier ?? "" })),
+    vatByMonth: tf.vatByMonth.map((g) => ({ ...g, month: g.key, paidPt: paidByMonth("vat", g.key) })),
+    tax5: tf.tax5ByContractMonth.map((r) => ({ ...r, equipment: equipment.get(contractEq.get(r.contractId) ?? -1)?.name ?? "", paidPt: 0 })),
+    tax5ByMonth: [...new Set(tf.tax5ByContractMonth.map((r) => r.month))].map((month) => ({
+      month,
+      tax5Pt: tf.tax5ByContractMonth.filter((r) => r.month === month).reduce((s, r) => s + r.tax5Pt, 0),
+      paidPt: paidByMonth("tax5", month),
+    })),
+    payments: livePayments,
+    months: books.months.map((m) => m.month),
+  };
+}
+
+export type TaxView = ReturnType<typeof taxView>;

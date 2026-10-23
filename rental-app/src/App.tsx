@@ -9,6 +9,7 @@ import Clients from "./pages/clients/Clients";
 import Management from "./pages/management/Management";
 import Investors from "./pages/investors/Investors";
 import Treasury from "./pages/treasury/Treasury";
+import Tax from "./pages/tax/Tax";
 import { SectionId } from "./nav";
 
 export default function App() {
@@ -33,6 +34,8 @@ export default function App() {
               <Investors />
             ) : active === "treasury" ? (
               <Treasury />
+            ) : active === "tax" ? (
+              <Tax />
             ) : (
               <ComingNext id={active} />
             )}

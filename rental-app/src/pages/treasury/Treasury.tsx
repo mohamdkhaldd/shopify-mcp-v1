@@ -59,7 +59,7 @@ export default function Treasury() {
           { header: "خارج", key: "outPt", money: true },
           { header: "الرصيد", key: "balancePt", money: true },
         ],
-        rows: [...v.rows].reverse().map((r) => ({ date: r.date, typeLabel: r.typeLabel, party: r.party, note: r.note ?? "", inPt: r.inPt || null, outPt: r.outPt || null, balancePt: r.balancePt })),
+        rows: v.rows.map((r) => ({ date: r.date, typeLabel: r.typeLabel, party: r.party, note: r.note ?? "", inPt: r.inPt || null, outPt: r.outPt || null, balancePt: r.balancePt })),
         totals: { date: "الإجمالي", inPt: v.totals.inPt, outPt: v.totals.outPt },
       },
     ]);

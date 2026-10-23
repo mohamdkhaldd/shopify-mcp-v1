@@ -1,4 +1,4 @@
-import type { ClientsView, ContractOptions, DashboardView, InvestorsView, ManagementView, SarkiView, SuppliersView, TreasuryFilters, TreasuryView } from "../../core/services/views";
+import type { ClientsView, ContractOptions, DashboardView, InvestorsView, ManagementView, SarkiView, SuppliersView, TaxView, TreasuryFilters, TreasuryView } from "../../core/services/views";
 import type { NewContractInput } from "../../core/services/master";
 import type { DayPatch } from "../../core/services/sarki";
 import type { Deletable } from "../../core/services/deletion";
@@ -72,6 +72,8 @@ export const api = {
   investorPayout: (v: { investorId: number; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) => call<number>("investorPayout", v),
   reinvest: (v: { investorId: number; date: string; amountPt: number }) => call<number>("reinvest", v),
   treasury: (f: TreasuryFilters) => call<TreasuryView>("treasury", f),
+  tax: () => call<TaxView>("tax"),
+  taxPayment: (v: { tax: "vat" | "tax5"; periodMonth?: string; date: string; amountPt: number; receiptNo?: string; note?: string }) => call<number>("taxPayment", v),
   setSupplierRate: (contractId: number, from: string, to: string, v: { dayRatePt?: number | null; overtimeRatePt?: number | null }) =>
     call("setSupplierRate", { contractId, from, to, ...v }),
   deletePreview: (entity: Deletable, id: number) => call<DeletePreview>("deletePreview", { entity, id }),
@@ -102,6 +104,6 @@ export const appApi = {
   savePdf: (name: string) => window.api?.invoke("print:savePdf", { name }),
 };
 
-export type { TreasuryView, TreasuryFilters, InvestorsView, ManagementView, ClientsView, ContractOptions, DashboardView, Deletable, NewContractInput, SarkiView, SuppliersView };
+export type { TaxView, TreasuryView, TreasuryFilters, InvestorsView, ManagementView, ClientsView, ContractOptions, DashboardView, Deletable, NewContractInput, SarkiView, SuppliersView };
 /** The السركي view once a contract is open. */
 export type OpenSarki = Exclude<SarkiView, { contract: null }>;
