@@ -1,0 +1,18 @@
+// One fixed key for every tablet build of the rental app — an update must be
+// signed with the same key to install over the old one without wiping its data.
+android {
+    signingConfigs {
+        albunyanRental {
+            storeFile file("release.keystore")
+            storePassword "albunyan-rental"
+            keyAlias "albunyan-rental"
+            keyPassword "albunyan-rental"
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.albunyanRental
+            minifyEnabled false
+        }
+    }
+}
