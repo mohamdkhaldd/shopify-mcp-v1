@@ -1,8 +1,8 @@
 import { Db, UserError } from "../core/db";
-import { contractOptions, dashboardView, sarkiView, suppliersView } from "../core/services/views";
+import { clientsView, contractOptions, dashboardView, sarkiView, suppliersView } from "../core/services/views";
 import { deleteEntity, deletePreview, restoreDeleted } from "../core/services/deletion";
-import { createEquipment, createSupplier, newContract, NewContractInput, updateEquipment, updateSupplier } from "../core/services/master";
-import { recordSupplierDeduction, recordSupplierPayment } from "../core/services/ledger";
+import { createClient, createEquipment, createSupplier, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier } from "../core/services/master";
+import { recordClientPayment, recordSupplierDeduction, recordSupplierPayment } from "../core/services/ledger";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
 
 // Every screen call goes through one channel ("core:call") to a named function
@@ -37,6 +37,13 @@ export function makeRegistry(db: Db) {
       recordSupplierPayment(db, a, { confirmNegative: a.confirmNegative }),
     supplierDeduction: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean }) =>
       recordSupplierDeduction(db, a, { confirmNegative: a.confirmNegative }),
+
+    // الشركات والأفراد
+    clients: (a: { clientId?: number }) => clientsView(db, a.clientId),
+    createClient: (a: { kind: "company" | "individual"; name: string; phone?: string; taxId?: string; vatApplies?: boolean; tax5Applies?: boolean }) => createClient(db, a),
+    updateClient: (a: { id: number; kind: "company" | "individual"; name: string; phone?: string | null; taxId?: string | null }) => updateClient(db, a.id, a),
+    setClientTaxes: (a: { id: number; vatApplies: boolean; tax5Applies: boolean }) => setClientTaxes(db, a.id, a.vatApplies, a.tax5Applies),
+    clientPayment: (a: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string }) => recordClientPayment(db, a),
 
     // حذف
     deletePreview: (a: { entity: Parameters<typeof deletePreview>[1]; id: number }) => deletePreview(db, a.entity, a.id),

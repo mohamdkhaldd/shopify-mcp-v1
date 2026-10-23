@@ -1,6 +1,6 @@
 import { Db, monthOf, today } from "../db";
 import { computeBooks } from "./books";
-import { dashboard, supplierStatement } from "./reports";
+import { clientStatement, dashboard, supplierStatement } from "./reports";
 import { getSheet } from "./sarki";
 
 // Screen-shaped data: one call per page, names already joined in.
@@ -222,3 +222,61 @@ export function suppliersView(db: Db, supplierId?: number, now: string = today()
 }
 
 export type SuppliersView = ReturnType<typeof suppliersView>;
+
+// ---------------- الشركات والأفراد ----------------
+
+export function clientsView(db: Db, clientId?: number, now: string = today()) {
+  const books = computeBooks(db, now);
+  const clients = db.prepare("SELECT id, kind, name, phone, tax_id, vat_applies, tax5_applies FROM clients WHERE deleted_at IS NULL ORDER BY name").all() as {
+    id: number;
+    kind: "company" | "individual";
+    name: string;
+    phone: string | null;
+    tax_id: string | null;
+    vat_applies: number;
+    tax5_applies: number;
+  }[];
+  const list = clients.map((c) => ({ ...c, remainingPt: clientStatement(db, c.id, now, books).totals.remainingPt }));
+  const id = clientId && clients.some((c) => c.id === clientId) ? clientId : clients[0]?.id;
+  if (!id) return { list, selected: null };
+  const st = clientStatement(db, id, now, books);
+  const closedMonths = new Set((db.prepare("SELECT month FROM month_closes").all() as { month: string }[]).map((r) => r.month));
+  const contracts = (
+    db
+      .prepare(
+        `SELECT c.id, c.code, c.start_date, c.end_date, e.name AS equipment FROM contracts c JOIN equipment e ON e.id = c.equipment_id
+         WHERE c.client_id = ? AND c.deleted_at IS NULL ORDER BY c.id DESC`,
+      )
+      .all(id) as { id: number; code: string; start_date: string; end_date: string | null; equipment: string }[]
+  ).map((c) => ({ ...c, months: monthsOfContract(c, now) }));
+  const code = new Map(contracts.map((c) => [c.id, c.code]));
+  const equipment = new Map(contracts.map((c) => [c.id, c.equipment]));
+  // monthly statement: what was invoiced (with VAT) and what was paid, month by month
+  const months = [...new Set([...st.invoices.map((i) => i.month), ...st.payments.map((p) => p.date.slice(0, 7))])].sort();
+  let running = 0;
+  const rows = months.map((month) => {
+    const invoicedPt = st.invoices.filter((i) => i.month === month).reduce((s, i) => s + i.totalPt, 0);
+    const paidPt = st.payments.filter((p) => p.date.startsWith(month)).reduce((s, p) => s + p.amountPt, 0);
+    running += invoicedPt - paidPt;
+    return { month, invoicedPt, paidPt, runningPt: running };
+  });
+  return {
+    list,
+    selected: {
+      client: st.client as (typeof clients)[number],
+      totals: st.totals,
+      rows,
+      invoices: st.invoices.map((i) => ({
+        ...i,
+        code: code.get(i.contractId) ?? "",
+        equipment: equipment.get(i.contractId) ?? "",
+        monthClosed: closedMonths.has(i.month),
+        status: i.openPt <= 0 ? ("paid" as const) : i.collectedPt > 0 ? ("partial" as const) : ("unpaid" as const),
+      })),
+      payments: st.payments,
+      contracts,
+    },
+  };
+}
+
+export type ClientsView = ReturnType<typeof clientsView>;

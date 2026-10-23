@@ -159,3 +159,8 @@ export function updateEquipment(db: Db, id: number, v: { name: string; siteName?
   if (!v.name.trim()) throw new UserError("اكتب اسم المعدة");
   db.prepare("UPDATE equipment SET name = ?, site_name = ?, supplier_rate_pt = ? WHERE id = ? AND deleted_at IS NULL").run(v.name.trim(), v.siteName ?? null, v.supplierRatePt ?? null, id);
 }
+
+export function updateClient(db: Db, id: number, v: { kind: "company" | "individual"; name: string; phone?: string | null; taxId?: string | null }) {
+  if (!v.name.trim()) throw new UserError("اكتب اسم الشركة أو الفرد");
+  db.prepare("UPDATE clients SET kind = ?, name = ?, phone = ?, tax_id = ? WHERE id = ? AND deleted_at IS NULL").run(v.kind, v.name.trim(), v.phone ?? null, v.taxId ?? null, id);
+}

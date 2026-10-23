@@ -1,35 +1,18 @@
-import { ReactNode, useCallback, useEffect, useState } from "react";
-import { api, appApi, Deletable, PartySheet, SuppliersView } from "../../api/client";
-import { Button, Code, ErrorBox, Loading, Money, PageHeader, Panel, Pill } from "../../components/ui";
-import { Labeled, Select, TextInput } from "../../components/Field";
+import { useCallback, useEffect, useState } from "react";
+import { api, appApi, Deletable, SuppliersView } from "../../api/client";
+import { Button, ErrorBox, Loading, PageHeader, Panel, Pill } from "../../components/ui";
+import { Labeled, TextInput } from "../../components/Field";
 import { PrintButtons, PrintHeader, PrintSignoff } from "../../components/Print";
 import ConfirmDelete from "../../components/ConfirmDelete";
+import { Fact, MoneyTable, PartySheetTab, TrashButton } from "../../components/party";
 import Modal from "../../components/Modal";
 import MoneyEntry from "../../components/MoneyEntry";
-import PartySheetView from "../../components/PartySheetView";
 import Icon from "../../components/Icon";
 import { dateLabel, monthLabel, pounds } from "../../utils/format";
 import { moneyToPt, ptToInput } from "../../utils/input";
 
 type Selected = NonNullable<SuppliersView["selected"]>;
 type Tab = "statement" | "equipment" | "sheet" | "deductions" | "payments";
-
-function Fact({ label, children, tone = "" }: { label: string; children: ReactNode; tone?: string }) {
-  return (
-    <div className="px-4 py-3 border-s border-line first:border-s-0">
-      <span className="block text-xs font-semibold text-muted">{label}</span>
-      <b className={`text-lg num ${tone}`}>{children}</b>
-    </div>
-  );
-}
-
-function TrashButton({ onClick, title }: { onClick: () => void; title: string }) {
-  return (
-    <button type="button" title={title} onClick={onClick} className="no-print text-muted hover:text-out">
-      <Icon name="trash" className="w-4 h-4" />
-    </button>
-  );
-}
 
 /** كشف الحساب: one "up to today" sentence + one row per month. Nothing about clients or margins. */
 function Statement({ s }: { s: Selected }) {
@@ -201,52 +184,6 @@ function SupplierForm({ initial, onClose, onSaved }: { initial?: { id: number; n
       </div>
       {error && <div className="mt-3"><ErrorBox message={error} /></div>}
     </Modal>
-  );
-}
-
-/** سركي صاحب المعدة للطباعة: pick contract + month; the sheet only has his own data. */
-function SheetTab({ s }: { s: Selected }) {
-  const [contractId, setContractId] = useState<number | undefined>(s.contracts[0]?.id);
-  const contract = s.contracts.find((c) => c.id === contractId);
-  const [month, setMonth] = useState<string | undefined>(contract?.months[contract.months.length - 1]);
-  const [sheet, setSheet] = useState<PartySheet | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!contract) return;
-    const m = month && contract.months.includes(month) ? month : contract.months[contract.months.length - 1];
-    if (m !== month) setMonth(m);
-    else if (m) api.partySheet(contract.id, m, "supplier").then(setSheet, (e) => setError(e.message));
-  }, [contract, month]);
-
-  if (!s.contracts.length) return <div className="px-4 py-8 text-center text-muted">لسه مفيش عقود على معدات صاحب المعدة ده.</div>;
-  return (
-    <div>
-      <div className="no-print flex flex-wrap items-end gap-2.5 px-4 py-3 border-b border-line bg-surface-2">
-        <Labeled label="العقد">
-          <Select value={contractId} onChange={(e) => setContractId(Number(e.target.value))}>
-            {s.contracts.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.code} · {c.equipment}
-              </option>
-            ))}
-          </Select>
-        </Labeled>
-        <Labeled label="الشهر">
-          <Select value={month} onChange={(e) => setMonth(e.target.value)}>
-            {[...(contract?.months ?? [])].reverse().map((m) => (
-              <option key={m} value={m}>
-                {monthLabel(m)}
-              </option>
-            ))}
-          </Select>
-        </Labeled>
-        <PrintButtons pdfName={`سركي ${s.supplier.name} ${month ? monthLabel(month) : ""}`} singlePage={false} />
-        <span className="text-xs text-muted self-center">ده اللي بيتطبع ويتسلّم — فيه أسعاره هو بس، من غير اسم الشركة ولا سعرها.</span>
-      </div>
-      {error && <ErrorBox message={error} />}
-      {sheet && <PartySheetView sheet={sheet} partyLabel="صاحب المعدة" signLabel="توقيع صاحب المعدة" />}
-    </div>
   );
 }
 
@@ -440,7 +377,7 @@ export default function Suppliers() {
               </>
             )}
 
-            {tab === "sheet" && <SheetTab key={s.supplier.id} s={s} />}
+            {tab === "sheet" && <PartySheetTab key={s.supplier.id} contracts={s.contracts} side="supplier" partyName={s.supplier.name} />}
 
             {tab === "deductions" && (
               <>
@@ -504,57 +441,6 @@ export default function Suppliers() {
           }}
         />
       )}
-    </div>
-  );
-}
-
-function MoneyTable({ rows, noteHeader, contracts, onDelete }: { rows: { id: number; date: string; contractId: number | null; amountPt: number; note: string | null }[]; noteHeader: string; contracts: Selected["contracts"]; onDelete: (id: number) => void }) {
-  const code = (id: number | null) => contracts.find((c) => c.id === id)?.code;
-  const total = rows.reduce((a, r) => a + r.amountPt, 0);
-  return (
-    <div className="overflow-x-auto">
-      <table className="tbl">
-        <thead>
-          <tr>
-            <th>التاريخ</th>
-            <th>العقد</th>
-            <th>{noteHeader}</th>
-            <th className="n">المبلغ</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={5} className="text-center text-muted py-6">
-                لسه مفيش حاجة متسجلة.
-              </td>
-            </tr>
-          )}
-          {rows.map((r) => (
-            <tr key={r.id}>
-              <td>{dateLabel(r.date)}</td>
-              <td>{code(r.contractId) ? <Code>{code(r.contractId)}</Code> : "—"}</td>
-              <td>{r.note ?? ""}</td>
-              <td className="n font-bold">
-                <Money pt={pounds(r.amountPt)} />
-              </td>
-              <td className="text-end">
-                <TrashButton title="حذف" onClick={() => onDelete(r.id)} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-        {rows.length > 0 && (
-          <tfoot>
-            <tr>
-              <td colSpan={3}>الإجمالي</td>
-              <td className="n">{pounds(total)}</td>
-              <td />
-            </tr>
-          </tfoot>
-        )}
-      </table>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard";
 import ComingNext from "./pages/ComingNext";
 import Sarki from "./pages/sarki/Sarki";
 import Suppliers from "./pages/suppliers/Suppliers";
+import Clients from "./pages/clients/Clients";
 import { SectionId } from "./nav";
 
 export default function App() {
@@ -21,6 +22,8 @@ export default function App() {
               <Sarki />
             ) : active === "suppliers" ? (
               <Suppliers />
+            ) : active === "clients" ? (
+              <Clients />
             ) : (
               <ComingNext id={active} />
             )}

@@ -104,3 +104,22 @@ describe("an owner with several machines", () => {
     expect(v.totals.remainingPt).toBe(egp(52_000));
   });
 });
+
+import { clientsView } from "../core/services/views";
+
+describe("clients view", () => {
+  const db = freshDb();
+  seedDemo(db);
+  it("company with VAT, an individual without, invoices and monthly statement", () => {
+    const v = clientsView(db, undefined, "2026-10-31");
+    expect(v.list.map((c) => [c.name, c.kind, c.vat_applies, c.remainingPt])).toEqual([
+      ["شركة الأمل للمقاولات", "company", 1, egp(51_300)],
+      ["م. حسام فؤاد", "individual", 0, 0],
+    ]);
+    const s = v.selected!;
+    expect(s.totals).toMatchObject({ basePt: egp(90_000), vatPt: egp(12_600), invoicedPt: egp(102_600), paidPt: egp(51_300), remainingPt: egp(51_300) });
+    expect(s.invoices).toEqual([expect.objectContaining({ month: "2026-10", code: "ع-2026-001", totalPt: egp(102_600), collectedPt: egp(51_300), status: "partial", serial: null })]);
+    expect(s.rows).toEqual([{ month: "2026-10", invoicedPt: egp(102_600), paidPt: egp(51_300), runningPt: egp(51_300) }]);
+    expect(JSON.stringify(s)).not.toContain("سيد");
+  });
+});
