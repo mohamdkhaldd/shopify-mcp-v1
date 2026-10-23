@@ -103,10 +103,10 @@ describe("activation in the app", () => {
     const laptop = manager(s, "laptop");
     expect((await laptop.activate("BNYN-AAAA")).ok).toBe(true);
     // sent the link + code to someone else
-    expect(await manager(s, "stranger").activate("BNYN-AAAA")).toEqual({ ok: false, message: "الكود ده متفعّل على أقصى عدد أجهزة (1) — كلّم الدعم الفني لو عايز تزوّد جهاز" });
+    expect(await manager(s, "stranger").activate("BNYN-AAAA")).toEqual({ ok: false, message: "الكود ده متفعّل على أقصى عدد أجهزة (1) — كلّم MK-Tech لو عايز تزوّد جهاز" });
     // the owner stops the code from the licenses table
     s.state.codes.get("BNYN-AAAA")!.revoked = true;
-    expect(await laptop.refresh()).toEqual({ state: "needed", message: "الكود ده اتوقف — كلّم الدعم الفني" });
+    expect(await laptop.refresh()).toEqual({ state: "needed", message: "الكود ده اتوقف — كلّم MK-Tech" });
   });
 
   it("an activation copied to another device is not valid there", async () => {

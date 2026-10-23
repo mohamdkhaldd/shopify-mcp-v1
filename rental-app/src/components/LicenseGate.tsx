@@ -4,9 +4,8 @@ import { BrandContext, brandFrom } from "../context/BrandContext";
 
 /**
  * Nothing of the app shows until this copy is activated. The code also brings
- * the customer's company name and logo, which every screen and printout uses;
- * the activation screen itself stays neutral (the customer never sees the
- * seller's name).
+ * the customer's company name and logo, which every screen and printout uses.
+ * Before that, the product's own brand (MK-Tech) is all the customer sees.
  */
 export default function LicenseGate({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<LicenseStatus | null>(null);
@@ -23,7 +22,7 @@ export default function LicenseGate({ children }: { children: ReactNode }) {
   }, [load]);
   const brand = useMemo(() => (status?.state === "active" ? brandFrom(status) : null), [status]);
   useEffect(() => {
-    document.title = brand ? `${brand.name} - التأجير` : "برنامج التأجير";
+    document.title = brand ? `${brand.name} - التأجير` : "MK-Tech Rental";
   }, [brand]);
   if (!status) return null;
   if (brand) return <BrandContext.Provider value={brand}>{children}</BrandContext.Provider>;
@@ -43,19 +42,16 @@ function Activate({ message, onDone }: { message: string | null; onDone: (s: Lic
     if (r.ok) onDone(r.status);
     else setError(r.message);
   };
+  // MK-Tech's own colors (navy #0F172A / blue #0B5FFF), not the app's theme
   return (
-    <div dir="rtl" className="min-h-screen flex items-center justify-center bg-canvas px-4">
-      <div className="w-full max-w-[440px] rounded-card border border-line bg-surface shadow-sm p-7 grid gap-5 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-ink text-amber mx-auto flex items-center justify-center" aria-hidden>
-          <svg viewBox="0 0 24 24" className="w-9 h-9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="4" y="10" width="16" height="10" rx="2" />
-            <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-            <circle cx="12" cy="15" r="1.5" />
-          </svg>
-        </div>
+    <div dir="rtl" className="min-h-screen flex items-center justify-center px-4" style={{ background: "linear-gradient(160deg, #0F172A 0%, #0B1A3A 55%, #0B2A6B 100%)" }}>
+      <div className="w-full max-w-[440px] rounded-2xl bg-white text-[#0F172A] shadow-2xl p-7 grid gap-5 text-center">
+        <img src="./mk-icon.png" alt="MK-Tech" className="w-[72px] h-[72px] rounded-2xl mx-auto" />
         <div>
-          <div className="font-display text-xl font-bold">برنامج تأجير المعدات</div>
-          <div className="text-muted text-sm mt-1">اكتب كود التفعيل عشان تبدأ</div>
+          <div dir="ltr" className="text-2xl font-extrabold tracking-tight">
+            MK-Tech <span className="text-[#0B5FFF]">Rental</span>
+          </div>
+          <div className="text-[#64748B] text-sm mt-1.5">برنامج تأجير المعدات — اكتب كود التفعيل عشان تبدأ</div>
         </div>
         <input
           aria-label="كود التفعيل"
@@ -65,17 +61,18 @@ function Activate({ message, onDone }: { message: string | null; onDone: (s: Lic
           placeholder="BNYN-XXXX-XXXX-XXXX"
           onChange={(e) => setKey(e.target.value.toUpperCase())}
           onKeyDown={(e) => e.key === "Enter" && key.trim() && !busy && submit()}
-          className="font-mono text-center text-lg tracking-wider border border-line bg-surface text-fg rounded-md px-3 py-2.5"
+          style={{ outlineColor: "#0B5FFF" }}
+          className="font-mono text-center text-lg tracking-wider border border-[#E2E8F0] bg-[#F8FAFC] text-[#0F172A] rounded-lg px-3 py-2.5 outline-none focus:border-[#0B5FFF] focus:ring-2 focus:ring-[#0B5FFF]/20"
         />
         <button
           onClick={submit}
           disabled={!key.trim() || busy}
-          className="rounded-md bg-ink text-white font-bold py-2.5 disabled:opacity-50"
+          className="rounded-lg bg-[#0B5FFF] hover:bg-[#2563EB] text-white font-bold py-2.5 disabled:opacity-50"
         >
           {busy ? "بيتأكد من الكود..." : "فعّل البرنامج"}
         </button>
-        {error && <div className="rounded-md border border-out bg-out-soft text-sm font-semibold px-3 py-2">{error}</div>}
-        <div className="text-xs text-muted">الكود بيشتغل على عدد أجهزة محدد. أول مرة لازم يكون فيه نت، وبعدها البرنامج بيشتغل من غير نت لحد ١٤ يوم.</div>
+        {error && <div className="rounded-lg border border-[#EF4444] bg-[#FEF2F2] text-[#B91C1C] text-sm font-semibold px-3 py-2">{error}</div>}
+        <div className="text-xs text-[#64748B]">الكود بيشتغل على عدد أجهزة محدد. أول مرة لازم يكون فيه نت، وبعدها البرنامج بيشتغل من غير نت لحد ١٤ يوم.</div>
       </div>
     </div>
   );

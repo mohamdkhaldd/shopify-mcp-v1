@@ -35,10 +35,10 @@ type ServerAnswer =
 
 const MESSAGES: Record<string, (a: ServerAnswer & { ok: false }) => string> = {
   not_found: () => "الكود ده مش صحيح — راجعه تاني",
-  revoked: () => "الكود ده اتوقف — كلّم الدعم الفني",
-  expired: (a) => `الاشتراك خلص${a.expiresAt ? ` يوم ${a.expiresAt}` : ""} — كلّم الدعم الفني عشان تجدده`,
-  full: (a) => `الكود ده متفعّل على أقصى عدد أجهزة${a.maxDevices ? ` (${a.maxDevices})` : ""} — كلّم الدعم الفني لو عايز تزوّد جهاز`,
-  device_removed: () => "الجهاز ده اتشال من الترخيص — كلّم الدعم الفني",
+  revoked: () => "الكود ده اتوقف — كلّم MK-Tech",
+  expired: (a) => `الاشتراك خلص${a.expiresAt ? ` يوم ${a.expiresAt}` : ""} — كلّم MK-Tech عشان تجدده`,
+  full: (a) => `الكود ده متفعّل على أقصى عدد أجهزة${a.maxDevices ? ` (${a.maxDevices})` : ""} — كلّم MK-Tech لو عايز تزوّد جهاز`,
+  device_removed: () => "الجهاز ده اتشال من الترخيص — كلّم MK-Tech",
 };
 /** answers that mean "this code no longer works here" (anything else is treated like no internet) */
 const FINAL = new Set(Object.keys(MESSAGES));

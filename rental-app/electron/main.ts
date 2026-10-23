@@ -16,7 +16,13 @@ import { licenseServer } from "../core/license/config";
 
 const isDev = !app.isPackaged;
 const root = path.join(__dirname, "..");
-const iconPath = path.join(root, isDev ? "public" : "dist", "logo.png");
+const iconPath = path.join(root, isDev ? "public" : "dist", "mk-icon.png");
+
+// The data folder keeps the name it was first created with: the product was
+// renamed to MK-Tech Rental, and copies installed before that keep their data
+// in "البنيان - التأجير".
+const legacyData = path.join(app.getPath("appData"), "البنيان - التأجير");
+if (fs.existsSync(legacyData)) app.setPath("userData", legacyData);
 
 // Screenshot / demo mode (never in a real install): RENTAL_DEMO=1 fills an empty
 // database with the mockup example, RENTAL_TODAY pins "today".
@@ -33,7 +39,7 @@ function createWindow() {
     minHeight: 700,
     autoHideMenuBar: true,
     icon: iconPath,
-    title: "البنيان - التأجير",
+    title: "MK-Tech Rental",
     webPreferences: { contextIsolation: true, nodeIntegration: false, preload: path.join(__dirname, "preload.cjs") },
   });
   mainWindow = win;
@@ -105,7 +111,10 @@ app.whenReady().then(async () => {
   ipcMain.handle("backup:now", async () => {
     if (!mainWindow) return null;
     const r = await dialog.showSaveDialog(mainWindow, {
-      defaultPath: `نسخة-البنيان-التأجير-${new Date().toLocaleDateString("en-CA")}.db`,
+      defaultPath: `نسخة-${(() => {
+        const s = licenseStatus();
+        return s.state === "active" ? s.name : "التأجير";
+      })()}-${new Date().toLocaleDateString("en-CA")}.db`,
       filters: [{ name: "نسخة احتياطية", extensions: ["db"] }],
     });
     return r.canceled || !r.filePath ? null : backupTo(raw, r.filePath);

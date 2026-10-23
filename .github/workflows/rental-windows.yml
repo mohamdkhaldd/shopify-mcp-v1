@@ -45,18 +45,18 @@ jobs:
         run: npm run electron:build -- --publish never
 
       # the same installer under a fixed name, so one link always downloads the latest:
-      # https://github.com/mohamdkhaldd/albunyan-rental-releases/releases/latest/download/albunyan-rental-setup.exe
+      # https://github.com/mohamdkhaldd/albunyan-rental-releases/releases/latest/download/mk-tech-rental-setup.exe
       - name: Fixed-name copy for the download link
         if: env.HAS_RELEASES_TOKEN == 'true'
         shell: bash
-        run: cp release/albunyan-rental-setup-0.1.${{ github.run_number }}.exe release/albunyan-rental-setup.exe
+        run: cp release/mk-tech-rental-setup-0.1.${{ github.run_number }}.exe release/mk-tech-rental-setup.exe
       - uses: softprops/action-gh-release@v2
         if: env.HAS_RELEASES_TOKEN == 'true'
         with:
           repository: mohamdkhaldd/albunyan-rental-releases
           token: ${{ secrets.RELEASES_TOKEN }}
           tag_name: v0.1.${{ github.run_number }}
-          files: rental-app/release/albunyan-rental-setup.exe
+          files: rental-app/release/mk-tech-rental-setup.exe
 
       - uses: actions/upload-artifact@v4
         with:

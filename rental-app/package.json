@@ -1,9 +1,9 @@
 {
-  "name": "al-bunyan-rental",
+  "name": "mk-tech-rental",
   "version": "0.1.0",
   "private": true,
-  "description": "البنيان - التأجير: نظام تأجير المعدات بتمويل المستثمرين",
-  "author": "شركة البنيان للمعدات الثقيلة",
+  "description": "MK-Tech Rental: نظام تأجير المعدات بتمويل المستثمرين",
+  "author": "MK-Tech",
   "scripts": {
     "dev": "vite",
     "build:renderer": "vite build",
@@ -64,7 +64,7 @@
   "main": "dist-electron/main.cjs",
   "build": {
     "appId": "com.albunyan.rental",
-    "productName": "البنيان - التأجير",
+    "productName": "MK-Tech Rental",
     "directories": {
       "output": "release"
     },
@@ -76,13 +76,13 @@
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico",
-      "artifactName": "albunyan-rental-setup-${version}.${ext}"
+      "artifactName": "mk-tech-rental-setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "البنيان - التأجير"
+      "shortcutName": "MK-Tech Rental"
     },
     "publish": {
       "provider": "github",

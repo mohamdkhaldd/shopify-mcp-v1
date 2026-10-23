@@ -68,12 +68,12 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk "albunyan-rental-tablet-$APP_VERSION.apk"
+        run: cp android/app/build/outputs/apk/release/app-release.apk "mk-tech-rental-tablet-$APP_VERSION.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: albunyan-rental-tablet-apk
-          path: rental-app/albunyan-rental-tablet-*.apk
+          name: mk-tech-rental-tablet-apk
+          path: rental-app/mk-tech-rental-tablet-*.apk
 
       # prerelease: the laptop's updater skips it, the tablet looks for tablet-v*
       - uses: softprops/action-gh-release@v2
@@ -84,13 +84,13 @@ jobs:
           tag_name: tablet-v${{ env.APP_VERSION }}
           name: نسخة التابلت ${{ env.APP_VERSION }}
           prerelease: true
-          files: rental-app/albunyan-rental-tablet-${{ env.APP_VERSION }}.apk
+          files: rental-app/mk-tech-rental-tablet-${{ env.APP_VERSION }}.apk
 
       # one fixed link that always downloads the newest APK:
-      # https://github.com/mohamdkhaldd/albunyan-rental-releases/releases/download/tablet-latest/albunyan-rental-tablet.apk
+      # https://github.com/mohamdkhaldd/albunyan-rental-releases/releases/download/tablet-latest/mk-tech-rental-tablet.apk
       - name: Fixed-name copy for the download link
         if: env.HAS_RELEASES_TOKEN == 'true'
-        run: cp "albunyan-rental-tablet-$APP_VERSION.apk" albunyan-rental-tablet.apk
+        run: cp "mk-tech-rental-tablet-$APP_VERSION.apk" mk-tech-rental-tablet.apk
       - uses: softprops/action-gh-release@v2
         if: env.HAS_RELEASES_TOKEN == 'true'
         with:
@@ -99,4 +99,4 @@ jobs:
           tag_name: tablet-latest
           name: التابلت — آخر نسخة
           prerelease: true
-          files: rental-app/albunyan-rental-tablet.apk
+          files: rental-app/mk-tech-rental-tablet.apk
