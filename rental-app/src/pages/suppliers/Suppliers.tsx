@@ -85,6 +85,35 @@ function Statement({ s }: { s: Selected }) {
           </tfoot>
         </table>
       </div>
+      {s.byEquipment.length > 1 && (
+        <>
+          <div className="px-4 pt-4 pb-2 font-display font-bold text-[15px]">حسب المعدة</div>
+          <div className="overflow-x-auto">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>المعدة</th>
+                  <th className="n">من السركي</th>
+                  <th className="n">دفعنا عنه</th>
+                  <th className="n">اتصرف له</th>
+                  <th className="n">الباقي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.byEquipment.map((e) => (
+                  <tr key={e.equipmentId ?? "none"}>
+                    <td className={e.equipmentId == null ? "text-muted" : "font-bold"}>{e.name}</td>
+                    <td className="n">{pounds(e.fromSarkiPt)}</td>
+                    <td className="n">{pounds(e.deductionsPt)}</td>
+                    <td className="n">{pounds(e.paidPt)}</td>
+                    <td className="n font-bold">{pounds(e.remainingPt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

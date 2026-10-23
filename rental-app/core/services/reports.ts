@@ -31,10 +31,32 @@ export function supplierStatement(db: Db, supplierId: number, asOf: string = tod
     deductionsPt: sum(rows, (r) => r.deductionsPt),
     paidPt: sum(rows, (r) => r.paidPt),
   };
-  const equipment = db.prepare("SELECT id, name, site_name, supplier_rate_pt FROM equipment WHERE supplier_id = ? AND deleted_at IS NULL ORDER BY id").all(supplierId);
+  const equipment = db.prepare("SELECT id, name, site_name, supplier_rate_pt FROM equipment WHERE supplier_id = ? AND deleted_at IS NULL ORDER BY id").all(supplierId) as {
+    id: number;
+    name: string;
+  }[];
+  // an owner with several machines: the same account split per machine (payments not tied to a contract stay apart)
+  const equipmentOfContract = new Map(books.raw.contracts.map((c) => [c.id as number, c.equipment_id as number]));
+  const byEquipment = [
+    ...equipment.map((e) => {
+      const mine = (r: Record<string, any>) => r.contract_id != null && equipmentOfContract.get(r.contract_id) === e.id;
+      const fromSarkiPt = sum(
+        books.months.flatMap((m) => m.contracts.filter((c) => c.supplierId === supplierId && c.equipmentId === e.id)),
+        (c) => c.supplierCostPt,
+      );
+      const deductionsPt = sum(deds.filter(mine), (d) => d.amount_pt);
+      const paidPt = sum(pays.filter(mine), (p) => p.amount_pt);
+      return { equipmentId: e.id as number | null, name: e.name, fromSarkiPt, deductionsPt, paidPt, remainingPt: fromSarkiPt - deductionsPt - paidPt };
+    }),
+  ];
+  const unlinkedDed = sum(deds.filter((d) => d.contract_id == null), (d) => d.amount_pt);
+  const unlinkedPaid = sum(pays.filter((p) => p.contract_id == null), (p) => p.amount_pt);
+  if (unlinkedDed || unlinkedPaid)
+    byEquipment.push({ equipmentId: null, name: "دفعات من غير معدة محددة", fromSarkiPt: 0, deductionsPt: unlinkedDed, paidPt: unlinkedPaid, remainingPt: -unlinkedDed - unlinkedPaid });
   return {
     supplier,
     equipment,
+    byEquipment,
     rows,
     totals: { ...totals, remainingPt: totals.fromSarkiPt - totals.deductionsPt - totals.paidPt },
     payments: pays.map((p) => ({ id: p.id, date: p.date, contractId: p.contract_id, amountPt: p.amount_pt, note: p.note })),

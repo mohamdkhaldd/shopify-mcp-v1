@@ -212,6 +212,7 @@ export function suppliersView(db: Db, supplierId?: number, now: string = today()
         working: active.has(e.id),
       })),
       rows: st.rows,
+      byEquipment: st.byEquipment,
       totals: st.totals,
       payments: st.payments,
       deductions: st.deductions,

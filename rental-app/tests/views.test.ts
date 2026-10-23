@@ -82,3 +82,25 @@ describe("suppliers view", () => {
     expect(s.deductions).toHaveLength(1);
   });
 });
+
+import { createEquipment, createContract } from "../core/services/master";
+import { fillRange as fill } from "../core/services/sarki";
+import { recordSupplierPayment as paySupplier } from "../core/services/ledger";
+
+describe("an owner with several machines", () => {
+  it("one account, split per machine", () => {
+    const db = freshDb();
+    const ids = seedDemo(db);
+    const crane = createEquipment(db, { name: "ونش 25 طن", supplierId: ids.sayed, supplierRatePt: egp(4_000) });
+    const c2 = createContract(db, { clientId: ids.amal, equipmentId: crane, unit: "day", clientRatePt: egp(5_000), supplierRatePt: egp(4_000), startDate: "2026-10-20", endDate: "2026-10-29" });
+    fill(db, c2, "client", "2026-10-20", "2026-10-29", {}); // 10 days → 40,000 for the owner
+    paySupplier(db, { supplierId: ids.sayed, contractId: c2, date: "2026-10-30", amountPt: egp(10_000) }, { confirmNegative: true });
+    const v = suppliersView(db, ids.sayed, "2026-10-31").selected!;
+    expect(v.equipment.map((e) => e.name)).toEqual(["لودر كاتربيلر 950", "ونش 25 طن"]);
+    expect(v.byEquipment.map((e) => [e.name, e.fromSarkiPt, e.deductionsPt, e.paidPt, e.remainingPt])).toEqual([
+      ["لودر كاتربيلر 950", egp(75_000), egp(3_000), egp(50_000), egp(22_000)],
+      ["ونش 25 طن", egp(40_000), 0, egp(10_000), egp(30_000)],
+    ]);
+    expect(v.totals.remainingPt).toBe(egp(52_000));
+  });
+});
