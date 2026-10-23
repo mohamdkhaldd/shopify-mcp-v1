@@ -85,3 +85,18 @@ jobs:
           name: نسخة التابلت ${{ env.APP_VERSION }}
           prerelease: true
           files: rental-app/albunyan-rental-tablet-${{ env.APP_VERSION }}.apk
+
+      # one fixed link that always downloads the newest APK:
+      # https://github.com/mohamdkhaldd/albunyan-rental-releases/releases/download/tablet-latest/albunyan-rental-tablet.apk
+      - name: Fixed-name copy for the download link
+        if: env.HAS_RELEASES_TOKEN == 'true'
+        run: cp "albunyan-rental-tablet-$APP_VERSION.apk" albunyan-rental-tablet.apk
+      - uses: softprops/action-gh-release@v2
+        if: env.HAS_RELEASES_TOKEN == 'true'
+        with:
+          repository: mohamdkhaldd/albunyan-rental-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: tablet-latest
+          name: التابلت — آخر نسخة
+          prerelease: true
+          files: rental-app/albunyan-rental-tablet.apk
