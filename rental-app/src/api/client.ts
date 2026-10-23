@@ -9,6 +9,8 @@ import type { Deletable } from "../../core/services/deletion";
 declare global {
   interface Window {
     api?: {
+      /** set by the Android app (tablet/backend.ts); absent on the laptop */
+      platform?: "tablet";
       invoke: (channel: string, payload?: unknown) => Promise<any>;
       on: (channel: string, cb: (data: unknown) => void) => () => void;
     };
@@ -111,14 +113,24 @@ export interface ExcelSheet {
   totals?: Record<string, string | number | null>;
 }
 
+export const isTablet = () => window.api?.platform === "tablet";
+
+export type UpdateCheck =
+  | { state: "dev" }
+  | { state: "not-available"; version?: string }
+  | { state: "downloaded"; version: string }
+  | { state: "apk"; version: string; url: string }
+  | { state: "error"; message?: string };
+
 export const appApi = {
   exportExcel: (fileName: string, sheets: ExcelSheet[]) => window.api?.invoke("export:excel", { fileName, sheets }),
   version: (): Promise<string> => window.api?.invoke("app:getVersion") ?? Promise.resolve(""),
   lastBackup: (): Promise<{ file: string; at: string } | null> => window.api?.invoke("backup:last") ?? Promise.resolve(null),
   printPreview: (singlePage = true) => window.api?.invoke("print:preview", { singlePage }),
-  checkForUpdate: (): Promise<{ state: "dev" | "not-available" | "downloaded" | "error"; version?: string; message?: string }> =>
-    window.api?.invoke("app:checkForUpdate") ?? Promise.resolve({ state: "dev" }),
-  installUpdate: () => window.api?.invoke("app:installUpdate"),
+  checkForUpdate: (): Promise<UpdateCheck> => window.api?.invoke("app:checkForUpdate") ?? Promise.resolve({ state: "dev" }),
+  /** laptop: restart into the downloaded version; tablet: download the APK at url and open Android's installer */
+  installUpdate: (url?: string): Promise<{ ok: boolean; message?: string } | undefined> => window.api?.invoke("app:installUpdate", { url }) ?? Promise.resolve(undefined),
+  onUpdateProgress: (cb: (p: { percent: number }) => void) => window.api?.on("app:updateProgress", cb as (d: unknown) => void) ?? (() => {}),
   backupNow: (): Promise<string | null> => window.api?.invoke("backup:now") ?? Promise.resolve(null),
   restoreBackup: (): Promise<{ ok: boolean; message?: string }> => window.api?.invoke("backup:restore") ?? Promise.resolve({ ok: false }),
   savePdf: (name: string) => window.api?.invoke("print:savePdf", { name }),

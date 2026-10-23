@@ -1,0 +1,49 @@
+name: Rental - Windows installer
+
+# برنامج البنيان - التأجير على الويندوز. بيتبني لوحده مع كل تعديل في
+# rental-app. لو RELEASES_TOKEN موجود، بيتنشر في ريبو albunyan-rental-releases
+# العام (ملفات تسطيب بس، من غير كود) — البرنامج المتسطب بيراجع الريبو ده
+# لوحده وبينزّل التحديث في الخلفية. من غير التوكن، الملف بيبقى في Artifacts بس.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/albunyan-rental-app]
+    paths: ["rental-app/**", ".github/workflows/rental-windows.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: rental-app
+    env:
+      HAS_RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+      - run: npm test
+
+      # every build gets a higher number so installed copies see it as an update
+      - run: npm version "0.1.${{ github.run_number }}" --no-git-tag-version
+
+      - name: Build and publish
+        if: env.HAS_RELEASES_TOKEN == 'true'
+        run: npm run electron:build -- --publish always
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+
+      - name: Build only (no RELEASES_TOKEN yet)
+        if: env.HAS_RELEASES_TOKEN != 'true'
+        run: npm run electron:build -- --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: albunyan-rental-windows-installer
+          path: rental-app/release/*.exe

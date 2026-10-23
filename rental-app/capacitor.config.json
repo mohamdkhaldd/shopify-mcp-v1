@@ -1,0 +1,8 @@
+{
+  "appId": "com.albunyan.rental",
+  "appName": "البنيان - التأجير",
+  "webDir": "dist-tablet",
+  "android": {
+    "allowMixedContent": false
+  }
+}

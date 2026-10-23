@@ -919,4 +919,4 @@ function createSyncEngine({
   return { setup, start, stop, login, undo, push, pull, syncNow, status, setDeviceName, activity, _applyBatch: applyBatch, _buildBatch: buildBatch };
 }
 
-module.exports = { createSyncEngine };
+export { createSyncEngine };

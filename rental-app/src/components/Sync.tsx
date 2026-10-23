@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { REFRESH_EVENT, syncApi, SyncStatus } from "../api/client";
+import { appApi, isTablet, REFRESH_EVENT, syncApi, SyncStatus } from "../api/client";
 import { Button } from "./ui";
 
 /** Polls the sync status; every sync widget shares the same shape. */
@@ -61,6 +61,7 @@ export function SyncBars() {
 
   return (
     <div className="no-print grid gap-2 mb-4 empty:hidden">
+      {isTablet() && <TabletUpdateBar />}
       {status?.needsLogin && (
         <div className="rounded-card border border-amber bg-amber-soft px-4 py-3 flex flex-wrap items-center gap-3">
           <div className="font-semibold text-sm">
@@ -96,6 +97,33 @@ export function SyncBars() {
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Tablet only: Android can't update silently, so a newer APK is offered here as soon as the app opens. */
+function TabletUpdateBar() {
+  const [offer, setOffer] = useState<{ version: string; url: string } | null>(null);
+  const [state, setState] = useState<string | null>(null);
+  useEffect(() => {
+    appApi.checkForUpdate().then((r) => r.state === "apk" && setOffer({ version: r.version, url: r.url }));
+    return appApi.onUpdateProgress((p) => setState(p.percent < 100 ? `بينزّل... ${p.percent}٪` : "خلص — وافق على التسطيب"));
+  }, []);
+  if (!offer) return null;
+  return (
+    <div className="rounded-card border border-amber bg-amber-soft px-4 py-2.5 flex flex-wrap items-center gap-3">
+      <div className="font-semibold text-sm">فيه نسخة جديدة من البرنامج ({offer.version}) — بياناتك مش هتتمسح.</div>
+      <Button
+        primary
+        onClick={async () => {
+          setState("بيبدأ التنزيل...");
+          const r = await appApi.installUpdate(offer.url);
+          if (r && !r.ok && r.message) setState(r.message);
+        }}
+      >
+        نزّل وسطّب
+      </Button>
+      {state && <span className="text-sm font-semibold num">{state}</span>}
     </div>
   );
 }

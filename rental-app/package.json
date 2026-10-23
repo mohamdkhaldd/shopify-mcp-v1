@@ -15,7 +15,9 @@
     "rebuild:node": "npm rebuild better-sqlite3",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build:tablet": "tsc -p tsconfig.json --noEmit && vite build --config vite.tablet.config.ts",
+    "test:tablet": "TEST_DB=sqljs vitest run"
   },
   "dependencies": {
     "@fontsource/cairo": "^5.1.0",
@@ -31,11 +33,17 @@
     "ws": "^8.22.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/cli": "^7.6.9",
+    "@capacitor/core": "^7.6.9",
+    "@capacitor/filesystem": "^7.1.9",
+    "@capacitor/share": "^7.0.4",
     "@electron/rebuild": "^3.6.2",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.7.4",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
+    "@types/sql.js": "^1.4.11",
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
@@ -43,6 +51,7 @@
     "electron-builder": "^25.1.7",
     "esbuild": "^0.21.5",
     "postcss": "^8.4.47",
+    "sql.js": "^1.15.1",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.5.4",
     "vite": "^5.4.8",
