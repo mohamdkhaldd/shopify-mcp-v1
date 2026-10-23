@@ -276,7 +276,18 @@ CREATE TABLE IF NOT EXISTS audit_log (
   op TEXT NOT NULL CHECK (op IN ('insert', 'update', 'delete')),
   before_json TEXT,
   after_json TEXT,
+  action_id TEXT,
   undone INTEGER NOT NULL DEFAULT 0
+);
+
+-- one row per thing the user did (a save, a payment, a delete…): the audit rows
+-- it produced share its id, so "تراجع" undoes the whole action at once
+CREATE TABLE IF NOT EXISTS actions (
+  id TEXT PRIMARY KEY,
+  at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  label TEXT NOT NULL,
+  undone INTEGER NOT NULL DEFAULT 0,
+  undo_of TEXT
 );
 
 -- names only need to be unique among rows that weren't deleted
@@ -396,6 +407,8 @@ function installNoDelete(db: Db, tables: string[]) {
 
 // Same idea as the old app's sync triggers: a JSON snapshot of the row before
 // and after every change, so the activity log can describe and undo it.
+const ACTION = "(SELECT value FROM app_settings WHERE key = 'current_action')";
+
 function installAudit(db: Db, tables: string[]) {
   for (const t of tables) {
     const cols = columnsOf(db, t);
@@ -403,13 +416,13 @@ function installAudit(db: Db, tables: string[]) {
     db.exec(`
       DROP TRIGGER IF EXISTS audit_ins_${t};
       CREATE TRIGGER audit_ins_${t} AFTER INSERT ON ${t}
-      BEGIN INSERT INTO audit_log (tbl, row_id, op, after_json) VALUES ('${t}', NEW.rowid, 'insert', ${json("NEW")}); END;
+      BEGIN INSERT INTO audit_log (tbl, row_id, op, after_json, action_id) VALUES ('${t}', NEW.rowid, 'insert', ${json("NEW")}, ${ACTION}); END;
       DROP TRIGGER IF EXISTS audit_upd_${t};
       CREATE TRIGGER audit_upd_${t} AFTER UPDATE ON ${t}
-      BEGIN INSERT INTO audit_log (tbl, row_id, op, before_json, after_json) VALUES ('${t}', NEW.rowid, 'update', ${json("OLD")}, ${json("NEW")}); END;
+      BEGIN INSERT INTO audit_log (tbl, row_id, op, before_json, after_json, action_id) VALUES ('${t}', NEW.rowid, 'update', ${json("OLD")}, ${json("NEW")}, ${ACTION}); END;
       DROP TRIGGER IF EXISTS audit_del_${t};
       CREATE TRIGGER audit_del_${t} AFTER DELETE ON ${t}
-      BEGIN INSERT INTO audit_log (tbl, row_id, op, before_json) VALUES ('${t}', OLD.rowid, 'delete', ${json("OLD")}); END;
+      BEGIN INSERT INTO audit_log (tbl, row_id, op, before_json, action_id) VALUES ('${t}', OLD.rowid, 'delete', ${json("OLD")}, ${ACTION}); END;
     `);
   }
 }
@@ -420,7 +433,7 @@ export function setupDatabase(db: Db): Db {
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(DDL);
   const business = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('audit_log', 'app_settings')")
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('audit_log', 'app_settings', 'actions')")
     .all()
     .map((r: any) => r.name as string);
   installGuards(db);

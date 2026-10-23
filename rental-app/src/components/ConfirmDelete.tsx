@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { api, DeletePreview, Deletable } from "../api/client";
-import { useUndo } from "../context/UndoContext";
 import Modal from "./Modal";
 import { Button, ErrorBox } from "./ui";
 import Icon from "./Icon";
@@ -10,7 +9,6 @@ export default function ConfirmDelete({ entity, id, onClose, onDeleted }: { enti
   const [preview, setPreview] = useState<DeletePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const { pushUndo } = useUndo();
 
   useEffect(() => {
     api.deletePreview(entity, id).then(setPreview, (e) => setError(e.message));
@@ -19,13 +17,9 @@ export default function ConfirmDelete({ entity, id, onClose, onDeleted }: { enti
   async function confirm() {
     setBusy(true);
     try {
-      const batch = await api.delete(entity, id);
+      await api.delete(entity, id); // the undo bar ("اتحفظ: حذف …") comes from the save event
       onDeleted();
       onClose();
-      pushUndo("اتحذف", async () => {
-        await api.restore(batch);
-        onDeleted();
-      });
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);

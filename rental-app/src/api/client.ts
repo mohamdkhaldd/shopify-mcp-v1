@@ -1,4 +1,5 @@
-import type { ClientsView, ContractOptions, DashboardView, InvestorsView, ManagementView, SarkiView, SuppliersView, TaxView, TreasuryFilters, TreasuryView } from "../../core/services/views";
+import type { ClientsView, ContractOptions, DashboardView, InvestorsView, ManagementView, SarkiView, SettingsView, SuppliersView, TaxView, TreasuryFilters, TreasuryView } from "../../core/services/views";
+import type { ActivityView } from "../../core/services/activity";
 import type { NewContractInput } from "../../core/services/master";
 import type { DayPatch } from "../../core/services/sarki";
 import type { Deletable } from "../../core/services/deletion";
@@ -20,10 +21,16 @@ export class ApiError extends Error {
   }
 }
 
+/** Fired after every save: { actionId, label } — the undo bar listens to it. */
+export const CHANGED_EVENT = "rental:changed";
+/** Fired after an undo so the open page reloads. */
+export const REFRESH_EVENT = "rental:refresh";
+
 async function call<T>(fn: string, args: unknown = {}): Promise<T> {
   if (!window.api) throw new ApiError("البرنامج لازم يشتغل من نسخة الويندوز");
   const r = await window.api.invoke("core:call", { fn, args });
   if (!r?.ok) throw new ApiError(r?.message ?? "حصلت مشكلة", r?.code);
+  if (r.actionId) window.dispatchEvent(new CustomEvent(CHANGED_EVENT, { detail: { actionId: r.actionId, label: r.label, undoable: r.undoable } }));
   return r.value as T;
 }
 
@@ -74,6 +81,14 @@ export const api = {
   treasury: (f: TreasuryFilters) => call<TreasuryView>("treasury", f),
   tax: () => call<TaxView>("tax"),
   taxPayment: (v: { tax: "vat" | "tax5"; periodMonth?: string; date: string; amountPt: number; receiptNo?: string; note?: string }) => call<number>("taxPayment", v),
+  activity: (f: { from?: string; to?: string } = {}) => call<ActivityView>("activity", f),
+  undo: async (actionId: string) => {
+    const r = await call<string>("undo", { actionId });
+    window.dispatchEvent(new CustomEvent(REFRESH_EVENT));
+    return r;
+  },
+  settings: () => call<SettingsView>("settings"),
+  setRates: (v: { effectiveFrom: string; vat: number; tax5: number; management: number }) => call("setRates", v),
   setSupplierRate: (contractId: number, from: string, to: string, v: { dayRatePt?: number | null; overtimeRatePt?: number | null }) =>
     call("setSupplierRate", { contractId, from, to, ...v }),
   deletePreview: (entity: Deletable, id: number) => call<DeletePreview>("deletePreview", { entity, id }),
@@ -101,9 +116,14 @@ export const appApi = {
   version: (): Promise<string> => window.api?.invoke("app:getVersion") ?? Promise.resolve(""),
   lastBackup: (): Promise<{ file: string; at: string } | null> => window.api?.invoke("backup:last") ?? Promise.resolve(null),
   printPreview: (singlePage = true) => window.api?.invoke("print:preview", { singlePage }),
+  checkForUpdate: (): Promise<{ state: "dev" | "not-available" | "downloaded" | "error"; version?: string; message?: string }> =>
+    window.api?.invoke("app:checkForUpdate") ?? Promise.resolve({ state: "dev" }),
+  installUpdate: () => window.api?.invoke("app:installUpdate"),
+  backupNow: (): Promise<string | null> => window.api?.invoke("backup:now") ?? Promise.resolve(null),
+  restoreBackup: (): Promise<{ ok: boolean; message?: string }> => window.api?.invoke("backup:restore") ?? Promise.resolve({ ok: false }),
   savePdf: (name: string) => window.api?.invoke("print:savePdf", { name }),
 };
 
-export type { TaxView, TreasuryView, TreasuryFilters, InvestorsView, ManagementView, ClientsView, ContractOptions, DashboardView, Deletable, NewContractInput, SarkiView, SuppliersView };
+export type { ActivityView, SettingsView, TaxView, TreasuryView, TreasuryFilters, InvestorsView, ManagementView, ClientsView, ContractOptions, DashboardView, Deletable, NewContractInput, SarkiView, SuppliersView };
 /** The السركي view once a contract is open. */
 export type OpenSarki = Exclude<SarkiView, { contract: null }>;

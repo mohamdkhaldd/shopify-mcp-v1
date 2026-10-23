@@ -45,7 +45,7 @@ app.whenReady().then(async () => {
   if (process.env.RENTAL_DEMO === "1" && !raw.prepare("SELECT 1 FROM contracts LIMIT 1").get()) seedDemo(db);
   let registry = makeRegistry(db);
 
-  ipcMain.handle("core:call", (_e, { fn, args }) => callCore(registry, fn, args));
+  ipcMain.handle("core:call", (_e, { fn, args }) => callCore(db, registry, fn, args));
 
   ipcMain.handle("print:preview", (_e, opts?: { singlePage?: boolean }) => mainWindow && printPreview(mainWindow, iconPath, opts?.singlePage ?? true));
   ipcMain.handle("print:savePdf", async (_e, { name }: { name: string }) => {

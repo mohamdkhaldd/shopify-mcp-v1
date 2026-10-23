@@ -584,3 +584,26 @@ export function taxView(db: Db, now: string = today()) {
 }
 
 export type TaxView = ReturnType<typeof taxView>;
+
+// ---------------- الإعدادات ----------------
+
+export function settingsView(db: Db, now: string = today()) {
+  const rows = db.prepare("SELECT key, value_bp, effective_from FROM rate_settings ORDER BY effective_from DESC, key").all() as { key: string; value_bp: number; effective_from: string }[];
+  const byDate = new Map<string, Record<string, number>>();
+  for (const r of rows) byDate.set(r.effective_from, { ...(byDate.get(r.effective_from) ?? {}), [r.key]: r.value_bp });
+  const at = (key: string, date: string) => rows.find((r) => r.key === key && r.effective_from <= date)?.value_bp ?? 0;
+  const closed = (db.prepare("SELECT month FROM month_closes ORDER BY month DESC LIMIT 1").get() as { month: string } | undefined)?.month ?? null;
+  return {
+    current: { vat: at("vat", now), tax5: at("tax5", now), management: at("management_share", now), investors: at("investors_share", now) },
+    history: [...byDate.entries()].map(([effectiveFrom, v]) => ({
+      effectiveFrom,
+      vat: v.vat as number | undefined,
+      tax5: v.tax5 as number | undefined,
+      management_share: v.management_share as number | undefined,
+      investors_share: v.investors_share as number | undefined,
+    })),
+    lastClosedMonth: closed,
+  };
+}
+
+export type SettingsView = ReturnType<typeof settingsView>;

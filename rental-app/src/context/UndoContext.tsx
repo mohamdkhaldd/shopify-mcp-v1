@@ -1,4 +1,5 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { api, CHANGED_EVENT } from "../api/client";
 
 // Ported from the old app: a 12-second "تراجع (Ctrl+Z)" bar after a change.
 interface UndoAction {
@@ -13,6 +14,7 @@ const AUTO_DISMISS_MS = 12000;
 export function UndoProvider({ children }: { children: ReactNode }) {
   const [action, setAction] = useState<UndoAction | null>(null);
   const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
   const actionRef = useRef<UndoAction | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextId = useRef(1);
@@ -44,10 +46,26 @@ export function UndoProvider({ children }: { children: ReactNode }) {
     setBusy(true);
     try {
       await cur.undo();
+    } catch (e) {
+      setFailure((e as Error).message);
+      setTimeout(() => setFailure(null), 5000);
     } finally {
       setBusy(false);
     }
   }, []);
+
+  // every save anywhere in the app offers "تراجع" for a few seconds
+  useEffect(() => {
+    const onChanged = (e: Event) => {
+      const { actionId, label, undoable } = (e as CustomEvent<{ actionId: string; label: string; undoable: boolean }>).detail;
+      if (!undoable || label.startsWith("تراجع")) return;
+      pushUndo(`اتحفظ: ${label}`, async () => {
+        await api.undo(actionId);
+      });
+    };
+    window.addEventListener(CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(CHANGED_EVENT, onChanged);
+  }, [pushUndo]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -65,6 +83,11 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   return (
     <UndoContext.Provider value={{ pushUndo }}>
       {children}
+      {failure && (
+        <div className="no-print fixed bottom-5 inset-x-0 z-50 flex justify-center px-4">
+          <div className="bg-out text-white text-sm rounded-lg shadow-lg px-4 py-2.5">{failure}</div>
+        </div>
+      )}
       {action && (
         <div className="no-print fixed bottom-5 inset-x-0 z-50 flex justify-center px-4">
           <div className="flex items-center gap-3 bg-ink text-white text-sm rounded-lg shadow-lg px-4 py-2.5">
