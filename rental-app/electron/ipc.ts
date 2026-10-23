@@ -1,8 +1,10 @@
 import { Db, UserError } from "../core/db";
-import { clientsView, contractOptions, dashboardView, sarkiView, suppliersView } from "../core/services/views";
+import { clientsView, contractOptions, dashboardView, managementView, sarkiView, suppliersView } from "../core/services/views";
+import { closeMonth, recordAdjustment } from "../core/services/close";
+import { today } from "../core/db";
 import { deleteEntity, deletePreview, restoreDeleted } from "../core/services/deletion";
-import { createClient, createEquipment, createSupplier, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier } from "../core/services/master";
-import { recordClientPayment, recordSupplierDeduction, recordSupplierPayment } from "../core/services/ledger";
+import { createClient, createEquipment, createExpenseCategory, createSupplier, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier } from "../core/services/master";
+import { recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment } from "../core/services/ledger";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
 
 // Every screen call goes through one channel ("core:call") to a named function
@@ -44,6 +46,19 @@ export function makeRegistry(db: Db) {
     updateClient: (a: { id: number; kind: "company" | "individual"; name: string; phone?: string | null; taxId?: string | null }) => updateClient(db, a.id, a),
     setClientTaxes: (a: { id: number; vatApplies: boolean; tax5Applies: boolean }) => setClientTaxes(db, a.id, a.vatApplies, a.tax5Applies),
     clientPayment: (a: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string }) => recordClientPayment(db, a),
+
+    // الإدارة
+    management: (a: { month?: string }) => managementView(db, a.month),
+    createExpenseCategory: (a: { name: string }) => createExpenseCategory(db, a.name),
+    expense: (a: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
+      recordExpense(db, a, { confirmNegative: a.confirmNegative }),
+    managementPayout: (a: { date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
+      recordPayout(db, { payee: "management", date: a.date, amountPt: a.amountPt, note: a.note }, { confirmNegative: a.confirmNegative }),
+    closeMonth: (a: { month: string }) => {
+      closeMonth(db, a.month, today());
+    },
+    adjustment: (a: { targetMonth: string; contractId: number; kind: "client_base" | "supplier_cost"; amountPt: number; reason: string }) =>
+      recordAdjustment(db, { ...a, appliedMonth: today().slice(0, 7) }),
 
     // حذف
     deletePreview: (a: { entity: Parameters<typeof deletePreview>[1]; id: number }) => deletePreview(db, a.entity, a.id),

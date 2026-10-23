@@ -38,7 +38,7 @@ export default function MoneyEntry({
 }) {
   const [date, setDate] = useState(today());
   const [amount, setAmount] = useState("");
-  const [contract, setContract] = useState<string>(contracts[0] ? String(contracts[0].id) : "");
+  const [contract, setContract] = useState<string>(contracts.length === 1 ? String(contracts[0].id) : "");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirmCash, setConfirmCash] = useState<string | null>(null);
@@ -79,16 +79,18 @@ export default function MoneyEntry({
         <Labeled label="المبلغ">
           <TextInput value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="مثلًا 20000" inputMode="decimal" className="w-28" />
         </Labeled>
-        <Labeled label="على عقد (اختياري)">
-          <Select value={contract} onChange={(e) => setContract(e.target.value)}>
-            <option value="">— من غير عقد —</option>
-            {contracts.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-          </Select>
-        </Labeled>
+        {contracts.length > 0 && (
+          <Labeled label="عن أنهي معدة؟ (لو عنده أكتر من عقد)">
+            <Select value={contract} onChange={(e) => setContract(e.target.value)}>
+              <option value="">— مش محددة (على الأقدم) —</option>
+              {contracts.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </Select>
+          </Labeled>
+        )}
         <Labeled label={noteRequired ? "البيان" : "ملاحظة"}>
           <TextInput value={note} onChange={(e) => setNote(e.target.value)} placeholder={notePlaceholder} className="w-52" />
         </Labeled>

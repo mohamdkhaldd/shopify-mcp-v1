@@ -163,16 +163,22 @@ export function computeBooks(db: Db, asOf: string = today()) {
 
   // ---- invoices + collections ----
   const issued = new Map(q("SELECT * FROM invoices").map((i) => [`${i.contract_id}|${i.month}`, i]));
-  const invoiceLines = monthResults.flatMap((m) =>
-    m.contracts
-      .filter((r) => r.invoiceTotalPt > 0)
-      .map((r) => ({ clientId: r.clientId, contractId: r.contractId, month: m.month, basePt: r.clientBasePt, vatPt: r.vatPt, totalPt: r.invoiceTotalPt })),
+  const lines = monthResults.flatMap((m) =>
+    m.contracts.map((r) => ({ clientId: r.clientId, contractId: r.contractId, month: m.month, basePt: r.clientBasePt, vatPt: r.vatPt, totalPt: r.invoiceTotalPt })),
   );
+  // a negative month (a correction lowering a closed month) is a credit note
+  const creditNotes = lines.filter((l) => l.totalPt < 0);
   const allocation = allocatePayments(
-    invoiceLines,
+    lines.filter((l) => l.totalPt > 0),
     clientPayments.map((p) => ({ clientId: p.client_id, contractId: p.contract_id, date: p.date, amountPt: p.amount_pt })),
+    creditNotes.map((l) => ({ clientId: l.clientId, contractId: l.contractId, month: l.month, amountPt: -l.totalPt })),
   );
-  const invoices = allocation.invoices.map((i) => ({ ...i, serial: issued.get(`${i.contractId}|${i.month}`)?.serial ?? null }));
+  const invoices = [
+    ...allocation.invoices,
+    ...creditNotes.map((l) => ({ ...l, collectedPt: 0, creditedPt: l.totalPt, collectedBasePt: 0, collectedVatPt: 0 })),
+  ]
+    .sort((a, b) => a.month.localeCompare(b.month) || a.contractId - b.contractId)
+    .map((i) => ({ ...i, serial: issued.get(`${i.contractId}|${i.month}`)?.serial ?? null }));
 
   for (const m of monthResults) {
     const inv = invoices.filter((i) => i.month === m.month);

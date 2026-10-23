@@ -66,7 +66,7 @@ function Statement({ s }: { s: Selected }) {
   );
 }
 
-const STATUS = { paid: ["مدفوعة", "in"], partial: ["جزء", "amber"], unpaid: ["متدفعتش", "out"] } as const;
+const STATUS = { paid: ["مدفوعة", "in"], partial: ["جزء", "amber"], unpaid: ["متدفعتش", "out"], credit: ["خصم (تسوية)", "tax"] } as const;
 
 function Invoices({ s }: { s: Selected }) {
   return (

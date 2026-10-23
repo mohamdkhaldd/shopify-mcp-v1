@@ -325,3 +325,21 @@ describe("printed sheets show one party only", () => {
     expect(c).not.toContain(String(egp(2500)));
   });
 });
+
+describe("a correction that lowers a closed month (credit note)", () => {
+  it("lowers what the company owes and the VAT owed, but is not cash", () => {
+    const { db, contract, client } = setup();
+    recordClientPayment(db, { clientId: client, date: "2026-10-20", amountPt: egp(8_550) }); // half of 17,100
+    closeMonth(db, "2026-10", "2026-11-02");
+    const before = computeBooks(db, "2026-11-30");
+    recordAdjustment(db, { appliedMonth: "2026-11", targetMonth: "2026-10", contractId: contract, kind: "client_base", amountPt: -egp(500), reason: "يوم عطل" });
+    const b = computeBooks(db, "2026-11-30");
+    const credit = b.invoices.find((i) => i.month === "2026-11")!;
+    expect([credit.basePt, credit.vatPt, credit.totalPt]).toEqual([-egp(500), -egp(70), -egp(570)]);
+    const oct = b.invoices.find((i) => i.month === "2026-10")!;
+    expect([oct.collectedPt, oct.creditedPt, oct.totalPt - oct.collectedPt - oct.creditedPt]).toEqual([egp(8_550), egp(570), egp(7_980)]);
+    expect(b.tax.vatInvoicedPt).toBe(egp(2_100 - 70));
+    expect(b.tax.vatCollectedPt).toBe(before.tax.vatCollectedPt); // no cash came in
+    expect(b.treasury.balancePt).toBe(before.treasury.balancePt);
+  });
+});

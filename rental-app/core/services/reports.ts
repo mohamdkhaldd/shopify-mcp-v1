@@ -77,7 +77,8 @@ export function clientStatement(db: Db, clientId: number, asOf: string = today()
       vatPt: i.vatPt,
       totalPt: i.totalPt,
       collectedPt: i.collectedPt,
-      openPt: i.totalPt - i.collectedPt,
+      creditedPt: i.creditedPt,
+      openPt: i.totalPt - i.collectedPt - i.creditedPt,
     }));
   const payments = books.raw.clientPayments
     .filter((p) => p.client_id === clientId)
@@ -136,7 +137,7 @@ export function taxFile(db: Db, asOf: string = today(), books: Books = computeBo
 /** الرئيسية. */
 export function dashboard(db: Db, asOf: string = today(), books: Books = computeBooks(db, asOf)) {
   const month = books.months.find((m) => m.month === monthOf(asOf));
-  const receivablesPt = sum(books.invoices, (i) => i.totalPt - i.collectedPt);
+  const receivablesPt = sum(books.invoices, (i) => i.totalPt - i.collectedPt - i.creditedPt);
   const supplierCostPt = sum(books.months, (m) => sum(m.contracts, (c) => c.supplierCostPt));
   const payablesPt = supplierCostPt - sum(books.raw.deductions, (d) => d.amount_pt) - sum(books.raw.supplierPayments, (p) => p.amount_pt);
   const net = month?.monthNetPt ?? 0;

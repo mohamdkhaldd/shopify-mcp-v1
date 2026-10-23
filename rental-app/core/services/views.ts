@@ -271,7 +271,7 @@ export function clientsView(db: Db, clientId?: number, now: string = today()) {
         code: code.get(i.contractId) ?? "",
         equipment: equipment.get(i.contractId) ?? "",
         monthClosed: closedMonths.has(i.month),
-        status: i.openPt <= 0 ? ("paid" as const) : i.collectedPt > 0 ? ("partial" as const) : ("unpaid" as const),
+        status: i.totalPt < 0 ? ("credit" as const) : i.openPt <= 0 ? ("paid" as const) : i.collectedPt + i.creditedPt > 0 ? ("partial" as const) : ("unpaid" as const),
       })),
       payments: st.payments,
       contracts,
@@ -280,3 +280,114 @@ export function clientsView(db: Db, clientId?: number, now: string = today()) {
 }
 
 export type ClientsView = ReturnType<typeof clientsView>;
+
+// ---------------- الإدارة ----------------
+
+export function managementView(db: Db, month?: string, now: string = today()) {
+  const books = computeBooks(db, now);
+  const months = books.months.map((m) => m.month);
+  const m = books.months.find((x) => x.month === (month && months.includes(month) ? month : monthOf(now))) ?? books.months[books.months.length - 1];
+  const names = (t: string) => new Map((db.prepare(`SELECT id, name FROM ${t}`).all() as { id: number; name: string }[]).map((r) => [r.id, r.name]));
+  const clients = names("clients");
+  const suppliers = names("suppliers");
+  const equipment = names("equipment");
+  const contracts = db.prepare("SELECT id, code, equipment_id, status FROM contracts WHERE deleted_at IS NULL ORDER BY id DESC").all() as {
+    id: number;
+    code: string;
+    equipment_id: number;
+    status: string;
+  }[];
+
+  const rows = (m?.contracts ?? []).map((r) => ({
+    ...r,
+    client: clients.get(r.clientId) ?? "",
+    supplier: suppliers.get(r.supplierId) ?? "",
+    equipment: equipment.get(r.equipmentId) ?? "",
+  }));
+  const byEquipment = [...new Set(rows.map((r) => r.equipmentId))].map((id) => {
+    const rs = rows.filter((r) => r.equipmentId === id);
+    const s = (f: (r: (typeof rows)[number]) => number) => rs.reduce((a, r) => a + f(r), 0);
+    return {
+      equipmentId: id,
+      equipment: rs[0].equipment,
+      supplier: rs[0].supplier,
+      clients: [...new Set(rs.map((r) => r.client))].join("، "),
+      marginPt: s((r) => r.marginPt),
+      tax5Pt: s((r) => r.tax5Pt),
+      expensesPt: s((r) => r.expensesPt),
+      netPt: s((r) => r.netPt),
+    };
+  });
+
+  const expenses = m
+    ? (
+        db
+          .prepare(
+            `SELECT x.id, x.kind, x.date, x.amount_pt, x.note, x.contract_id, c.code, k.name AS category
+             FROM expenses x LEFT JOIN contracts c ON c.id = x.contract_id LEFT JOIN expense_categories k ON k.id = x.category_id
+             WHERE substr(x.date, 1, 7) = ? AND x.deleted_at IS NULL AND x.reversal_of IS NULL
+               AND NOT EXISTS (SELECT 1 FROM expenses r WHERE r.reversal_of = x.id AND r.deleted_at IS NULL)
+             ORDER BY x.date, x.id`,
+          )
+          .all(m.month) as { id: number; kind: "contract" | "general"; date: string; amount_pt: number; note: string | null; contract_id: number | null; code: string | null; category: string | null }[]
+      )
+    : [];
+
+  const payouts = (
+    db
+      .prepare("SELECT id, date, amount_pt, note FROM profit_payouts WHERE payee_kind = 'management' AND deleted_at IS NULL AND reversal_of IS NULL ORDER BY date DESC")
+      .all() as { id: number; date: string; amount_pt: number; note: string | null }[]
+  ).map((p) => ({ id: p.id, date: p.date, contractId: null, amountPt: p.amount_pt, note: p.note }));
+
+  // months close in order, and only after they end
+  const closable = books.months.find((x) => !x.closed && x.month < monthOf(now))?.month ?? null;
+  const adjustments = db
+    .prepare(
+      `SELECT a.id, a.applied_month, a.target_month, a.kind, a.amount_pt, a.reason, c.code FROM adjustments a JOIN contracts c ON c.id = a.contract_id
+       ORDER BY a.id DESC`,
+    )
+    .all() as { id: number; applied_month: string; target_month: string; kind: "client_base" | "supplier_cost"; amount_pt: number; reason: string; code: string }[];
+
+  return {
+    month: m?.month ?? monthOf(now),
+    months: books.months.map((x) => ({ month: x.month, closed: x.closed })),
+    closed: !!m?.closed,
+    rates: m?.rates ?? null,
+    rows,
+    byEquipment,
+    totals: {
+      clientBasePt: rows.reduce((a, r) => a + r.clientBasePt, 0),
+      supplierCostPt: rows.reduce((a, r) => a + r.supplierCostPt, 0),
+      marginPt: rows.reduce((a, r) => a + r.marginPt, 0),
+      tax5Pt: rows.reduce((a, r) => a + r.tax5Pt, 0),
+      contractExpensesPt: rows.reduce((a, r) => a + r.expensesPt, 0),
+      generalExpensesPt: m?.generalExpensesPt ?? 0,
+      monthNetPt: m?.monthNetPt ?? 0,
+      carryInPt: m?.carryInPt ?? 0,
+      carryOutPt: m?.carryOutPt ?? 0,
+      managementPt: m?.distribution.managementPt ?? 0,
+      investorsPt: m?.distribution.investorsPoolPt ?? 0,
+      releasableManagementPt: m?.releasableManagementPt ?? 0,
+    },
+    expenses,
+    categories: db.prepare("SELECT id, name FROM expense_categories WHERE deleted_at IS NULL ORDER BY name").all() as { id: number; name: string }[],
+    contracts: contracts.map((c) => ({ id: c.id, code: c.code, equipment: equipment.get(c.equipment_id) ?? "", active: c.status === "active" })),
+    history: books.months
+      .map((x) => ({
+        month: x.month,
+        closed: x.closed,
+        netPt: x.monthNetPt,
+        carryInPt: x.carryInPt ?? 0,
+        managementPt: x.distribution.managementPt,
+        releasablePt: x.releasableManagementPt,
+      }))
+      .reverse(),
+    management: { ...books.management, payableNowPt: Math.max(0, books.management.releasablePt - books.management.paidPt) },
+    payouts,
+    closable,
+    adjustments,
+    closedMonths: books.months.filter((x) => x.closed).map((x) => x.month),
+  };
+}
+
+export type ManagementView = ReturnType<typeof managementView>;

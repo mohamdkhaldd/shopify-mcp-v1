@@ -123,3 +123,19 @@ describe("clients view", () => {
     expect(JSON.stringify(s)).not.toContain("سيد");
   });
 });
+
+import { managementView } from "../core/services/views";
+
+describe("management view", () => {
+  it("contracts, per machine, expenses, management share and what can be closed", () => {
+    const db = freshDb();
+    seedDemo(db);
+    const v = managementView(db, "2026-10", "2026-11-05");
+    expect(v.rows).toEqual([expect.objectContaining({ code: "ع-2026-001", equipment: "لودر كاتربيلر 950", supplier: "الحاج سيد عبد الله", client: "شركة الأمل للمقاولات", marginPt: egp(15_000), tax5Pt: egp(750), expensesPt: egp(1_250), netPt: egp(13_000) })]);
+    expect(v.byEquipment).toEqual([expect.objectContaining({ equipment: "لودر كاتربيلر 950", netPt: egp(13_000) })]);
+    expect(v.totals).toMatchObject({ monthNetPt: egp(13_000), managementPt: egp(6_500), releasableManagementPt: egp(3_250) });
+    expect(v.expenses).toEqual([expect.objectContaining({ kind: "contract", amount_pt: egp(1_250), code: "ع-2026-001", category: "نقل معدات" })]);
+    expect(v.closable).toBe("2026-10");
+    expect(v.management.payableNowPt).toBe(egp(3_250));
+  });
+});

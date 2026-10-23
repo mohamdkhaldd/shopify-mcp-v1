@@ -1,4 +1,4 @@
-import type { ClientsView, ContractOptions, DashboardView, SarkiView, SuppliersView } from "../../core/services/views";
+import type { ClientsView, ContractOptions, DashboardView, ManagementView, SarkiView, SuppliersView } from "../../core/services/views";
 import type { NewContractInput } from "../../core/services/master";
 import type { DayPatch } from "../../core/services/sarki";
 import type { Deletable } from "../../core/services/deletion";
@@ -58,6 +58,13 @@ export const api = {
   updateClient: (v: { id: number; kind: "company" | "individual"; name: string; phone?: string | null; taxId?: string | null }) => call("updateClient", v),
   setClientTaxes: (id: number, vatApplies: boolean, tax5Applies: boolean) => call("setClientTaxes", { id, vatApplies, tax5Applies }),
   clientPayment: (v: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string }) => call<number>("clientPayment", v),
+  management: (month?: string) => call<ManagementView>("management", { month }),
+  createExpenseCategory: (name: string) => call<number>("createExpenseCategory", { name }),
+  expense: (v: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
+    call<number>("expense", v),
+  managementPayout: (v: { date: string; amountPt: number; note?: string; confirmNegative?: boolean }) => call<number>("managementPayout", v),
+  closeMonth: (month: string) => call<void>("closeMonth", { month }),
+  adjustment: (v: { targetMonth: string; contractId: number; kind: "client_base" | "supplier_cost"; amountPt: number; reason: string }) => call<number>("adjustment", v),
   setSupplierRate: (contractId: number, from: string, to: string, v: { dayRatePt?: number | null; overtimeRatePt?: number | null }) =>
     call("setSupplierRate", { contractId, from, to, ...v }),
   deletePreview: (entity: Deletable, id: number) => call<DeletePreview>("deletePreview", { entity, id }),
@@ -88,6 +95,6 @@ export const appApi = {
   savePdf: (name: string) => window.api?.invoke("print:savePdf", { name }),
 };
 
-export type { ClientsView, ContractOptions, DashboardView, Deletable, NewContractInput, SarkiView, SuppliersView };
+export type { ManagementView, ClientsView, ContractOptions, DashboardView, Deletable, NewContractInput, SarkiView, SuppliersView };
 /** The السركي view once a contract is open. */
 export type OpenSarki = Exclude<SarkiView, { contract: null }>;
