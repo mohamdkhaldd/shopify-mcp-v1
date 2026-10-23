@@ -25,7 +25,11 @@ function NavButton({ item, active, onSelect }: { item: NavItem; active: boolean;
   );
 }
 
-export default function Sidebar({ active, onSelect }: { active: SectionId; onSelect: (id: SectionId) => void }) {
+/**
+ * The side menu. On a phone or a tablet held upright (under 1024px) it's hidden
+ * and slides in from the right when the ☰ button in the top bar is tapped.
+ */
+export default function Sidebar({ active, onSelect, open = false }: { active: SectionId; onSelect: (id: SectionId) => void; open?: boolean }) {
   const { theme, toggle } = useTheme();
   const brand = useBrand();
   const [version, setVersion] = useState("");
@@ -44,7 +48,13 @@ export default function Sidebar({ active, onSelect }: { active: SectionId; onSel
   }, []);
 
   return (
-    <aside className="no-print w-[248px] shrink-0 h-screen sticky top-0 bg-ink text-side flex flex-col">
+    <aside
+      className={[
+        "no-print w-[248px] shrink-0 h-screen sticky top-0 bg-ink text-side flex flex-col",
+        "max-[1023px]:fixed max-[1023px]:right-0 max-[1023px]:z-50 max-[1023px]:h-[100dvh] max-[1023px]:shadow-2xl max-[1023px]:transition-transform max-[1023px]:duration-200",
+        open ? "" : "max-[1023px]:translate-x-full",
+      ].join(" ")}
+    >
       <div className="flex items-center gap-3 px-[18px] pt-[22px] pb-[18px] border-b border-white/[.07]">
         <BrandLogo className="w-[46px] h-[46px] shrink-0" />
         <div>

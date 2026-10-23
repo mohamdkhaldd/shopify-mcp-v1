@@ -157,3 +157,14 @@ body {
     transition: none !important;
   }
 }
+
+/* Phone / upright tablet: wide tables scroll sideways inside their card
+   instead of pushing the whole page wider than the screen. */
+@media screen and (max-width: 1023px) {
+  main table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+}
