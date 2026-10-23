@@ -46,7 +46,11 @@ const insertId = (r: { lastInsertRowid: number | bigint }) => Number(r.lastInser
 export function recordCapital(db: Db, v: { investorId: number; kind: "deposit" | "withdrawal"; date: string; amountPt: number; note?: string }, opts: Opts = {}) {
   positive(v.amountPt);
   return db.transaction(() => {
-    if (v.kind === "withdrawal") guardCash(db, v.date, v.amountPt, opts);
+    if (v.kind === "withdrawal") {
+      const capital = computeBooks(db, v.date).investors.find((i) => i.investorId === v.investorId)?.capitalPt ?? 0;
+      if (v.amountPt > capital) throw new UserError("المبلغ أكبر من رأس مال المستثمر ده");
+      guardCash(db, v.date, v.amountPt, opts);
+    }
     const id = insertId(
       db.prepare("INSERT INTO capital_movements (investor_id, kind, date, amount_pt, note) VALUES (?, ?, ?, ?, ?)").run(v.investorId, v.kind, v.date, v.amountPt, v.note ?? null),
     );
@@ -206,5 +210,14 @@ export function reverse(db: Db, table: keyof typeof REVERSIBLE, id: number, date
       });
     }
     return newId;
+  })();
+}
+
+/** "حطها في رأس ماله": his profit that's ready to pay goes into his capital instead of out of the treasury. */
+export function reinvestProfit(db: Db, v: { investorId: number; date: string; amountPt: number }) {
+  return db.transaction(() => {
+    const payout = recordPayout(db, { payee: "investor", investorId: v.investorId, date: v.date, amountPt: v.amountPt, note: "اتحطت في رأس المال" }, { confirmNegative: true });
+    recordCapital(db, { investorId: v.investorId, kind: "deposit", date: v.date, amountPt: v.amountPt, note: "أرباح اتحطت في رأس المال" });
+    return payout;
   })();
 }

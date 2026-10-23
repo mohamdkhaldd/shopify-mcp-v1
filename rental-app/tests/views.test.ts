@@ -139,3 +139,34 @@ describe("management view", () => {
     expect(v.management.payableNowPt).toBe(egp(3_250));
   });
 });
+
+import { investorsView, nextPayoutMonth } from "../core/services/views";
+import { recordCapital as cap, reinvestProfit } from "../core/services/ledger";
+
+describe("investors view", () => {
+  it("the investors table, the split for the month, and the next quarterly payout", () => {
+    const db = freshDb();
+    const ids = seedDemo(db);
+    const v = investorsView(db, "2026-10", "2026-10-31");
+    expect(v.investors.map((i) => [i.name, i.capitalPt, i.shareBp, i.inUsePt, i.accruedPt, i.payableNowPt, i.monthlyReturnBp])).toEqual([
+      ["م. أحمد سالم", egp(60_000), 6000, egp(5_550), egp(3_900), egp(1_950), 650],
+      ["أ. خالد منصور", egp(40_000), 4000, egp(3_700), egp(2_600), egp(1_300), 650],
+    ]);
+    expect(v.split.map((s) => [s.name, s.capitalAtEndPt, s.daysPresent, s.shareBp, s.sharePt])).toEqual([
+      ["م. أحمد سالم", egp(60_000), 31, 6000, egp(3_900)],
+      ["أ. خالد منصور", egp(40_000), 31, 4000, egp(2_600)],
+    ]);
+    expect(v.nextPayoutMonth).toBe("2026-12");
+    expect(nextPayoutMonth("2027-01-15")).toBe("2027-03");
+    // can't withdraw more than his capital
+    expect(() => cap(db, { investorId: ids.khaled, kind: "withdrawal", date: "2026-10-31", amountPt: egp(40_001) })).toThrow(/رأس مال/);
+    // reinvesting: his payable profit moves into his capital, the treasury doesn't change
+    // (dated the 1st of the next month; on the 31st it would add one day of the bigger capital to October's split)
+    const before = investorsView(db, "2026-10", "2026-11-01");
+    reinvestProfit(db, { investorId: ids.khaled, date: "2026-11-01", amountPt: egp(1_300) });
+    const after = investorsView(db, "2026-10", "2026-11-01");
+    const k = after.investors.find((i) => i.investorId === ids.khaled)!;
+    expect([k.capitalPt, k.payableNowPt, k.paidPt]).toEqual([egp(41_300), 0, egp(1_300)]);
+    expect(after.totals.capitalPt - before.totals.capitalPt).toBe(egp(1_300));
+  });
+});

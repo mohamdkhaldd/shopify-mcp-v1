@@ -29,6 +29,11 @@ export function createInvestor(db: Db, v: { name: string; phone?: string; notes?
   return id(db.prepare("INSERT INTO investors (name, phone, notes) VALUES (?, ?, ?)").run(v.name.trim(), v.phone ?? null, v.notes ?? null));
 }
 
+export function updateInvestor(db: Db, id: number, v: { name: string; phone?: string | null }) {
+  if (!v.name.trim()) throw new UserError("اكتب اسم المستثمر");
+  db.prepare("UPDATE investors SET name = ?, phone = ? WHERE id = ? AND deleted_at IS NULL").run(v.name.trim(), v.phone ?? null, id);
+}
+
 export function createSupplier(db: Db, v: { name: string; phone?: string; notes?: string }) {
   return id(db.prepare("INSERT INTO suppliers (name, phone, notes) VALUES (?, ?, ?)").run(v.name.trim(), v.phone ?? null, v.notes ?? null));
 }

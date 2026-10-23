@@ -1,10 +1,10 @@
 import { Db, UserError } from "../core/db";
-import { clientsView, contractOptions, dashboardView, managementView, sarkiView, suppliersView } from "../core/services/views";
+import { clientsView, contractOptions, dashboardView, investorsView, managementView, sarkiView, suppliersView } from "../core/services/views";
 import { closeMonth, recordAdjustment } from "../core/services/close";
 import { today } from "../core/db";
 import { deleteEntity, deletePreview, restoreDeleted } from "../core/services/deletion";
-import { createClient, createEquipment, createExpenseCategory, createSupplier, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier } from "../core/services/master";
-import { recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment } from "../core/services/ledger";
+import { createClient, createEquipment, createExpenseCategory, createInvestor, createSupplier, updateInvestor, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier } from "../core/services/master";
+import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, reinvestProfit } from "../core/services/ledger";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
 
 // Every screen call goes through one channel ("core:call") to a named function
@@ -59,6 +59,16 @@ export function makeRegistry(db: Db) {
     },
     adjustment: (a: { targetMonth: string; contractId: number; kind: "client_base" | "supplier_cost"; amountPt: number; reason: string }) =>
       recordAdjustment(db, { ...a, appliedMonth: today().slice(0, 7) }),
+
+    // المستثمرين
+    investors: (a: { month?: string }) => investorsView(db, a.month),
+    createInvestor: (a: { name: string; phone?: string }) => createInvestor(db, a),
+    updateInvestor: (a: { id: number; name: string; phone?: string | null }) => updateInvestor(db, a.id, a),
+    capital: (a: { investorId: number; kind: "deposit" | "withdrawal"; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
+      recordCapital(db, a, { confirmNegative: a.confirmNegative }),
+    investorPayout: (a: { investorId: number; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
+      recordPayout(db, { payee: "investor", investorId: a.investorId, date: a.date, amountPt: a.amountPt, note: a.note }, { confirmNegative: a.confirmNegative }),
+    reinvest: (a: { investorId: number; date: string; amountPt: number }) => reinvestProfit(db, a),
 
     // حذف
     deletePreview: (a: { entity: Parameters<typeof deletePreview>[1]; id: number }) => deletePreview(db, a.entity, a.id),

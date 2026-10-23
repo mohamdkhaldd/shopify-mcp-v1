@@ -2,6 +2,7 @@ import { Db, monthOf, today } from "../db";
 import { computeBooks } from "./books";
 import { clientStatement, dashboard, supplierStatement } from "./reports";
 import { getSheet } from "./sarki";
+import { daysPresent } from "../calc/timeWeight";
 
 // Screen-shaped data: one call per page, names already joined in.
 
@@ -391,3 +392,80 @@ export function managementView(db: Db, month?: string, now: string = today()) {
 }
 
 export type ManagementView = ReturnType<typeof managementView>;
+
+// ---------------- المستثمرين ----------------
+
+/** Profits are paid every three months: the next payout is the end of the current quarter. */
+export function nextPayoutMonth(now: string) {
+  const [y, m] = now.slice(0, 7).split("-").map(Number);
+  const q = Math.ceil(m / 3) * 3;
+  return `${y}-${String(q).padStart(2, "0")}`;
+}
+
+export function investorsView(db: Db, month?: string, now: string = today()) {
+  const books = computeBooks(db, now);
+  const phones = new Map((db.prepare("SELECT id, phone FROM investors").all() as { id: number; phone: string | null }[]).map((r) => [r.id, r.phone]));
+  const names = new Map(books.investors.map((i) => [i.investorId, i.name]));
+  const m = books.months.find((x) => x.month === (month ?? monthOf(now))) ?? books.months[books.months.length - 1];
+
+  // نصيب كل مستثمر اتحسب إزاي: money × days present, for the chosen month
+  const movements = (db
+    .prepare(
+      `SELECT c.id, c.investor_id, c.kind, c.date, c.amount_pt, c.note FROM capital_movements c
+       WHERE c.deleted_at IS NULL AND c.reversal_of IS NULL AND NOT EXISTS (SELECT 1 FROM capital_movements r WHERE r.reversal_of = c.id AND r.deleted_at IS NULL)
+       ORDER BY c.date, c.id`,
+    )
+    .all() as { id: number; investor_id: number; kind: "deposit" | "withdrawal"; date: string; amount_pt: number; note: string | null }[]);
+  const totalWeight = m ? m.distribution.investors.reduce((s, x) => s + x.weight, 0n) : 0n;
+  const split = m
+    ? m.distribution.investors.map((x) => {
+        const mv = movements.filter((c) => c.investor_id === x.investorId).map((c) => ({ date: c.date, signedPt: c.kind === "deposit" ? c.amount_pt : -c.amount_pt }));
+        const end = `${m.month}-31`;
+        return {
+          investorId: x.investorId,
+          name: names.get(x.investorId) ?? "",
+          capitalAtEndPt: mv.filter((c) => c.date <= end).reduce((s, c) => s + c.signedPt, 0),
+          daysPresent: daysPresent(mv, m.month),
+          /** share of the pool in bp */
+          shareBp: totalWeight > 0n ? Number((x.weight * 10_000n) / totalWeight) : 0,
+          sharePt: x.sharePt,
+        };
+      })
+    : [];
+
+  const payouts = (
+    db
+      .prepare(
+        `SELECT p.id, p.investor_id, p.date, p.amount_pt, p.note FROM profit_payouts p
+         WHERE p.payee_kind = 'investor' AND p.deleted_at IS NULL AND p.reversal_of IS NULL
+           AND NOT EXISTS (SELECT 1 FROM profit_payouts r WHERE r.reversal_of = p.id AND r.deleted_at IS NULL)
+         ORDER BY p.date DESC, p.id DESC`,
+      )
+      .all() as { id: number; investor_id: number; date: string; amount_pt: number; note: string | null }[]
+  ).map((p) => ({ ...p, name: names.get(p.investor_id) ?? "" }));
+
+  const totalAccrued = books.investors.reduce((s, i) => s + i.accruedPt, 0);
+  return {
+    month: m?.month ?? monthOf(now),
+    months: books.months.map((x) => ({ month: x.month, closed: x.closed })),
+    investors: books.investors.map((i) => ({ ...i, phone: phones.get(i.investorId) ?? null })),
+    totals: {
+      capitalPt: books.capital.totalPt,
+      deployedPt: books.capital.deployedPt,
+      inTreasuryPt: books.capital.inTreasuryPt,
+      accruedPt: totalAccrued,
+      releasablePt: books.investors.reduce((s, i) => s + i.releasablePt, 0),
+      paidPt: books.investors.reduce((s, i) => s + i.paidPt, 0),
+      payableNowPt: books.investors.reduce((s, i) => s + i.payableNowPt, 0),
+    },
+    month_: m
+      ? { poolPt: m.distribution.investorsPoolPt, remainderToManagementPt: m.distribution.remainderToManagementPt, releasablePt: [...m.releasableByInvestor.values()].reduce((s, v) => s + v, 0), closed: m.closed }
+      : null,
+    split,
+    movements: movements.map((c) => ({ ...c, name: names.get(c.investor_id) ?? "" })).reverse(),
+    payouts,
+    nextPayoutMonth: nextPayoutMonth(now),
+  };
+}
+
+export type InvestorsView = ReturnType<typeof investorsView>;
