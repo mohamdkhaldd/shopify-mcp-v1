@@ -71,9 +71,15 @@ app.whenReady().then(async () => {
     ? { state: "active" as const, licenseId: 0, customer: demoCustomer || demoName, name: demoName, logo: null, expiresAt: null, checkBy: "" }
     : { state: "active" as const, licenseId: 0, customer: "شركة البنيان للمعدات الثقيلة", name: "البنيان", logo: "bundled", expiresAt: null, checkBy: "" };
   const licenseStatus = () => (demo ? demoStatus : license.status());
+  // after each check the screen gets the fresh state right away (name, logo, a stopped code)
+  const checkLicense = () =>
+    license
+      .refresh()
+      .then((s) => mainWindow?.webContents.send("license:changed", s))
+      .catch(() => {});
   if (!demo) {
-    license.refresh().catch(() => {});
-    setInterval(() => license.refresh().catch(() => {}), 6 * 60 * 60 * 1000);
+    checkLicense();
+    setInterval(checkLicense, 6 * 60 * 60 * 1000);
   }
   ipcMain.handle("license:status", () => licenseStatus());
   ipcMain.handle("license:activate", (_e, { key }: { key: string }) => license.activate(key));

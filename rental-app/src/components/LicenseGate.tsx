@@ -13,9 +13,13 @@ export default function LicenseGate({ children }: { children: ReactNode }) {
   const load = useCallback(() => licenseApi.status().then(setStatus), []);
   useEffect(() => {
     load();
-    // a stopped / expired code locks the open app at the next check
+    const off = licenseApi.onChanged(setStatus);
+    // a code that runs out while the app is open locks it within a minute
     const t = setInterval(load, 60_000);
-    return () => clearInterval(t);
+    return () => {
+      off();
+      clearInterval(t);
+    };
   }, [load]);
   const brand = useMemo(() => (status?.state === "active" ? brandFrom(status) : null), [status]);
   useEffect(() => {

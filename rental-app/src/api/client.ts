@@ -158,6 +158,8 @@ export const licenseApi = {
   status: (): Promise<LicenseStatus> => window.api?.invoke("license:status") ?? Promise.resolve({ state: "needed", message: "البرنامج لازم يشتغل من نسخة الويندوز أو التابلت" }),
   activate: (key: string): Promise<{ ok: true; status: LicenseStatus } | { ok: false; message: string }> =>
     window.api?.invoke("license:activate", { key }) ?? Promise.resolve({ ok: false, message: "البرنامج لازم يشتغل من نسخة الويندوز أو التابلت" }),
+  /** fired after every check with the server */
+  onChanged: (cb: (s: LicenseStatus) => void) => window.api?.on("license:changed", cb as (d: unknown) => void) ?? (() => {}),
 };
 
 export const syncApi = {

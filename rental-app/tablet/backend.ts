@@ -60,8 +60,14 @@ export async function startBackend() {
     ...licenseServer,
     onCredentials: (c) => sync.ensureLogin(c).catch(() => {}),
   });
-  license.refresh().catch(() => {});
-  setInterval(() => license.refresh().catch(() => {}), 6 * 60 * 60 * 1000);
+  // after each check the screen gets the fresh state right away (name, logo, a stopped code)
+  const checkLicense = () =>
+    license
+      .refresh()
+      .then((s) => emit("license:changed", s))
+      .catch(() => {});
+  checkLicense();
+  setInterval(checkLicense, 6 * 60 * 60 * 1000);
   sync
     .start()
     .then(() => {
