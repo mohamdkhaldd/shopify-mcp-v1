@@ -12,6 +12,8 @@ export interface LicensePayload {
   v: 1;
   lic: number;
   customer: string;
+  /** the company name shown in the app and on printouts (older tokens: none, use customer) */
+  name?: string;
   device: string;
   /** last day of the subscription (yyyy-mm-dd), null = open-ended */
   expiresAt: string | null;

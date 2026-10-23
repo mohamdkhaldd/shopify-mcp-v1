@@ -354,7 +354,7 @@ export default function Clients() {
             {tab === "statement" && (
               <>
                 <Statement s={s} />
-                <PrintSignoff parties={["توقيع شركة البنيان", "توقيع العميل"]} />
+                <PrintSignoff others={["توقيع العميل"]} />
                 <div className="no-print text-xs text-muted px-4 py-2.5 border-t border-line">ده اللي بيتطبع للعميل — مفيهوش أي حاجة عن أصحاب المعدات أو ربحنا.</div>
               </>
             )}

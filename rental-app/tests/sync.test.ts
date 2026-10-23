@@ -42,12 +42,16 @@ function fakeCloud() {
     };
     return q;
   };
+  const signedIn: { email?: string; logins: string[] } = { email: "rental@elbonyan.app", logins: [] };
   return {
     rows,
+    signedIn,
     createClient: () => ({
       auth: {
-        getSession: async () => ({ data: { session: { user: {} } }, error: null }),
-        signInWithPassword: async () => ({ error: null }),
+        getSession: async () => ({ data: { session: { user: { email: signedIn.email } } }, error: null }),
+        signInWithPassword: async ({ email }: { email: string }) => ((signedIn.email = email), signedIn.logins.push(email), { error: null }),
+        signOut: async () => ((signedIn.email = undefined), { error: null }),
+        refreshSession: async () => ({ error: null }),
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
       },
       from: (t: string) => query(t),
@@ -148,5 +152,15 @@ describe("sync between the laptop and the tablet", () => {
     await b.syncNow();
     expect(computeBooks(tablet, "2026-10-31").treasury.balancePt).toBe(egp(97_050));
     expect(laptop.prepare("SELECT COUNT(*) AS n FROM sync_outbox").get().n).toBe(0);
+  });
+
+  it("signs in with the customer's own sync account from the activation", async () => {
+    const cloud = fakeCloud();
+    const e = await device(freshDb(), cloud, "اللاب");
+    await e.ensureLogin({ email: "tenant-7@tenants.albunyan.app", password: "pw" });
+    expect(cloud.signedIn).toEqual({ email: "tenant-7@tenants.albunyan.app", logins: ["tenant-7@tenants.albunyan.app"] });
+    // already on the right account: no new sign-in
+    await e.ensureLogin({ email: "tenant-7@tenants.albunyan.app", password: "pw" });
+    expect(cloud.signedIn.logins).toHaveLength(1);
   });
 });

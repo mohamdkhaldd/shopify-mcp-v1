@@ -16,6 +16,8 @@ export interface SyncEngine {
   start(): Promise<void>;
   stop(): void;
   login(password: string): Promise<SyncStatus>;
+  /** sign in with this customer's own sync account (from the activation), switching accounts if needed */
+  ensureLogin(creds: { email: string; password: string }): Promise<SyncStatus>;
   push(): Promise<void>;
   pull(): Promise<void>;
   syncNow(): Promise<SyncStatus>;

@@ -1,7 +1,13 @@
-import { ReactNode, useCallback, useEffect, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { licenseApi, LicenseStatus } from "../api/client";
+import { BrandContext, brandFrom } from "../context/BrandContext";
 
-/** Nothing of the app shows until this copy is activated with a code from Al Bunyan. */
+/**
+ * Nothing of the app shows until this copy is activated. The code also brings
+ * the customer's company name and logo, which every screen and printout uses;
+ * the activation screen itself stays neutral (the customer never sees the
+ * seller's name).
+ */
 export default function LicenseGate({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<LicenseStatus | null>(null);
   const load = useCallback(() => licenseApi.status().then(setStatus), []);
@@ -11,8 +17,13 @@ export default function LicenseGate({ children }: { children: ReactNode }) {
     const t = setInterval(load, 60_000);
     return () => clearInterval(t);
   }, [load]);
+  const brand = useMemo(() => (status?.state === "active" ? brandFrom(status) : null), [status]);
+  useEffect(() => {
+    document.title = brand ? `${brand.name} - التأجير` : "برنامج التأجير";
+  }, [brand]);
   if (!status) return null;
-  if (status.state === "active") return <>{children}</>;
+  if (brand) return <BrandContext.Provider value={brand}>{children}</BrandContext.Provider>;
+  if (status.state === "active") return null;
   return <Activate message={status.message} onDone={setStatus} />;
 }
 
@@ -31,10 +42,16 @@ function Activate({ message, onDone }: { message: string | null; onDone: (s: Lic
   return (
     <div dir="rtl" className="min-h-screen flex items-center justify-center bg-canvas px-4">
       <div className="w-full max-w-[440px] rounded-card border border-line bg-surface shadow-sm p-7 grid gap-5 text-center">
-        <img src="./logo.png" alt="" className="w-20 h-20 rounded-full bg-white mx-auto" />
+        <div className="w-16 h-16 rounded-2xl bg-ink text-amber mx-auto flex items-center justify-center" aria-hidden>
+          <svg viewBox="0 0 24 24" className="w-9 h-9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="4" y="10" width="16" height="10" rx="2" />
+            <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+            <circle cx="12" cy="15" r="1.5" />
+          </svg>
+        </div>
         <div>
-          <div className="font-display text-xl font-bold">البنيان - التأجير</div>
-          <div className="text-muted text-sm mt-1">اكتب كود التفعيل اللي خدته من البنيان عشان تبدأ</div>
+          <div className="font-display text-xl font-bold">برنامج تأجير المعدات</div>
+          <div className="text-muted text-sm mt-1">اكتب كود التفعيل عشان تبدأ</div>
         </div>
         <input
           aria-label="كود التفعيل"

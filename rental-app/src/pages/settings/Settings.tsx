@@ -222,6 +222,7 @@ function License() {
         <div>
           البرنامج متفعّل باسم: <b>{s.customer}</b>
         </div>
+        <div className="text-sm text-muted">الاسم واللوجو اللي بيظهروا في البرنامج والطباعة جايين مع كود التفعيل.</div>
         <div>الاشتراك: {s.expiresAt ? <b className="num">لحد يوم {s.expiresAt}</b> : <b>مفتوح</b>}</div>
         <div className="text-xs text-muted">البرنامج بيتأكد من الترخيص لوحده كل ما يكون فيه نت، ويقدر يشتغل من غير نت لحد ١٤ يوم.</div>
       </div>

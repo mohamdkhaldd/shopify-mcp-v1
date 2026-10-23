@@ -3,6 +3,8 @@ import { footerItems, navItems, NavItem, SectionId } from "../nav";
 import { appApi, isTablet } from "../api/client";
 import { useTheme } from "../theme";
 import Icon from "./Icon";
+import BrandLogo from "./BrandLogo";
+import { useBrand } from "../context/BrandContext";
 import { syncLine, useSyncStatus } from "./Sync";
 
 function NavButton({ item, active, onSelect }: { item: NavItem; active: boolean; onSelect: (id: SectionId) => void }) {
@@ -25,6 +27,7 @@ function NavButton({ item, active, onSelect }: { item: NavItem; active: boolean;
 
 export default function Sidebar({ active, onSelect }: { active: SectionId; onSelect: (id: SectionId) => void }) {
   const { theme, toggle } = useTheme();
+  const brand = useBrand();
   const [version, setVersion] = useState("");
   const [backup, setBackup] = useState<string | null>(null);
   const [sync] = useSyncStatus();
@@ -43,9 +46,9 @@ export default function Sidebar({ active, onSelect }: { active: SectionId; onSel
   return (
     <aside className="no-print w-[248px] shrink-0 h-screen sticky top-0 bg-ink text-side flex flex-col">
       <div className="flex items-center gap-3 px-[18px] pt-[22px] pb-[18px] border-b border-white/[.07]">
-        <img src="./logo.png" alt="" className="w-[46px] h-[46px] rounded-full bg-white" />
+        <BrandLogo className="w-[46px] h-[46px] shrink-0" />
         <div>
-          <div className="text-white font-display text-[15px] font-bold leading-tight">البنيان</div>
+          <div className="text-white font-display text-[15px] font-bold leading-tight">{brand.name}</div>
           <div className="text-amber text-xs font-bold">التأجير</div>
         </div>
       </div>

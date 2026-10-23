@@ -49,27 +49,28 @@ app.whenReady().then(async () => {
   if (process.env.RENTAL_DEMO === "1" && !raw.prepare("SELECT 1 FROM contracts LIMIT 1").get()) seedDemo(db);
   let registry = makeRegistry(db);
 
-  // ---- laptop ↔ tablet sync (never in demo / screenshot mode) ----
-  const notifyRemote = (info: { count: number; devices: string[] }) => mainWindow?.webContents.send("sync:remoteChanges", info);
-  let sync = process.env.RENTAL_DEMO === "1" ? null : startDeviceSync(db, notifyRemote);
-  const offline = { deviceId: "", deviceName: "", pending: 0, deferred: 0, online: false, needsLogin: false, lastError: null, lastSyncAt: null, disabled: true };
-  ipcMain.handle("sync:status", () => sync?.status() ?? offline);
-  ipcMain.handle("sync:now", () => sync?.syncNow() ?? offline);
-  ipcMain.handle("sync:login", async (_e, { password }: { password: string }) => {
-    try {
-      return { ok: true, status: sync ? await sync.login(password) : offline };
-    } catch (e) {
-      return { ok: false, message: e instanceof Error ? e.message : String(e) };
-    }
-  });
-  ipcMain.handle("sync:setDeviceName", (_e, { name }: { name: string }) => sync?.setDeviceName(name) ?? offline);
-
   // ---- activation: nothing works until this copy has a valid code ----
   const identity = deviceIdentity();
   const demo = process.env.RENTAL_DEMO === "1";
-  const makeLicense = () => createLicenseManager({ db, ...identity, appVersion: app.getVersion(), ...licenseServer });
+  const makeLicense = () =>
+    createLicenseManager({ db, ...identity, appVersion: app.getVersion(), ...licenseServer, onCredentials: (c) => sync?.ensureLogin(c).catch(() => {}) });
   let license: LicenseManager = makeLicense();
-  const licenseStatus = () => (demo ? { state: "active" as const, customer: "نسخة عرض", expiresAt: null, checkBy: "" } : license.status());
+
+  // ---- sync between this customer's devices (never in demo / screenshot mode) ----
+  const notifyRemote = (info: { count: number; devices: string[] }) => mainWindow?.webContents.send("sync:remoteChanges", info);
+  const startSync = () => startDeviceSync(db, notifyRemote, () => license.credentials());
+  let sync = demo ? null : startSync();
+  const offline = { deviceId: "", deviceName: "", pending: 0, deferred: 0, online: false, needsLogin: false, lastError: null, lastSyncAt: null, disabled: true };
+  ipcMain.handle("sync:status", () => sync?.status() ?? offline);
+  ipcMain.handle("sync:now", () => sync?.syncNow() ?? offline);
+  ipcMain.handle("sync:setDeviceName", (_e, { name }: { name: string }) => sync?.setDeviceName(name) ?? offline);
+
+  // demo / screenshots only: RENTAL_DEMO_BRAND="name|legal name" shows another company's copy
+  const [demoName, demoCustomer] = (process.env.RENTAL_DEMO_BRAND ?? "").split("|");
+  const demoStatus = demoName
+    ? { state: "active" as const, licenseId: 0, customer: demoCustomer || demoName, name: demoName, logo: null, expiresAt: null, checkBy: "" }
+    : { state: "active" as const, licenseId: 0, customer: "شركة البنيان للمعدات الثقيلة", name: "البنيان", logo: "bundled", expiresAt: null, checkBy: "" };
+  const licenseStatus = () => (demo ? demoStatus : license.status());
   if (!demo) {
     license.refresh().catch(() => {});
     setInterval(() => license.refresh().catch(() => {}), 6 * 60 * 60 * 1000);
@@ -117,7 +118,7 @@ app.whenReady().then(async () => {
     ({ raw, db } = openDatabase());
     registry = makeRegistry(db);
     license = makeLicense();
-    if (sync) sync = startDeviceSync(db, notifyRemote);
+    if (sync) sync = startSync();
     mainWindow.webContents.reload();
     return { ok: true };
   });

@@ -326,7 +326,7 @@ export default function Suppliers() {
             {tab === "statement" && (
               <>
                 <Statement s={s} />
-                <PrintSignoff parties={["توقيع شركة البنيان", "توقيع صاحب المعدة"]} />
+                <PrintSignoff others={["توقيع صاحب المعدة"]} />
                 <div className="no-print text-xs text-muted px-4 py-2.5 border-t border-line">ده اللي بيتطبع لصاحب المعدة — مفيهوش أي حاجة عن الشركة أو ربحنا.</div>
               </>
             )}

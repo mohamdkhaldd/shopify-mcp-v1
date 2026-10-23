@@ -30,14 +30,22 @@ describe("activation token", () => {
 // A fake "license" function with its own key pair and the same rules.
 function fakeServer() {
   const priv = ed.utils.randomPrivateKey();
-  const state = { codes: new Map<string, { customer: string; max: number; revoked: boolean; devices: Set<string> }>(), online: true };
+  const state = {
+    codes: new Map<string, { lic?: number; customer: string; name?: string; logoUrl?: string | null; max: number; revoked: boolean; devices: Set<string> }>(),
+    online: true,
+    logoFetches: 0,
+  };
   const sign = (payload: object) => {
     const bytes = new TextEncoder().encode(JSON.stringify(payload));
     return `${Buffer.from(bytes).toString("base64url")}.${Buffer.from(ed.sign(bytes, priv)).toString("base64url")}`;
   };
   let clock = IAT;
-  const fetch = (async (_url: string, init: { body: string }) => {
+  const fetch = (async (url: string, init?: { body: string }) => {
     if (!state.online) throw new Error("offline");
+    if (!init) {
+      state.logoFetches++;
+      return { ok: true, headers: new Map([["content-type", "image/png"]]), arrayBuffer: async () => new Uint8Array([137, 80, 78, 71]).buffer, url };
+    }
     const b = JSON.parse(init.body);
     const c = state.codes.get(b.key);
     const json = (x: unknown) => ({ json: async () => x });
@@ -45,7 +53,13 @@ function fakeServer() {
     if (c.revoked) return json({ ok: false, error: "revoked" });
     if (!c.devices.has(b.deviceId) && c.devices.size >= c.max) return json({ ok: false, error: "full", maxDevices: c.max });
     c.devices.add(b.deviceId);
-    return json({ ok: true, token: sign({ v: 1, lic: 1, customer: c.customer, device: b.deviceId, expiresAt: null, iat: clock, exp: clock + 14 * 86400 }) });
+    const lic = c.lic ?? 1;
+    return json({
+      ok: true,
+      token: sign({ v: 1, lic, customer: c.customer, name: c.name, device: b.deviceId, expiresAt: null, iat: clock, exp: clock + 14 * 86400 }),
+      logoUrl: c.logoUrl ?? null,
+      sync: { email: `tenant-${lic}@x`, password: `pw-${lic}` },
+    });
   }) as unknown as typeof globalThis.fetch;
   return {
     state,
@@ -56,8 +70,8 @@ function fakeServer() {
   };
 }
 
-const manager = (s: ReturnType<typeof fakeServer>, deviceId: string, db = freshDb()) =>
-  createLicenseManager({ db, deviceId, deviceName: "x", platform: "windows", appVersion: "1", url: "x", anonKey: "x", fetch: s.fetch, publicKey: s.publicKey, now: () => s.clock() * 1000 });
+const manager = (s: ReturnType<typeof fakeServer>, deviceId: string, db = freshDb(), onCredentials?: (c: { email: string; password: string }) => void) =>
+  createLicenseManager({ db, deviceId, deviceName: "x", platform: "windows", appVersion: "1", url: "x", anonKey: "x", fetch: s.fetch, publicKey: s.publicKey, now: () => s.clock() * 1000, onCredentials });
 
 describe("activation in the app", () => {
   it("locked until a valid code; then works offline until the token runs out", async () => {
@@ -89,10 +103,10 @@ describe("activation in the app", () => {
     const laptop = manager(s, "laptop");
     expect((await laptop.activate("BNYN-AAAA")).ok).toBe(true);
     // sent the link + code to someone else
-    expect(await manager(s, "stranger").activate("BNYN-AAAA")).toEqual({ ok: false, message: "الكود ده متفعّل على أقصى عدد أجهزة (1) — كلّم البنيان لو عايز تزوّد جهاز" });
+    expect(await manager(s, "stranger").activate("BNYN-AAAA")).toEqual({ ok: false, message: "الكود ده متفعّل على أقصى عدد أجهزة (1) — كلّم الدعم الفني لو عايز تزوّد جهاز" });
     // the owner stops the code from the licenses table
     s.state.codes.get("BNYN-AAAA")!.revoked = true;
-    expect(await laptop.refresh()).toEqual({ state: "needed", message: "الكود ده اتوقف — كلّم البنيان" });
+    expect(await laptop.refresh()).toEqual({ state: "needed", message: "الكود ده اتوقف — كلّم الدعم الفني" });
   });
 
   it("an activation copied to another device is not valid there", async () => {
@@ -101,5 +115,42 @@ describe("activation in the app", () => {
     const db = freshDb();
     expect((await manager(s, "laptop", db).activate("BNYN-AAAA")).ok).toBe(true);
     expect(manager(s, "other-pc", db).status()).toEqual({ state: "needed", message: null });
+  });
+});
+
+describe("each customer's own company and cloud space", () => {
+  it("the code brings the company's name, logo and the login of its own sync space", async () => {
+    const s = fakeServer();
+    s.state.codes.set("BNYN-NOUR", { lic: 7, customer: "شركة النور للمقاولات", name: "النور", logoUrl: "https://x/logos/nour.png", max: 2, revoked: false, devices: new Set() });
+    const logins: { email: string; password: string }[] = [];
+    const m = manager(s, "laptop", freshDb(), (c) => logins.push(c));
+    const r = await m.activate("BNYN-NOUR");
+    expect(r.ok && r.status).toMatchObject({ state: "active", licenseId: 7, name: "النور", customer: "شركة النور للمقاولات", logo: "data:image/png;base64,iVBORw==" });
+    expect(logins).toEqual([{ email: "tenant-7@x", password: "pw-7" }]);
+    expect(m.credentials()).toEqual({ email: "tenant-7@x", password: "pw-7" });
+    // the logo is downloaded once and kept for offline use
+    await m.refresh();
+    expect(s.state.logoFetches).toBe(1);
+    s.state.online = false;
+    expect(m.status()).toMatchObject({ logo: "data:image/png;base64,iVBORw==" });
+  });
+
+  it("the logo shipped with the app, and a letter badge when there's none", async () => {
+    const s = fakeServer();
+    s.state.codes.set("BNYN-OWN", { lic: 2, customer: "شركة البنيان للمعدات الثقيلة", name: "البنيان", logoUrl: "bundled:albunyan", max: 4, revoked: false, devices: new Set() });
+    s.state.codes.set("BNYN-NONE", { lic: 9, customer: "مؤسسة الفجر", max: 1, revoked: false, devices: new Set() });
+    expect(await manager(s, "a").activate("BNYN-OWN")).toMatchObject({ ok: true, status: { logo: "bundled", name: "البنيان" } });
+    expect(await manager(s, "b").activate("BNYN-NONE")).toMatchObject({ ok: true, status: { logo: null, name: "مؤسسة الفجر" } });
+    expect(s.state.logoFetches).toBe(0);
+  });
+
+  it("a device keeps one company's data: another company's code is refused on it", async () => {
+    const s = fakeServer();
+    s.state.codes.set("BNYN-A", { lic: 1, customer: "أ", max: 2, revoked: false, devices: new Set() });
+    s.state.codes.set("BNYN-B", { lic: 2, customer: "ب", max: 2, revoked: false, devices: new Set() });
+    const db = freshDb();
+    expect((await manager(s, "laptop", db).activate("BNYN-A")).ok).toBe(true);
+    expect(await manager(s, "laptop", db).activate("BNYN-B")).toEqual({ ok: false, message: "الجهاز ده عليه بيانات شركة تانية — الكود ده مينفعش عليه" });
+    expect(manager(s, "laptop", db).status()).toMatchObject({ state: "active", customer: "أ" });
   });
 });

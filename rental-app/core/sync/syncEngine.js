@@ -680,6 +680,26 @@ function createSyncEngine({
     return status();
   }
 
+  // كل عميل ليه حساب مزامنة خاص بيه بييجي مع كود التفعيل (مساحته لوحده على
+  // السحابة). لو الجهاز داخل بحساب تاني أو مش داخل خالص بيخرج ويدخل بالصح؛
+  // ولو داخل بنفس الحساب بيجدد الجلسة مرة عشان ياخد بيانات حسابه الأحدث.
+  let refreshedOnce = false;
+  async function ensureLogin(creds) {
+    if (!sb || !creds?.email) return status();
+    const { data } = await sb.auth.getSession();
+    if (data.session?.user?.email === creds.email && !needsLogin) {
+      if (!refreshedOnce) {
+        refreshedOnce = true;
+        await sb.auth.refreshSession().catch(() => {});
+      }
+      return status();
+    }
+    if (data.session) await sb.auth.signOut({ scope: "local" }).catch(() => {});
+    email = creds.email;
+    refreshedOnce = true;
+    return login(creds.password);
+  }
+
   async function start() {
     setup();
     sb = createClient(supabaseUrl, supabaseKey, {
@@ -916,7 +936,7 @@ function createSyncEngine({
     return { rows, pending: pendingRows, devices };
   }
 
-  return { setup, start, stop, login, undo, push, pull, syncNow, status, setDeviceName, activity, _applyBatch: applyBatch, _buildBatch: buildBatch };
+  return { setup, start, stop, login, ensureLogin, undo, push, pull, syncNow, status, setDeviceName, activity, _applyBatch: applyBatch, _buildBatch: buildBatch };
 }
 
 export { createSyncEngine };

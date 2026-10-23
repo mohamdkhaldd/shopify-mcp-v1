@@ -3,6 +3,8 @@
 // expired / too many devices) and signs the answer with the Ed25519 key kept
 // in licensing.secrets. The app verifies the signature with the public key,
 // so an activation can't be faked by editing files on the device.
+// It also hands the device its company's name, logo and the login of its own
+// cloud space (each customer syncs only with its own devices).
 // Deployed with the Supabase MCP tool; this copy is the source of truth.
 import postgres from "npm:postgres@3.4.5";
 import * as ed from "npm:@noble/ed25519@2.1.0";
@@ -33,16 +35,28 @@ Deno.serve(async (req) => {
   }
   try {
     const [row] = await sql`select licensing.activate(${body.key ?? ""}, ${body.deviceId ?? ""}, ${body.deviceName ?? null}, ${body.platform ?? null}, ${body.appVersion ?? null}) as r`;
-    const r = row.r as { ok: boolean; error?: string; licenseId?: number; customer?: string; expiresAt?: string | null; iat?: number; exp?: number; maxDevices?: number };
+    const r = row.r as {
+      ok: boolean;
+      error?: string;
+      licenseId?: number;
+      customer?: string;
+      name?: string;
+      logoUrl?: string | null;
+      expiresAt?: string | null;
+      iat?: number;
+      exp?: number;
+      maxDevices?: number;
+      sync?: { email: string; password: string };
+    };
     if (!r.ok) return json(r);
     if (!privateKey) {
       const [s] = await sql`select v from licensing.secrets where k = 'signing_key'`;
       privateKey = ed.etc.hexToBytes(s.v);
     }
-    const payload = { v: 1, lic: r.licenseId, customer: r.customer, device: body.deviceId, expiresAt: r.expiresAt ?? null, iat: r.iat, exp: r.exp };
+    const payload = { v: 1, lic: r.licenseId, customer: r.customer, name: r.name, device: body.deviceId, expiresAt: r.expiresAt ?? null, iat: r.iat, exp: r.exp };
     const bytes = new TextEncoder().encode(JSON.stringify(payload));
     const token = `${b64url(bytes)}.${b64url(ed.sign(bytes, privateKey))}`;
-    return json({ ok: true, token, customer: r.customer, expiresAt: r.expiresAt ?? null });
+    return json({ ok: true, token, customer: r.customer, name: r.name, logoUrl: r.logoUrl ?? null, expiresAt: r.expiresAt ?? null, sync: r.sync });
   } catch (e) {
     console.error(e);
     return json({ ok: false, error: "server" }, 500);

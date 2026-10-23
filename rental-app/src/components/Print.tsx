@@ -1,5 +1,7 @@
 import { appApi } from "../api/client";
 import Icon from "./Icon";
+import BrandLogo from "./BrandLogo";
+import { useBrand } from "../context/BrandContext";
 import { Button } from "./ui";
 
 // Ported from the old app: PrintButton opens the in-app PDF preview,
@@ -18,13 +20,14 @@ export function PrintButtons({ pdfName, singlePage = true }: { pdfName: string; 
 }
 
 export function PrintHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+  const brand = useBrand();
   return (
     <div className="print-only mb-4 pb-3 border-b-2 border-fg">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src="./logo.png" alt="" className="w-12 h-12 rounded-full" />
+          <BrandLogo className="w-12 h-12" />
           <div>
-            <div className="font-extrabold text-lg">شركة البنيان للمعدات الثقيلة</div>
+            <div className="font-extrabold text-lg">{brand.customer}</div>
             <div className="text-sm text-muted">{title}</div>
           </div>
         </div>
@@ -34,7 +37,9 @@ export function PrintHeader({ title, subtitle }: { title: string; subtitle?: str
   );
 }
 
-export function PrintSignoff({ parties = ["توقيع شركة البنيان"] }: { parties?: string[] }) {
+/** Signature lines; the customer's own company always comes first. */
+export function PrintSignoff({ others = [] }: { others?: string[] }) {
+  const parties = [useBrand().signature, ...others];
   return (
     <div className="print-only mt-10 pt-6">
       <div className="grid gap-10 text-center font-bold text-sm" style={{ gridTemplateColumns: `repeat(${parties.length + 1}, minmax(0, 1fr))` }}>

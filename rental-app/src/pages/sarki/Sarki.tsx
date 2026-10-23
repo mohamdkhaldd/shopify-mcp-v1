@@ -99,7 +99,7 @@ function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki;
           </div>
         </>
       )}
-      <PrintSignoff parties={["توقيع شركة البنيان", tab === "client" ? "توقيع مندوب الشركة" : "توقيع صاحب المعدة"]} />
+      <PrintSignoff others={[tab === "client" ? "توقيع مندوب الشركة" : "توقيع صاحب المعدة"]} />
       <div className="no-print text-xs text-muted px-4 py-2.5 border-t border-line">
         الدايرة الحمرا جنب اليوم = مشتغلش (اكتب السبب في البيان). الساعات الفعلية فاضية = يوم كامل. الأوفر تايم = الفعلية − الأساسية، وسعر ساعته لو فاضي = اليومية ÷ الساعات الأساسية.
       </div>

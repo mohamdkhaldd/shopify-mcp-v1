@@ -7,7 +7,13 @@ import { Db } from "../core/db";
 // Laptop ↔ tablet sync through the rental app's own Supabase project. The
 // engine's triggers must be in place before the first edit from the screen,
 // so setup() runs synchronously and only the network part is async.
-export function startDeviceSync(db: Db, onRemoteChanges: (info: { count: number; devices: string[] }) => void): SyncEngine {
+// Each customer syncs in its own cloud space: the login comes with the
+// activation code (getCredentials), never typed by hand.
+export function startDeviceSync(
+  db: Db,
+  onRemoteChanges: (info: { count: number; devices: string[] }) => void,
+  getCredentials: () => { email: string; password: string } | null,
+): SyncEngine {
   const engine = createSyncEngine({
     db,
     createClient,
@@ -17,6 +23,12 @@ export function startDeviceSync(db: Db, onRemoteChanges: (info: { count: number;
     onRemoteChanges,
   });
   engine.setup();
-  engine.start().catch((e) => console.error("sync start failed", e));
+  engine
+    .start()
+    .then(() => {
+      const c = getCredentials();
+      return c ? engine.ensureLogin(c) : undefined;
+    })
+    .catch((e) => console.error("sync start failed", e));
   return engine;
 }

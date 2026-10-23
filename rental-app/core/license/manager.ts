@@ -8,19 +8,37 @@ import { checkToken, LICENSE_PUBLIC_KEY } from "./token";
 // working until the token runs out (14 days, or the subscription's last day).
 
 export type LicenseStatus =
-  | { state: "active"; customer: string; expiresAt: string | null; checkBy: string }
+  | {
+      state: "active";
+      licenseId: number;
+      /** legal name, for printouts */
+      customer: string;
+      /** short name, for the app's header */
+      name: string;
+      /** data: URL of the company's logo, "bundled" for the logo shipped with the app, null = none */
+      logo: string | null;
+      expiresAt: string | null;
+      checkBy: string;
+    }
   | { state: "needed"; message: string | null };
+
+export interface SyncCredentials {
+  email: string;
+  password: string;
+}
 
 export type ActivateResult = { ok: true; status: LicenseStatus } | { ok: false; message: string };
 
-type ServerAnswer = { ok: true; token: string } | { ok: false; error: string; maxDevices?: number; expiresAt?: string };
+type ServerAnswer =
+  | { ok: true; token: string; logoUrl?: string | null; sync?: SyncCredentials }
+  | { ok: false; error: string; maxDevices?: number; expiresAt?: string };
 
 const MESSAGES: Record<string, (a: ServerAnswer & { ok: false }) => string> = {
   not_found: () => "الكود ده مش صحيح — راجعه تاني",
-  revoked: () => "الكود ده اتوقف — كلّم البنيان",
-  expired: (a) => `الاشتراك خلص${a.expiresAt ? ` يوم ${a.expiresAt}` : ""} — كلّم البنيان عشان تجدده`,
-  full: (a) => `الكود ده متفعّل على أقصى عدد أجهزة${a.maxDevices ? ` (${a.maxDevices})` : ""} — كلّم البنيان لو عايز تزوّد جهاز`,
-  device_removed: () => "الجهاز ده اتشال من الترخيص — كلّم البنيان",
+  revoked: () => "الكود ده اتوقف — كلّم الدعم الفني",
+  expired: (a) => `الاشتراك خلص${a.expiresAt ? ` يوم ${a.expiresAt}` : ""} — كلّم الدعم الفني عشان تجدده`,
+  full: (a) => `الكود ده متفعّل على أقصى عدد أجهزة${a.maxDevices ? ` (${a.maxDevices})` : ""} — كلّم الدعم الفني لو عايز تزوّد جهاز`,
+  device_removed: () => "الجهاز ده اتشال من الترخيص — كلّم الدعم الفني",
 };
 /** answers that mean "this code no longer works here" (anything else is treated like no internet) */
 const FINAL = new Set(Object.keys(MESSAGES));
@@ -38,7 +56,12 @@ export interface LicenseOptions {
   fetch?: typeof fetch;
   now?: () => number;
   publicKey?: string;
+  /** called after every successful check with the login of this customer's own cloud space */
+  onCredentials?: (c: SyncCredentials) => void;
 }
+
+/** logo_url "bundled:…" = the logo shipped inside the app (Al Bunyan's own copy) */
+const BUNDLED = "bundled";
 
 export function createLicenseManager(o: LicenseOptions) {
   const now = () => Math.floor((o.now ?? Date.now)() / 1000);
@@ -55,7 +78,16 @@ export function createLicenseManager(o: LicenseOptions) {
     const token = get("license_token");
     if (!token) return { state: "needed", message: lastMessage };
     const c = checkToken(token, o.deviceId, now(), o.publicKey ?? LICENSE_PUBLIC_KEY);
-    if (c.ok) return { state: "active", customer: c.payload.customer, expiresAt: c.payload.expiresAt, checkBy: new Date(c.payload.exp * 1000).toISOString() };
+    if (c.ok)
+      return {
+        state: "active",
+        licenseId: c.payload.lic,
+        customer: c.payload.customer,
+        name: c.payload.name || c.payload.customer,
+        logo: get("brand_logo"),
+        expiresAt: c.payload.expiresAt,
+        checkBy: new Date(c.payload.exp * 1000).toISOString(),
+      };
     return { state: "needed", message: c.reason === "expired" ? CHECK_IN : lastMessage };
   }
 
@@ -73,12 +105,57 @@ export function createLicenseManager(o: LicenseOptions) {
     }
   }
 
-  function accept(key: string, token: string): boolean {
-    if (!checkToken(token, o.deviceId, now(), o.publicKey ?? LICENSE_PUBLIC_KEY).ok) return false;
+  async function saveLogo(url: string | null | undefined) {
+    if ((url ?? null) === get("brand_logo_url") && (url == null || get("brand_logo"))) return;
+    if (!url) {
+      set("brand_logo", null);
+      set("brand_logo_url", null);
+      return;
+    }
+    if (url.startsWith(`${BUNDLED}:`)) {
+      set("brand_logo", BUNDLED);
+      set("brand_logo_url", url);
+      return;
+    }
+    try {
+      const res = await doFetch(url);
+      if (!res.ok) return; // keep the old one, try again next time
+      const type = res.headers.get("content-type") ?? "image/png";
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      set("brand_logo", `data:${type};base64,${btoa(bin)}`);
+      set("brand_logo_url", url);
+    } catch {
+      /* offline: keep the old logo */
+    }
+  }
+
+  /** "" = fine; otherwise why this answer can't be used on this device */
+  async function accept(key: string, a: ServerAnswer & { ok: true }): Promise<string> {
+    const c = checkToken(a.token, o.deviceId, now(), o.publicKey ?? LICENSE_PUBLIC_KEY);
+    if (!c.ok) return "حصلت مشكلة في التفعيل — جرّب تاني";
+    // one device holds one company's data: a code of another company would mix the two
+    const before = get("license_lic");
+    if (before && Number(before) !== c.payload.lic) return "الجهاز ده عليه بيانات شركة تانية — الكود ده مينفعش عليه";
+    set("license_lic", String(c.payload.lic));
     set("license_key", key);
-    set("license_token", token);
+    set("license_token", a.token);
+    if (a.sync) {
+      set("sync_email", a.sync.email);
+      set("sync_password", a.sync.password);
+    }
+    await saveLogo(a.logoUrl);
     lastMessage = null;
-    return true;
+    const creds = credentials();
+    if (creds) o.onCredentials?.(creds);
+    return "";
+  }
+
+  function credentials(): SyncCredentials | null {
+    const email = get("sync_email");
+    const password = get("sync_password");
+    return email && password ? { email, password } : null;
   }
 
   async function activate(key: string): Promise<ActivateResult> {
@@ -87,7 +164,8 @@ export function createLicenseManager(o: LicenseOptions) {
     const a = await ask(clean);
     if (!a) return { ok: false, message: OFFLINE };
     if (!a.ok) return { ok: false, message: (MESSAGES[a.error] ?? (() => OFFLINE))(a) };
-    if (!accept(clean, a.token)) return { ok: false, message: "حصلت مشكلة في التفعيل — جرّب تاني" };
+    const problem = await accept(clean, a);
+    if (problem) return { ok: false, message: problem };
     return { ok: true, status: status() };
   }
 
@@ -96,7 +174,7 @@ export function createLicenseManager(o: LicenseOptions) {
     const key = get("license_key");
     if (!key) return status();
     const a = await ask(key);
-    if (a?.ok) accept(key, a.token);
+    if (a?.ok) await accept(key, a);
     else if (a && FINAL.has(a.error)) {
       set("license_token", null);
       lastMessage = MESSAGES[a.error](a);
@@ -104,7 +182,7 @@ export function createLicenseManager(o: LicenseOptions) {
     return status();
   }
 
-  return { status, activate, refresh, savedKey: () => get("license_key") };
+  return { status, activate, refresh, credentials, savedKey: () => get("license_key") };
 }
 
 export type LicenseManager = ReturnType<typeof createLicenseManager>;

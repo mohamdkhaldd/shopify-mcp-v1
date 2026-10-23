@@ -38,9 +38,6 @@ export async function startBackend() {
   const registry = makeRegistry(db);
 
   // activation: nothing works until this tablet has a valid code
-  const license = createLicenseManager({ db, ...(await tabletIdentity()), appVersion: typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.0.0", ...licenseServer });
-  license.refresh().catch(() => {});
-  setInterval(() => license.refresh().catch(() => {}), 6 * 60 * 60 * 1000);
 
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const emit = (channel: string, data: unknown) => (listeners.get(channel) ?? []).forEach((cb) => cb(data));
@@ -53,7 +50,25 @@ export async function startBackend() {
     onRemoteChanges: (info) => emit("sync:remoteChanges", info),
   });
   sync.setup();
-  sync.start().catch((e) => console.error("sync start failed", e));
+
+  // activation: nothing works until this tablet has a valid code; the code
+  // also brings the login of this customer's own sync space
+  const license = createLicenseManager({
+    db,
+    ...(await tabletIdentity()),
+    appVersion: typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.0.0",
+    ...licenseServer,
+    onCredentials: (c) => sync.ensureLogin(c).catch(() => {}),
+  });
+  license.refresh().catch(() => {});
+  setInterval(() => license.refresh().catch(() => {}), 6 * 60 * 60 * 1000);
+  sync
+    .start()
+    .then(() => {
+      const c = license.credentials();
+      return c ? sync.ensureLogin(c) : undefined;
+    })
+    .catch((e) => console.error("sync start failed", e));
 
   // a save is a whole-file export: at most once a second, and right away when
   // the app is sent to the background or closed
@@ -80,13 +95,6 @@ export async function startBackend() {
     "license:activate": ({ key }) => license.activate(key),
     "sync:status": () => sync.status(),
     "sync:now": () => sync.syncNow(),
-    "sync:login": async ({ password }) => {
-      try {
-        return { ok: true, status: await sync.login(password) };
-      } catch (e) {
-        return { ok: false, message: e instanceof Error ? e.message : String(e) };
-      }
-    },
     "sync:setDeviceName": ({ name }) => sync.setDeviceName(name),
     ...tabletAppHandlers(emit, () => db.exportNow()),
   };

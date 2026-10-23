@@ -1,6 +1,8 @@
 import type { PartySheet } from "../api/client";
 import { monthLabel, pounds } from "../utils/format";
 import { milliToHours } from "../utils/input";
+import BrandLogo from "./BrandLogo";
+import { useBrand } from "../context/BrandContext";
 
 const WEEKDAYS = ["الأحد", "الاتنين", "التلات", "الأربع", "الخميس", "الجمعة", "السبت"];
 
@@ -10,12 +12,13 @@ const WEEKDAYS = ["الأحد", "الاتنين", "التلات", "الأربع"
  */
 export default function PartySheetView({ sheet, partyLabel, signLabel }: { sheet: PartySheet; partyLabel: string; signLabel: string }) {
   const days = sheet.days.filter((d) => d.entered);
+  const brand = useBrand();
   return (
     <div className="m-3 border border-line rounded-md bg-surface print:m-0 print:border-0">
       <div className="flex items-center gap-3 px-4 py-3.5 border-b-2 border-fg">
-        <img src="./logo.png" alt="" className="w-11 h-11 rounded-full bg-white" />
+        <BrandLogo className="w-11 h-11" />
         <div>
-          <b className="block font-display">شركة البنيان للمعدات الثقيلة</b>
+          <b className="block font-display">{brand.customer}</b>
           <span className="text-muted text-[13px]">سركي معدة — {monthLabel(sheet.month)}</span>
         </div>
       </div>
@@ -91,7 +94,7 @@ export default function PartySheetView({ sheet, partyLabel, signLabel }: { sheet
         </table>
       </div>
       <div className="grid grid-cols-3 gap-4 px-4 pt-9 pb-4 text-center font-bold text-[13px]">
-        <div className="border-t border-fg pt-1.5">توقيع شركة البنيان</div>
+        <div className="border-t border-fg pt-1.5">{brand.signature}</div>
         <div className="border-t border-fg pt-1.5">{signLabel}</div>
         <div className="border-t border-fg pt-1.5">الختم</div>
       </div>
