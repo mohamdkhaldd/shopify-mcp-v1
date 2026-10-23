@@ -9,8 +9,8 @@ import type { Deletable } from "../../core/services/deletion";
 declare global {
   interface Window {
     api?: {
-      /** set by the Android app (tablet/backend.ts); absent on the laptop */
-      platform?: "tablet";
+      /** set by tablet/backend.ts: "tablet" inside the Android app, "web" in a browser; absent on the laptop */
+      platform?: "tablet" | "web";
       invoke: (channel: string, payload?: unknown) => Promise<any>;
       on: (channel: string, cb: (data: unknown) => void) => () => void;
     };
@@ -113,7 +113,10 @@ export interface ExcelSheet {
   totals?: Record<string, string | number | null>;
 }
 
+/** inside the Android app (phone or tablet) */
 export const isTablet = () => window.api?.platform === "tablet";
+/** the web version, in a browser (iPhone, any computer) */
+export const isWeb = () => window.api?.platform === "web";
 
 export type UpdateCheck =
   | { state: "dev" }

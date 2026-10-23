@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { footerItems, navItems, NavItem, SectionId } from "../nav";
-import { appApi, isTablet } from "../api/client";
+import { appApi, isTablet, isWeb } from "../api/client";
 import { useTheme } from "../theme";
 import Icon from "./Icon";
 import BrandLogo from "./BrandLogo";
@@ -80,7 +80,7 @@ export default function Sidebar({ active, onSelect, open = false }: { active: Se
           <span className={`w-2 h-2 rounded-full shrink-0 ${line.tone === "ok" ? "bg-in" : line.tone === "warn" ? "bg-amber" : "bg-white/30"}`} />
           {line.text}
         </div>
-        <div className={isTablet() ? "hidden" : ""}>{backup ? `آخر نسخة احتياطية: ${backup}` : "لسه مفيش نسخة احتياطية"}</div>
+        <div className={isTablet() || isWeb() ? "hidden" : ""}>{backup ? `آخر نسخة احتياطية: ${backup}` : "لسه مفيش نسخة احتياطية"}</div>
         <div>{version ? `الإصدار ${version}` : ""}</div>
       </div>
     </aside>

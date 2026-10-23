@@ -49,7 +49,7 @@ export interface LicenseOptions {
   db: Db;
   deviceId: string;
   deviceName: string;
-  platform: "windows" | "android" | "other";
+  platform: "windows" | "android" | "web" | "other";
   appVersion: string;
   url: string;
   anonKey: string;

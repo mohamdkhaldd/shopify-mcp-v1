@@ -8,6 +8,7 @@ import { callCore, makeRegistry } from "../electron/ipc";
 import { createDatabase } from "./sqlAdapter";
 import { loadSaved, save } from "./storage";
 import { tabletAppHandlers } from "./appHandlers";
+import { Capacitor } from "@capacitor/core";
 import { Device } from "@capacitor/device";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex } from "@noble/hashes/utils";
@@ -16,13 +17,21 @@ import { licenseServer } from "../core/license/config";
 
 declare const __APP_VERSION__: string;
 
-/** Android's id for this app on this tablet (same on reinstall, different on another tablet). */
-async function tabletIdentity() {
+/** Inside the Android app, or the web version in a browser (iPhone, any computer). */
+const native = Capacitor.isNativePlatform();
+
+/**
+ * Android's id for this app on this device (same on reinstall, different on
+ * another device); in a browser, an id saved in that browser's storage.
+ */
+async function deviceIdentity() {
   const [{ identifier }, info] = await Promise.all([Device.getId(), Device.getInfo()]);
+  const ua = navigator.userAgent;
+  const webName = /iPhone/.test(ua) ? "آيفون" : /iPad/.test(ua) ? "آيباد" : /Android/.test(ua) ? "موبايل (ويب)" : "متصفح";
   return {
     deviceId: bytesToHex(sha256(`albunyan-rental:${identifier}`)).slice(0, 32),
-    deviceName: [info.manufacturer, info.model].filter(Boolean).join(" ") || "تابلت",
-    platform: "android" as const,
+    deviceName: native ? [info.manufacturer, info.model].filter(Boolean).join(" ") || "تابلت" : webName,
+    platform: native ? ("android" as const) : ("web" as const),
   };
 }
 
@@ -46,7 +55,7 @@ export async function startBackend() {
     db,
     createClient,
     ...cloud,
-    defaultDeviceName: "التابلت",
+    defaultDeviceName: native ? "التابلت" : "نسخة الويب",
     onRemoteChanges: (info) => emit("sync:remoteChanges", info),
   });
   sync.setup();
@@ -55,7 +64,7 @@ export async function startBackend() {
   // also brings the login of this customer's own sync space
   const license = createLicenseManager({
     db,
-    ...(await tabletIdentity()),
+    ...(await deviceIdentity()),
     appVersion: typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.0.0",
     ...licenseServer,
     onCredentials: (c) => sync.ensureLogin(c).catch(() => {}),
@@ -102,11 +111,11 @@ export async function startBackend() {
     "sync:status": () => sync.status(),
     "sync:now": () => sync.syncNow(),
     "sync:setDeviceName": ({ name }) => sync.setDeviceName(name),
-    ...tabletAppHandlers(emit, () => db.exportNow()),
+    ...tabletAppHandlers(emit, () => db.exportNow(), native),
   };
 
   return {
-    platform: "tablet" as const,
+    platform: native ? ("tablet" as const) : ("web" as const),
     invoke: async (channel: string, payload?: unknown) => {
       const fn = handlers[channel];
       if (!fn) throw new Error(`No handler for ${channel}`);

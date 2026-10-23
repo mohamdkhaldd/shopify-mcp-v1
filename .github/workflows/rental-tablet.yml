@@ -43,6 +43,22 @@ jobs:
       - name: Build tablet web app
         run: npm run build:tablet
 
+      # the same build is the web version (iPhone / any browser): published to
+      # GitHub Pages of the public releases repo, opened from
+      # https://mohamdkhaldd.github.io/albunyan-rental-releases/
+      - name: Publish the web version
+        if: env.HAS_RELEASES_TOKEN == 'true'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          personal_token: ${{ secrets.RELEASES_TOKEN }}
+          external_repository: mohamdkhaldd/albunyan-rental-releases
+          publish_branch: gh-pages
+          publish_dir: rental-app/dist-tablet
+          force_orphan: true
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
+          commit_message: "web version ${{ env.APP_VERSION }}"
+
       - name: Create Android project
         run: npx cap add android
 

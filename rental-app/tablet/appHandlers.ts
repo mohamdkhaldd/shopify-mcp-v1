@@ -6,6 +6,8 @@ import { buildWorkbook, ExcelSheet } from "../electron/workbook";
 // Tablet versions of what Electron's main process does on the laptop:
 // printing (Android print — a printer or "Save as PDF"), Excel and backups
 // (shared to WhatsApp / Drive / Files), and updates (download the new APK).
+// In the web version: the browser's print, files downloaded, and no updates
+// to install (the page always loads the latest version).
 
 // small plugins inside the app: tablet/android/PrinterPlugin.java, UpdaterPlugin.java
 const Printer = registerPlugin<{ print(o: { name: string }): Promise<void> }>("Printer");
@@ -30,6 +32,18 @@ function base64(bytes: Uint8Array) {
   let s = "";
   for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(s);
+}
+
+function downloadFile(name: string, bytes: Uint8Array) {
+  const url = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: "application/octet-stream" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.setAttribute("download", name);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return name;
 }
 
 async function shareFile(name: string, bytes: Uint8Array, title: string) {
@@ -98,23 +112,26 @@ function fitPrintToOnePage() {
   return () => printFont.remove();
 }
 
-async function print(singlePage: boolean) {
+async function print(singlePage: boolean, native: boolean) {
   const cleanup = singlePage ? fitPrintToOnePage() : () => {};
   try {
-    await Printer.print({ name: document.title || "البنيان - التأجير" });
+    if (!native) throw new Error("web");
+    await Printer.print({ name: document.title || "MK-Tech" });
   } catch {
     window.print();
   } finally {
-    setTimeout(cleanup, 60000);
+    setTimeout(cleanup, native ? 60000 : 1000);
   }
 }
 
-export function tabletAppHandlers(emit: (channel: string, data: unknown) => void, databaseFile: () => Uint8Array) {
+export function tabletAppHandlers(emit: (channel: string, data: unknown) => void, databaseFile: () => Uint8Array, native = true) {
+  const deliver = (name: string, bytes: Uint8Array, title: string) => (native ? shareFile(name, bytes, title) : downloadFile(name, bytes));
   return {
     "app:getVersion": () => VERSION,
     // no silent install on Android: a newer APK comes back as a link, the
     // screen offers it, and Android asks once to install it over this one
     "app:checkForUpdate": async () => {
+      if (!native) return { state: "not-available", version: VERSION };
       try {
         const res = await fetch(`https://api.github.com/repos/${RELEASES}/releases?per_page=20`);
         if (!res.ok) throw new Error(`GitHub ${res.status}`);
@@ -144,16 +161,16 @@ export function tabletAppHandlers(emit: (channel: string, data: unknown) => void
         sub.remove();
       }
     },
-    "print:preview": ({ singlePage = true }: { singlePage?: boolean }) => print(singlePage),
-    // Android's print screen has "Save as PDF"
-    "print:savePdf": () => print(true),
+    "print:preview": ({ singlePage = true }: { singlePage?: boolean }) => print(singlePage, native),
+    // Android's and the browser's print screens both have "Save as PDF"
+    "print:savePdf": () => print(true, native),
     "export:excel": async ({ fileName, sheets }: { fileName: string; sheets: ExcelSheet[] }) => {
       const buf = await buildWorkbook(sheets).xlsx.writeBuffer();
-      return shareFile(`${fileName}.xlsx`, new Uint8Array(buf as ArrayBuffer), fileName);
+      return deliver(`${fileName}.xlsx`, new Uint8Array(buf as ArrayBuffer), fileName);
     },
     // the tablet's real backup is the cloud copy; this shares the file by hand
     "backup:last": () => null,
-    "backup:now": () => shareFile(`نسخة-البنيان-التأجير-${new Date().toLocaleDateString("en-CA")}.db`, databaseFile(), "نسخة احتياطية"),
+    "backup:now": () => deliver(`نسخة-التأجير-${new Date().toLocaleDateString("en-CA")}.db`, databaseFile(), "نسخة احتياطية"),
     "backup:restore": () => ({ ok: false, message: "الرجوع لنسخة قديمة بيتعمل من اللاب — التابلت بياخد كل البيانات من المزامنة" }),
   };
 }

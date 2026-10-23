@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, appApi, isTablet, licenseApi, LicenseStatus, SettingsView, syncApi } from "../../api/client";
+import { api, appApi, isTablet, isWeb, licenseApi, LicenseStatus, SettingsView, syncApi } from "../../api/client";
 import { Button, ErrorBox, Loading, Note, PageHeader, Panel } from "../../components/ui";
 import { Labeled, TextInput } from "../../components/Field";
 import { syncLine, useSyncStatus } from "../../components/Sync";
@@ -118,14 +118,17 @@ function Backups() {
   useEffect(() => {
     refresh();
   }, []);
-  if (isTablet())
+  if (isTablet() || isWeb())
     return (
       <Panel title="النسخ الاحتياطي">
         <div className="px-4 py-3.5 grid gap-3">
-          <div>بيانات التابلت محفوظة في السحابة مع اللاب، واللاب بيعمل نسخة كل يوم. لو عايز نسخة في إيدك، ابعتها لنفسك على واتساب أو Drive.</div>
+          <div>
+            البيانات هنا محفوظة في السحابة مع باقي الأجهزة، واللاب بيعمل نسخة كل يوم. لو عايز نسخة في إيدك،{" "}
+            {isWeb() ? "نزّلها على الجهاز." : "ابعتها لنفسك على واتساب أو Drive."}
+          </div>
           <div>
             <Button primary onClick={() => appApi.backupNow()}>
-              ابعت نسخة من البيانات
+              {isWeb() ? "نزّل نسخة من البيانات" : "ابعت نسخة من البيانات"}
             </Button>
           </div>
         </div>
@@ -245,40 +248,44 @@ function Updates() {
       <div className="px-4 py-3.5 grid gap-3">
         <div>
           النسخة الحالية: <b className="num">{version}</b> —{" "}
-          {tablet
+          {isWeb()
+            ? "نسخة الويب بتتحدّث لوحدها: كل ما تفتحها بتفتح على آخر نسخة."
+            : tablet
             ? "البرنامج بيدوّر على تحديث لوحده كل ما يتفتح، ولو فيه نسخة جديدة هيظهرلك شريط فوق تدوس عليه."
             : "البرنامج بيدوّر على تحديث لوحده وبينزّله في الخلفية، وبيتثبّت لما تقفل البرنامج وتفتحه تاني."}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            onClick={async () => {
-              setState("جاري البحث...");
-              const r = await appApi.checkForUpdate();
-              if (r.state === "downloaded") {
-                setReady({});
-                setState(`نسخة ${r.version} نزلت وجاهزة`);
-              } else if (r.state === "apk") {
-                setReady({ url: r.url });
-                setState(`فيه نسخة جديدة ${r.version}`);
-              } else if (r.state === "not-available") setState("عندك آخر نسخة");
-              else if (r.state === "dev") setState("نسخة تجريبية — مفيش تحديثات");
-              else setState(`مقدرناش نوصل للتحديثات (${r.message ?? ""})`);
-            }}
-          >
-            تحقق من التحديثات
-          </Button>
-          {ready && (
+        {!isWeb() && (
+          <div className="flex flex-wrap gap-2">
             <Button
-              primary
               onClick={async () => {
-                const r = await appApi.installUpdate(ready.url);
-                if (r && !r.ok && r.message) setState(r.message);
+                setState("جاري البحث...");
+                const r = await appApi.checkForUpdate();
+                if (r.state === "downloaded") {
+                  setReady({});
+                  setState(`نسخة ${r.version} نزلت وجاهزة`);
+                } else if (r.state === "apk") {
+                  setReady({ url: r.url });
+                  setState(`فيه نسخة جديدة ${r.version}`);
+                } else if (r.state === "not-available") setState("عندك آخر نسخة");
+                else if (r.state === "dev") setState("نسخة تجريبية — مفيش تحديثات");
+                else setState(`مقدرناش نوصل للتحديثات (${r.message ?? ""})`);
               }}
             >
-              {tablet ? "نزّل وسطّب" : "ثبّت وأعد التشغيل"}
+              تحقق من التحديثات
             </Button>
-          )}
-        </div>
+            {ready && (
+              <Button
+                primary
+                onClick={async () => {
+                  const r = await appApi.installUpdate(ready.url);
+                  if (r && !r.ok && r.message) setState(r.message);
+                }}
+              >
+                {tablet ? "نزّل وسطّب" : "ثبّت وأعد التشغيل"}
+              </Button>
+            )}
+          </div>
+        )}
         {state && <div className="text-sm font-semibold">{state}</div>}
         {percent != null && percent < 100 && <div className="text-sm num">بينزّل... {percent}٪</div>}
       </div>
