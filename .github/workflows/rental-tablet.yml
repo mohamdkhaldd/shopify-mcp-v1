@@ -17,6 +17,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: rental-app
@@ -46,6 +47,7 @@ jobs:
         run: npx cap add android
 
       - name: Customize Android project
+        timeout-minutes: 5
         run: |
           JAVA_DIR=android/app/src/main/java/com/albunyan/rental
           cp tablet/android/PrinterPlugin.java tablet/android/MainActivity.java tablet/android/UpdaterPlugin.java "$JAVA_DIR/"
@@ -56,16 +58,9 @@ jobs:
           cat tablet/android/signing.gradle >> android/app/build.gradle
           sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"$APP_VERSION\"/" android/app/build.gradle
           grep -q "versionCode ${{ github.run_number }}" android/app/build.gradle
-          # app icon = company logo
+          # app icon = company logo (pre-made in tablet/android/res)
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
-          command -v convert >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick)
-          for pair in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
-            name=${pair%%:*}; size=${pair##*:}
-            for icon in ic_launcher ic_launcher_round ic_launcher_foreground; do
-              convert public/logo.png -resize ${size}x${size} -background white -gravity center -extent ${size}x${size} \
-                "android/app/src/main/res/mipmap-$name/$icon.png"
-            done
-          done
+          cp -r tablet/android/res/. android/app/src/main/res/
           npx cap sync android
 
       - name: Build signed APK
