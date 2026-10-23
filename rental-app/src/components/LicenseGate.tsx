@@ -22,7 +22,7 @@ export default function LicenseGate({ children }: { children: ReactNode }) {
   }, [load]);
   const brand = useMemo(() => (status?.state === "active" ? brandFrom(status) : null), [status]);
   useEffect(() => {
-    document.title = brand ? `${brand.name} - التأجير` : "MK-Tech Rental";
+    document.title = brand ? `${brand.name} - التأجير` : "MK-Tech التأجير";
   }, [brand]);
   if (!status) return null;
   if (brand) return <BrandContext.Provider value={brand}>{children}</BrandContext.Provider>;
@@ -48,17 +48,16 @@ function Activate({ message, onDone }: { message: string | null; onDone: (s: Lic
       <div className="w-full max-w-[440px] rounded-2xl bg-white text-[#0F172A] shadow-2xl p-7 grid gap-5 text-center">
         <img src="./mk-icon.png" alt="MK-Tech" className="w-[72px] h-[72px] rounded-2xl mx-auto" />
         <div>
-          <div dir="ltr" className="text-2xl font-extrabold tracking-tight">
-            MK-Tech <span className="text-[#0B5FFF]">Rental</span>
-          </div>
-          <div className="text-[#64748B] text-sm mt-1.5">برنامج تأجير المعدات — اكتب كود التفعيل عشان تبدأ</div>
+          <div dir="ltr" className="text-2xl font-extrabold tracking-tight">MK-Tech</div>
+          <div className="text-[#0B5FFF] font-bold mt-0.5">برنامج التأجير</div>
+          <div className="text-[#64748B] text-sm mt-2">اكتب كود التفعيل عشان تبدأ</div>
         </div>
         <input
           aria-label="كود التفعيل"
           dir="ltr"
           autoFocus
           value={key}
-          placeholder="BNYN-XXXX-XXXX-XXXX"
+          placeholder="MKTECH-XXXX-XXXX-XXXX"
           onChange={(e) => setKey(e.target.value.toUpperCase())}
           onKeyDown={(e) => e.key === "Enter" && key.trim() && !busy && submit()}
           style={{ outlineColor: "#0B5FFF" }}

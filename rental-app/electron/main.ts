@@ -19,7 +19,7 @@ const root = path.join(__dirname, "..");
 const iconPath = path.join(root, isDev ? "public" : "dist", "mk-icon.png");
 
 // The data folder keeps the name it was first created with: the product was
-// renamed to MK-Tech Rental, and copies installed before that keep their data
+// renamed to "MK-Tech التأجير", and copies installed before that keep their data
 // in "البنيان - التأجير".
 const legacyData = path.join(app.getPath("appData"), "البنيان - التأجير");
 if (fs.existsSync(legacyData)) app.setPath("userData", legacyData);
@@ -39,7 +39,7 @@ function createWindow() {
     minHeight: 700,
     autoHideMenuBar: true,
     icon: iconPath,
-    title: "MK-Tech Rental",
+    title: "MK-Tech التأجير",
     webPreferences: { contextIsolation: true, nodeIntegration: false, preload: path.join(__dirname, "preload.cjs") },
   });
   mainWindow = win;

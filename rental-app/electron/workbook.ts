@@ -20,7 +20,7 @@ export interface ExcelSheet {
 
 export function buildWorkbook(sheets: ExcelSheet[]) {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "MK-Tech Rental";
+  wb.creator = "MK-Tech";
   for (const s of sheets) {
     const ws = wb.addWorksheet(s.title.slice(0, 31).replace(/[\\/?*[\]:]/g, "-"), { views: [{ rightToLeft: true, state: "frozen", ySplit: 1 }] });
     ws.columns = s.columns.map((c) => ({ header: c.header, key: c.key, width: c.width ?? Math.max(12, c.header.length + 4) }));

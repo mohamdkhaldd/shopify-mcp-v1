@@ -2,7 +2,7 @@
   "name": "mk-tech-rental",
   "version": "0.1.0",
   "private": true,
-  "description": "MK-Tech Rental: نظام تأجير المعدات بتمويل المستثمرين",
+  "description": "MK-Tech — برنامج التأجير: نظام تأجير المعدات بتمويل المستثمرين",
   "author": "MK-Tech",
   "scripts": {
     "dev": "vite",
@@ -64,7 +64,7 @@
   "main": "dist-electron/main.cjs",
   "build": {
     "appId": "com.albunyan.rental",
-    "productName": "MK-Tech Rental",
+    "productName": "MK-Tech التأجير",
     "directories": {
       "output": "release"
     },
@@ -82,7 +82,7 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "MK-Tech Rental"
+      "shortcutName": "MK-Tech التأجير"
     },
     "publish": {
       "provider": "github",
