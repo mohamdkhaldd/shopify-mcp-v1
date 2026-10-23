@@ -65,3 +65,20 @@ describe("sarki view", () => {
     expect(ids.contract).toBe(v.contract.id);
   });
 });
+
+import { suppliersView } from "../core/services/views";
+
+describe("suppliers view", () => {
+  const db = freshDb();
+  seedDemo(db);
+  it("list with what's left for each owner, and the selected owner's page", () => {
+    const v = suppliersView(db, undefined, "2026-10-31");
+    expect(v.list).toEqual([expect.objectContaining({ name: "الحاج سيد عبد الله", equipmentCount: 1, remainingPt: egp(22_000) })]);
+    const s = v.selected!;
+    expect(s.totals).toEqual({ fromSarkiPt: egp(75_000), deductionsPt: egp(3_000), paidPt: egp(50_000), remainingPt: egp(22_000) });
+    expect(s.equipment).toEqual([expect.objectContaining({ name: "لودر كاتربيلر 950", site_name: "كمبوند الياسمين — التجمع", supplier_rate_pt: egp(2_500), working: true })]);
+    expect(s.contracts[0].months).toEqual(["2026-10"]);
+    expect(s.payments).toHaveLength(1);
+    expect(s.deductions).toHaveLength(1);
+  });
+});

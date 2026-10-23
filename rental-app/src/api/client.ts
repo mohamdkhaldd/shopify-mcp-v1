@@ -1,4 +1,4 @@
-import type { ContractOptions, DashboardView, SarkiView } from "../../core/services/views";
+import type { ContractOptions, DashboardView, SarkiView, SuppliersView } from "../../core/services/views";
 import type { NewContractInput } from "../../core/services/master";
 import type { DayPatch } from "../../core/services/sarki";
 import type { Deletable } from "../../core/services/deletion";
@@ -44,6 +44,15 @@ export const api = {
   clearRange: (contractId: number, from: string, to: string, reason: string) => call("clearRange", { contractId, from, to, reason }),
   applyOvertime: (contractId: number, month: string, days: string, hoursMilli: number, ratePt: number | null) =>
     call("applyOvertime", { contractId, month, days, hoursMilli, ratePt }),
+  suppliers: (supplierId?: number) => call<SuppliersView>("suppliers", { supplierId }),
+  createSupplier: (name: string, phone?: string) => call<number>("createSupplier", { name, phone }),
+  updateSupplier: (id: number, name: string, phone?: string | null) => call("updateSupplier", { id, name, phone }),
+  createEquipment: (v: { name: string; supplierId: number; siteName?: string; supplierRatePt?: number }) => call<number>("createEquipment", v),
+  updateEquipment: (v: { id: number; name: string; siteName?: string | null; supplierRatePt?: number | null }) => call("updateEquipment", v),
+  partySheet: (contractId: number, month: string, side: "client" | "supplier") => call<PartySheet>("partySheet", { contractId, month, side }),
+  supplierPayment: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) => call<number>("supplierPayment", v),
+  supplierDeduction: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean }) =>
+    call<number>("supplierDeduction", v),
   setSupplierRate: (contractId: number, from: string, to: string, v: { dayRatePt?: number | null; overtimeRatePt?: number | null }) =>
     call("setSupplierRate", { contractId, from, to, ...v }),
   deletePreview: (entity: Deletable, id: number) => call<DeletePreview>("deletePreview", { entity, id }),
@@ -51,13 +60,29 @@ export const api = {
   restore: (batch: string) => call<void>("restore", { batch }),
 };
 
+export type PartySheet = ReturnType<typeof import("../../core/services/sarki").getPartySheet>;
+
+export interface ExcelColumn {
+  header: string;
+  key: string;
+  money?: boolean;
+  width?: number;
+}
+export interface ExcelSheet {
+  title: string;
+  columns: ExcelColumn[];
+  rows: Record<string, string | number | null>[];
+  totals?: Record<string, string | number | null>;
+}
+
 export const appApi = {
+  exportExcel: (fileName: string, sheets: ExcelSheet[]) => window.api?.invoke("export:excel", { fileName, sheets }),
   version: (): Promise<string> => window.api?.invoke("app:getVersion") ?? Promise.resolve(""),
   lastBackup: (): Promise<{ file: string; at: string } | null> => window.api?.invoke("backup:last") ?? Promise.resolve(null),
   printPreview: (singlePage = true) => window.api?.invoke("print:preview", { singlePage }),
   savePdf: (name: string) => window.api?.invoke("print:savePdf", { name }),
 };
 
-export type { ContractOptions, DashboardView, Deletable, NewContractInput, SarkiView };
+export type { ContractOptions, DashboardView, Deletable, NewContractInput, SarkiView, SuppliersView };
 /** The السركي view once a contract is open. */
 export type OpenSarki = Exclude<SarkiView, { contract: null }>;

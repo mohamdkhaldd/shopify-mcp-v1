@@ -1,6 +1,6 @@
 import { Db, monthOf, today } from "../db";
 import { computeBooks } from "./books";
-import { dashboard } from "./reports";
+import { dashboard, supplierStatement } from "./reports";
 import { getSheet } from "./sarki";
 
 // Screen-shaped data: one call per page, names already joined in.
@@ -171,3 +171,53 @@ export function contractOptions(db: Db) {
 }
 
 export type ContractOptions = ReturnType<typeof contractOptions>;
+
+// ---------------- أصحاب المعدات ----------------
+
+export function suppliersView(db: Db, supplierId?: number, now: string = today()) {
+  const books = computeBooks(db, now);
+  const suppliers = db.prepare("SELECT id, name, phone, notes FROM suppliers WHERE deleted_at IS NULL ORDER BY name").all() as {
+    id: number;
+    name: string;
+    phone: string | null;
+    notes: string | null;
+  }[];
+  const list = suppliers.map((s) => {
+    const st = supplierStatement(db, s.id, now, books);
+    return { ...s, equipmentCount: st.equipment.length, remainingPt: st.totals.remainingPt };
+  });
+  const id = supplierId && suppliers.some((s) => s.id === supplierId) ? supplierId : suppliers[0]?.id;
+  if (!id) return { list, selected: null };
+  const st = supplierStatement(db, id, now, books);
+  const active = new Map(
+    (db.prepare("SELECT equipment_id, site_name FROM contracts WHERE supplier_id = ? AND status = 'active' AND deleted_at IS NULL").all(id) as { equipment_id: number; site_name: string | null }[]).map((c) => [
+      c.equipment_id,
+      c,
+    ]),
+  );
+  const contracts = (
+    db
+      .prepare(
+        `SELECT c.id, c.code, c.start_date, c.end_date, e.name AS equipment FROM contracts c JOIN equipment e ON e.id = c.equipment_id
+         WHERE c.supplier_id = ? AND c.deleted_at IS NULL ORDER BY c.id DESC`,
+      )
+      .all(id) as { id: number; code: string; start_date: string; end_date: string | null; equipment: string }[]
+  ).map((c) => ({ ...c, months: monthsOfContract(c, now) }));
+  return {
+    list,
+    selected: {
+      supplier: st.supplier as { id: number; name: string; phone: string | null },
+      equipment: (st.equipment as { id: number; name: string; site_name: string | null; supplier_rate_pt: number | null }[]).map((e) => ({
+        ...e,
+        working: active.has(e.id),
+      })),
+      rows: st.rows,
+      totals: st.totals,
+      payments: st.payments,
+      deductions: st.deductions,
+      contracts,
+    },
+  };
+}
+
+export type SuppliersView = ReturnType<typeof suppliersView>;

@@ -8,7 +8,7 @@ const common = {
   target: "node20",
   format: "cjs",
   sourcemap: true,
-  external: ["electron", "better-sqlite3", "electron-updater"],
+  external: ["electron", "better-sqlite3", "electron-updater", "exceljs"],
   logLevel: "info",
 };
 

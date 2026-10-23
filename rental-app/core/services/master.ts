@@ -148,3 +148,14 @@ export function newContract(db: Db, v: NewContractInput) {
     });
   })();
 }
+
+export function updateSupplier(db: Db, id: number, v: { name: string; phone?: string | null; notes?: string | null }) {
+  if (!v.name.trim()) throw new UserError("اكتب اسم صاحب المعدة");
+  db.prepare("UPDATE suppliers SET name = ?, phone = ?, notes = ? WHERE id = ? AND deleted_at IS NULL").run(v.name.trim(), v.phone ?? null, v.notes ?? null, id);
+}
+
+/** Name, site and the agreed day rate — what the owner's page shows for each machine. */
+export function updateEquipment(db: Db, id: number, v: { name: string; siteName?: string | null; supplierRatePt?: number | null }) {
+  if (!v.name.trim()) throw new UserError("اكتب اسم المعدة");
+  db.prepare("UPDATE equipment SET name = ?, site_name = ?, supplier_rate_pt = ? WHERE id = ? AND deleted_at IS NULL").run(v.name.trim(), v.siteName ?? null, v.supplierRatePt ?? null, id);
+}

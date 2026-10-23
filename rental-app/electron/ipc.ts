@@ -1,8 +1,9 @@
 import { Db, UserError } from "../core/db";
-import { contractOptions, dashboardView, sarkiView } from "../core/services/views";
+import { contractOptions, dashboardView, sarkiView, suppliersView } from "../core/services/views";
 import { deleteEntity, deletePreview, restoreDeleted } from "../core/services/deletion";
-import { newContract, NewContractInput } from "../core/services/master";
-import { applyOvertime, clearRange, DayPatch, fillRange, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
+import { createEquipment, createSupplier, newContract, NewContractInput, updateEquipment, updateSupplier } from "../core/services/master";
+import { recordSupplierDeduction, recordSupplierPayment } from "../core/services/ledger";
+import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
 
 // Every screen call goes through one channel ("core:call") to a named function
 // here. Only names listed in this registry can be called from the window.
@@ -24,6 +25,18 @@ export function makeRegistry(db: Db) {
       applyOvertime(db, a.contractId, "client", a.month, a.days, a.hoursMilli, a.ratePt),
     setSupplierRate: (a: { contractId: number; from: string; to: string; dayRatePt?: number | null; overtimeRatePt?: number | null }) =>
       setSupplierRate(db, a.contractId, a.from, a.to, { dayRatePt: a.dayRatePt, overtimeRatePt: a.overtimeRatePt }),
+
+    // أصحاب المعدات
+    suppliers: (a: { supplierId?: number }) => suppliersView(db, a.supplierId),
+    createSupplier: (a: { name: string; phone?: string }) => createSupplier(db, a),
+    updateSupplier: (a: { id: number; name: string; phone?: string | null }) => updateSupplier(db, a.id, a),
+    createEquipment: (a: { name: string; supplierId: number; siteName?: string; supplierRatePt?: number }) => createEquipment(db, a),
+    updateEquipment: (a: { id: number; name: string; siteName?: string | null; supplierRatePt?: number | null }) => updateEquipment(db, a.id, a),
+    partySheet: (a: { contractId: number; month: string; side: Side }) => getPartySheet(db, a.contractId, a.month, a.side),
+    supplierPayment: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
+      recordSupplierPayment(db, a, { confirmNegative: a.confirmNegative }),
+    supplierDeduction: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean }) =>
+      recordSupplierDeduction(db, a, { confirmNegative: a.confirmNegative }),
 
     // حذف
     deletePreview: (a: { entity: Parameters<typeof deletePreview>[1]; id: number }) => deletePreview(db, a.entity, a.id),

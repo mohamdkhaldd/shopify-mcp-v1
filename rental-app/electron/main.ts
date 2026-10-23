@@ -7,6 +7,7 @@ import { backupTo, dailyBackup, lastBackup, looksLikeRentalDb } from "./backup";
 import { printPreview, savePdf } from "./print";
 import { setupAutoUpdate } from "./updater";
 import { callCore, makeRegistry } from "./ipc";
+import { exportExcel, ExcelSheet } from "./excel";
 import { seedDemo } from "../core/demo";
 
 const isDev = !app.isPackaged;
@@ -52,6 +53,8 @@ app.whenReady().then(async () => {
     const r = await dialog.showSaveDialog(mainWindow, { defaultPath: `${name}.pdf`, filters: [{ name: "PDF", extensions: ["pdf"] }] });
     return r.canceled || !r.filePath ? null : savePdf(mainWindow, r.filePath);
   });
+
+  ipcMain.handle("export:excel", (_e, { fileName, sheets }: { fileName: string; sheets: ExcelSheet[] }) => mainWindow && exportExcel(mainWindow, fileName, sheets));
 
   // ---- backups ----
   const runDaily = () => dailyBackup(raw).catch((e) => console.error("backup failed", e));
