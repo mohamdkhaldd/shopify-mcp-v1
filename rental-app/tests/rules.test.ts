@@ -7,7 +7,7 @@ import { dayValue, sheetTotals, SarkiDay } from "../core/calc/sarki";
 import { parsePounds, formatPounds, portion } from "../core/calc/money";
 import { allocatePayments } from "../core/calc/collections";
 import { createClient, createContract, createEquipment, createInvestor, createSupplier, rateAt, setClientTaxes, setRates } from "../core/services/master";
-import { applyOvertime, fillRange, getPartySheet, getSheet, upsertDay } from "../core/services/sarki";
+import { applyOvertime, fillRange, getPartySheet, getSheet, setSupplierRate, upsertDay } from "../core/services/sarki";
 import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierPayment, reverse } from "../core/services/ledger";
 import { computeBooks } from "../core/services/books";
 import { closeMonth, recordAdjustment } from "../core/services/close";
@@ -89,12 +89,24 @@ describe("sarki day rules (same as the old app)", () => {
     const s = getSheet(db, contract, "2026-10", "supplier").days.find((d) => d.date === "2026-10-07")!;
     expect([s.row!.actual_hours_milli, s.row!.site_name, s.row!.note, s.row!.day_rate_pt]).toEqual([10_000, "موقع تاني", "شغل ليلي", egp(400)]);
     expect(s.totalPt).toBe(egp(400) + egp(100)); // 400 ÷ 8 × 2 h
-    expect(() => upsertDay(db, contract, "2026-10-07", "supplier", { actualHoursMilli: 8000 })).toThrow(/سعر اليوم بس/);
+    expect(() => upsertDay(db, contract, "2026-10-07", "supplier", { actualHoursMilli: 8000 })).toThrow(/سعر اليوم وسعر ساعة الأوفر بس/);
     upsertDay(db, contract, "2026-10-07", "supplier", { dayRatePt: egp(450) });
     // a later edit on the company sheet keeps the owner's own rate
     upsertDay(db, contract, "2026-10-07", "client", { note: "اتعدل" });
     const again = getSheet(db, contract, "2026-10", "supplier").days.find((d) => d.date === "2026-10-07")!.row!;
     expect([again.day_rate_pt, again.note]).toEqual([egp(450), "اتعدل"]);
+  });
+  it("the owner's overtime rate is set separately, and the gap is margin", () => {
+    const { db, contract } = setup();
+    // company: 2 h at 80/h; owner: 2 h at 60/h → 40 more margin on that day
+    upsertDay(db, contract, "2026-10-07", "client", { actualHoursMilli: 10_000, overtimeRatePt: egp(80) });
+    upsertDay(db, contract, "2026-10-07", "supplier", { overtimeRatePt: egp(60) });
+    upsertDay(db, contract, "2026-10-07", "client", { note: "اتعدل" }); // an edit on the company sheet keeps his overtime rate
+    const day = (side: "client" | "supplier") => getSheet(db, contract, "2026-10", side).days.find((d) => d.date === "2026-10-07")!;
+    expect([day("client").totalPt, day("supplier").totalPt, day("supplier").row!.overtime_rate_pt]).toEqual([egp(660), egp(520), egp(60)]);
+    expect(october(db).contracts[0].marginPt).toBe(egp(3_000) + egp(160) - egp(120));
+    setSupplierRate(db, contract, "2026-10-01", "2026-10-31", { overtimeRatePt: egp(70) });
+    expect(day("supplier").totalPt).toBe(egp(540));
   });
   it("bulk overtime on '3, 7-8' and the red mismatch flag", () => {
     const { db, contract } = setup();

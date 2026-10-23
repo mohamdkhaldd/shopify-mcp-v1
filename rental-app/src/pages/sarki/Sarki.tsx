@@ -137,7 +137,7 @@ export default function Sarki() {
 
   return (
     <div className="grid gap-5">
-      <PageHeader title="السركي" subtitle="بتكتب سركي الشركة يوم بيوم، وسركي صاحب المعدة بيتملى لوحده — اللي بيختلف سعر اليوم بس">
+      <PageHeader title="السركي" subtitle="بتكتب سركي الشركة يوم بيوم، وسركي صاحب المعدة بيتملى لوحده — اللي بيختلف أسعاره بس (اليومية وساعة الأوفر)">
         {open && (
           <>
             <Select aria-label="العقد" value={open.contract.id} onChange={(e) => setContractId(Number(e.target.value))}>

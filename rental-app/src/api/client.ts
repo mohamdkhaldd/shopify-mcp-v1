@@ -44,7 +44,8 @@ export const api = {
   clearRange: (contractId: number, from: string, to: string, reason: string) => call("clearRange", { contractId, from, to, reason }),
   applyOvertime: (contractId: number, month: string, days: string, hoursMilli: number, ratePt: number | null) =>
     call("applyOvertime", { contractId, month, days, hoursMilli, ratePt }),
-  setSupplierRate: (contractId: number, from: string, to: string, ratePt: number) => call("setSupplierRate", { contractId, from, to, ratePt }),
+  setSupplierRate: (contractId: number, from: string, to: string, v: { dayRatePt?: number | null; overtimeRatePt?: number | null }) =>
+    call("setSupplierRate", { contractId, from, to, ...v }),
   deletePreview: (entity: Deletable, id: number) => call<DeletePreview>("deletePreview", { entity, id }),
   delete: (entity: Deletable, id: number) => call<string>("delete", { entity, id }),
   restore: (batch: string) => call<void>("restore", { batch }),

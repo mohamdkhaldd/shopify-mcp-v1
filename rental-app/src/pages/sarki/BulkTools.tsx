@@ -90,21 +90,22 @@ export function ClientBulk({ v, onDone, onError }: { v: OpenSarki; onDone: (msg:
           طبّق
         </Button>
       </div>
-      <div className="text-[11px] text-muted">سركي صاحب المعدة بيتملى لوحده بنفس الأيام والساعات والأوفر تايم والبيان — اللي بيختلف فيه سعر اليوم بس.</div>
+      <div className="text-[11px] text-muted">سركي صاحب المعدة بيتملى لوحده بنفس الأيام والساعات والأوفر تايم والبيان — اللي بيختلف فيه أسعاره بس (اليومية وساعة الأوفر).</div>
     </div>
   );
 }
 
-/** On the owner's sheet the only bulk change is his day rate. */
+/** On the owner's sheet the only bulk changes are his two prices. */
 export function SupplierBulk({ v, onDone, onError }: { v: OpenSarki; onDone: (msg: string) => void; onError: (m: string) => void }) {
   const c = v.contract;
   const [from, setFrom] = useState("1");
   const [to, setTo] = useState(lastDay(v.month));
   const [rate, setRate] = useState(ptToInput(c.supplierRatePt));
+  const [otRate, setOtRate] = useState("");
   const [busy, setBusy] = useState(false);
   return (
     <div className="no-print flex flex-wrap items-end gap-2.5 px-4 py-3 border-b border-line bg-surface-2">
-      <b className="w-full text-xs text-muted">سعر اليوم لصاحب المعدة — كل حاجة تانية جاية من سركي الشركة</b>
+      <b className="w-full text-xs text-muted">أسعار صاحب المعدة — كل حاجة تانية جاية من سركي الشركة</b>
       <Labeled label="من يوم">
         <TextInput value={from} onChange={(e) => setFrom(e.target.value)} className="w-16" inputMode="numeric" />
       </Labeled>
@@ -114,6 +115,9 @@ export function SupplierBulk({ v, onDone, onError }: { v: OpenSarki; onDone: (ms
       <Labeled label="سعر اليوم">
         <TextInput value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" />
       </Labeled>
+      <Labeled label="سعر ساعة الأوفر (فاضي = مايتغيرش)">
+        <TextInput value={otRate} onChange={(e) => setOtRate(e.target.value)} className="w-28" inputMode="decimal" placeholder="—" />
+      </Labeled>
       <Button
         primary
         disabled={busy || v.closed}
@@ -122,8 +126,9 @@ export function SupplierBulk({ v, onDone, onError }: { v: OpenSarki; onDone: (ms
           try {
             const pt = moneyToPt(rate);
             if (pt == null) throw new Error("اكتب سعر اليوم");
-            await api.setSupplierRate(c.id, day(v.month, from), day(v.month, to), pt);
-            onDone(`سعر اليوم اتغيّر من ${from} لـ ${to}`);
+            const ot = moneyToPt(otRate);
+            await api.setSupplierRate(c.id, day(v.month, from), day(v.month, to), { dayRatePt: pt, ...(ot != null ? { overtimeRatePt: ot } : {}) });
+            onDone(`أسعار صاحب المعدة اتغيّرت من ${from} لـ ${to}`);
           } catch (e) {
             onError((e as Error).message);
           } finally {

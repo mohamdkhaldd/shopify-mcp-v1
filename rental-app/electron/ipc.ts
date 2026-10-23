@@ -22,7 +22,8 @@ export function makeRegistry(db: Db) {
     clearRange: (a: { contractId: number; from: string; to: string; reason: string }) => clearRange(db, a.contractId, "client", a.from, a.to, a.reason),
     applyOvertime: (a: { contractId: number; month: string; days: string; hoursMilli: number; ratePt: number | null }) =>
       applyOvertime(db, a.contractId, "client", a.month, a.days, a.hoursMilli, a.ratePt),
-    setSupplierRate: (a: { contractId: number; from: string; to: string; ratePt: number }) => setSupplierRate(db, a.contractId, a.from, a.to, a.ratePt),
+    setSupplierRate: (a: { contractId: number; from: string; to: string; dayRatePt?: number | null; overtimeRatePt?: number | null }) =>
+      setSupplierRate(db, a.contractId, a.from, a.to, { dayRatePt: a.dayRatePt, overtimeRatePt: a.overtimeRatePt }),
 
     // حذف
     deletePreview: (a: { entity: Parameters<typeof deletePreview>[1]; id: number }) => deletePreview(db, a.entity, a.id),

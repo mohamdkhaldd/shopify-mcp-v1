@@ -139,7 +139,7 @@ export function ClientSheet({ v, onSaved, onError, onDeleteDay }: { v: OpenSarki
   );
 }
 
-/** سركي صاحب المعدة — a copy of the company sheet; only his day rate can change. */
+/** سركي صاحب المعدة — a copy of the company sheet; only his day rate and overtime rate can change. */
 export function SupplierSheet({ v, onSaved, onError }: { v: OpenSarki; onSaved: () => void; onError: (m: string) => void }) {
   const c = v.contract;
   const ro = v.closed;
@@ -161,7 +161,24 @@ export function SupplierSheet({ v, onSaved, onError }: { v: OpenSarki; onSaved: 
               <td className="text-muted">{off ? "مشتغلش" : r?.site_name ?? ""}</td>
               <td className="n text-muted">{milliToHours(r?.actual_hours_milli)}</td>
               <td className="n text-muted">{hasOt ? milliToHours(d.overtimeMilli) : ""}</td>
-              <td className="n text-muted">{hasOt ? pounds(Math.trunc(otRate)) : ""}</td>
+              <td className="n">
+                {hasOt ? (
+                  <Cell
+                    ariaLabel="سعر ساعة الأوفر لصاحب المعدة"
+                    value={ptToInput(r?.overtime_rate_pt)}
+                    placeholder={`تلقائي ${(Math.trunc(otRate) / 100).toLocaleString("en-US")}`}
+                    disabled={ro}
+                    onCommit={(x) => {
+                      try {
+                        api.upsertDay(c.id, d.date, "supplier", { overtimeRatePt: moneyToPt(x) }).then(onSaved, (e) => onError(e.message));
+                      } catch (e) {
+                        onError((e as Error).message);
+                      }
+                    }}
+                    className="w-[80px] text-end"
+                  />
+                ) : null}
+              </td>
               <td className="n text-muted">{r && !off ? milliToHours(r.base_hours_milli) : ""}</td>
               <td className="n">
                 {r && !off ? (

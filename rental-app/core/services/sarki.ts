@@ -54,7 +54,7 @@ export function getDay(db: Db, contractId: number, date: string, side: Side): Wo
 
 // The company sheet (client) is the master. The equipment owner's sheet
 // (supplier) mirrors every day of it — off days, site, hours, overtime, notes —
-// and the only thing that differs is his day rate.
+// and only his own prices differ: his day rate and his overtime hourly rate.
 
 function writeRow(db: Db, contractId: number, date: string, side: Side, r: Omit<WorkLogRow, "id" | "contract_id" | "date" | "side">) {
   db.prepare(
@@ -67,7 +67,7 @@ function writeRow(db: Db, contractId: number, date: string, side: Side, r: Omit<
   ).run({ contract_id: contractId, date, side, ...r });
 }
 
-/** Copies one company-sheet day onto the owner's sheet, keeping the owner's own day rate. */
+/** Copies one company-sheet day onto the owner's sheet, keeping the owner's own prices. */
 function mirror(db: Db, c: Contract, client: Omit<WorkLogRow, "id" | "contract_id" | "date" | "side">, date: string) {
   const existing = getDay(db, c.id, date, "supplier");
   writeRow(db, c.id, date, "supplier", {
@@ -76,24 +76,27 @@ function mirror(db: Db, c: Contract, client: Omit<WorkLogRow, "id" | "contract_i
     actual_hours_milli: client.actual_hours_milli,
     base_hours_milli: client.base_hours_milli,
     day_rate_pt: client.is_day_off ? null : existing && existing.day_rate_pt != null ? existing.day_rate_pt : newRowRate(c, "supplier"),
-    overtime_rate_pt: null, // his overtime hour = his day rate ÷ base hours
+    // his overtime hour: what you set for him, else his day rate ÷ base hours
+    overtime_rate_pt: client.is_day_off ? null : existing?.overtime_rate_pt ?? null,
     note: client.note,
   });
 }
 
-const SUPPLIER_ONLY_RATE = "سركي صاحب المعدة بياخد كل حاجة من سركي الشركة — اللي بيتغير فيه سعر اليوم بس";
+const SUPPLIER_ONLY_RATE = "سركي صاحب المعدة بياخد كل حاجة من سركي الشركة — اللي بيتغير فيه سعر اليوم وسعر ساعة الأوفر بس";
 
-/** Creates or updates one day (the cell-by-cell save of the sheet). On the owner's sheet only the day rate can change. */
+/** Creates or updates one day (the cell-by-cell save of the sheet). On the owner's sheet only his two prices can change. */
 export function upsertDay(db: Db, contractId: number, date: string, side: Side, patch: DayPatch): WorkLogRow {
   const c = getContract(db, contractId);
   assertInContract(c, date);
   return db.transaction(() => {
     if (side === "supplier") {
-      if (Object.keys(patch).some((k) => k !== "dayRatePt")) throw new UserError(SUPPLIER_ONLY_RATE);
+      if (Object.keys(patch).some((k) => k !== "dayRatePt" && k !== "overtimeRatePt")) throw new UserError(SUPPLIER_ONLY_RATE);
       const row = getDay(db, contractId, date, "supplier");
       if (!row) throw new UserError("اكتب اليوم ده في سركي الشركة الأول");
       if (row.is_day_off) throw new UserError("اليوم ده مشتغلش في سركي الشركة");
-      db.prepare("UPDATE work_logs SET day_rate_pt = ?, updated_at = datetime('now') WHERE id = ?").run(patch.dayRatePt ?? newRowRate(c, "supplier"), row.id);
+      const dayRate = patch.dayRatePt === undefined ? row.day_rate_pt : patch.dayRatePt ?? newRowRate(c, "supplier");
+      const otRate = patch.overtimeRatePt === undefined ? row.overtime_rate_pt : patch.overtimeRatePt;
+      db.prepare("UPDATE work_logs SET day_rate_pt = ?, overtime_rate_pt = ?, updated_at = datetime('now') WHERE id = ?").run(dayRate, otRate, row.id);
       return getDay(db, contractId, date, "supplier")!;
     }
     const cur = getDay(db, contractId, date, "client");
@@ -144,7 +147,7 @@ function datesBetween(c: Contract, from: string, to: string): string[] {
  */
 export function fillRange(db: Db, contractId: number, side: Side, from: string, to: string, v: { dayRatePt?: number | null; siteName?: string | null; baseHoursMilli?: number }) {
   const c = getContract(db, contractId);
-  if (side === "supplier") return setSupplierRate(db, contractId, from, to, v.dayRatePt === undefined ? newRowRate(c, "supplier") : v.dayRatePt);
+  if (side === "supplier") return setSupplierRate(db, contractId, from, to, { dayRatePt: v.dayRatePt === undefined ? newRowRate(c, "supplier") : v.dayRatePt });
   db.transaction(() => {
     for (const date of datesBetween(c, from, to))
       upsertDay(db, contractId, date, "client", {
@@ -159,12 +162,18 @@ export function fillRange(db: Db, contractId: number, side: Side, from: string, 
   })();
 }
 
-/** The owner's day rate for a range of already-written working days. */
-export function setSupplierRate(db: Db, contractId: number, from: string, to: string, dayRatePt: number | null) {
-  db.prepare(
-    `UPDATE work_logs SET day_rate_pt = ?, updated_at = datetime('now')
-     WHERE contract_id = ? AND side = 'supplier' AND date BETWEEN ? AND ? AND is_day_off = 0 AND deleted_at IS NULL`,
-  ).run(dayRatePt, contractId, from, to);
+/**
+ * The owner's prices for a range of already-written working days: his day rate
+ * and/or his overtime hourly rate (null = his day rate ÷ base hours). A price
+ * left undefined isn't touched.
+ */
+export function setSupplierRate(db: Db, contractId: number, from: string, to: string, v: { dayRatePt?: number | null; overtimeRatePt?: number | null }) {
+  const where = "contract_id = ? AND side = 'supplier' AND date BETWEEN ? AND ? AND is_day_off = 0 AND deleted_at IS NULL";
+  db.transaction(() => {
+    if (v.dayRatePt !== undefined) db.prepare(`UPDATE work_logs SET day_rate_pt = ?, updated_at = datetime('now') WHERE ${where}`).run(v.dayRatePt, contractId, from, to);
+    if (v.overtimeRatePt !== undefined)
+      db.prepare(`UPDATE work_logs SET overtime_rate_pt = ?, updated_at = datetime('now') WHERE ${where}`).run(v.overtimeRatePt, contractId, from, to);
+  })();
 }
 
 /** "افرغ الأيام دي (مشتغلش)" — company sheet (the owner's follows). */
