@@ -68,8 +68,15 @@ function targetsOf(db: Db, entity: Deletable, id: number): Target[] {
   if (MONEY_TABLES.includes(entity)) return money(db, entity, "id = ?", id);
   switch (entity) {
     case "work_logs": {
-      const r = db.prepare(`SELECT id, date, side FROM work_logs WHERE id = ? AND ${live}`).get(id);
-      return r ? [{ table: "work_logs", id, date: r.date, label: `يوم ${r.date} من ${r.side === "client" ? "سركي الشركة" : "سركي صاحب المعدة"}` }] : [];
+      // a company-sheet day takes the owner's copy of it along
+      const r = db.prepare(`SELECT id, contract_id, date, side FROM work_logs WHERE id = ? AND ${live}`).get(id);
+      if (!r) return [];
+      if (r.side === "supplier") throw new UserError("سركي صاحب المعدة بيتبع سركي الشركة — احذف اليوم من سركي الشركة");
+      const copy = db.prepare(`SELECT id FROM work_logs WHERE contract_id = ? AND date = ? AND side = 'supplier' AND ${live}`).get(r.contract_id, r.date);
+      return [
+        { table: "work_logs", id, date: r.date, label: `يوم ${r.date} من السركي (الشركة وصاحب المعدة)` },
+        ...(copy ? [{ table: "work_logs", id: copy.id, date: r.date, label: "" }] : []),
+      ];
     }
     case "contracts":
       return contractTargets(db, id);

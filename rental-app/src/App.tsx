@@ -3,6 +3,7 @@ import Sidebar from "./components/Sidebar";
 import { UndoProvider } from "./context/UndoContext";
 import Dashboard from "./pages/Dashboard";
 import ComingNext from "./pages/ComingNext";
+import Sarki from "./pages/sarki/Sarki";
 import { SectionId } from "./nav";
 
 export default function App() {
@@ -13,7 +14,7 @@ export default function App() {
         <Sidebar active={active} onSelect={setActive} />
         <main className="flex-1 min-w-0 px-6 xl:px-8 pt-[26px] pb-14">
           <div className="max-w-[1240px] mx-auto">
-            {active === "home" ? <Dashboard onNavigate={setActive} /> : <ComingNext id={active} />}
+            {active === "home" ? <Dashboard onNavigate={setActive} /> : active === "sarki" ? <Sarki /> : <ComingNext id={active} />}
           </div>
         </main>
       </div>

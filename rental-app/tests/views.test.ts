@@ -46,3 +46,22 @@ describe("dashboard view (demo data)", () => {
     expect(asOfForMonth("2026-10", "2026-10-23")).toBe("2026-10-23");
   });
 });
+
+import { sarkiView } from "../core/services/views";
+
+describe("sarki view", () => {
+  const db = freshDb();
+  const ids = seedDemo(db);
+  it("opens the active contract on the current month with both sheets", () => {
+    const v = sarkiView(db, undefined, undefined, "2026-10-31");
+    expect(v.contract?.code).toBe("ع-2026-001");
+    expect(v.month).toBe("2026-10");
+    expect(v.months).toEqual(["2026-10"]);
+    if (!v.contract) throw new Error();
+    expect([v.client!.totals.workedDays, v.client!.totals.totalPt, v.supplier!.totals.totalPt]).toEqual([30, egp(90_000), egp(75_000)]);
+    expect(v.client!.days).toHaveLength(31);
+    expect(v.client!.days[8].row?.note).toBe("إجازة الجمعة — الموقع قافل");
+    expect(v.supplier!.days[8].row?.is_day_off).toBe(1);
+    expect(ids.contract).toBe(v.contract.id);
+  });
+});

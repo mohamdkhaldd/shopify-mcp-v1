@@ -108,3 +108,43 @@ export function getContract(db: Db, contractId: number) {
 export function createExpenseCategory(db: Db, name: string) {
   return id(db.prepare("INSERT INTO expense_categories (name) VALUES (?)").run(name.trim()));
 }
+
+/**
+ * The "عقد جديد" form in one step: the client, the equipment owner and the
+ * equipment can each be an existing id or a new one typed in the same form.
+ */
+export interface NewContractInput {
+  client: { id: number } | { kind: "company" | "individual"; name: string; taxId?: string; vatApplies?: boolean; tax5Applies?: boolean };
+  equipment: { id: number } | { name: string; siteName?: string; supplier: { id: number } | { name: string; phone?: string } };
+  unit: "day" | "month";
+  clientRatePt: number;
+  supplierRatePt: number;
+  startDate: string;
+  endDate?: string;
+  siteName?: string;
+}
+
+export function newContract(db: Db, v: NewContractInput) {
+  if (!(v.clientRatePt > 0) || !(v.supplierRatePt > 0)) throw new UserError("اكتب سعر الشركة وسعر صاحب المعدة");
+  if (v.endDate && v.endDate < v.startDate) throw new UserError("تاريخ النهاية قبل تاريخ البداية");
+  return db.transaction(() => {
+    const clientId = "id" in v.client ? v.client.id : createClient(db, v.client);
+    let equipmentId: number;
+    if ("id" in v.equipment) equipmentId = v.equipment.id;
+    else {
+      const sup = v.equipment.supplier;
+      const supplierId = "id" in sup ? sup.id : createSupplier(db, sup);
+      equipmentId = createEquipment(db, { name: v.equipment.name, supplierId, siteName: v.equipment.siteName ?? v.siteName, supplierRatePt: v.supplierRatePt });
+    }
+    return createContract(db, {
+      clientId,
+      equipmentId,
+      unit: v.unit,
+      clientRatePt: v.clientRatePt,
+      supplierRatePt: v.supplierRatePt,
+      startDate: v.startDate,
+      endDate: v.endDate,
+      siteName: v.siteName,
+    });
+  })();
+}

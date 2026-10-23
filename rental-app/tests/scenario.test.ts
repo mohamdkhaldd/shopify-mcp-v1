@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { freshDb, egp } from "./helpers";
 import { Db } from "../core/db";
 import { createClient, createContract, createEquipment, createInvestor, createSupplier } from "../core/services/master";
-import { clearRange, copyClientToSupplier, fillRange, getSheet } from "../core/services/sarki";
+import { clearRange, fillRange, getSheet } from "../core/services/sarki";
 import { recordCapital, recordClientPayment, recordExpense, recordSupplierDeduction, recordSupplierPayment } from "../core/services/ledger";
 import { computeBooks, Books } from "../core/services/books";
 import { clientStatement, dashboard, supplierStatement, taxFile } from "../core/services/reports";
@@ -34,7 +34,6 @@ describe("mockup scenario (3,000 / 2,500)", () => {
     });
     fillRange(db, ids.contract, "client", "2026-10-01", "2026-10-31", {});
     clearRange(db, ids.contract, "client", "2026-10-09", "2026-10-09", "إجازة الجمعة — الموقع قافل");
-    copyClientToSupplier(db, ids.contract, "2026-10");
     recordExpense(db, { kind: "contract", contractId: ids.contract, date: "2026-10-02", amountPt: egp(1_250), note: "نقل المعدة للموقع" });
     recordSupplierDeduction(db, { supplierId: ids.sayed, contractId: ids.contract, date: "2026-10-05", amountPt: egp(3_000), note: "سولار دفعناه عنه" });
     recordSupplierPayment(db, { supplierId: ids.sayed, contractId: ids.contract, date: "2026-10-15", amountPt: egp(50_000) });

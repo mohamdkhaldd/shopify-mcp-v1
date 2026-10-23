@@ -68,8 +68,9 @@ describe("delete with confirmation", () => {
     const row = db.prepare("SELECT id FROM work_logs WHERE contract_id = ? AND date = '2026-10-05' AND side = 'client'").get(contract);
     deleteEntity(db, "work_logs", row.id);
     expect(getSheet(db, contract, "2026-10", "client").totals.workedDays).toBe(29);
+    expect(getSheet(db, contract, "2026-10", "supplier").totals.workedDays).toBe(29);
     fillRange(db, contract, "client", "2026-10-05", "2026-10-05", {});
-    expect(getSheet(db, contract, "2026-10", "client").totals.workedDays).toBe(30);
+    expect(getSheet(db, contract, "2026-10", "supplier").totals.workedDays).toBe(30);
   });
 
   it("anything in a closed month is refused with a clear reason", () => {

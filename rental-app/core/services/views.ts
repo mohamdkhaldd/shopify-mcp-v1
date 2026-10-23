@@ -1,6 +1,7 @@
 import { Db, monthOf, today } from "../db";
 import { computeBooks } from "./books";
 import { dashboard } from "./reports";
+import { getSheet } from "./sarki";
 
 // Screen-shaped data: one call per page, names already joined in.
 
@@ -83,3 +84,90 @@ export function dashboardView(db: Db, month: string = monthOf(today()), now: str
 }
 
 export type DashboardView = ReturnType<typeof dashboardView>;
+
+// ---------------- السركي ----------------
+
+function monthsOfContract(c: { start_date: string; end_date: string | null }, now: string) {
+  const end = c.end_date && c.end_date < now ? c.end_date : now > c.start_date ? now : c.start_date;
+  const out: string[] = [];
+  let [y, m] = c.start_date.slice(0, 7).split("-").map(Number);
+  const [ey, em] = end.slice(0, 7).split("-").map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    if (++m > 12) [y, m] = [y + 1, 1];
+  }
+  return out;
+}
+
+export function sarkiView(db: Db, contractId?: number, month?: string, now: string = today()) {
+  const contracts = db
+    .prepare(
+      `SELECT c.id, c.code, c.status, e.name AS equipment, cl.name AS client FROM contracts c
+       JOIN equipment e ON e.id = c.equipment_id JOIN clients cl ON cl.id = c.client_id
+       WHERE c.deleted_at IS NULL ORDER BY (c.status = 'active') DESC, c.id DESC`,
+    )
+    .all() as { id: number; code: string; status: string; equipment: string; client: string }[];
+  const id = contractId && contracts.some((c) => c.id === contractId) ? contractId : contracts[0]?.id;
+  if (!id) return { contracts, contract: null };
+  const c = db
+    .prepare(
+      `SELECT c.*, e.name AS equipment, cl.name AS client, cl.kind AS client_kind, cl.vat_applies, cl.tax5_applies, s.name AS supplier
+       FROM contracts c JOIN equipment e ON e.id = c.equipment_id JOIN clients cl ON cl.id = c.client_id JOIN suppliers s ON s.id = c.supplier_id
+       WHERE c.id = ?`,
+    )
+    .get(id);
+  const months = monthsOfContract(c, now);
+  const m = month && months.includes(month) ? month : months.includes(monthOf(now)) ? monthOf(now) : months[months.length - 1];
+  const client = getSheet(db, id, m, "client");
+  const supplier = getSheet(db, id, m, "supplier");
+  const closed = !!db.prepare("SELECT 1 FROM month_closes WHERE month = ?").get(m);
+  return {
+    contracts,
+    contract: {
+      id: c.id as number,
+      code: c.code as string,
+      unit: c.unit as "day" | "month",
+      client: c.client as string,
+      clientKind: c.client_kind as "company" | "individual",
+      vatApplies: !!c.vat_applies,
+      tax5Applies: !!c.tax5_applies,
+      supplier: c.supplier as string,
+      equipment: c.equipment as string,
+      siteName: c.site_name as string | null,
+      clientRatePt: c.client_rate_pt as number,
+      supplierRatePt: c.supplier_rate_pt as number,
+      startDate: c.start_date as string,
+      endDate: c.end_date as string | null,
+      status: c.status as string,
+    },
+    month: m,
+    months,
+    closed,
+    client: { days: client.days, totals: client.totals },
+    supplier: { days: supplier.days, totals: supplier.totals },
+  };
+}
+
+export type SarkiView = ReturnType<typeof sarkiView>;
+
+/** Pick-lists for the "عقد جديد" form. */
+export function contractOptions(db: Db) {
+  return {
+    clients: db.prepare("SELECT id, name, kind, vat_applies, tax5_applies FROM clients WHERE deleted_at IS NULL ORDER BY name").all() as {
+      id: number;
+      name: string;
+      kind: "company" | "individual";
+      vat_applies: number;
+      tax5_applies: number;
+    }[],
+    suppliers: db.prepare("SELECT id, name FROM suppliers WHERE deleted_at IS NULL ORDER BY name").all() as { id: number; name: string }[],
+    equipment: db
+      .prepare(
+        `SELECT e.id, e.name, e.site_name, e.supplier_rate_pt, e.supplier_id, s.name AS supplier FROM equipment e
+         JOIN suppliers s ON s.id = e.supplier_id WHERE e.deleted_at IS NULL ORDER BY e.name`,
+      )
+      .all() as { id: number; name: string; site_name: string | null; supplier_rate_pt: number | null; supplier_id: number; supplier: string }[],
+  };
+}
+
+export type ContractOptions = ReturnType<typeof contractOptions>;

@@ -1,4 +1,6 @@
-import type { DashboardView } from "../../core/services/views";
+import type { ContractOptions, DashboardView, SarkiView } from "../../core/services/views";
+import type { NewContractInput } from "../../core/services/master";
+import type { DayPatch } from "../../core/services/sarki";
 import type { Deletable } from "../../core/services/deletion";
 
 // Thin typed wrapper over the single "core:call" IPC channel (see electron/ipc.ts).
@@ -33,6 +35,16 @@ export interface DeletePreview {
 
 export const api = {
   dashboard: (month?: string) => call<DashboardView>("dashboard", { month }),
+  sarki: (contractId?: number, month?: string) => call<SarkiView>("sarki", { contractId, month }),
+  contractOptions: () => call<ContractOptions>("contractOptions"),
+  newContract: (input: NewContractInput) => call<number>("newContract", input),
+  upsertDay: (contractId: number, date: string, side: "client" | "supplier", patch: DayPatch) => call("upsertDay", { contractId, date, side, patch }),
+  fillRange: (contractId: number, from: string, to: string, v: { dayRatePt?: number | null; siteName?: string | null; baseHoursMilli?: number }) =>
+    call("fillRange", { contractId, from, to, ...v }),
+  clearRange: (contractId: number, from: string, to: string, reason: string) => call("clearRange", { contractId, from, to, reason }),
+  applyOvertime: (contractId: number, month: string, days: string, hoursMilli: number, ratePt: number | null) =>
+    call("applyOvertime", { contractId, month, days, hoursMilli, ratePt }),
+  setSupplierRate: (contractId: number, from: string, to: string, ratePt: number) => call("setSupplierRate", { contractId, from, to, ratePt }),
   deletePreview: (entity: Deletable, id: number) => call<DeletePreview>("deletePreview", { entity, id }),
   delete: (entity: Deletable, id: number) => call<string>("delete", { entity, id }),
   restore: (batch: string) => call<void>("restore", { batch }),
@@ -45,4 +57,6 @@ export const appApi = {
   savePdf: (name: string) => window.api?.invoke("print:savePdf", { name }),
 };
 
-export type { DashboardView, Deletable };
+export type { ContractOptions, DashboardView, Deletable, NewContractInput, SarkiView };
+/** The السركي view once a contract is open. */
+export type OpenSarki = Exclude<SarkiView, { contract: null }>;

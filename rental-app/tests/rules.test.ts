@@ -76,11 +76,25 @@ describe("sarki day rules (same as the old app)", () => {
     const days = Array.from({ length: 15 }, () => day());
     expect(sheetTotals(days, { unit: "month", ratePt: egp(90_000) }).totalPt).toBe(egp(45_000));
   });
-  it("day off needs a reason and counts nothing", () => {
+  it("a day off counts nothing; with no reason it says مشتغلش", () => {
     const { db, contract } = setup();
-    expect(() => upsertDay(db, contract, "2026-10-05", "client", { isDayOff: true })).toThrow(/سبب/);
-    upsertDay(db, contract, "2026-10-05", "client", { isDayOff: true, note: "عطل" });
-    expect(getSheet(db, contract, "2026-10", "client").totals.workedDays).toBe(29);
+    expect(upsertDay(db, contract, "2026-10-05", "client", { isDayOff: true }).note).toBe("مشتغلش");
+    upsertDay(db, contract, "2026-10-06", "client", { isDayOff: true, note: "عطل" });
+    expect(getSheet(db, contract, "2026-10", "client").totals.workedDays).toBe(28);
+    expect(getSheet(db, contract, "2026-10", "supplier").totals.workedDays).toBe(28);
+  });
+  it("the owner's sheet mirrors every detail of the company sheet; only his day rate differs", () => {
+    const { db, contract } = setup();
+    upsertDay(db, contract, "2026-10-07", "client", { actualHoursMilli: 10_000, siteName: "موقع تاني", note: "شغل ليلي" });
+    const s = getSheet(db, contract, "2026-10", "supplier").days.find((d) => d.date === "2026-10-07")!;
+    expect([s.row!.actual_hours_milli, s.row!.site_name, s.row!.note, s.row!.day_rate_pt]).toEqual([10_000, "موقع تاني", "شغل ليلي", egp(400)]);
+    expect(s.totalPt).toBe(egp(400) + egp(100)); // 400 ÷ 8 × 2 h
+    expect(() => upsertDay(db, contract, "2026-10-07", "supplier", { actualHoursMilli: 8000 })).toThrow(/سعر اليوم بس/);
+    upsertDay(db, contract, "2026-10-07", "supplier", { dayRatePt: egp(450) });
+    // a later edit on the company sheet keeps the owner's own rate
+    upsertDay(db, contract, "2026-10-07", "client", { note: "اتعدل" });
+    const again = getSheet(db, contract, "2026-10", "supplier").days.find((d) => d.date === "2026-10-07")!.row!;
+    expect([again.day_rate_pt, again.note]).toEqual([egp(450), "اتعدل"]);
   });
   it("bulk overtime on '3, 7-8' and the red mismatch flag", () => {
     const { db, contract } = setup();
@@ -88,7 +102,8 @@ describe("sarki day rules (same as the old app)", () => {
     const s = getSheet(db, contract, "2026-10", "client");
     expect(s.totals.overtimeMilli).toBe(6000);
     expect(s.totals.totalPt).toBe(egp(15_000) + 3 * egp(125)); // 500/8 × 2 h = 125
-    expect(s.mismatchDays).toBe(3);
+    expect(s.mismatchDays).toBe(0); // the owner's sheet follows
+    expect(getSheet(db, contract, "2026-10", "supplier").totals.totalPt).toBe(egp(12_000) + 3 * egp(100));
   });
 });
 
@@ -228,7 +243,7 @@ describe("records are never deleted or edited", () => {
     const n = db.prepare("SELECT COUNT(*) AS n FROM audit_log").get().n;
     upsertDay(db, contract, "2026-10-03", "client", { note: "تعديل" });
     const last = db.prepare("SELECT * FROM audit_log ORDER BY id DESC LIMIT 1").get();
-    expect(db.prepare("SELECT COUNT(*) AS n FROM audit_log").get().n).toBe(n + 1);
+    expect(db.prepare("SELECT COUNT(*) AS n FROM audit_log").get().n).toBe(n + 2); // the company day + the owner's copy
     expect([last.tbl, last.op]).toEqual(["work_logs", "update"]);
     expect(JSON.parse(last.after_json).note).toBe("تعديل");
   });

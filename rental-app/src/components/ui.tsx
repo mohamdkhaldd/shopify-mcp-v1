@@ -12,7 +12,7 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
   );
 }
 
-export function Panel({ title, hint, actions, children, className = "" }: { title?: string; hint?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
+export function Panel({ title, hint, actions, children, className = "" }: { title?: ReactNode; hint?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={`bg-surface border border-line rounded-card min-w-0 ${className}`}>
       {(title || actions) && (

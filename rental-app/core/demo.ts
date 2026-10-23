@@ -1,6 +1,6 @@
 import { Db } from "./db";
 import { createClient, createContract, createEquipment, createExpenseCategory, createInvestor, createSupplier } from "./services/master";
-import { clearRange, copyClientToSupplier, fillRange } from "./services/sarki";
+import { clearRange, fillRange } from "./services/sarki";
 import { recordCapital, recordClientPayment, recordExpense, recordSupplierDeduction, recordSupplierPayment } from "./services/ledger";
 
 // The everyday example from the mockups (3,000 / 2,500, October 2026). Used by
@@ -26,8 +26,7 @@ export function seedDemo(db: Db) {
       endDate: "2026-10-31",
     });
     fillRange(db, contract, "client", "2026-10-01", "2026-10-31", {});
-    clearRange(db, contract, "client", "2026-10-09", "2026-10-09", "إجازة الجمعة — الموقع قافل");
-    copyClientToSupplier(db, contract, "2026-10");
+    clearRange(db, contract, "client", "2026-10-09", "2026-10-09", "إجازة الجمعة — الموقع قافل"); // the owner's sheet follows by itself
     const transport = createExpenseCategory(db, "نقل معدات");
     recordExpense(db, { kind: "contract", contractId: contract, categoryId: transport, date: "2026-10-02", amountPt: egp(1_250), note: "نقل المعدة للموقع" });
     recordSupplierDeduction(db, { supplierId: sayed, contractId: contract, date: "2026-10-05", amountPt: egp(3_000), note: "سولار دفعناه عنه" });
