@@ -27,9 +27,13 @@ jobs:
 
       # --publish always بينشر إصدار على GitHub Releases (مش بس يبني الملف
       # محليًا) — ده اللي البرنامج المُثبَّت بيراجعه لوحده عشان يكتشف تحديثات.
+      # بيتنشر في ريبو albunyan-releases العام (ملفات تسطيب بس، من غير كود)
+      # — أول ريبو في "publish" هو اللي البرنامج المتسطب بيدوّر فيه — وفي
+      # الريبو ده كمان عشان النسخ القديمة تلاقي التحديث وتنقل للريبو العام.
+      # RELEASES_TOKEN: توكن ليه صلاحية كتابة على الاتنين.
       - run: npm run electron:build -- --publish always
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
 
       - uses: actions/upload-artifact@v4
         with:

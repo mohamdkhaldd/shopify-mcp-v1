@@ -7,7 +7,8 @@ const Printer = registerPlugin("Printer");
 // النسخة الجديدة ويفتح شاشة التثبيت بتاعة أندرويد.
 const Updater = registerPlugin("Updater");
 
-const REPO = "mohamdkhaldd/shopify-mcp-v1";
+// ريبو عام فيه ملفات التسطيب بس — الكود نفسه في ريبو خاص.
+const REPO = "mohamdkhaldd/albunyan-releases";
 // eslint-disable-next-line no-undef
 const VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.0.0";
 

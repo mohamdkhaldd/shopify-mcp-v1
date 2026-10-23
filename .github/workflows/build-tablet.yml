@@ -77,6 +77,17 @@ jobs:
           target_commitish: ${{ github.sha }}
           files: accounting-app/albunyan-tablet-${{ env.APP_VERSION }}.apk
 
+      # نفس الـ APK في الريبو العام (ملفات تسطيب بس) — نسخ التابلت الجديدة
+      # بتدوّر على تحديثاتها هناك عشان الكود يفضل في ريبو خاص.
+      - uses: softprops/action-gh-release@v2
+        with:
+          repository: mohamdkhaldd/albunyan-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: tablet-v${{ env.APP_VERSION }}
+          name: نسخة التابلت ${{ env.APP_VERSION }}
+          prerelease: true
+          files: accounting-app/albunyan-tablet-${{ env.APP_VERSION }}.apk
+
       - uses: actions/upload-artifact@v4
         with:
           name: albunyan-tablet-apk

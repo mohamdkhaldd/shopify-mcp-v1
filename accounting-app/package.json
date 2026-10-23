@@ -60,11 +60,19 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true
     },
-    "publish": {
-      "provider": "github",
-      "owner": "mohamdkhaldd",
-      "repo": "shopify-mcp-v1",
-      "releaseType": "release"
-    }
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "mohamdkhaldd",
+        "repo": "albunyan-releases",
+        "releaseType": "release"
+      },
+      {
+        "provider": "github",
+        "owner": "mohamdkhaldd",
+        "repo": "shopify-mcp-v1",
+        "releaseType": "release"
+      }
+    ]
   }
 }
