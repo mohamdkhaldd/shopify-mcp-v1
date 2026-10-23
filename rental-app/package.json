@@ -20,16 +20,7 @@
     "test:tablet": "TEST_DB=sqljs vitest run"
   },
   "dependencies": {
-    "@fontsource/cairo": "^5.1.0",
-    "@fontsource/noto-kufi-arabic": "^5.1.0",
-    "@supabase/supabase-js": "^2.118.0",
-    "better-sqlite3": "^11.3.0",
-    "electron-updater": "^6.3.9",
-    "exceljs": "^4.4.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "recharts": "^2.12.7",
-    "ws": "^8.22.0"
+    "better-sqlite3": "^11.3.0"
   },
   "devDependencies": {
     "@capacitor/android": "^7.6.9",
@@ -38,6 +29,9 @@
     "@capacitor/filesystem": "^7.1.9",
     "@capacitor/share": "^7.0.4",
     "@electron/rebuild": "^3.6.2",
+    "@fontsource/cairo": "^5.1.0",
+    "@fontsource/noto-kufi-arabic": "^5.1.0",
+    "@supabase/supabase-js": "^2.118.0",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.7.4",
     "@types/react": "^18.3.11",
@@ -49,14 +43,20 @@
     "concurrently": "^9.0.1",
     "electron": "^32.1.2",
     "electron-builder": "^25.1.7",
+    "electron-updater": "^6.3.9",
     "esbuild": "^0.21.5",
+    "exceljs": "^4.4.0",
     "postcss": "^8.4.47",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7",
     "sql.js": "^1.15.1",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.5.4",
     "vite": "^5.4.8",
     "vitest": "^2.1.2",
-    "wait-on": "^8.0.1"
+    "wait-on": "^8.0.1",
+    "ws": "^8.22.0"
   },
   "main": "dist-electron/main.cjs",
   "build": {
