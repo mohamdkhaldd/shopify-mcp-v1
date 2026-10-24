@@ -4,11 +4,11 @@ const path = require("path");
 const QR = require("qrcode");
 const { chromium } = require("playwright");
 
-// short links (is.gd) that forward to the real downloads — they always give the latest version
+// short links (TinyURL) that forward to the real downloads — they always give the latest version
 const LINKS = {
-  windows: "https://is.gd/mktech_win",
-  android: "https://is.gd/mktech_android",
-  web: "https://is.gd/mktech_iphone",
+  windows: "https://tinyurl.com/mktech-windows",
+  android: "https://tinyurl.com/mktech-android",
+  web: "https://tinyurl.com/mktech-iphone",
 };
 const F = (p) => "file://" + path.join(__dirname, "node_modules/@fontsource", p);
 const ICONS = {
@@ -74,7 +74,7 @@ body{font-family:Tajawal,Inter,sans-serif;color:var(--navy);-webkit-print-color-
 .cover .glow{position:absolute;inset:auto -30mm -40mm auto;width:150mm;height:150mm;border-radius:50%;background:radial-gradient(circle,rgba(11,95,255,.45),transparent 65%)}
 .cover .shape{position:absolute;left:-20mm;top:70mm;width:120mm;height:120mm;transform:rotate(45deg);border:1px solid rgba(59,130,246,.18);border-radius:12mm}
 .brand{display:flex;align-items:center;gap:14px;direction:ltr;justify-content:flex-end}
-.brand img{width:64px;height:64px;border-radius:16px;box-shadow:0 10px 30px rgba(11,95,255,.35)}
+.brand img{width:88px;height:88px;border-radius:20px;box-shadow:0 10px 30px rgba(11,95,255,.35)}
 .brand .wm{font-family:Inter;font-weight:800;font-size:34px;letter-spacing:-.5px;line-height:1}
 .brand .tl{font-family:Inter;font-size:12.5px;color:#93C5FD;margin-top:5px}
 .hero{margin-top:34mm;position:relative}

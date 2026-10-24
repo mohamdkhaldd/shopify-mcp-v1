@@ -1,34 +1,94 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" rx="168" fill="#06142F"/>
+  <svg x="206" y="313" width="612" height="406" viewBox="160 225 440 292" overflow="visible">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0F172A"/><stop offset="0.6" stop-color="#0B1A3A"/><stop offset="1" stop-color="#0B2A6B"/>
+    <!-- left leg: bright top, a darker band low down -->
+    <linearGradient id="g-left" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1268FF"/>
+      <stop offset="0.55" stop-color="#0B5BF0"/>
+      <stop offset="0.8" stop-color="#0A3FC4"/>
+      <stop offset="1" stop-color="#0D55E6"/>
     </linearGradient>
+    <!-- first diagonal: lit at the top, shaded into the fold -->
+    <linearGradient id="g-diag" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E63FA"/>
+      <stop offset="0.6" stop-color="#0B4FD8"/>
+      <stop offset="1" stop-color="#08308F"/>
+    </linearGradient>
+    <!-- the ribbon (second diagonal): the brightest face -->
+    <linearGradient id="g-ribbon" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1A8CFF"/>
+      <stop offset="1" stop-color="#0E6BFF"/>
+    </linearGradient>
+    <!-- the ribbon's folded-back top -->
+    <linearGradient id="g-fold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B4FE0"/>
+      <stop offset="1" stop-color="#1546C9"/>
+    </linearGradient>
+    <!-- right leg: lit top, deep shadow down the middle -->
+    <linearGradient id="g-right" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1A8EFF"/>
+      <stop offset="0.45" stop-color="#0B55E8"/>
+      <stop offset="0.75" stop-color="#0A35B0"/>
+      <stop offset="1" stop-color="#0B4CD6"/>
+    </linearGradient>
+    <linearGradient id="g-right-shine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#7CC4FF" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <!-- the drop under the fold -->
+    <linearGradient id="g-drop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1A84FF"/>
+      <stop offset="1" stop-color="#2FA6FF"/>
+    </linearGradient>
+    <linearGradient id="g-arm-up" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#0A63FF"/>
+      <stop offset="1" stop-color="#1786FF"/>
+    </linearGradient>
+    <linearGradient id="g-arm-down" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1489FF"/>
+      <stop offset="1" stop-color="#22A0FF"/>
+    </linearGradient>
+    <!-- the dark band that crosses the legs low down -->
+    <linearGradient id="g-band" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0.35" stop-color="#03113D" stop-opacity="0"/>
+      <stop offset="0.68" stop-color="#03113D" stop-opacity="0.42"/>
+      <stop offset="0.9" stop-color="#03113D" stop-opacity="0.05"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
   </defs>
-  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
-  <svg x="212" y="337" width="600" height="351" viewBox="0 0 410 240">
-  <defs>
-    <linearGradient id="stem" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3B82F6"/>
-      <stop offset="1" stop-color="#0B5FFF"/>
-    </linearGradient>
-    <linearGradient id="vee" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1D4ED8"/>
-      <stop offset="1" stop-color="#0B3FB8"/>
-    </linearGradient>
-    <linearGradient id="arm" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#0B5FFF"/>
-      <stop offset="1" stop-color="#60A5FA"/>
-    </linearGradient>
-  </defs>
-  <!-- M: the V between its two legs (drawn first, the legs sit on it) -->
-  <polygon points="0,0 56,0 116,112 176,0 232,0 116,212" fill="url(#vee)"/>
-  <!-- M: left leg -->
-  <rect x="0" y="0" width="52" height="240" fill="url(#stem)"/>
-  <!-- M's right leg is also the K's stem -->
-  <rect x="180" y="0" width="52" height="240" fill="url(#stem)"/>
-  <!-- K: upper arm -->
-  <polygon points="232,118 330,0 400,0 232,200" fill="url(#arm)"/>
-  <!-- K: lower arm -->
-  <polygon points="268,158 306,114 410,240 338,240" fill="url(#stem)"/>
+
+  <!-- soft glow behind the letters -->
+  <g filter="url(#glow)" opacity="0.32">
+  <!-- M -->
+  <polygon points="168,233 212,233 228,253 228,507 168,507" fill="url(#g-left)"/>
+  <polygon points="186,233 212,233 300,343 300,436 228,352 228,282" fill="url(#g-diag)"/>
+  <polygon points="365,507 365,342 422,297 428,302 428,507" fill="url(#g-right)"/>
+  <polygon points="365,507 365,342 422,297 428,302 428,507" fill="url(#g-right-shine)"/>
+  <polygon points="300,343 390,233 460,233 420,285 316,418 300,436" fill="url(#g-ribbon)"/>
+  <polygon points="398,233 460,233 420,285 409,300" fill="url(#g-fold)"/>
+  <polygon points="278,463 283,425 316,418 316,463 300,476" fill="url(#g-drop)"/>
+
+  <!-- K -->
+  <polygon points="439,325 512,233 588,233 478,368" fill="url(#g-arm-up)"/>
+  <polygon points="441,416 478,376 590,509 515,509" fill="url(#g-arm-down)"/>
+  </g>
+  <!-- M -->
+  <polygon points="168,233 212,233 228,253 228,507 168,507" fill="url(#g-left)"/>
+  <polygon points="168,233 212,233 228,253 228,507 168,507" fill="url(#g-band)"/>
+  <polygon points="186,233 212,233 300,343 300,436 228,352 228,282" fill="url(#g-diag)"/>
+  <polygon points="365,507 365,342 422,297 428,302 428,507" fill="url(#g-right)"/>
+  <polygon points="365,507 365,342 422,297 428,302 428,507" fill="url(#g-right-shine)"/>
+  <polygon points="365,507 365,342 422,297 428,302 428,507" fill="url(#g-band)"/>
+  <polygon points="300,343 390,233 460,233 420,285 316,418 300,436" fill="url(#g-ribbon)"/>
+  <polygon points="398,233 460,233 420,285 409,300" fill="url(#g-fold)"/>
+  <polygon points="278,463 283,425 316,418 316,463 300,476" fill="url(#g-drop)"/>
+
+  <!-- K -->
+  <polygon points="439,325 512,233 588,233 478,368" fill="url(#g-arm-up)"/>
+  <polygon points="441,416 478,376 590,509 515,509" fill="url(#g-arm-down)"/>
   </svg>
 </svg>

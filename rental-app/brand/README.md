@@ -1,6 +1,7 @@
 # MK-Tech — اللوجو
 
-- `mk-mark.svg`: علامة MK لوحدها (vector، أي مقاس)
+- `mk-mark.svg`: علامة MK لوحدها بالألوان والتأثيرات (vector، أي مقاس)
+- `mark-navy.svg` / `mark-white.svg`: العلامة بلون واحد (طباعة، أختام، favicon)
 - `mk-icon.svg` / `mk-icon-1024.png`: أيقونة البرنامج (كحلي + العلامة)
 
 منهم اتعملت: `public/mk-icon*.png`، `public/apple-touch-icon.png`، `build/icon.ico`،
