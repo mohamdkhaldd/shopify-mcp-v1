@@ -182,7 +182,7 @@ table.t{width:100%;border-collapse:separate;border-spacing:0;background:#fff;bor
     <table class="t"><tr><th>الخانة</th><th>تكتب فيها إيه</th><th>مثال</th></tr>
       <tr><td><span class="f">customer</span></td><td>اسم الشركة الرسمي — بيظهر في الطباعة والتقارير</td><td class="ex">شركة النور للمقاولات</td></tr>
       <tr><td><span class="f">display_name</span></td><td>الاسم القصير اللي فوق في البرنامج (لو فاضي = customer)</td><td class="ex">النور</td></tr>
-      <tr><td><span class="f">products</span></td><td>البرامج اللي الكود بيفتحها (شوف تحت)</td><td class="ex"><span class="en">{rental,operations}</span></td></tr>
+      <tr><td><span class="f">products</span></td><td>البرامج اللي الكود بيفتحها (شوف تحت)</td><td class="ex"><span class="en">["rental","operations"]</span></td></tr>
       <tr><td><span class="f">max_devices</span></td><td>عدد الأجهزة المسموحة (لاب + تابلت + موبايل…)</td><td class="ex en">3</td></tr>
       <tr><td><span class="f">expires_at</span></td><td>آخر يوم في الاشتراك — فاضي = مفتوح من غير ميعاد</td><td class="ex en">2027-01-31</td></tr>
       <tr><td><span class="f">logo_url</span></td><td>لينك اللوجو (الصفحة الجاية) — فاضي = أول حرف من الاسم في دايرة</td><td class="ex">(اختياري)</td></tr>
@@ -190,11 +190,11 @@ table.t{width:100%;border-collapse:separate;border-spacing:0;background:#fff;bor
       <tr><td><span class="f">key</span></td><td><b>ماتكتبش فيها حاجة</b> — الكود بيتعمل لوحده</td><td class="ex">—</td></tr>
     </table>
     <table class="t" style="margin-top:8px"><tr><th>العميل اشترى</th><th>اكتب في products بالظبط</th></tr>
-      <tr><td>برنامج التأجير بس</td><td class="f">{rental}</td></tr>
-      <tr><td>برنامج التشغيل بس</td><td class="f">{operations}</td></tr>
-      <tr><td>البرنامجين</td><td class="f">{rental,operations}</td></tr>
+      <tr><td>برنامج التأجير بس</td><td class="f">["rental"]</td></tr>
+      <tr><td>برنامج التشغيل بس</td><td class="f">["operations"]</td></tr>
+      <tr><td>البرنامجين</td><td class="f">["rental","operations"]</td></tr>
     </table>
-    ${note("الأقواس <b>{ }</b> لازم تتكتب، ومن غير مسافات. لو الكود بيفتح البرنامجين، العميل بيشوف صفحة \"اختار البرنامج\" كل ما يفتح.")}`)}
+    ${note("اكتبها بالظبط زي ما هي: الأقواس المربعة <b>[ ]</b> وعلامات التنصيص <b>&quot; &quot;</b> والفاصلة، من غير مسافات. لو الكود بيفتح البرنامجين، العميل بيشوف صفحة \"اختار البرنامج\" كل ما يفتح.")}`)}
   ${pnum(3, TOTAL)}
 </div>
 
