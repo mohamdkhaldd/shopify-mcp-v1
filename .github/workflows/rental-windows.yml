@@ -1,9 +1,10 @@
 name: Rental - Windows installer
 
-# برنامج البنيان - التأجير على الويندوز. بيتبني لوحده مع كل تعديل في
-# rental-app. لو RELEASES_TOKEN موجود، بيتنشر في ريبو albunyan-rental-releases
-# العام (ملفات تسطيب بس، من غير كود) — البرنامج المتسطب بيراجع الريبو ده
-# لوحده وبينزّل التحديث في الخلفية. من غير التوكن، الملف بيبقى في Artifacts بس.
+# MK-Tech على الويندوز. لو RELEASES_TOKEN موجود والنشر مطلوب، بيتنشر في ريبو
+# mk-tech العام (ملفات تسطيب بس، من غير كود) — البرنامج المتسطب بيراجعه لوحده
+# وبينزّل التحديث في الخلفية. من غير نشر، الملف بيبقى في Artifacts بس.
+# النسخ المتسطبة قبل MK-Tech بتراجع albunyan-rental-releases: لما الفرع
+# claude/albunyan-rental-app يتحدّث، النسخة بتتنشر هناك كمان فتوصلهم وتنقلهم.
 on:
   workflow_dispatch:
     inputs:
@@ -27,6 +28,7 @@ jobs:
         working-directory: rental-app
     env:
       HAS_RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN != '' && (github.event_name == 'push' || inputs.publish) }}
+      ALSO_LEGACY: ${{ secrets.RELEASES_TOKEN != '' && (github.event_name == 'push' || inputs.publish) && github.ref == 'refs/heads/claude/albunyan-rental-app' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,7 +52,7 @@ jobs:
         run: npm run electron:build -- --publish never
 
       # the same installer under a fixed name, so one link always downloads the latest:
-      # https://github.com/mohamdkhaldd/albunyan-rental-releases/releases/latest/download/mk-tech-rental-setup.exe
+      # https://github.com/mohamdkhaldd/mk-tech/releases/latest/download/mk-tech-rental-setup.exe
       - name: Fixed-name copy for the download link
         if: env.HAS_RELEASES_TOKEN == 'true'
         shell: bash
@@ -58,10 +60,23 @@ jobs:
       - uses: softprops/action-gh-release@v2
         if: env.HAS_RELEASES_TOKEN == 'true'
         with:
-          repository: mohamdkhaldd/albunyan-rental-releases
+          repository: mohamdkhaldd/mk-tech
           token: ${{ secrets.RELEASES_TOKEN }}
           tag_name: v0.1.${{ github.run_number }}
           files: rental-app/release/mk-tech-rental-setup.exe
+
+      # the same release for copies installed before MK-Tech (they read the old repo)
+      - uses: softprops/action-gh-release@v2
+        if: env.ALSO_LEGACY == 'true'
+        with:
+          repository: mohamdkhaldd/albunyan-rental-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: v0.1.${{ github.run_number }}
+          files: |
+            rental-app/release/latest.yml
+            rental-app/release/mk-tech-rental-setup-0.1.${{ github.run_number }}.exe
+            rental-app/release/mk-tech-rental-setup-0.1.${{ github.run_number }}.exe.blockmap
+            rental-app/release/mk-tech-rental-setup.exe
 
       - uses: actions/upload-artifact@v4
         with:

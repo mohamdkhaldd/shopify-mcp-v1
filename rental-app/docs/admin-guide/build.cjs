@@ -11,7 +11,7 @@ const LINKS = {
   table: "https://supabase.com/dashboard/project/dbzgiaxsxadzkfqppknm/editor",
   storage: "https://supabase.com/dashboard/project/dbzgiaxsxadzkfqppknm/storage/buckets/logos",
   code: "https://github.com/mohamdkhaldd/shopify-mcp-v1",
-  releases: "https://github.com/mohamdkhaldd/albunyan-rental-releases",
+  releases: "https://github.com/mohamdkhaldd/mk-tech",
   actions: "https://github.com/mohamdkhaldd/shopify-mcp-v1/actions",
 };
 const ICONS = {
@@ -155,7 +155,7 @@ table.t{width:100%;border-collapse:separate;border-spacing:0;background:#fff;bor
   ${card("github", "GitHub — البرنامج والتحديثات", `
     <table class="t"><tr><th>الريبو</th><th>فيه إيه</th><th>ملاحظة</th></tr>
       <tr><td class="en">shopify-mcp-v1</td><td>كود البرنامج كله، والأدوات اللي بتبني نسخ الويندوز والتابلت</td><td>هيتقفل (private) — شوف آخر صفحة</td></tr>
-      <tr><td class="en">albunyan-rental-releases</td><td>النسخ الجاهزة، لينكات التسطيب، نسخة الويب، والتحديثات اللي بتوصل للعملاء</td><td><b>لازم يفضل public</b> — من غيره العملاء مش هيحمّلوا ولا يتحدّثوا</td></tr>
+      <tr><td class="en">mk-tech</td><td>النسخ الجاهزة، لينكات التسطيب، نسخة الويب، والتحديثات اللي بتوصل للعملاء</td><td><b>لازم يفضل public</b> — من غيره العملاء مش هيحمّلوا ولا يتحدّثوا</td></tr>
     </table>`)}
   ${card("shield", "الأمان", `
     <p>اللي يدخل على Supabase يقدر يعمل أكواد ويوقف عملاء، واللي يدخل على GitHub يقدر يبعت تحديث لكل العملاء. علشان كده:</p>
@@ -261,7 +261,8 @@ table.t{width:100%;border-collapse:separate;border-spacing:0;background:#fff;bor
     ])}`)}
   ${card("warn", "ماتمسحش ولا تغيّر", `
     <table class="t"><tr><th>الحاجة</th><th>ليه</th></tr>
-      <tr><td>ريبو <span class="en">albunyan-rental-releases</span></td><td>منه العملاء بيحمّلوا ويتحدّثوا — لازم يفضل public</td></tr>
+      <tr><td>ريبو <span class="en">mk-tech</span></td><td>منه العملاء بيحمّلوا ويتحدّثوا — لازم يفضل public</td></tr>
+      <tr><td>ريبو <span class="en">albunyan-rental-releases</span> القديم</td><td>الأجهزة اللي اتسطبت قبل MK-Tech بتلاقي فيه التحديث اللي ينقلها — سيبه زي ما هو</td></tr>
       <tr><td>جداول السحابة غير licenses و license_devices</td><td>فيها بيانات العملاء ومفاتيح التوقيع</td></tr>
       <tr><td>Edge Function اسمها <span class="en">license</span></td><td>هي اللي بتفعّل الأكواد</td></tr>
       <tr><td>صف عميل شغال (ماتمسحوش)</td><td>لو عايز توقفه استخدم <span class="en">revoked</span> — المسح بيضيّع ربطه ببياناته</td></tr>
@@ -271,8 +272,7 @@ table.t{width:100%;border-collapse:separate;border-spacing:0;background:#fff;bor
       <li><span>قولّي <b>"ابعت التحديث"</b> بعد ما تتفق مع عميل البنيان — نقل برنامج التشغيل محتاج شغل مني.</span></li>
       <li><span>اتأكد إنك داخل على <b>GitHub</b> و<b>Supabase</b> بإيميلك وباسوردك، وشغّلت <b>التحقق بخطوتين</b>.</span></li>
       <li><span>اطلب مني أقفل ريبو الكود (private) — بعد ما أتأكد إن كل الأجهزة القديمة اتحدّثت.</span></li>
-      <li><span>احتفظ بالدليلين (التسطيب والإدارة) عندك وعلى Google Drive.</span></li>
-      <li><span>جرّب تعمل عميل تجربة بنفسك من الدليل ده، وتوقفه، علشان تتأكد إنك ماسك الخطوات.</span></li>
+      <li><span>جرّب تعمل عميل تجربة بنفسك من الدليل ده وتوقفه — واحتفظ بالدليلين على Google Drive.</span></li>
     </ul>`)}
   ${card("db", "بعد Claude وتكلفة الكبر", `
     <p>العملاء هيفضلوا شغالين عادي، وانت بتضيف وتجدد وتوقف بنفسك من الدليل ده. <b>مميزات جديدة أو تصليح أخطاء</b> محتاجين مبرمج — والكود كله على GitHub ومعاه شرح، فأي مبرمج يكمّل. لو العملاء كتروا: باقة Supabase المدفوعة حوالي <b class="en">$25</b> في الشهر، ومعاها السحابة مابتنامش خالص.</p>`)}

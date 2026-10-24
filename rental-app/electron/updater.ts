@@ -2,10 +2,10 @@ import { app, ipcMain } from "electron";
 import { autoUpdater } from "electron-updater";
 
 // Same flow as the old app (silent download, install on quit, manual check from
-// settings) — but pointed at the rental app's OWN releases repo. The old app
-// reads the latest release of mohamdkhaldd/shopify-mcp-v1; publishing rental
-// builds there would offer them to the old app as its update.
-export const RELEASES = { provider: "github" as const, owner: "mohamdkhaldd", repo: "albunyan-rental-releases" };
+// settings) — pointed at MK-Tech's own public releases repo (installers only).
+// Copies installed before MK-Tech look in albunyan-rental-releases: the update
+// that brings them here is published there too (see rental-windows.yml).
+export const RELEASES = { provider: "github" as const, owner: "mohamdkhaldd", repo: "mk-tech" };
 
 export function setupAutoUpdate() {
   ipcMain.handle("app:getVersion", () => app.getVersion());

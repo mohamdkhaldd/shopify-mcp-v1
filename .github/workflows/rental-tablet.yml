@@ -1,10 +1,11 @@
 name: Rental - Tablet (Android)
 
-# البنيان - التأجير على التابلت: نفس البرنامج ملفوف كتطبيق APK
-# (com.albunyan.rental — مختلف عن تطبيق الحسابات القديم فبيتسطبوا جنب بعض).
-# بيتبني لوحده مع كل تعديل في rental-app. لو RELEASES_TOKEN موجود، بيتنشر
-# في ريبو albunyan-rental-releases العام باسم tablet-vX — التابلت بيلاقيه
-# هناك ويعرض التحديث. من غير التوكن، الـ APK بيبقى في Artifacts بس.
+# MK-Tech على التابلت: نفس البرنامج ملفوف كتطبيق APK (com.albunyan.rental —
+# مختلف عن تطبيق الحسابات القديم فبيتسطبوا جنب بعض)، ونفس البيلد هو نسخة الويب.
+# لو RELEASES_TOKEN موجود والنشر مطلوب، بيتنشر في ريبو mk-tech العام باسم
+# tablet-vX — التابلت بيلاقيه هناك ويعرض التحديث. من غير نشر، بيبقى في Artifacts بس.
+# النسخ اللي قبل MK-Tech بتراجع albunyan-rental-releases: لما الفرع
+# claude/albunyan-rental-app يتحدّث، النسخة بتتنشر هناك كمان فتوصلهم وتنقلهم.
 on:
   workflow_dispatch:
     inputs:
@@ -33,6 +34,7 @@ jobs:
     env:
       HAS_RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN != '' && (github.event_name == 'push' || inputs.publish) }}
       HAS_PREVIEW: ${{ secrets.RELEASES_TOKEN != '' && inputs.preview }}
+      ALSO_LEGACY: ${{ secrets.RELEASES_TOKEN != '' && (github.event_name == 'push' || inputs.publish) && github.ref == 'refs/heads/claude/albunyan-rental-app' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -55,9 +57,22 @@ jobs:
 
       # the same build is the web version (iPhone / any browser): published to
       # GitHub Pages of the public releases repo, opened from
-      # https://mohamdkhaldd.github.io/albunyan-rental-releases/
+      # https://mohamdkhaldd.github.io/mk-tech/
       - name: Publish the web version
         if: env.HAS_RELEASES_TOKEN == 'true'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          personal_token: ${{ secrets.RELEASES_TOKEN }}
+          external_repository: mohamdkhaldd/mk-tech
+          publish_branch: gh-pages
+          publish_dir: rental-app/dist-tablet
+          force_orphan: true
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
+          commit_message: "web version ${{ env.APP_VERSION }}"
+      # and at the old address, for phones that saved it before MK-Tech
+      - name: Publish the web version at the old address
+        if: env.ALSO_LEGACY == 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
           personal_token: ${{ secrets.RELEASES_TOKEN }}
@@ -69,7 +84,7 @@ jobs:
           user_email: github-actions[bot]@users.noreply.github.com
           commit_message: "web version ${{ env.APP_VERSION }}"
 
-      # a trial copy at https://mohamdkhaldd.github.io/albunyan-rental-releases/preview/
+      # a trial copy at https://mohamdkhaldd.github.io/mk-tech/preview/
       # with its own browser storage; the next real publish removes it
       - name: Build the preview web version
         if: env.HAS_PREVIEW == 'true'
@@ -79,7 +94,7 @@ jobs:
         uses: peaceiris/actions-gh-pages@v4
         with:
           personal_token: ${{ secrets.RELEASES_TOKEN }}
-          external_repository: mohamdkhaldd/albunyan-rental-releases
+          external_repository: mohamdkhaldd/mk-tech
           publish_branch: gh-pages
           publish_dir: rental-app/dist-preview
           destination_dir: preview
@@ -124,7 +139,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         if: env.HAS_RELEASES_TOKEN == 'true'
         with:
-          repository: mohamdkhaldd/albunyan-rental-releases
+          repository: mohamdkhaldd/mk-tech
           token: ${{ secrets.RELEASES_TOKEN }}
           tag_name: tablet-v${{ env.APP_VERSION }}
           name: نسخة التابلت ${{ env.APP_VERSION }}
@@ -132,12 +147,32 @@ jobs:
           files: rental-app/mk-tech-rental-tablet-${{ env.APP_VERSION }}.apk
 
       # one fixed link that always downloads the newest APK:
-      # https://github.com/mohamdkhaldd/albunyan-rental-releases/releases/download/tablet-latest/mk-tech-rental-tablet.apk
+      # https://github.com/mohamdkhaldd/mk-tech/releases/download/tablet-latest/mk-tech-rental-tablet.apk
       - name: Fixed-name copy for the download link
         if: env.HAS_RELEASES_TOKEN == 'true'
         run: cp "mk-tech-rental-tablet-$APP_VERSION.apk" mk-tech-rental-tablet.apk
       - uses: softprops/action-gh-release@v2
         if: env.HAS_RELEASES_TOKEN == 'true'
+        with:
+          repository: mohamdkhaldd/mk-tech
+          token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: tablet-latest
+          name: التابلت — آخر نسخة
+          prerelease: true
+          files: rental-app/mk-tech-rental-tablet.apk
+
+      # the same APK for tablets installed before MK-Tech (they read the old repo)
+      - uses: softprops/action-gh-release@v2
+        if: env.ALSO_LEGACY == 'true'
+        with:
+          repository: mohamdkhaldd/albunyan-rental-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: tablet-v${{ env.APP_VERSION }}
+          name: نسخة التابلت ${{ env.APP_VERSION }}
+          prerelease: true
+          files: rental-app/mk-tech-rental-tablet-${{ env.APP_VERSION }}.apk
+      - uses: softprops/action-gh-release@v2
+        if: env.ALSO_LEGACY == 'true'
         with:
           repository: mohamdkhaldd/albunyan-rental-releases
           token: ${{ secrets.RELEASES_TOKEN }}

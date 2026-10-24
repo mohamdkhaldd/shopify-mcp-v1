@@ -5,9 +5,9 @@ const QR = require("qrcode");
 const { chromium } = require("playwright");
 
 const LINKS = {
-  windows: "https://github.com/mohamdkhaldd/albunyan-rental-releases/releases/latest/download/mk-tech-rental-setup.exe",
-  android: "https://github.com/mohamdkhaldd/albunyan-rental-releases/releases/download/tablet-latest/mk-tech-rental-tablet.apk",
-  web: "https://mohamdkhaldd.github.io/albunyan-rental-releases/",
+  windows: "https://github.com/mohamdkhaldd/mk-tech/releases/latest/download/mk-tech-rental-setup.exe",
+  android: "https://github.com/mohamdkhaldd/mk-tech/releases/download/tablet-latest/mk-tech-rental-tablet.apk",
+  web: "https://mohamdkhaldd.github.io/mk-tech/",
 };
 const F = (p) => "file://" + path.join(__dirname, "node_modules/@fontsource", p);
 const ICONS = {

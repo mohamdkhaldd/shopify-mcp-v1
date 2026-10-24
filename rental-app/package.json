@@ -87,7 +87,7 @@
     "publish": {
       "provider": "github",
       "owner": "mohamdkhaldd",
-      "repo": "albunyan-rental-releases",
+      "repo": "mk-tech",
       "releaseType": "release"
     }
   }

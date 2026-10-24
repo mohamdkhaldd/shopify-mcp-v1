@@ -35,8 +35,8 @@ const offlineCopy = (): Plugin => ({
     const version = crypto.createHash("sha256").update(files.join("\n")).digest("hex").slice(0, 12);
     const source = fs
       .readFileSync(path.resolve(__dirname, "tablet/web/sw.js"), "utf8")
-      .replace("__CACHE__", JSON.stringify(`${storageName}-${version}`))
-      .replace("__PREFIX__", JSON.stringify(`${storageName}-`))
+      .replace("__VERSION__", JSON.stringify(version))
+      .replace("__PREFIX__", JSON.stringify(`${storageName}:`))
       .replace("__FILES__", JSON.stringify(files));
     fs.writeFileSync(path.join(opts.dir!, "sw.js"), source);
   },

@@ -3,8 +3,10 @@
 // With internet the page itself always comes from the site, so updates show
 // on the next open; a new build replaces this copy.
 // The three values below are filled in at build time (vite.tablet.config.ts).
-const CACHE = __CACHE__;
-const PREFIX = __PREFIX__;
+// one copy per address: the same build can be served from more than one
+// folder of the site (old link, new link, /preview/)
+const PREFIX = __PREFIX__ + new URL(self.registration.scope).pathname + "-";
+const CACHE = PREFIX + __VERSION__;
 const FILES = __FILES__;
 const page = () => new URL("index.html", self.registration.scope).href;
 
@@ -21,7 +23,7 @@ self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches
       .keys()
-      // only this copy's older versions: the live and preview builds share the site
+      // only this copy's older versions
       .then((keys) => Promise.all(keys.filter((k) => k.startsWith(PREFIX) && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );

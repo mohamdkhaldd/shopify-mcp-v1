@@ -17,7 +17,7 @@ const Updater = registerPlugin<{
 }>("Updater");
 
 /** Its own public releases repo (installers only), tablet builds tagged tablet-vX.Y.Z. */
-const RELEASES = "mohamdkhaldd/albunyan-rental-releases";
+const RELEASES = "mohamdkhaldd/mk-tech";
 declare const __APP_VERSION__: string;
 const VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.0.0";
 
