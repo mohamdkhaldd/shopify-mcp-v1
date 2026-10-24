@@ -1,10 +1,14 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { Capacitor } from "@capacitor/core";
 import { startBackend } from "./backend";
 
 // MK-Tech on the tablet / web: the same screens as the laptop — التأجير
 // (src/) or التشغيل (operations/src/), or the activation / chooser page —
 // with window.api served by the in-app backend instead of Electron.
+// the web version keeps a copy on the phone so it opens without internet
+if (!Capacitor.isNativePlatform() && "serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
+
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 root.render(<div style={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center", fontFamily: "Cairo", color: "#64748b" }}>جاري تحميل البرنامج...</div>);
 
