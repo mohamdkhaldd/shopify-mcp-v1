@@ -28,7 +28,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     const api = window.api;
     if (!api) return;
     api.invoke("license:status").then((s) => setBrand(toBrand(s as Status)), () => {});
-    return api.on?.("license:changed", (s) => setBrand(toBrand(s as Status)));
+    return api.on("license:changed", (s) => setBrand(toBrand(s as Status)));
   }, []);
   useEffect(() => {
     document.title = brand.name && brand !== fallback ? `${brand.name} - التشغيل` : "MK-Tech التشغيل";

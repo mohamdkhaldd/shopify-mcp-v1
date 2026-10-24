@@ -3,6 +3,9 @@
 @import "@fontsource/cairo/700.css";
 @import "@fontsource/cairo/800.css";
 
+/* its own Tailwind theme (the rental screens use the default config) */
+@config "../tailwind.config.js";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -195,5 +198,16 @@ body {
 
   .dark .hover\:text-primary-dark:hover {
     color: #6ee7b7;
+  }
+}
+
+/* Phone / upright tablet: wide tables scroll sideways inside their card
+   instead of pushing the whole page wider than the screen. */
+@media screen and (max-width: 1023px) {
+  main table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
   }
 }

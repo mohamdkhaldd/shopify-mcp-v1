@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { appApi, syncApi } from "../api/client";
 import { AppUpdateStatus } from "../api/types";
 

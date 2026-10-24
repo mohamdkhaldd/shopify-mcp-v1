@@ -66,9 +66,11 @@ import {
 
 declare global {
   interface Window {
+    // the same shape the rental screens declare (MK-Tech builds both together)
     api?: {
+      platform?: "tablet" | "web";
       invoke: (channel: string, payload?: unknown) => Promise<any>;
-      on?: (channel: string, callback: (data: any) => void) => () => void;
+      on: (channel: string, cb: (data: unknown) => void) => () => void;
     };
   }
 }
@@ -357,7 +359,7 @@ export const syncApi = {
     invoke("sync:activity", filters),
   // إشعار لما تعديلات توصل من جهاز تاني — بيرجع دالة لإلغاء الاشتراك.
   onRemoteChanges: (callback: (info: { count: number; devices: string[] }) => void): (() => void) =>
-    window.api?.on ? window.api.on("sync:remoteChanges", callback) : () => {},
+    window.api?.on ? window.api.on("sync:remoteChanges", callback as (data: unknown) => void) : () => {},
 };
 
 export const appApi = {
@@ -366,7 +368,7 @@ export const appApi = {
   // على التابلت: بينزّل ملف النسخة الجديدة جوه البرنامج ويفتح شاشة التثبيت.
   installUpdate: (url?: string): Promise<void> => invoke("app:installUpdate", url ? { url } : undefined),
   onUpdateProgress: (callback: (info: { percent: number }) => void): (() => void) =>
-    window.api?.on ? window.api.on("app:updateProgress", callback) : () => {},
+    window.api?.on ? window.api.on("app:updateProgress", callback as (data: unknown) => void) : () => {},
 };
 
 export const hassanApi = {

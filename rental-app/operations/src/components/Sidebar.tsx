@@ -9,9 +9,13 @@ import { useTheme } from "../theme";
 interface SidebarProps {
   active: SectionId;
   onSelect: (id: SectionId) => void;
+  /** phone / upright tablet: the menu slides in from the right */
+  open?: boolean;
 }
 
-export default function Sidebar({ active, onSelect }: SidebarProps) {
+// On a phone or a tablet held upright (under 1024px) the menu is hidden and
+// slides in from the right when ☰ in the top bar is tapped.
+export default function Sidebar({ active, onSelect, open = false }: SidebarProps) {
   const { theme, toggle } = useTheme();
   const brand = useBrand();
   const [version, setVersion] = useState("");
@@ -21,7 +25,13 @@ export default function Sidebar({ active, onSelect }: SidebarProps) {
   }, []);
 
   return (
-    <aside className="no-print w-64 shrink-0 h-screen sticky top-0 bg-white border-s border-slate-200 flex flex-col">
+    <aside
+      className={[
+        "no-print w-64 shrink-0 h-screen sticky top-0 bg-white border-s border-slate-200 flex flex-col",
+        "max-[1023px]:fixed max-[1023px]:right-0 max-[1023px]:z-50 max-[1023px]:h-[100dvh] max-[1023px]:shadow-2xl max-[1023px]:transition-transform max-[1023px]:duration-200",
+        open ? "" : "max-[1023px]:translate-x-full",
+      ].join(" ")}
+    >
       <div className="px-5 py-6 border-b border-slate-100">
         <div className="flex items-center gap-3">
           <CompanyLogo />

@@ -6,6 +6,11 @@ name: Rental - Windows installer
 # لوحده وبينزّل التحديث في الخلفية. من غير التوكن، الملف بيبقى في Artifacts بس.
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to the releases repo (customers get it as an update)"
+        type: boolean
+        default: false
   push:
     branches: [claude/albunyan-rental-app]
     paths: ["rental-app/**", ".github/workflows/rental-windows.yml"]
@@ -21,7 +26,7 @@ jobs:
       run:
         working-directory: rental-app
     env:
-      HAS_RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN != '' }}
+      HAS_RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN != '' && (github.event_name == 'push' || inputs.publish) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

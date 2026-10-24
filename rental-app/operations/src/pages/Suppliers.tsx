@@ -83,7 +83,7 @@ function PurchaseForm({ suggestions, onSaved }: { suggestions: string[]; onSaved
   );
 }
 
-function PaymentForm({ suggestions, onSaved }: { suggestions: string[]; onSaved: () => void }) {
+function PaymentForm({ onSaved }: { suggestions: string[]; onSaved: () => void }) {
   const [supplierName, setSupplierName] = useState("");
   const [date, setDate] = useState(todayIso());
   const [amount, setAmount] = useState("");
