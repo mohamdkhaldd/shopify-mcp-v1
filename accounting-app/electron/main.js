@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -33,6 +33,11 @@ function createWindow() {
     },
   });
   mainWindow = win;
+  // links (MK-Tech's download) open in the browser
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https:\/\//.test(url)) shell.openExternal(url);
+    return { action: "deny" };
+  });
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = null;
   });

@@ -19,6 +19,7 @@ import Car from "./pages/Car";
 import Obligations from "./pages/Obligations";
 import { syncApi } from "./api/client";
 import { SyncLoginBar, TabletUpdatePrompt } from "./components/DeviceBars";
+import MovedNotice from "./components/MovedNotice";
 import { SectionId } from "./nav";
 
 // نسخة التابلت (Capacitor) — التحديث فيها بيسأل قبل ما يحمّل.
@@ -88,6 +89,7 @@ export default function App() {
         </main>
       </div>
       {isTablet && <TabletUpdatePrompt />}
+      <MovedNotice />
     </UndoProvider>
   );
 }
