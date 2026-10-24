@@ -4,10 +4,11 @@ const path = require("path");
 const QR = require("qrcode");
 const { chromium } = require("playwright");
 
+// short links (is.gd) that forward to the real downloads — they always give the latest version
 const LINKS = {
-  windows: "https://github.com/mohamdkhaldd/albunyan-rental-releases/releases/latest/download/mk-tech-rental-setup.exe",
-  android: "https://github.com/mohamdkhaldd/albunyan-rental-releases/releases/download/tablet-latest/mk-tech-rental-tablet.apk",
-  web: "https://mohamdkhaldd.github.io/albunyan-rental-releases/",
+  windows: "https://is.gd/mktech_win",
+  android: "https://is.gd/mktech_android",
+  web: "https://is.gd/mktech_iphone",
 };
 const F = (p) => "file://" + path.join(__dirname, "node_modules/@fontsource", p);
 const ICONS = {
@@ -106,7 +107,7 @@ body{font-family:Tajawal,Inter,sans-serif;color:var(--navy);-webkit-print-color-
 .qr svg{width:100%;height:100%;display:block}
 .lk{min-width:0}
 .lk-t{font-weight:700;font-size:13px;color:#93C5FD}
-.lk a{display:block;font-family:Inter;font-size:10.5px;color:#fff;text-decoration:none;word-break:break-all;margin:3px 0;line-height:1.45;text-align:left}
+.lk a{display:block;font-family:Inter;font-weight:700;font-size:20px;letter-spacing:.3px;color:#fff;text-decoration:none;word-break:break-all;margin:3px 0;line-height:1.45;text-align:left}
 .lk-h{font-size:11px;color:#94A3B8}
 .steps{list-style:none;margin:0;padding:0;counter-reset:s}
 .steps li{counter-increment:s;display:flex;gap:10px;align-items:flex-start;font-size:14.5px;line-height:1.75;padding:4px 0}
