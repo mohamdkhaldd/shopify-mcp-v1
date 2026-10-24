@@ -25,9 +25,12 @@ export default defineConfig({
   publicDir: path.resolve(__dirname, "public"),
   plugins: [operationsShims(), react()],
   base: "./",
-  define: { __APP_VERSION__: JSON.stringify(process.env.APP_VERSION ?? "0.0.0") },
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.APP_VERSION ?? "0.0.0"),
+    __STORAGE_NAME__: JSON.stringify(process.env.PREVIEW ? "mk-tech-preview" : "albunyan-rental"),
+  },
   build: {
-    outDir: path.resolve(__dirname, "dist-tablet"),
+    outDir: path.resolve(__dirname, process.env.PREVIEW ? "dist-preview" : "dist-tablet"),
     emptyOutDir: true,
     commonjsOptions: { include: [/operations[\\/]electron[\\/]/, /node_modules/], transformMixedEsModules: true },
   },

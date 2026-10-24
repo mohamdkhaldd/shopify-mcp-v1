@@ -2,7 +2,10 @@
 // saved a second after any change and right away when the app goes to the
 // background. Uninstalling the app deletes it — the cloud copy (sync) stays.
 // One file per program: "main" (التأجير, also the activation) and "operations" (التشغيل).
-const IDB_NAME = "albunyan-rental";
+// the preview build (/preview/ on the same site) keeps its own, so trying it
+// never touches the live web version's data
+declare const __STORAGE_NAME__: string;
+const IDB_NAME = __STORAGE_NAME__;
 const IDB_STORE = "db";
 
 function idb(): Promise<IDBDatabase> {

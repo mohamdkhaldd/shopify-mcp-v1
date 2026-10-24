@@ -6,4 +6,5 @@ release
 *.db-wal
 *.db-shm
 dist-tablet
+dist-preview
 /android/

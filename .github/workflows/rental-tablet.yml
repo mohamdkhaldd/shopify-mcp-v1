@@ -12,6 +12,10 @@ on:
         description: "Publish to the releases repo (customers get it as an update)"
         type: boolean
         default: false
+      preview:
+        description: "Put a trial web version at /preview/ (the live web version and apps stay as they are)"
+        type: boolean
+        default: false
   push:
     branches: [claude/albunyan-rental-app]
     paths: ["rental-app/**", ".github/workflows/rental-tablet.yml"]
@@ -28,6 +32,7 @@ jobs:
         working-directory: rental-app
     env:
       HAS_RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN != '' && (github.event_name == 'push' || inputs.publish) }}
+      HAS_PREVIEW: ${{ secrets.RELEASES_TOKEN != '' && inputs.preview }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -63,6 +68,25 @@ jobs:
           user_name: github-actions[bot]
           user_email: github-actions[bot]@users.noreply.github.com
           commit_message: "web version ${{ env.APP_VERSION }}"
+
+      # a trial copy at https://mohamdkhaldd.github.io/albunyan-rental-releases/preview/
+      # with its own browser storage; the next real publish removes it
+      - name: Build the preview web version
+        if: env.HAS_PREVIEW == 'true'
+        run: PREVIEW=1 npx vite build --config vite.tablet.config.ts
+      - name: Publish the preview web version
+        if: env.HAS_PREVIEW == 'true'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          personal_token: ${{ secrets.RELEASES_TOKEN }}
+          external_repository: mohamdkhaldd/albunyan-rental-releases
+          publish_branch: gh-pages
+          publish_dir: rental-app/dist-preview
+          destination_dir: preview
+          keep_files: true
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
+          commit_message: "preview web version ${{ env.APP_VERSION }}"
 
       - name: Create Android project
         run: npx cap add android
