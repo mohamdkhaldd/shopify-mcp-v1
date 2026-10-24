@@ -12,8 +12,8 @@
     <!-- first diagonal: lit at the top, shaded into the fold -->
     <linearGradient id="g-diag" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0E63FA"/>
-      <stop offset="0.6" stop-color="#0B4FD8"/>
-      <stop offset="1" stop-color="#08308F"/>
+      <stop offset="0.55" stop-color="#0B55E6"/>
+      <stop offset="1" stop-color="#0A47CF"/>
     </linearGradient>
     <!-- the ribbon (second diagonal): the brightest face -->
     <linearGradient id="g-ribbon" x1="0" y1="1" x2="1" y2="0">
@@ -27,8 +27,9 @@
     </linearGradient>
     <!-- right leg: lit top, deep shadow down the middle -->
     <linearGradient id="g-right" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1A8EFF"/>
-      <stop offset="0.45" stop-color="#0B55E8"/>
+      <stop offset="0" stop-color="#1F97FF"/>
+      <stop offset="0.25" stop-color="#1683FF"/>
+      <stop offset="0.5" stop-color="#0B55E8"/>
       <stop offset="0.75" stop-color="#0A35B0"/>
       <stop offset="1" stop-color="#0B4CD6"/>
     </linearGradient>
@@ -39,8 +40,9 @@
     </linearGradient>
     <!-- the drop under the fold -->
     <linearGradient id="g-drop" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1A84FF"/>
-      <stop offset="1" stop-color="#2FA6FF"/>
+      <stop offset="0" stop-color="#1678F2"/>
+      <stop offset="0.35" stop-color="#1E93FF"/>
+      <stop offset="1" stop-color="#2DA6FF"/>
     </linearGradient>
     <linearGradient id="g-arm-up" x1="0" y1="1" x2="1" y2="0">
       <stop offset="0" stop-color="#0A63FF"/>
@@ -62,15 +64,16 @@
   </defs>
 
   <!-- soft glow behind the letters -->
-  <g filter="url(#glow)" opacity="0.32">
+  <g filter="url(#glow)" opacity="0.22">
   <!-- M -->
   <polygon points="168,233 212,233 228,253 228,507 168,507" fill="url(#g-left)"/>
-  <polygon points="186,233 212,233 300,343 300,436 228,352 228,282" fill="url(#g-diag)"/>
-  <polygon points="365,507 365,342 422,297 428,302 428,507" fill="url(#g-right)"/>
-  <polygon points="365,507 365,342 422,297 428,302 428,507" fill="url(#g-right-shine)"/>
-  <polygon points="300,343 390,233 460,233 420,285 316,418 300,436" fill="url(#g-ribbon)"/>
-  <polygon points="398,233 460,233 420,285 409,300" fill="url(#g-fold)"/>
-  <polygon points="278,463 283,425 316,418 316,463 300,476" fill="url(#g-drop)"/>
+  <polygon points="186,233 212,233 300,343 300,436 228,352" fill="url(#g-diag)"/>
+  <polygon points="300,343 390,233 460,233 428,294 316,418 300,436" fill="url(#g-ribbon)"/>
+  <polygon points="402,233 460,233 428,294 419,297" fill="url(#g-fold)"/>
+  <polygon points="363,367 368,361 368,425 363,431" fill="#5FB8FF" opacity="0.45"/>
+  <polygon points="363,507 363,367 424,297 428,300 428,507" fill="url(#g-right)"/>
+  <polygon points="363,507 363,367 424,297 428,300 428,507" fill="url(#g-right-shine)"/>
+  <polygon points="279,463 281,421 315,409 317,462 298,476" fill="url(#g-drop)"/>
 
   <!-- K -->
   <polygon points="439,325 512,233 588,233 478,368" fill="url(#g-arm-up)"/>
@@ -79,13 +82,14 @@
   <!-- M -->
   <polygon points="168,233 212,233 228,253 228,507 168,507" fill="url(#g-left)"/>
   <polygon points="168,233 212,233 228,253 228,507 168,507" fill="url(#g-band)"/>
-  <polygon points="186,233 212,233 300,343 300,436 228,352 228,282" fill="url(#g-diag)"/>
-  <polygon points="365,507 365,342 422,297 428,302 428,507" fill="url(#g-right)"/>
-  <polygon points="365,507 365,342 422,297 428,302 428,507" fill="url(#g-right-shine)"/>
-  <polygon points="365,507 365,342 422,297 428,302 428,507" fill="url(#g-band)"/>
-  <polygon points="300,343 390,233 460,233 420,285 316,418 300,436" fill="url(#g-ribbon)"/>
-  <polygon points="398,233 460,233 420,285 409,300" fill="url(#g-fold)"/>
-  <polygon points="278,463 283,425 316,418 316,463 300,476" fill="url(#g-drop)"/>
+  <polygon points="186,233 212,233 300,343 300,436 228,352" fill="url(#g-diag)"/>
+  <polygon points="300,343 390,233 460,233 428,294 316,418 300,436" fill="url(#g-ribbon)"/>
+  <polygon points="402,233 460,233 428,294 419,297" fill="url(#g-fold)"/>
+  <polygon points="363,367 368,361 368,425 363,431" fill="#5FB8FF" opacity="0.45"/>
+  <polygon points="363,507 363,367 424,297 428,300 428,507" fill="url(#g-right)"/>
+  <polygon points="363,507 363,367 424,297 428,300 428,507" fill="url(#g-right-shine)"/>
+  <polygon points="363,507 363,367 424,297 428,300 428,507" fill="url(#g-band)"/>
+  <polygon points="279,463 281,421 315,409 317,462 298,476" fill="url(#g-drop)"/>
 
   <!-- K -->
   <polygon points="439,325 512,233 588,233 478,368" fill="url(#g-arm-up)"/>
