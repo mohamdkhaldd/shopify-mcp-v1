@@ -3,6 +3,7 @@ import { expenseCategoriesApi } from "../../api/client";
 import { ExpenseCategory } from "../../api/types";
 import Icon from "../../components/Icon";
 import { useUndo } from "../../context/UndoContext";
+import { person } from "../../person";
 
 export default function ExpenseCategoriesTab() {
   const [items, setItems] = useState<ExpenseCategory[]>([]);
@@ -47,8 +48,8 @@ export default function ExpenseCategoriesTab() {
     <div className="bg-white rounded-card shadow-card p-5">
       <h2 className="font-bold text-slate-800 mb-1">أنواع المصروفات</h2>
       <p className="text-xs text-slate-400 mb-4">
-        علّم "يحسب في كوميشن حسن" على أي نوع زي المكنيكي أو السكن — أي مصروف من النوع ده على أي معدة يتضاف تلقائيًا
-        لكوميشن حسن، من غير ما تسجله مرتين.
+        علّم "يحسب في كوميشن {person()}" على أي نوع زي المكنيكي أو السكن — أي مصروف من النوع ده على أي معدة يتضاف تلقائيًا
+        لكوميشن {person()}، من غير ما تسجله مرتين.
       </p>
 
       <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-2 mb-5">
@@ -65,7 +66,7 @@ export default function ExpenseCategoriesTab() {
             onChange={(e) => setCountsAsCommission(e.target.checked)}
             className="w-4 h-4 accent-primary"
           />
-          يحسب في كوميشن حسن
+          يحسب في كوميشن {person()}
         </label>
         <button
           type="submit"
@@ -98,7 +99,7 @@ export default function ExpenseCategoriesTab() {
                     onChange={() => handleToggleCommission(item)}
                     className="w-4 h-4 accent-primary"
                   />
-                  كوميشن حسن
+                  كوميشن {person()}
                 </label>
                 <button
                   onClick={() => handleDelete(item.id)}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { navItems, SectionId } from "../nav";
+import { navItems, navLabel, SectionId } from "../nav";
 import { appApi } from "../api/client";
 import CompanyLogo from "./CompanyLogo";
 import { useBrand } from "../brand";
@@ -57,7 +57,7 @@ export default function Sidebar({ active, onSelect, open = false }: SidebarProps
               ].join(" ")}
             >
               <Icon name={item.icon} className="w-5 h-5" />
-              <span>{item.label}</span>
+              <span>{navLabel(item)}</span>
             </button>
           );
         })}

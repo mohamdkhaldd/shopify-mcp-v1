@@ -6,6 +6,7 @@ import { carApi, equipmentApi, monthlyExpensesApi } from "../api/client";
 import { CarSummary, Equipment } from "../api/types";
 import { currentMonthKey, monthLabel } from "../utils/months";
 import { formatEGP } from "../utils/format";
+import { person } from "../person";
 
 function todayISO(): string {
   const d = new Date();
@@ -44,7 +45,7 @@ export default function Car() {
   const breakdown = (s: CarSummary) =>
     [
       `صرفت ${formatEGP(s.fuelTotal)} على العربية في ${monthLabel(s.month)}:`,
-      `${formatEGP(s.personal)} خاص (من كوميشن حسن)`,
+      `${formatEGP(s.personal)} خاص (من كوميشن ${person()})`,
       ...s.byEquipment.map((b) => `${formatEGP(b.amount)} على ${b.equipment_name}`),
     ].join(" — ");
 
@@ -101,7 +102,7 @@ export default function Car() {
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">العربية الملاكي</h1>
           <p className="text-sm text-slate-500 mt-1">
-            سجّل البنزين والزيت كل مرة. مشوار الشغل بيتسجل على المعدة ويتخصم من فلوس العربية (مش من الخزنة) — والباقي خاص بيتخصم من كوميشن حسن.
+            سجّل البنزين والزيت كل مرة. مشوار الشغل بيتسجل على المعدة ويتخصم من فلوس العربية (مش من الخزنة) — والباقي خاص بيتخصم من كوميشن {person()}.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -130,7 +131,7 @@ export default function Car() {
             <div className="mt-1 text-xl font-extrabold text-primary-dark">{formatEGP(data.tripsTotal)}</div>
           </div>
           <div className="bg-white rounded-card shadow-card p-4">
-            <div className="text-xs text-slate-500 font-semibold">خاص (من كوميشن حسن)</div>
+            <div className="text-xs text-slate-500 font-semibold">خاص (من كوميشن {person()})</div>
             <div className="mt-1 text-xl font-extrabold text-rose-600">{formatEGP(data.personal)}</div>
           </div>
           <div className="bg-white rounded-card shadow-card p-4">
@@ -151,7 +152,7 @@ export default function Car() {
           <table className="w-full text-sm">
             <tbody>
               <tr className="border-b border-slate-50">
-                <td className="py-2 text-slate-600">خاص — من كوميشن حسن</td>
+                <td className="py-2 text-slate-600">خاص — من كوميشن {person()}</td>
                 <td className="py-2 font-bold text-rose-600">{formatEGP(data.personal)}</td>
               </tr>
               {data.byEquipment.map((b) => (

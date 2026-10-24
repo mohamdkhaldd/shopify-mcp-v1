@@ -9,6 +9,7 @@ import PartnersTab from "./settings/PartnersTab";
 import ExpenseCategoriesTab from "./settings/ExpenseCategoriesTab";
 import { ApkUpdateButton } from "../components/DeviceBars";
 import { useBrand } from "../brand";
+import { person, personIsSet, savePerson, usePerson } from "../person";
 
 type TabId = "partners" | "drivers" | "equipment" | "contractors" | "expenseCategories";
 
@@ -42,6 +43,40 @@ function LicensePanel() {
           افتح برنامج التأجير
         </button>
       )}
+    </div>
+  );
+}
+
+// اسم الشخص اللي بياخد الكوميشن — بيظهر في القائمة وفي صفحته وفي كل مكان
+// الكوميشن بيتذكر فيه، وبيتزامن على كل أجهزة الشركة.
+function PersonPanel() {
+  const current = usePerson();
+  const [value, setValue] = useState(personIsSet() ? current : "");
+  const [saved, setSaved] = useState(false);
+  const dirty = value.trim() !== (personIsSet() ? current : "");
+  return (
+    <div className="bg-white rounded-card shadow-card p-5">
+      <h2 className="font-bold text-slate-700 mb-1">صاحب الكوميشن</h2>
+      <p className="text-xs text-slate-400 mb-3">اسم الشخص اللي بياخد كوميشن على تأجير المعدات — صفحته في القائمة بتتسمّى باسمه.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setSaved(false);
+          }}
+          placeholder="مثلًا: أحمد"
+          className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm w-48"
+        />
+        <button
+          disabled={!value.trim() || !dirty}
+          onClick={() => savePerson(value).then(() => setSaved(true))}
+          className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
+        >
+          احفظ
+        </button>
+        {saved && <span className="text-sm text-primary-dark font-semibold">اتحفظ</span>}
+      </div>
     </div>
   );
 }
@@ -124,7 +159,7 @@ export default function Settings() {
 
   async function handleResetAll() {
     const step1 = window.confirm(
-      "هتمسح كل السركي والمقاول ومصروفات المعدات والسلف والحوافز ودفعات المقاولين والشركاء وحساب حسن — المعدات والشركاء والسائقين والمقاولين هيفضلوا زي ما هما. متأكد؟"
+      `هتمسح كل السركي والمقاول ومصروفات المعدات والسلف والحوافز ودفعات المقاولين والشركاء وحساب ${person()} — المعدات والشركاء والسائقين والمقاولين هيفضلوا زي ما هما. متأكد؟`
     );
     if (!step1) return;
     const step2 = window.confirm("تأكيد أخير: مفيش رجوع بعد كده. تمسح كل السركي والمصروفات فعلاً؟");
@@ -175,6 +210,8 @@ export default function Settings() {
       {active === "expenseCategories" && <ExpenseCategoriesTab />}
 
       <LicensePanel />
+
+      <PersonPanel />
 
       <ConfirmToggle />
 
@@ -290,7 +327,7 @@ export default function Settings() {
       <div className="bg-white rounded-card shadow-card p-5 border border-rose-100">
         <h2 className="font-bold text-rose-600 mb-1">منطقة الخطر</h2>
         <p className="text-xs text-slate-400 mb-3">
-          بيمسح كل السركي والمقاول ومصروفات المعدات والسلف والحوافز ودفعات المقاولين والشركاء وحساب حسن، عشان تبدأ
+          بيمسح كل السركي والمقاول ومصروفات المعدات والسلف والحوافز ودفعات المقاولين والشركاء وحساب {person()}، عشان تبدأ
           شهر جديد فاضي — من غير ما يمسح المعدات ولا الشركاء ولا نسبهم ولا السائقين ولا المقاولين، دول بيفضلوا زي
           ما هما.
         </p>

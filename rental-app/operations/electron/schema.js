@@ -207,6 +207,13 @@ CREATE TABLE IF NOT EXISTS treasury_accounts (
   current_balance REAL NOT NULL DEFAULT 0
 );
 
+-- إعدادات الشركة اللي بتتزامن على كل أجهزتها (مثلًا اسم صاحب الكوميشن).
+CREATE TABLE IF NOT EXISTS app_settings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  key TEXT NOT NULL UNIQUE,
+  value TEXT
+);
+
 CREATE TABLE IF NOT EXISTS suppliers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE

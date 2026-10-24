@@ -4,6 +4,7 @@ import { DailyLog, DailyLogRole, WageType } from "../../api/types";
 import { daysInMonth, weekdayLabel } from "../../utils/months";
 import { formatEGP } from "../../utils/format";
 import { useUndo } from "../../context/UndoContext";
+import { person } from "../../person";
 
 interface Person {
   id: number;
@@ -850,7 +851,7 @@ export default function DailyLogTable({
                     <span className="no-print">قيمة اليوم</span>
                   </th>
                   <th className="text-start font-semibold py-2">
-                    <span className="no-print">كوميشن حسن</span>
+                    <span className="no-print">كوميشن {person()}</span>
                   </th>
                 </>
               )}

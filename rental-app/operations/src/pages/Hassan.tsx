@@ -23,16 +23,17 @@ import {
 } from "../api/types";
 import { currentMonthKey, monthLabel } from "../utils/months";
 import { formatEGP } from "../utils/format";
+import { person } from "../person";
 
-const LEDGER_TYPES: { value: HassanLedgerType; label: string }[] = [
-  { value: "loan", label: "سلفة/دين على حسن" },
-  { value: "repayment", label: "سداد من حسن" },
-  { value: "due", label: "مستحق لحسن" },
-  { value: "collection", label: "تحصيل لحسن" },
+const ledgerTypes = (): { value: HassanLedgerType; label: string }[] => [
+  { value: "loan", label: `سلفة/دين على ${person()}` },
+  { value: "repayment", label: `سداد من ${person()}` },
+  { value: "due", label: `مستحق ل${person()}` },
+  { value: "collection", label: `تحصيل ل${person()}` },
 ];
 
 function typeLabel(type: HassanLedgerType) {
-  return LEDGER_TYPES.find((t) => t.value === type)?.label ?? type;
+  return ledgerTypes().find((t) => t.value === type)?.label ?? type;
 }
 
 function EquipmentCommissionPanel({ equipmentId, month }: { equipmentId: number; month: string }) {
@@ -82,7 +83,7 @@ function EquipmentCommissionPanel({ equipmentId, month }: { equipmentId: number;
                   <th className="text-start font-semibold py-1.5">الشيفت</th>
                   <th className="text-start font-semibold py-1.5">المقاول بكام</th>
                   <th className="text-start font-semibold py-1.5">السركي بكام</th>
-                  <th className="text-start font-semibold py-1.5">كوميشن حسن</th>
+                  <th className="text-start font-semibold py-1.5">كوميشن {person()}</th>
                 </tr>
               </thead>
               <tbody>
@@ -161,7 +162,7 @@ function CommissionTab({ month }: { month: string }) {
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-card shadow-card p-5">
-          <div className="text-sm text-slate-500 font-semibold">إجمالي كوميشن حسن — {monthLabel(month)}</div>
+          <div className="text-sm text-slate-500 font-semibold">إجمالي كوميشن {person()} — {monthLabel(month)}</div>
           <div className="mt-2 text-2xl font-extrabold text-slate-800">{formatEGP(summary.total)}</div>
         </div>
         <div className="bg-white rounded-card shadow-card p-5">
@@ -175,8 +176,8 @@ function CommissionTab({ month }: { month: string }) {
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-1">جزاءات حسن — {monthLabel(month)}</h2>
-        <p className="text-xs text-slate-400 mb-4">أي جزاء هنا بيتخصم من كوميشن حسن ومن رصيد خزنته.</p>
+        <h2 className="font-bold text-slate-800 mb-1">جزاءات {person()} — {monthLabel(month)}</h2>
+        <p className="text-xs text-slate-400 mb-4">أي جزاء هنا بيتخصم من كوميشن {person()} ومن رصيد خزنته.</p>
         <form onSubmit={handleAddPenalty} className="no-print flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
           <div>
             <label className="block text-xs text-slate-400 mb-1">التاريخ</label>
@@ -322,7 +323,7 @@ function TreasuryTab({ month }: { month: string }) {
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-card shadow-card p-5">
-        <div className="text-sm text-slate-500 font-semibold">رصيد خزنة حسن (كل الوقت)</div>
+        <div className="text-sm text-slate-500 font-semibold">رصيد خزنة {person()} (كل الوقت)</div>
         <div className="mt-2 text-2xl font-extrabold text-primary">{formatEGP(balance?.balance ?? 0)}</div>
         <p className="text-xs text-slate-400 mt-1">بيزيد بكوميشنه كل شهر، وبيقل بس لما هو يدفع منه — مالوش علاقة بخزنة الشركة.</p>
       </div>
@@ -347,8 +348,8 @@ function TreasuryTab({ month }: { month: string }) {
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-1">دفع حسن من خزنته — {month}</h2>
-        <p className="text-xs text-slate-400 mb-4">زي قسط أو إيجار — بتتخصم من فلوس حسن نفسها، مش من خزنة الشركة.</p>
+        <h2 className="font-bold text-slate-800 mb-1">دفع {person()} من خزنته — {month}</h2>
+        <p className="text-xs text-slate-400 mb-4">زي قسط أو إيجار — بتتخصم من فلوس {person()} نفسها، مش من خزنة الشركة.</p>
         <form onSubmit={handleAdd} className="no-print flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
           <div>
             <label className="block text-xs text-slate-400 mb-1">التاريخ</label>
@@ -386,7 +387,7 @@ function TreasuryTab({ month }: { month: string }) {
         </form>
 
         {entries.length === 0 ? (
-          <div className="text-sm text-slate-400">لسه مفيش حاجة اتدفعت من خزنة حسن الشهر ده.</div>
+          <div className="text-sm text-slate-400">لسه مفيش حاجة اتدفعت من خزنة {person()} الشهر ده.</div>
         ) : (
           <ul className="space-y-1">
             {entries.map((e) => (
@@ -454,11 +455,11 @@ function LedgerTab({ month }: { month: string }) {
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-white rounded-card shadow-card p-5">
-          <div className="text-sm text-slate-500 font-semibold">صافي المديونية على حسن (كل الوقت)</div>
+          <div className="text-sm text-slate-500 font-semibold">صافي المديونية على {person()} (كل الوقت)</div>
           <div className="mt-2 text-xl font-extrabold text-rose-600">{formatEGP(balance?.netDebt ?? 0)}</div>
         </div>
         <div className="bg-white rounded-card shadow-card p-5">
-          <div className="text-sm text-slate-500 font-semibold">صافي المستحق لحسن (كل الوقت)</div>
+          <div className="text-sm text-slate-500 font-semibold">صافي المستحق ل{person()} (كل الوقت)</div>
           <div className="mt-2 text-xl font-extrabold text-primary">{formatEGP(balance?.netDue ?? 0)}</div>
         </div>
       </div>
@@ -472,8 +473,8 @@ function LedgerTab({ month }: { month: string }) {
             <thead>
               <tr className="text-slate-400 border-b border-slate-100">
                 <th className="text-start font-semibold py-2">الجهة/الشخص</th>
-                <th className="text-start font-semibold py-2">حسن مديون له بـ</th>
-                <th className="text-start font-semibold py-2">مستحق لحسن منه</th>
+                <th className="text-start font-semibold py-2">{person()} مديون له بـ</th>
+                <th className="text-start font-semibold py-2">مستحق ل{person()} منه</th>
               </tr>
             </thead>
             <tbody>
@@ -490,7 +491,7 @@ function LedgerTab({ month }: { month: string }) {
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-4">حساب حسن الشخصي — {monthLabel(month)} {month.slice(0, 4)}</h2>
+        <h2 className="font-bold text-slate-800 mb-4">حساب {person()} الشخصي — {monthLabel(month)} {month.slice(0, 4)}</h2>
         <form onSubmit={handleAdd} className="no-print flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
           <div>
             <label className="block text-xs text-slate-400 mb-1">التاريخ</label>
@@ -508,7 +509,7 @@ function LedgerTab({ month }: { month: string }) {
               onChange={(e) => setType(e.target.value as HassanLedgerType)}
               className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
             >
-              {LEDGER_TYPES.map((t) => (
+              {ledgerTypes().map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>
@@ -789,7 +790,7 @@ function WorkerSlip({
                 {row.job && <span className="text-sm font-semibold text-slate-400"> — {row.job}</span>}
               </div>
               <div className="text-xs text-slate-400">
-                شيت مرتب {monthLabel(month)} {month.slice(0, 4)} — عمال حسن
+                شيت مرتب {monthLabel(month)} {month.slice(0, 4)} — عمال {person()}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -888,7 +889,7 @@ function WorkerSlip({
             />
           )}
           <p className="no-print text-xs text-slate-400">
-            دفعة المرتب والسلفة بيتخصموا من خزنة حسن على طول ويظهروا هناك باسم العامل. الحافز والخصم بيغيّروا المستحق بس.
+            دفعة المرتب والسلفة بيتخصموا من خزنة {person()} على طول ويظهروا هناك باسم العامل. الحافز والخصم بيغيّروا المستحق بس.
           </p>
 
           {row.daily && (
@@ -982,7 +983,7 @@ function WorkersTab({ month }: { month: string }) {
   }
 
   async function handleRemoveWorker(w: HassanWorker) {
-    if (!window.confirm(`تشيل ${w.name} من قائمة عمال حسن؟ حركاته القديمة هتفضل زي ما هي.`)) return;
+    if (!window.confirm(`تشيل ${w.name} من قائمة عمال ${person()}؟ حركاته القديمة هتفضل زي ما هي.`)) return;
     await hassanApi.workerRemove(w.id);
     refresh();
   }
@@ -998,7 +999,7 @@ function WorkersTab({ month }: { month: string }) {
           <div className="mt-2 text-2xl font-extrabold text-slate-800">{formatEGP(payroll?.totalNet ?? 0)}</div>
         </div>
         <div className="bg-white rounded-card shadow-card p-5">
-          <div className="text-sm text-slate-500 font-semibold">اتصرف من خزنة حسن</div>
+          <div className="text-sm text-slate-500 font-semibold">اتصرف من خزنة {person()}</div>
           <div className="mt-2 text-2xl font-extrabold text-rose-600">{formatEGP(payroll?.totalPaid ?? 0)}</div>
         </div>
         <div className="bg-white rounded-card shadow-card p-5">
@@ -1009,7 +1010,7 @@ function WorkersTab({ month }: { month: string }) {
 
       <div className="bg-white rounded-card shadow-card p-5">
         <h2 className={`${slipOpen ? "no-print " : ""}font-bold text-slate-800 mb-1`}>
-          شيت مرتبات عمال حسن — {monthLabel(month)} {month.slice(0, 4)}
+          شيت مرتبات عمال {person()} — {monthLabel(month)} {month.slice(0, 4)}
         </h2>
         <p className="no-print text-xs text-slate-400 mb-4">دوس على اسم أي عامل تفتح شيت مرتبه — تسجل له دفع المرتب والسلف والحافز والخصم وتطبعه.</p>
         {!payroll || payroll.rows.length === 0 ? (
@@ -1083,7 +1084,7 @@ function WorkersTab({ month }: { month: string }) {
         )}
       </div>
       <div className="no-print bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-4">عمال حسن</h2>
+        <h2 className="font-bold text-slate-800 mb-4">عمال {person()}</h2>
         <form onSubmit={handleAddWorker} className="flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
           <div>
             <label className="block text-xs text-slate-400 mb-1">اسم العامل</label>
@@ -1247,12 +1248,12 @@ export default function Hassan() {
   const [tab, setTab] = useState<"commission" | "treasury" | "workers" | "ledger">("commission");
   const printTitle =
     tab === "ledger"
-      ? "حساب حسن الشخصي"
+      ? `حساب ${person()} الشخصي`
       : tab === "treasury"
-        ? "خزنة حسن"
+        ? `خزنة ${person()}`
         : tab === "workers"
-          ? "مرتبات عمال حسن"
-          : "كوميشن حسن";
+          ? `مرتبات عمال ${person()}`
+          : `كوميشن ${person()}`;
 
   return (
     <div className="space-y-6">
@@ -1260,8 +1261,8 @@ export default function Hassan() {
 
       <div className="no-print flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">حسن</h1>
-          <p className="text-sm text-slate-500 mt-1">كوميشن حسن على تأجير المعدات، منفصل عن حسابه الشخصي.</p>
+          <h1 className="text-2xl font-extrabold text-slate-900">{person()}</h1>
+          <p className="text-sm text-slate-500 mt-1">كوميشن {person()} على تأجير المعدات، منفصل عن حسابه الشخصي.</p>
         </div>
         <div className="flex items-center gap-2">
           <PrintButton />

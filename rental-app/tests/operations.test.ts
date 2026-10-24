@@ -33,6 +33,8 @@ describe("التشغيل for a new customer", () => {
     // opening again adds nothing
     setupOperationsDatabase(db);
     expect(count(db, "treasury_accounts")).toBe(4);
+    // the commission person's name: typed by the company in Settings
+    expect(count(db, "app_settings")).toBe(0);
   });
 });
 
@@ -66,6 +68,7 @@ describe("moving the old app's data into MK-Tech", () => {
     const copied = new Database(target);
     expect(copied.prepare("SELECT key FROM sync_state WHERE key LIKE 'auth:%' OR key IN ('gid_ready', 'last_seq')").all()).toEqual([]);
     expect(count(copied, "sync_outbox")).toBe(0);
+    expect(copied.prepare("SELECT value FROM app_settings WHERE key = 'commission_name'").get()).toEqual({ value: "حسن" });
     const laptop = setupOperationsDatabase(copied);
     expect(count(laptop, "partners")).toBe(partners);
     expect(count(laptop, "equipment")).toBe(equipment);
@@ -90,6 +93,13 @@ describe("moving the old app's data into MK-Tech", () => {
     expect(count(tablet, "equipment")).toBe(equipment);
     expect(count(tablet, "treasury_accounts")).toBe(4);
     expect(tablet.prepare("SELECT name FROM partners WHERE name = 'شريك جديد'").get()).toEqual({ name: "شريك جديد" });
+    expect(tablet.prepare("SELECT value FROM app_settings WHERE key = 'commission_name'").get()).toEqual({ value: "حسن" });
+
+    // renamed on the tablet → the laptop shows the new name
+    tablet.prepare("UPDATE app_settings SET value = 'أحمد' WHERE key = 'commission_name'").run();
+    await b.syncNow();
+    await a.syncNow();
+    expect(laptop.prepare("SELECT value FROM app_settings WHERE key = 'commission_name'").get()).toEqual({ value: "أحمد" });
   });
 
   it("does nothing on a computer that never had the old app", async () => {

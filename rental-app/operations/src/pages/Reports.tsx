@@ -10,6 +10,7 @@ import { MonthlyReport } from "../api/types";
 import { currentMonthKey, elapsedDaysInMonth, monthLabel } from "../utils/months";
 import { useTheme } from "../theme";
 import { formatEGP } from "../utils/format";
+import { person } from "../person";
 
 export default function Reports() {
   const [month, setMonth] = useState(currentMonthKey());
@@ -63,7 +64,7 @@ export default function Reports() {
           </div>
         </div>
         <div className="bg-white rounded-card shadow-card p-5">
-          <div className="text-sm text-slate-500 font-semibold">كوميشن حسن (بعد الجزاءات)</div>
+          <div className="text-sm text-slate-500 font-semibold">كوميشن {person()} (بعد الجزاءات)</div>
           <div className="mt-2 text-xl font-extrabold text-slate-900">{formatEGP(report.hassanCommissionTotal)}</div>
         </div>
       </div>

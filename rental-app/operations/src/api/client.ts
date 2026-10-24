@@ -63,6 +63,7 @@ import {
   SyncStatus,
   WasteEntry,
 } from "./types";
+import { person } from "../person";
 
 declare global {
   interface Window {
@@ -104,7 +105,7 @@ export class CancelledError extends Error {
   }
 }
 
-const ENTITY_LABELS: Record<string, string> = {
+const entityLabels = (): Record<string, string> => ({
   partners: "شريك",
   employees: "سواق / موظف",
   contractors: "مقاول",
@@ -117,11 +118,11 @@ const ENTITY_LABELS: Record<string, string> = {
   employeeBonuses: "حافز",
   employeeDeductions: "خصم",
   salaryPayments: "دفعة مرتب",
-  hassanPenalties: "جزاء على حسن",
-  hassanWorkers: "عامل لحسن",
-  hassanWorkerEntries: "حركة مرتب عامل حسن",
-  hassanTreasury: "مصروف من خزنة حسن",
-  hassanLedger: "حركة في حساب حسن الشخصي",
+  hassanPenalties: `جزاء على ${person()}`,
+  hassanWorkers: `عامل ل${person()}`,
+  hassanWorkerEntries: `حركة مرتب عامل ${person()}`,
+  hassanTreasury: `مصروف من خزنة ${person()}`,
+  hassanLedger: `حركة في حساب ${person()} الشخصي`,
   contractorPayments: "دفعة من مقاول",
   partnerPayments: "دفعة لشريك",
   treasury: "حركة خزنة",
@@ -136,11 +137,11 @@ const ENTITY_LABELS: Record<string, string> = {
   custodyEntries: "حركة في عهدة",
   carFuel: "بنزين / زيت العربية",
   obligations: "ميعاد التزام",
-};
+});
 
 function changeKind(channel: string): "add" | "delete" | null {
   const [entity, op] = channel.split(":");
-  if (!ENTITY_LABELS[entity]) return null;
+  if (!entityLabels()[entity]) return null;
   if (op === "create" || op === "upsert" || op === "createTransfer" || op === "count") return "add";
   if (op === "delete" || op === "deleteTransfer" || op === "deleteAdjustment") return "delete";
   return null;
@@ -199,7 +200,7 @@ function confirmChange(channel: string, payload: unknown): boolean {
     return true;
   }
   if (kind === "delete" && now - lastNativeConfirm < 4000) return true;
-  const label = ENTITY_LABELS[channel.split(":")[0]];
+  const label = entityLabels()[channel.split(":")[0]];
   const details = describePayload(payload);
   const message =
     kind === "add"

@@ -19,7 +19,8 @@ import Car from "./pages/Car";
 import Obligations from "./pages/Obligations";
 import { syncApi } from "./api/client";
 import { SyncLoginBar, TabletUpdatePrompt } from "./components/DeviceBars";
-import { navItems, SectionId } from "./nav";
+import { navItems, navLabel, SectionId } from "./nav";
+import { loadPerson, usePerson } from "./person";
 import CompanyLogo from "./components/CompanyLogo";
 import { useBrand } from "./brand";
 
@@ -34,20 +35,27 @@ export default function App() {
   const [pageKey, setPageKey] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const brand = useBrand();
+  // the commission person's name is in many screens: they redraw when it changes
+  const who = usePerson();
   const go = (id: SectionId) => {
     setActive(id);
     setMenuOpen(false);
     window.scrollTo(0, 0);
   };
 
+  useEffect(() => {
+    loadPerson();
+  }, []);
+
   useEffect(
     () =>
-      syncApi.onRemoteChanges((info) =>
+      syncApi.onRemoteChanges((info) => {
+        loadPerson();
         setRemote((prev) => ({
           count: (prev?.count ?? 0) + info.count,
           devices: [...new Set([...(prev?.devices ?? []), ...info.devices])],
-        }))
-      ),
+        }));
+      }),
     []
   );
 
@@ -56,7 +64,7 @@ export default function App() {
       <div className="flex min-h-screen" dir="rtl">
         <Sidebar active={active} onSelect={go} open={menuOpen} />
         {menuOpen && <div className="no-print fixed inset-0 z-40 bg-black/40 min-[1024px]:hidden" onClick={() => setMenuOpen(false)} aria-hidden />}
-        <main key={pageKey} className="flex-1 min-w-0 p-6 xl:p-8 max-w-[1400px] mx-auto w-full max-[1023px]:px-3 max-[1023px]:pt-0">
+        <main key={`${pageKey}-${who}`} className="flex-1 min-w-0 p-6 xl:p-8 max-w-[1400px] mx-auto w-full max-[1023px]:px-3 max-[1023px]:pt-0">
           {/* phone / upright tablet: the company, the page, and ☰ for the menu */}
           <div className="no-print min-[1024px]:hidden sticky top-0 z-30 -mx-3 mb-4 px-3 h-14 flex items-center gap-3 bg-white border-b border-slate-200 shadow-sm">
             <button aria-label="القايمة" onClick={() => setMenuOpen(true)} className="w-10 h-10 -ms-1 rounded-lg flex items-center justify-center text-slate-700 hover:bg-slate-100">
@@ -64,7 +72,10 @@ export default function App() {
                 <path d="M4 7h16M4 12h16M4 17h16" />
               </svg>
             </button>
-            <div className="font-bold text-slate-900 truncate">{navItems.find((i) => i.id === active)?.label}</div>
+            <div className="font-bold text-slate-900 truncate">{(() => {
+              const item = navItems.find((i) => i.id === active);
+              return item && navLabel(item);
+            })()}</div>
             <div className="ms-auto flex items-center gap-2 min-w-0">
               <span className="text-xs text-slate-500 truncate">{brand.name}</span>
               <CompanyLogo />

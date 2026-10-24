@@ -1821,6 +1821,19 @@ function registerIpcHandlers(db) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
 
+  // اسم الشخص اللي بياخد الكوميشن (صفحة "حسن" عند البنيان) — كل شركة بتكتبه
+  // من الإعدادات، وبيتزامن على كل أجهزتها. فاضي = لسه متكتبش.
+  ipcMain.handle("commission:getName", () => {
+    const row = db.prepare("SELECT value FROM app_settings WHERE key = 'commission_name'").get();
+    return row?.value ?? "";
+  });
+  ipcMain.handle("commission:setName", (_e, { name }) => {
+    db.prepare(
+      "INSERT INTO app_settings (key, value) VALUES ('commission_name', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    ).run(String(name ?? "").trim());
+    return { ok: true };
+  });
+
   ipcMain.handle("treasury:list", () => {
     const rows = db.prepare("SELECT * FROM treasury_accounts ORDER BY CASE name WHEN 'wallet' THEN 1 WHEN 'instapay' THEN 2 WHEN 'cash' THEN 3 WHEN 'vodafone_cash' THEN 4 ELSE 5 END, id").all();
     return rows.map((r) => ({ ...r, name_ar: ACCOUNT_NAME_AR[r.name] ?? r.name }));

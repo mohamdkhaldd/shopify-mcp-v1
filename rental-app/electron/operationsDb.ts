@@ -22,6 +22,10 @@ export async function migrateLegacyOperations(target: string, legacy: string): P
   }
   const db = new Database(target);
   try {
+    // the old app was one company's own, its commission page was "حسن"; in
+    // MK-Tech each company types the name in Settings — this one keeps its
+    setupOperationsDatabase(db);
+    db.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('commission_name', 'حسن')").run();
     resetSyncForNewCloud(db);
   } finally {
     db.close();

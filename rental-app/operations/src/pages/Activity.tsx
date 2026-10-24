@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { syncApi } from "../api/client";
 import { SyncActivity, SyncActivityRow } from "../api/types";
 import { formatEGP } from "../utils/format";
+import { person } from "../person";
 
 const OP_VERB: Record<string, string> = { insert: "أضاف", update: "عدّل", delete: "مسح" };
 
@@ -58,15 +59,15 @@ function describe(r: SyncActivityRow): string {
     case "expense_categories":
       return `نوع مصروف ${d.name ?? ""}`;
     case "hassan_ledger":
-      return `حساب حسن الشخصي ${money(d.amount)}${d.party_name ? ` — ${d.party_name}` : ""}`;
+      return `حساب ${person()} الشخصي ${money(d.amount)}${d.party_name ? ` — ${d.party_name}` : ""}`;
     case "hassan_treasury_expenses":
-      return `خزنة حسن ${money(d.amount)}${d.description ? ` — ${d.description}` : ""}`;
+      return `خزنة ${person()} ${money(d.amount)}${d.description ? ` — ${d.description}` : ""}`;
     case "hassan_penalties":
-      return `جزاء حسن ${money(d.amount)}${d.reason ? ` — ${d.reason}` : ""}`;
+      return `جزاء ${person()} ${money(d.amount)}${d.reason ? ` — ${d.reason}` : ""}`;
     case "hassan_workers":
-      return `عامل حسن ${d.name ?? ""}`;
+      return `عامل ${person()} ${d.name ?? ""}`;
     case "hassan_worker_entries":
-      return `حركة ${ref.worker_id ?? "عامل حسن"} ${money(d.amount)}`;
+      return `حركة ${ref.worker_id ?? `عامل ${person()}`} ${money(d.amount)}`;
     case "treasury_accounts":
       return "رصيد بداية حساب الخزنة";
     case "treasury_transfers":
@@ -95,7 +96,7 @@ function describe(r: SyncActivityRow): string {
       return `ميعاد التزام: ${d.title ?? ""}${d.amount ? ` ${money(d.amount)}` : ""} — ${d.due_date ?? ""}${d.done_at ? " (اتدفع)" : ""}`;
     case "hassan_worker_attendance": {
       const st: Record<string, string> = { present: "اشتغل", absent: "غايب", leave_paid: "إجازة مدفوعة", leave_unpaid: "إجازة مش مدفوعة" };
-      return `حضور ${ref.worker_id ?? "عامل حسن"} يوم ${day(d.date)}: ${st[d.status] ?? d.status ?? ""}`;
+      return `حضور ${ref.worker_id ?? `عامل ${person()}`} يوم ${day(d.date)}: ${st[d.status] ?? d.status ?? ""}`;
     }
     case "waste_entries":
       return `هالك ${money(d.amount)}`;

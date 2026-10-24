@@ -1,3 +1,5 @@
+import { person } from "./person";
+
 export type SectionId =
   | "home"
   | "equipment"
@@ -26,7 +28,7 @@ export const navItems: NavItem[] = [
   { id: "home", label: "الرئيسية", icon: "home" },
   { id: "equipment", label: "المعدات", icon: "equipment" },
   { id: "salaries", label: "الرواتب", icon: "salaries" },
-  { id: "hassan", label: "حسن", icon: "hassan" },
+  { id: "hassan", label: "صاحب الكوميشن", icon: "hassan" },
   { id: "contractors", label: "المقاولين", icon: "contractors" },
   { id: "partners", label: "الشركاء", icon: "partners" },
   { id: "treasury", label: "الخزنة", icon: "treasury" },
@@ -40,3 +42,6 @@ export const navItems: NavItem[] = [
   { id: "activity", label: "سجل التعديلات", icon: "history" },
   { id: "settings", label: "الإعدادات", icon: "settings" },
 ];
+
+/** The commission page is named after the person (each company types it in Settings). */
+export const navLabel = (item: NavItem) => (item.id === "hassan" ? person() : item.label);
