@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, appApi, isTablet, isWeb, licenseApi, LicenseStatus, SettingsView, syncApi } from "../../api/client";
+import { api, appApi, isTablet, isWeb, licenseApi, LicenseStatus, SettingsView, shellApi, syncApi } from "../../api/client";
 import { Button, ErrorBox, Loading, Note, PageHeader, Panel } from "../../components/ui";
 import { Labeled, TextInput } from "../../components/Field";
 import { syncLine, useSyncStatus } from "../../components/Sync";
@@ -226,6 +226,13 @@ function License() {
           البرنامج متفعّل باسم: <b>{s.customer}</b>
         </div>
         <div className="text-sm text-muted">الاسم واللوجو اللي بيظهروا في البرنامج والطباعة جايين مع كود التفعيل.</div>
+        {s.products.includes("operations") && (
+          <div className="pt-1">
+            <Button primary onClick={() => shellApi.open("operations")}>
+              افتح برنامج التشغيل
+            </Button>
+          </div>
+        )}
         <div>الاشتراك: {s.expiresAt ? <b className="num">لحد يوم {s.expiresAt}</b> : <b>مفتوح</b>}</div>
         <div className="text-xs text-muted">البرنامج بيتأكد من الترخيص لوحده كل ما يكون فيه نت، ويقدر يشتغل من غير نت لحد ١٤ يوم.</div>
       </div>

@@ -6,6 +6,9 @@ import { sha512 } from "@noble/hashes/sha512";
 // a token but never make one, so editing the saved token breaks it.
 ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
 
+/** The two MK-Tech programs: التأجير (rental) and التشغيل (operations). */
+export type Product = "rental" | "operations";
+
 export const LICENSE_PUBLIC_KEY = "aea509b039cbe7a416fe107ebf40acfab7eaa519e0308a15e025165fbbe23208";
 
 export interface LicensePayload {
@@ -14,6 +17,8 @@ export interface LicensePayload {
   customer: string;
   /** the company name shown in the app and on printouts (older tokens: none, use customer) */
   name?: string;
+  /** the programs this code opens (older tokens: none, meaning rental only) */
+  products?: Product[];
   device: string;
   /** last day of the subscription (yyyy-mm-dd), null = open-ended */
   expiresAt: string | null;

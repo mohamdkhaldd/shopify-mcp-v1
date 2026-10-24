@@ -4,7 +4,8 @@
 // in licensing.secrets. The app verifies the signature with the public key,
 // so an activation can't be faked by editing files on the device.
 // It also hands the device its company's name, logo and the login of its own
-// cloud space (each customer syncs only with its own devices).
+// cloud space for each program the code opens (rental / operations): each
+// customer syncs only with its own devices.
 // Deployed with the Supabase MCP tool; this copy is the source of truth.
 import postgres from "npm:postgres@3.4.5";
 import * as ed from "npm:@noble/ed25519@2.1.0";
@@ -46,17 +47,19 @@ Deno.serve(async (req) => {
       iat?: number;
       exp?: number;
       maxDevices?: number;
+      products?: string[];
       sync?: { email: string; password: string };
+      syncByProduct?: Record<string, { email: string; password: string }>;
     };
     if (!r.ok) return json(r);
     if (!privateKey) {
       const [s] = await sql`select v from licensing.secrets where k = 'signing_key'`;
       privateKey = ed.etc.hexToBytes(s.v);
     }
-    const payload = { v: 1, lic: r.licenseId, customer: r.customer, name: r.name, device: body.deviceId, expiresAt: r.expiresAt ?? null, iat: r.iat, exp: r.exp };
+    const payload = { v: 1, lic: r.licenseId, customer: r.customer, name: r.name, products: r.products ?? ["rental"], device: body.deviceId, expiresAt: r.expiresAt ?? null, iat: r.iat, exp: r.exp };
     const bytes = new TextEncoder().encode(JSON.stringify(payload));
     const token = `${b64url(bytes)}.${b64url(ed.sign(bytes, privateKey))}`;
-    return json({ ok: true, token, customer: r.customer, name: r.name, logoUrl: r.logoUrl ?? null, expiresAt: r.expiresAt ?? null, sync: r.sync });
+    return json({ ok: true, token, customer: r.customer, name: r.name, logoUrl: r.logoUrl ?? null, expiresAt: r.expiresAt ?? null, products: r.products, sync: r.sync, syncByProduct: r.syncByProduct });
   } catch (e) {
     console.error(e);
     return json({ ok: false, error: "server" }, 500);

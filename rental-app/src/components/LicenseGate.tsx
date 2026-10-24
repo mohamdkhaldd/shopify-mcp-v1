@@ -30,7 +30,7 @@ export default function LicenseGate({ children }: { children: ReactNode }) {
   return <Activate message={status.message} onDone={setStatus} />;
 }
 
-function Activate({ message, onDone }: { message: string | null; onDone: (s: LicenseStatus) => void }) {
+export function Activate({ message, onDone }: { message: string | null; onDone: (s: LicenseStatus) => void }) {
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(message);

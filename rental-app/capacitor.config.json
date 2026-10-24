@@ -1,6 +1,6 @@
 {
   "appId": "com.albunyan.rental",
-  "appName": "MK-Tech التأجير",
+  "appName": "MK-Tech",
   "webDir": "dist-tablet",
   "android": {
     "allowMixedContent": false

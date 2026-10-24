@@ -2,11 +2,11 @@
   "name": "mk-tech-rental",
   "version": "0.1.0",
   "private": true,
-  "description": "MK-Tech — برنامج التأجير: نظام تأجير المعدات بتمويل المستثمرين",
+  "description": "MK-Tech: برنامج التأجير وبرنامج التشغيل لشركات المعدات",
   "author": "MK-Tech",
   "scripts": {
     "dev": "vite",
-    "build:renderer": "vite build",
+    "build:renderer": "vite build && vite build -c vite.operations.config.ts",
     "build:electron": "node scripts/build-electron.mjs",
     "build": "npm run typecheck && npm run build:renderer && npm run build:electron",
     "electron:dev": "npm run build:electron && concurrently -k \"vite\" \"wait-on tcp:5174 && VITE_DEV_SERVER_URL=http://localhost:5174 electron .\"",
@@ -15,7 +15,7 @@
     "rebuild:node": "npm rebuild better-sqlite3",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p operations/tsconfig.json --noEmit",
     "build:tablet": "tsc -p tsconfig.json --noEmit && vite build --config vite.tablet.config.ts",
     "test:tablet": "TEST_DB=sqljs vitest run"
   },
@@ -64,7 +64,7 @@
   "main": "dist-electron/main.cjs",
   "build": {
     "appId": "com.albunyan.rental",
-    "productName": "MK-Tech التأجير",
+    "productName": "MK-Tech",
     "directories": {
       "output": "release"
     },
@@ -82,7 +82,7 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "MK-Tech التأجير"
+      "shortcutName": "MK-Tech"
     },
     "publish": {
       "provider": "github",

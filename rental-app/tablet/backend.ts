@@ -67,7 +67,7 @@ export async function startBackend() {
     ...(await deviceIdentity()),
     appVersion: typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.0.0",
     ...licenseServer,
-    onCredentials: (c) => sync.ensureLogin(c).catch(() => {}),
+    onCredentials: (c, p) => p === "rental" && sync.ensureLogin(c).catch(() => {}),
   });
   // after each check the screen gets the fresh state right away (name, logo, a stopped code)
   const checkLicense = () =>

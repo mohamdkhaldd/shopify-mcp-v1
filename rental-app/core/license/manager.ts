@@ -1,5 +1,7 @@
 import type { Db } from "../db";
-import { checkToken, LICENSE_PUBLIC_KEY } from "./token";
+import { checkToken, LICENSE_PUBLIC_KEY, Product } from "./token";
+
+export type { Product } from "./token";
 
 // The activation state of this copy of the app. The code the customer typed
 // and the last signed token are kept in app_settings (never synced). On every
@@ -19,6 +21,8 @@ export type LicenseStatus =
       logo: string | null;
       expiresAt: string | null;
       checkBy: string;
+      /** the programs this code opens */
+      products: Product[];
     }
   | { state: "needed"; message: string | null };
 
@@ -30,7 +34,7 @@ export interface SyncCredentials {
 export type ActivateResult = { ok: true; status: LicenseStatus } | { ok: false; message: string };
 
 type ServerAnswer =
-  | { ok: true; token: string; logoUrl?: string | null; sync?: SyncCredentials }
+  | { ok: true; token: string; logoUrl?: string | null; sync?: SyncCredentials; syncByProduct?: Partial<Record<Product, SyncCredentials>> }
   | { ok: false; error: string; maxDevices?: number; expiresAt?: string };
 
 const MESSAGES: Record<string, (a: ServerAnswer & { ok: false }) => string> = {
@@ -56,9 +60,16 @@ export interface LicenseOptions {
   fetch?: typeof fetch;
   now?: () => number;
   publicKey?: string;
-  /** called after every successful check with the login of this customer's own cloud space */
-  onCredentials?: (c: SyncCredentials) => void;
+  /** called after every successful check with the login of this customer's own cloud space, per program */
+  onCredentials?: (c: SyncCredentials, product: Product) => void;
 }
+
+const PRODUCTS: Product[] = ["rental", "operations"];
+/** where each program's sync login is kept (rental's keys predate the suite) */
+const KEYS: Record<Product, { email: string; password: string }> = {
+  rental: { email: "sync_email", password: "sync_password" },
+  operations: { email: "sync_ops_email", password: "sync_ops_password" },
+};
 
 /** logo_url "bundled:…" = the logo shipped inside the app (Al Bunyan's own copy) */
 const BUNDLED = "bundled";
@@ -87,6 +98,7 @@ export function createLicenseManager(o: LicenseOptions) {
         logo: get("brand_logo"),
         expiresAt: c.payload.expiresAt,
         checkBy: new Date(c.payload.exp * 1000).toISOString(),
+        products: c.payload.products?.length ? c.payload.products : ["rental"],
       };
     return { state: "needed", message: c.reason === "expired" ? CHECK_IN : lastMessage };
   }
@@ -141,20 +153,25 @@ export function createLicenseManager(o: LicenseOptions) {
     set("license_lic", String(c.payload.lic));
     set("license_key", key);
     set("license_token", a.token);
-    if (a.sync) {
-      set("sync_email", a.sync.email);
-      set("sync_password", a.sync.password);
+    const byProduct: Partial<Record<Product, SyncCredentials>> = a.syncByProduct ?? (a.sync ? { rental: a.sync } : {});
+    for (const p of PRODUCTS) {
+      const c = byProduct[p];
+      if (!c) continue;
+      set(KEYS[p].email, c.email);
+      set(KEYS[p].password, c.password);
     }
     await saveLogo(a.logoUrl);
     lastMessage = null;
-    const creds = credentials();
-    if (creds) o.onCredentials?.(creds);
+    for (const p of PRODUCTS) {
+      const creds = credentials(p);
+      if (creds) o.onCredentials?.(creds, p);
+    }
     return "";
   }
 
-  function credentials(): SyncCredentials | null {
-    const email = get("sync_email");
-    const password = get("sync_password");
+  function credentials(product: Product = "rental"): SyncCredentials | null {
+    const email = get(KEYS[product].email);
+    const password = get(KEYS[product].password);
     return email && password ? { email, password } : null;
   }
 

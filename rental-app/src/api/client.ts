@@ -154,7 +154,7 @@ export interface SyncStatus {
 const noSync: SyncStatus = { deviceId: "", deviceName: "", pending: 0, deferred: 0, online: false, needsLogin: false, lastError: null, lastSyncAt: null, disabled: true };
 
 export type LicenseStatus =
-  | { state: "active"; licenseId: number; customer: string; name: string; logo: string | null; expiresAt: string | null; checkBy: string }
+  | { state: "active"; licenseId: number; customer: string; name: string; logo: string | null; expiresAt: string | null; checkBy: string; products: ("rental" | "operations")[] }
   | { state: "needed"; message: string | null };
 
 export const licenseApi = {
@@ -163,6 +163,14 @@ export const licenseApi = {
     window.api?.invoke("license:activate", { key }) ?? Promise.resolve({ ok: false, message: "البرنامج لازم يشتغل من نسخة الويندوز أو التابلت" }),
   /** fired after every check with the server */
   onChanged: (cb: (s: LicenseStatus) => void) => window.api?.on("license:changed", cb as (d: unknown) => void) ?? (() => {}),
+};
+
+export type Product = "rental" | "operations";
+
+/** The MK-Tech shell: which program this window runs, and switching to the other one (restarts the app). */
+export const shellApi = {
+  info: (): Promise<{ product: Product | null; products: Product[] }> => window.api?.invoke("shell:info") ?? Promise.resolve({ product: "rental", products: ["rental"] }),
+  open: (product: Product) => window.api?.invoke("shell:open", { product }),
 };
 
 export const syncApi = {
