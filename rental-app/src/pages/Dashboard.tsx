@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, DashboardView } from "../api/client";
 import { Code, ErrorBox, Kpi, Loading, Money, Note, PageHeader, Panel, Pill } from "../components/ui";
 import { PrintButtons, PrintHeader } from "../components/Print";
+import { Blurrable, EyeAllButton, PrivacyProvider } from "../components/Privacy";
 import { monthLabel, percentFromBp, pounds, unitLabel } from "../utils/format";
 import type { SectionId } from "../nav";
 
@@ -96,85 +97,106 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: SectionId) 
   const months = v.months.some((m) => m.month === v.month) ? v.months : [...v.months, { month: v.month, closed: false }];
 
   return (
-    <div className="grid gap-5">
-      <PrintHeader title="ملخص الشهر" subtitle={monthLabel(v.month)} />
-      <PageHeader title="الرئيسية" subtitle={`ملخص شهر ${monthLabel(v.month)}${v.closed ? " — الشهر ده اتقفل" : ""}`}>
-        <select
-          aria-label="الشهر"
-          value={v.month}
-          onChange={(e) => setMonth(e.target.value)}
-          className="font-bold border border-line bg-surface text-fg rounded-lg px-2.5 py-1.5"
-        >
-          {[...months].reverse().map((m) => (
-            <option key={m.month} value={m.month}>
-              {monthLabel(m.month)}
-              {m.closed ? " (مقفول)" : ""}
-            </option>
-          ))}
-        </select>
-        <PrintButtons pdfName={`ملخص ${monthLabel(v.month)}`} />
-      </PageHeader>
+    <PrivacyProvider>
+      <div className="grid gap-5">
+        <PrintHeader title="ملخص الشهر" subtitle={monthLabel(v.month)} />
+        <PageHeader title="الرئيسية" subtitle={`ملخص شهر ${monthLabel(v.month)}${v.closed ? " — الشهر ده اتقفل" : ""}`}>
+          <select
+            aria-label="الشهر"
+            value={v.month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="font-bold border border-line bg-surface text-fg rounded-lg px-2.5 py-1.5"
+          >
+            {[...months].reverse().map((m) => (
+              <option key={m.month} value={m.month}>
+                {monthLabel(m.month)}
+                {m.closed ? " (مقفول)" : ""}
+              </option>
+            ))}
+          </select>
+          <EyeAllButton />
+          <PrintButtons pdfName={`ملخص ${monthLabel(v.month)}`} />
+        </PageHeader>
 
-      <div className="grid gap-3.5 grid-cols-3 max-[900px]:grid-cols-2">
-        <Kpi tone="hero" label="رصيد الخزنة" value={<Money pt={pounds(k.balancePt)} />} sub={<>المتاح للتشغيل {pounds(k.availablePt)}</>} />
-        <Kpi tone="tax" label="فلوس ضرايب في الخزنة" value={<Money pt={pounds(k.taxHeldPt)} />} sub="مش بتاعتنا — ممنوع تتصرف" />
-        <Kpi label="مستحق من العملاء" value={<Money pt={pounds(k.receivablesPt)} />} sub={<>من فواتير {pounds(k.invoicedPt)}</>} />
-        <Kpi label="علينا للموردين" value={<Money pt={pounds(k.payablesPt)} />} sub={<>بعد خصومات {pounds(k.deductionsPt)}</>} />
-        <Kpi label="ربح الشهر" value={<Money pt={pounds(k.monthProfitPt)} />} sub={<>المحصّل منه {pounds(k.monthCollectedProfitPt)}</>} />
-        <Kpi label="عقود شغالة" value={k.activeContracts} sub={k.activeContracts === 1 ? "معدة واحدة في الشغل" : `${k.activeContracts} معدات في الشغل`} />
+        <div className="grid gap-3.5 grid-cols-3 max-[900px]:grid-cols-2">
+          <Blurrable id="balance">
+            <Kpi tone="hero" label="رصيد الخزنة" value={<Money pt={pounds(k.balancePt)} />} sub={<>المتاح للتشغيل {pounds(k.availablePt)}</>} />
+          </Blurrable>
+          <Blurrable id="tax">
+            <Kpi tone="tax" label="فلوس ضرايب في الخزنة" value={<Money pt={pounds(k.taxHeldPt)} />} sub="مش بتاعتنا — ممنوع تتصرف" />
+          </Blurrable>
+          <Blurrable id="receivables">
+            <Kpi label="مستحق من العملاء" value={<Money pt={pounds(k.receivablesPt)} />} sub={<>من فواتير {pounds(k.invoicedPt)}</>} />
+          </Blurrable>
+          <Blurrable id="payables">
+            <Kpi label="علينا للموردين" value={<Money pt={pounds(k.payablesPt)} />} sub={<>بعد خصومات {pounds(k.deductionsPt)}</>} />
+          </Blurrable>
+          <Blurrable id="profit">
+            <Kpi label="ربح الشهر" value={<Money pt={pounds(k.monthProfitPt)} />} sub={<>المحصّل منه {pounds(k.monthCollectedProfitPt)}</>} />
+          </Blurrable>
+          <Blurrable id="contracts">
+            <Kpi label="عقود شغالة" value={k.activeContracts} sub={k.activeContracts === 1 ? "معدة واحدة في الشغل" : `${k.activeContracts} معدات في الشغل`} />
+          </Blurrable>
+        </div>
+
+        <div className="grid gap-3.5 items-start grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] max-[1050px]:grid-cols-1">
+          <Blurrable id="ladder">
+            <Ladder v={v} />
+          </Blurrable>
+          <Blurrable id="treasury">
+            <TreasurySplit v={v} />
+          </Blurrable>
+        </div>
+
+        <Blurrable id="active-contracts">
+          <Panel title="العقود الشغالة" actions={<button className="text-xs font-bold text-amber-deep hover:underline" onClick={() => onNavigate("sarki")}>افتح السركي ←</button>}>
+            {v.activeContracts.length === 0 ? (
+              <div className="px-4 py-8 text-center text-muted">مفيش عقود شغالة. ابدأ بعقد جديد من صفحة السركي.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>العقد</th>
+                      <th>العميل</th>
+                      <th>المعدة</th>
+                      <th>صاحب المعدة</th>
+                      <th className="n">سعر العميل</th>
+                      <th className="n">سعر المورد</th>
+                      <th className="n">أيام الشهر</th>
+                      <th className="n">صافي الشهر</th>
+                      <th>الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {v.activeContracts.map((c) => (
+                      <tr key={c.contractId}>
+                        <td>
+                          <Code>{c.code}</Code>
+                        </td>
+                        <td>{c.client}</td>
+                        <td>{c.equipment}</td>
+                        <td>{c.supplier}</td>
+                        <td className="n">
+                          {pounds(c.clientRatePt)} / {unitLabel(c.unit)}
+                        </td>
+                        <td className="n">
+                          {pounds(c.supplierRatePt)} / {unitLabel(c.unit)}
+                        </td>
+                        <td className="n">{c.daysThisMonth}</td>
+                        <td className={`n font-bold ${c.netThisMonthPt >= 0 ? "text-in" : "text-out"}`}>{pounds(c.netThisMonthPt)}</td>
+                        <td>
+                          <Pill tone="in">شغال</Pill>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        </Blurrable>
       </div>
-
-      <div className="grid gap-3.5 items-start grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] max-[1050px]:grid-cols-1">
-        <Ladder v={v} />
-        <TreasurySplit v={v} />
-      </div>
-
-      <Panel title="العقود الشغالة" actions={<button className="text-xs font-bold text-amber-deep hover:underline" onClick={() => onNavigate("sarki")}>افتح السركي ←</button>}>
-        {v.activeContracts.length === 0 ? (
-          <div className="px-4 py-8 text-center text-muted">مفيش عقود شغالة. ابدأ بعقد جديد من صفحة السركي.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>العقد</th>
-                  <th>العميل</th>
-                  <th>المعدة</th>
-                  <th>صاحب المعدة</th>
-                  <th className="n">سعر العميل</th>
-                  <th className="n">سعر المورد</th>
-                  <th className="n">أيام الشهر</th>
-                  <th className="n">صافي الشهر</th>
-                  <th>الحالة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {v.activeContracts.map((c) => (
-                  <tr key={c.contractId}>
-                    <td>
-                      <Code>{c.code}</Code>
-                    </td>
-                    <td>{c.client}</td>
-                    <td>{c.equipment}</td>
-                    <td>{c.supplier}</td>
-                    <td className="n">
-                      {pounds(c.clientRatePt)} / {unitLabel(c.unit)}
-                    </td>
-                    <td className="n">
-                      {pounds(c.supplierRatePt)} / {unitLabel(c.unit)}
-                    </td>
-                    <td className="n">{c.daysThisMonth}</td>
-                    <td className={`n font-bold ${c.netThisMonthPt >= 0 ? "text-in" : "text-out"}`}>{pounds(c.netThisMonthPt)}</td>
-                    <td>
-                      <Pill tone="in">شغال</Pill>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-    </div>
+    </PrivacyProvider>
   );
 }
