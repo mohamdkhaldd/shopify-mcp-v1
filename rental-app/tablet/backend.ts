@@ -46,7 +46,6 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
   const SQL = await initSqlJs({ locateFile: () => wasmUrl });
   const db = createDatabase(SQL, await loadSaved());
   setupDatabase(db);
-  const setting = (k: string) => (db.prepare("SELECT value FROM app_settings WHERE key = ?").get(k) as { value: string } | undefined)?.value;
 
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const emit = (channel: string, data: unknown) => (listeners.get(channel) ?? []).forEach((cb) => cb(data));
@@ -67,13 +66,12 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
     return s.state === "active" ? s.products : [];
   };
 
-  // which program this start opens: the one asked for, else the last one
-  // used, else the only one the code has; none = activation / chooser
+  // which program this start opens: the one just picked on the chooser, else
+  // the only one the code has; a code with both always starts on the chooser
   const asked = new URLSearchParams(location.search).get("product") as Product | null;
   const pick = (): Page => {
     const have = products();
-    const wanted = asked ?? (setting("shell_product") as Product | undefined);
-    if (wanted && have.includes(wanted)) return wanted;
+    if (asked && have.includes(asked)) return asked;
     return have.length === 1 ? have[0] : "launcher";
   };
   const page = pick();
@@ -114,10 +112,9 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
     "license:status": () => license.status(),
     "license:activate": ({ key }) => license.activate(key),
     "shell:info": () => ({ product: page === "launcher" ? null : page, products: products() }),
-    // switching programs: remember the choice and start again on it
+    // switching programs: start again on the chosen one
     "shell:open": ({ product }: { product: Product }) => {
       if (!products().includes(product)) return { ok: false };
-      db.prepare("INSERT INTO app_settings (key, value) VALUES ('shell_product', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(product);
       flush().then(() => location.replace(`${location.pathname}?product=${product}`));
       return { ok: true };
     },

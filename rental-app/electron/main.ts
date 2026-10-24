@@ -71,7 +71,6 @@ function loadPage(win: BrowserWindow, page: Page) {
 app.whenReady().then(async () => {
   // the rental database also keeps this copy's activation (app_settings)
   let { raw, db } = openDatabase();
-  const setting = (k: string) => (db.prepare("SELECT value FROM app_settings WHERE key = ?").get(k) as { value: string } | undefined)?.value;
   const demo = process.env.RENTAL_DEMO === "1";
 
   // ---- activation: nothing works until this copy has a valid code ----
@@ -106,11 +105,11 @@ app.whenReady().then(async () => {
     return s.state === "active" ? s.products : [];
   };
 
-  // which program this run opens: the one asked for, else the last one used,
-  // else the only one the code has; none = the activation / chooser page
+  // which program this run opens: the one just picked on the chooser, else
+  // the only one the code has; a code with both always starts on the chooser
   const pick = (): Product | null => {
     const have = products();
-    const wanted = (demo ? ((process.env.RENTAL_PRODUCT as Product | undefined) ?? "rental") : undefined) ?? productArg ?? (setting("shell_product") as Product | undefined);
+    const wanted = (demo ? ((process.env.RENTAL_PRODUCT as Product | undefined) ?? "rental") : undefined) ?? productArg;
     if (wanted && have.includes(wanted)) return wanted;
     return have.length === 1 ? have[0] : null;
   };
@@ -137,7 +136,6 @@ app.whenReady().then(async () => {
   ipcMain.handle("shell:info", () => ({ product, products: products() }));
   ipcMain.handle("shell:open", (_e, { product: next }: { product: Product }) => {
     if (!products().includes(next)) return { ok: false };
-    db.prepare("INSERT INTO app_settings (key, value) VALUES ('shell_product', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(next);
     app.relaunch({ args: [...process.argv.slice(1).filter((a) => !a.startsWith("--product=")), `--product=${next}`] });
     app.exit(0);
     return { ok: true };
