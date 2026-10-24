@@ -168,9 +168,16 @@ export const licenseApi = {
 export type Product = "rental" | "operations";
 
 /** The MK-Tech shell: which program this window runs, and switching to the other one (restarts the app). */
+export type ShellInfo = { product: Product | null; products: Product[]; locked?: boolean; hasPassword?: boolean };
+type ShellResult = { ok: true } | { ok: false; message?: string };
 export const shellApi = {
-  info: (): Promise<{ product: Product | null; products: Product[] }> => window.api?.invoke("shell:info") ?? Promise.resolve({ product: "rental", products: ["rental"] }),
+  info: (): Promise<ShellInfo> => window.api?.invoke("shell:info") ?? Promise.resolve({ product: "rental", products: ["rental"] }),
   open: (product: Product) => window.api?.invoke("shell:open", { product }),
+  /** back to the start: the password page (if one is set) or the chooser */
+  logout: () => window.api?.invoke("shell:logout"),
+  unlock: (password: string): Promise<ShellResult> => window.api!.invoke("shell:unlock", { password }),
+  resetPassword: (code: string): Promise<ShellResult> => window.api!.invoke("shell:resetPassword", { code }),
+  setPassword: (current: string, next: string): Promise<ShellResult> => window.api!.invoke("shell:setPassword", { current, next }),
 };
 
 export const syncApi = {

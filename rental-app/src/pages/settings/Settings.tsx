@@ -213,6 +213,63 @@ function SyncPanel() {
   );
 }
 
+// The device password (optional): asked when MK-Tech opens and after "خروج".
+// On this device only; forgetting it is fixed with the activation code.
+function DevicePassword() {
+  const [has, setHas] = useState<boolean | null>(null);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [again, setAgain] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => {
+    shellApi.info().then((i) => setHas(!!i.hasPassword), () => {});
+  }, []);
+  if (has === null || !window.api) return null;
+
+  async function save(remove: boolean) {
+    if (!remove && next !== again) return setMsg({ ok: false, text: "الباسورد الجديد مش زي التأكيد" });
+    const r = await shellApi.setPassword(current, remove ? "" : next);
+    if (!r.ok) return setMsg({ ok: false, text: r.message ?? "حصلت مشكلة" });
+    setHas(!remove);
+    setCurrent("");
+    setNext("");
+    setAgain("");
+    setMsg({ ok: true, text: remove ? "الباسورد اتشال" : "الباسورد اتحفظ — هيتطلب كل ما البرنامج يفتح وبعد الخروج" });
+  }
+
+  return (
+    <Panel title="باسورد الدخول" hint={has ? "شغال" : "مقفول"}>
+      <div className="px-4 py-3.5 grid gap-3">
+        <div className="text-sm text-muted">
+          لو حطيت باسورد، البرنامج هيطلبه كل ما يتفتح وكل ما تدوس "خروج". على الجهاز ده بس — ولو نسيته، كود التفعيل بيشيله.
+        </div>
+        <div className="flex flex-wrap items-end gap-2.5">
+          {has && (
+            <Labeled label="الباسورد الحالي">
+              <TextInput type="password" value={current} onChange={(e) => setCurrent(e.target.value)} className="w-36" />
+            </Labeled>
+          )}
+          <Labeled label={has ? "الباسورد الجديد" : "الباسورد"}>
+            <TextInput type="password" value={next} onChange={(e) => setNext(e.target.value)} className="w-36" />
+          </Labeled>
+          <Labeled label="اكتبه تاني">
+            <TextInput type="password" value={again} onChange={(e) => setAgain(e.target.value)} className="w-36" />
+          </Labeled>
+          <Button primary disabled={!next} onClick={() => save(false)}>
+            {has ? "غيّر الباسورد" : "حط باسورد"}
+          </Button>
+          {has && (
+            <Button danger disabled={!current} onClick={() => save(true)}>
+              شيل الباسورد
+            </Button>
+          )}
+        </div>
+        {msg && <div className={`text-sm font-semibold ${msg.ok ? "text-in" : "text-out"}`}>{msg.text}</div>}
+      </div>
+    </Panel>
+  );
+}
+
 function License() {
   const [s, setS] = useState<LicenseStatus | null>(null);
   useEffect(() => {
@@ -317,6 +374,7 @@ export default function Settings() {
         <Updates />
         <SyncPanel />
         <License />
+        <DevicePassword />
       </div>
     </div>
   );

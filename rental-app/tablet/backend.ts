@@ -15,6 +15,7 @@ import { bytesToHex } from "@noble/hashes/utils";
 import { createLicenseManager, Product } from "../core/license/manager";
 import { startOperations } from "./operations";
 import { licenseServer } from "../core/license/config";
+import { createLock } from "../core/shell/lock";
 
 declare const __APP_VERSION__: string;
 
@@ -66,10 +67,22 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
     return s.state === "active" ? s.products : [];
   };
 
+  // the device password (optional): until it's typed, only the password page
+  // opens. The pass the chooser hands over works once; it's taken off the
+  // address right away, so reloading later asks again.
+  const lock = createLock({ db, savedKey: () => license.savedKey() });
+  const query = new URLSearchParams(location.search);
+  let unlocked = !lock.hasPassword() || lock.takePass(query.get("pass"));
+  if (query.has("pass")) {
+    query.delete("pass");
+    history.replaceState(null, "", `${location.pathname}${query.size ? `?${query}` : ""}`);
+  }
+
   // which program this start opens: the one just picked on the chooser, else
   // the only one the code has; a code with both always starts on the chooser
-  const asked = new URLSearchParams(location.search).get("product") as Product | null;
+  const asked = query.get("product") as Product | null;
   const pick = (): Page => {
+    if (!unlocked) return "launcher";
     const have = products();
     if (asked && have.includes(asked)) return asked;
     return have.length === 1 ? have[0] : "launcher";
@@ -107,16 +120,39 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
   document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && flush());
   window.addEventListener("pagehide", () => flush());
 
-  const licensed = () => license.status().state === "active";
+  const licensed = () => license.status().state === "active" && unlocked;
   const handlers: Record<string, Handler> = {
     "license:status": () => license.status(),
     "license:activate": ({ key }) => license.activate(key),
-    "shell:info": () => ({ product: page === "launcher" ? null : page, products: products() }),
+    "shell:info": () => ({ product: page === "launcher" ? null : page, products: products(), locked: !unlocked, hasPassword: lock.hasPassword() }),
     // switching programs: start again on the chosen one
     "shell:open": ({ product }: { product: Product }) => {
-      if (!products().includes(product)) return { ok: false };
-      flush().then(() => location.replace(`${location.pathname}?product=${product}`));
+      if (!unlocked || !products().includes(product)) return { ok: false };
+      const pass = lock.hasPassword() ? `&pass=${lock.issuePass()}` : "";
+      flush().then(() => location.replace(`${location.pathname}?product=${product}${pass}`));
       return { ok: true };
+    },
+    // "خروج": back to the start — the password page, or the chooser
+    "shell:logout": () => {
+      flush().then(() => location.replace(location.pathname));
+      return { ok: true };
+    },
+    "shell:unlock": ({ password }: { password: string }) => {
+      if (!lock.check(password)) return { ok: false, message: "الباسورد غلط" };
+      unlocked = true;
+      return { ok: true };
+    },
+    "shell:resetPassword": ({ code }: { code: string }) => {
+      if (!lock.resetWithCode(code)) return { ok: false, message: "ده مش كود التفعيل بتاع الجهاز ده" };
+      unlocked = true;
+      flush();
+      return { ok: true };
+    },
+    "shell:setPassword": ({ current, next }: { current: string; next: string }) => {
+      if (!unlocked) return { ok: false, message: "ادخل الأول" };
+      const r = lock.setPassword(current, next);
+      flush();
+      return r;
     },
   };
 

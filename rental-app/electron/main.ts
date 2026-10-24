@@ -14,6 +14,7 @@ import { deviceIdentity } from "./device";
 import { createLicenseManager, LicenseManager, LicenseStatus, Product } from "../core/license/manager";
 import { licenseServer } from "../core/license/config";
 import { OperationsBackend, startOperations } from "./operations";
+import { createLock } from "../core/shell/lock";
 
 const isDev = !app.isPackaged;
 const root = path.join(__dirname, "..");
@@ -38,7 +39,10 @@ if (process.env.RENTAL_USER_DATA) app.setPath("userData", process.env.RENTAL_USE
 
 type Page = Product | "launcher";
 const TITLES: Record<Page, string> = { rental: "MK-Tech التأجير", operations: "MK-Tech التشغيل", launcher: "MK-Tech" };
-const productArg = process.argv.find((a) => a.startsWith("--product="))?.slice("--product=".length) as Product | undefined;
+const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
+const productArg = arg("product") as Product | undefined;
+/** without --product / --pass: the chooser (and the password page, if one is set) */
+const shellArgs = () => process.argv.slice(1).filter((a) => !a.startsWith("--product=") && !a.startsWith("--pass="));
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -100,6 +104,12 @@ app.whenReady().then(async () => {
     products: ["rental", "operations"],
   };
   const licenseStatus = () => (demo ? demoStatus : license.status());
+
+  // the device password (optional): until it's typed, only the password page opens
+  const makeLock = () => createLock({ db, savedKey: () => license.savedKey() });
+  let lock = makeLock();
+  let unlocked = !lock.hasPassword() || lock.takePass(arg("pass"));
+  const usable = () => licenseStatus().state === "active" && unlocked;
   const products = () => {
     const s = licenseStatus();
     return s.state === "active" ? s.products : [];
@@ -108,6 +118,7 @@ app.whenReady().then(async () => {
   // which program this run opens: the one just picked on the chooser, else
   // the only one the code has; a code with both always starts on the chooser
   const pick = (): Product | null => {
+    if (!unlocked) return null;
     const have = products();
     const wanted = (demo ? ((process.env.RENTAL_PRODUCT as Product | undefined) ?? "rental") : undefined) ?? productArg;
     if (wanted && have.includes(wanted)) return wanted;
@@ -133,13 +144,33 @@ app.whenReady().then(async () => {
   ipcMain.handle("license:activate", (_e, { key }: { key: string }) => license.activate(key));
 
   // ---- switching between the two programs ----
-  ipcMain.handle("shell:info", () => ({ product, products: products() }));
+  ipcMain.handle("shell:info", () => ({ product, products: products(), locked: !unlocked, hasPassword: lock.hasPassword() }));
   ipcMain.handle("shell:open", (_e, { product: next }: { product: Product }) => {
-    if (!products().includes(next)) return { ok: false };
-    app.relaunch({ args: [...process.argv.slice(1).filter((a) => !a.startsWith("--product=")), `--product=${next}`] });
+    if (!unlocked || !products().includes(next)) return { ok: false };
+    const pass = lock.hasPassword() ? [`--pass=${lock.issuePass()}`] : [];
+    app.relaunch({ args: [...shellArgs(), `--product=${next}`, ...pass] });
     app.exit(0);
     return { ok: true };
   });
+  // "خروج": back to the start — the password page, or the chooser
+  ipcMain.handle("shell:logout", () => {
+    app.relaunch({ args: shellArgs() });
+    app.exit(0);
+    return { ok: true };
+  });
+  ipcMain.handle("shell:unlock", (_e, { password }: { password: string }) => {
+    if (!lock.check(password)) return { ok: false, message: "الباسورد غلط" };
+    unlocked = true;
+    return { ok: true };
+  });
+  ipcMain.handle("shell:resetPassword", (_e, { code }: { code: string }) => {
+    if (!lock.resetWithCode(code)) return { ok: false, message: "ده مش كود التفعيل بتاع الجهاز ده" };
+    unlocked = true;
+    return { ok: true };
+  });
+  ipcMain.handle("shell:setPassword", (_e, { current, next }: { current: string; next: string }) =>
+    unlocked ? lock.setPassword(current, next) : { ok: false, message: "ادخل الأول" },
+  );
 
   // shared by both programs
   ipcMain.handle("print:preview", (_e, opts?: { singlePage?: boolean }) => mainWindow && printPreview(mainWindow, iconPath, opts?.singlePage ?? true));
@@ -152,7 +183,7 @@ app.whenReady().then(async () => {
 
   if (product === "operations") {
     operations = await startOperations({
-      licensed: () => licenseStatus().state === "active",
+      licensed: usable,
       credentials: () => license.credentials("operations"),
       onRemoteChanges: notifyRemote,
       withSync: !demo,
@@ -170,7 +201,7 @@ app.whenReady().then(async () => {
     ipcMain.handle("sync:setDeviceName", (_e, { name }: { name: string }) => rentalSync?.setDeviceName(name) ?? offline);
 
     ipcMain.handle("core:call", (_e, { fn, args }) =>
-      licenseStatus().state === "active" ? callCore(db, registry, fn, args) : { ok: false, code: "license", message: "البرنامج محتاج كود تفعيل" },
+      usable() ? callCore(db, registry, fn, args) : { ok: false, code: "license", message: "البرنامج محتاج كود تفعيل" },
     );
     ipcMain.handle("export:excel", (_e, { fileName, sheets }: { fileName: string; sheets: ExcelSheet[] }) => mainWindow && exportExcel(mainWindow, fileName, sheets));
 
@@ -206,6 +237,7 @@ app.whenReady().then(async () => {
       ({ raw, db } = openDatabase());
       registry = makeRegistry(db);
       license = makeLicense();
+      lock = makeLock();
       if (rentalSync) rentalSync = startRentalSync();
       mainWindow.webContents.reload();
       return { ok: true };

@@ -5,6 +5,7 @@ import CompanyLogo from "./CompanyLogo";
 import { useBrand } from "../brand";
 import Icon from "./Icon";
 import { useTheme } from "../theme";
+import { shell, ShellInfo } from "../shell";
 
 interface SidebarProps {
   active: SectionId;
@@ -19,9 +20,13 @@ export default function Sidebar({ active, onSelect, open = false }: SidebarProps
   const { theme, toggle } = useTheme();
   const brand = useBrand();
   const [version, setVersion] = useState("");
+  const [info, setInfo] = useState<ShellInfo | null>(null);
+  // "خروج" back to the start, when there's somewhere to go: a password or the other program
+  const canLogout = !!info && (!!info.hasPassword || info.products.length > 1);
 
   useEffect(() => {
     appApi.getVersion().then(setVersion);
+    shell.info().then(setInfo, () => {});
   }, []);
 
   return (
@@ -71,6 +76,15 @@ export default function Sidebar({ active, onSelect, open = false }: SidebarProps
           <Icon name={theme === "dark" ? "sun" : "moon"} className="w-5 h-5" />
           <span>{theme === "dark" ? "الوضع العادي" : "الوضع الليلي"}</span>
         </button>
+        {canLogout && (
+          <button
+            onClick={() => shell.logout()}
+            className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-primary-light hover:text-primary-dark transition-colors"
+          >
+            <Icon name="logout" className="w-5 h-5" />
+            <span>خروج</span>
+          </button>
+        )}
         <div className="text-xs text-slate-400">
           {version ? `الإصدار ${version}` : "..."} — يعمل بالكامل بدون إنترنت
         </div>

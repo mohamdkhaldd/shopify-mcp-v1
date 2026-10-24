@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { licenseApi, LicenseStatus, Product, shellApi } from "../api/client";
+import { FormEvent, ReactNode, useEffect, useState } from "react";
+import { licenseApi, LicenseStatus, Product, shellApi, ShellInfo } from "../api/client";
 import { Activate } from "./LicenseGate";
 
 const PROGRAMS: Record<Product, { title: string; line: string }> = {
@@ -7,56 +7,121 @@ const PROGRAMS: Record<Product, { title: string; line: string }> = {
   operations: { title: "التشغيل", line: "المعدات، الشغل اليومي، الشركاء، المرتبات، الخزنة والمصاريف" },
 };
 
+// MK-Tech's own colors (navy #0F172A / blue #0B5FFF), like the activation screen
+function Backdrop({ children, width = "max-w-[720px]" }: { children: ReactNode; width?: string }) {
+  return (
+    <div dir="rtl" className="min-h-screen flex items-center justify-center px-4 py-10" style={{ background: "linear-gradient(160deg, #0F172A 0%, #0B1A3A 55%, #0B2A6B 100%)" }}>
+      <div className={`w-full ${width} grid gap-6 text-center`}>{children}</div>
+    </div>
+  );
+}
+
+/** The device password, when the customer set one; forgot = the activation code. */
+function PasswordGate({ name, onOpen }: { name: string; onOpen: () => void }) {
+  const [forgot, setForgot] = useState(false);
+  const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!value.trim()) return;
+    setBusy(true);
+    const r = forgot ? await shellApi.resetPassword(value) : await shellApi.unlock(value);
+    setBusy(false);
+    if (r.ok) onOpen();
+    else setError(r.message ?? "حصلت مشكلة");
+  }
+  return (
+    <Backdrop width="max-w-[400px]">
+      <img src="./mk-icon.png" alt="MK-Tech" className="w-[72px] h-[72px] rounded-2xl mx-auto" />
+      <form onSubmit={submit} className="rounded-2xl bg-white text-[#0F172A] p-6 grid gap-3 text-right shadow-2xl">
+        <div className="text-center">
+          <div className="text-xl font-extrabold">أهلًا، {name}</div>
+          <div className="text-sm text-[#64748B] mt-1">{forgot ? "اكتب كود التفعيل بتاع الجهاز ده عشان تشيل الباسورد" : "اكتب الباسورد عشان تدخل"}</div>
+        </div>
+        <input
+          autoFocus
+          type={forgot ? "text" : "password"}
+          dir="ltr"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setError(null);
+          }}
+          placeholder={forgot ? "MKTECH-XXXX-XXXX-XXXX" : "••••"}
+          className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-center text-lg tracking-widest outline-none focus:border-[#0B5FFF] focus:ring-2 focus:ring-[#0B5FFF]/30"
+        />
+        {error && <div className="rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-sm px-3 py-2 text-center">{error}</div>}
+        <button disabled={busy} className="rounded-xl bg-[#0B5FFF] text-white font-bold py-2.5 hover:bg-[#2563EB] disabled:opacity-60">
+          {busy ? "..." : forgot ? "شيل الباسورد وادخل" : "دخول"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setForgot(!forgot);
+            setValue("");
+            setError(null);
+          }}
+          className="text-sm text-[#0B5FFF] font-semibold"
+        >
+          {forgot ? "رجوع للباسورد" : "نسيت الباسورد؟"}
+        </button>
+      </form>
+    </Backdrop>
+  );
+}
+
 /**
- * The page MK-Tech opens on before a program: the activation code, then — when
- * the code opens both programs — which one to work in. A code with one program
- * goes straight into it.
+ * The page MK-Tech opens on before a program: the activation code, the device
+ * password if one is set, then — when the code opens both programs — which one
+ * to work in. A code with one program goes straight into it.
  */
 export default function Launcher() {
   const [status, setStatus] = useState<LicenseStatus | null>(null);
+  const [shell, setShell] = useState<ShellInfo | null>(null);
   const [opening, setOpening] = useState<Product | null>(null);
   useEffect(() => {
     document.title = "MK-Tech";
     licenseApi.status().then(setStatus);
+    shellApi.info().then(setShell);
     return licenseApi.onChanged(setStatus);
   }, []);
   const open = (p: Product) => {
     setOpening(p);
     shellApi.open(p);
   };
+  const locked = !!shell?.locked;
   useEffect(() => {
-    if (status?.state === "active" && status.products.length === 1) open(status.products[0]);
-  }, [status]);
+    if (status?.state === "active" && shell && !locked && status.products.length === 1) open(status.products[0]);
+  }, [status, shell, locked]);
 
-  if (!status) return null;
+  if (!status || !shell) return null;
   if (status.state !== "active") return <Activate message={status.message} onDone={setStatus} />;
+  if (locked) return <PasswordGate name={status.name} onOpen={() => setShell({ ...shell, locked: false })} />;
 
-  // MK-Tech's own colors (navy #0F172A / blue #0B5FFF), like the activation screen
   return (
-    <div dir="rtl" className="min-h-screen flex items-center justify-center px-4 py-10" style={{ background: "linear-gradient(160deg, #0F172A 0%, #0B1A3A 55%, #0B2A6B 100%)" }}>
-      <div className="w-full max-w-[720px] grid gap-6 text-center">
-        <img src="./mk-icon.png" alt="MK-Tech" className="w-[72px] h-[72px] rounded-2xl mx-auto" />
-        <div className="text-white">
-          <div className="text-2xl font-extrabold">أهلًا، {status.name}</div>
-          <div className="text-[#93C5FD] mt-1.5">اختار البرنامج اللي هتشتغل عليه</div>
-        </div>
-        <div className="grid gap-4 grid-cols-2 max-[640px]:grid-cols-1">
-          {status.products.map((p) => (
-            <button
-              key={p}
-              onClick={() => open(p)}
-              disabled={!!opening}
-              className="rounded-2xl bg-white text-[#0F172A] p-6 text-right shadow-2xl hover:ring-4 hover:ring-[#0B5FFF]/40 disabled:opacity-60 transition"
-            >
-              <div className="text-xs font-bold text-[#0B5FFF]">MK-Tech</div>
-              <div className="text-2xl font-extrabold mt-1">برنامج {PROGRAMS[p].title}</div>
-              <div className="text-sm text-[#64748B] mt-2 leading-relaxed">{PROGRAMS[p].line}</div>
-              <div className="mt-4 inline-block rounded-lg bg-[#0B5FFF] text-white text-sm font-bold px-4 py-2">{opening === p ? "بيفتح..." : "افتح"}</div>
-            </button>
-          ))}
-        </div>
-        <div className="text-xs text-[#94A3B8]">تقدر تبدّل بين البرنامجين في أي وقت من الإعدادات.</div>
+    <Backdrop>
+      <img src="./mk-icon.png" alt="MK-Tech" className="w-[72px] h-[72px] rounded-2xl mx-auto" />
+      <div className="text-white">
+        <div className="text-2xl font-extrabold">أهلًا، {status.name}</div>
+        <div className="text-[#93C5FD] mt-1.5">اختار البرنامج اللي هتشتغل عليه</div>
       </div>
-    </div>
+      <div className="grid gap-4 grid-cols-2 max-[640px]:grid-cols-1">
+        {status.products.map((p) => (
+          <button
+            key={p}
+            onClick={() => open(p)}
+            disabled={!!opening}
+            className="rounded-2xl bg-white text-[#0F172A] p-6 text-right shadow-2xl hover:ring-4 hover:ring-[#0B5FFF]/40 disabled:opacity-60 transition"
+          >
+            <div className="text-xs font-bold text-[#0B5FFF]">MK-Tech</div>
+            <div className="text-2xl font-extrabold mt-1">برنامج {PROGRAMS[p].title}</div>
+            <div className="text-sm text-[#64748B] mt-2 leading-relaxed">{PROGRAMS[p].line}</div>
+            <div className="mt-4 inline-block rounded-lg bg-[#0B5FFF] text-white text-sm font-bold px-4 py-2">{opening === p ? "بيفتح..." : "افتح"}</div>
+          </button>
+        ))}
+      </div>
+      <div className="text-xs text-[#94A3B8]">تقدر تبدّل بين البرنامجين في أي وقت من الإعدادات.</div>
+    </Backdrop>
   );
 }

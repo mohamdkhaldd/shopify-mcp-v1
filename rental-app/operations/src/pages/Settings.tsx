@@ -9,6 +9,7 @@ import PartnersTab from "./settings/PartnersTab";
 import ExpenseCategoriesTab from "./settings/ExpenseCategoriesTab";
 import { ApkUpdateButton } from "../components/DeviceBars";
 import { useBrand } from "../brand";
+import { shell } from "../shell";
 import { person, personIsSet, savePerson, usePerson } from "../person";
 
 type TabId = "partners" | "drivers" | "equipment" | "contractors" | "expenseCategories";
@@ -77,6 +78,74 @@ function PersonPanel() {
         </button>
         {saved && <span className="text-sm text-primary-dark font-semibold">اتحفظ</span>}
       </div>
+    </div>
+  );
+}
+
+// باسورد الدخول (اختياري): بيتطلب كل ما MK-Tech يفتح وبعد "خروج". على الجهاز
+// ده بس، ولو اتنسى كود التفعيل بيشيله.
+function PasswordPanel() {
+  const [has, setHas] = useState<boolean | null>(null);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [again, setAgain] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => {
+    shell.info().then((i) => setHas(i ? !!i.hasPassword : null), () => {});
+  }, []);
+  if (has === null) return null;
+
+  async function save(remove: boolean) {
+    if (!remove && next !== again) return setMsg({ ok: false, text: "الباسورد الجديد مش زي التأكيد" });
+    const r = await shell.setPassword(current, remove ? "" : next);
+    if (!r.ok) return setMsg({ ok: false, text: r.message ?? "حصلت مشكلة" });
+    setHas(!remove);
+    setCurrent("");
+    setNext("");
+    setAgain("");
+    setMsg({ ok: true, text: remove ? "الباسورد اتشال" : "الباسورد اتحفظ — هيتطلب كل ما البرنامج يفتح وبعد الخروج" });
+  }
+
+  const input = "rounded-lg border border-slate-200 px-2 py-1.5 text-sm w-36";
+  return (
+    <div className="bg-white rounded-card shadow-card p-5">
+      <h2 className="font-bold text-slate-700 mb-1">باسورد الدخول {has ? "— شغال" : ""}</h2>
+      <p className="text-xs text-slate-400 mb-3">
+        لو حطيت باسورد، البرنامج هيطلبه كل ما يتفتح وكل ما تدوس "خروج". على الجهاز ده بس — ولو نسيته، كود التفعيل بيشيله.
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        {has && (
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">الباسورد الحالي</label>
+            <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} className={input} />
+          </div>
+        )}
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">{has ? "الباسورد الجديد" : "الباسورد"}</label>
+          <input type="password" value={next} onChange={(e) => setNext(e.target.value)} className={input} />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">اكتبه تاني</label>
+          <input type="password" value={again} onChange={(e) => setAgain(e.target.value)} className={input} />
+        </div>
+        <button
+          disabled={!next}
+          onClick={() => save(false)}
+          className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
+        >
+          {has ? "غيّر الباسورد" : "حط باسورد"}
+        </button>
+        {has && (
+          <button
+            disabled={!current}
+            onClick={() => save(true)}
+            className="rounded-xl px-4 py-2 text-sm font-semibold text-rose-600 border border-rose-200 hover:bg-rose-50 disabled:opacity-50"
+          >
+            شيل الباسورد
+          </button>
+        )}
+      </div>
+      {msg && <div className={`text-sm font-semibold mt-2 ${msg.ok ? "text-primary-dark" : "text-rose-600"}`}>{msg.text}</div>}
     </div>
   );
 }
@@ -212,6 +281,8 @@ export default function Settings() {
       <LicensePanel />
 
       <PersonPanel />
+
+      <PasswordPanel />
 
       <ConfirmToggle />
 

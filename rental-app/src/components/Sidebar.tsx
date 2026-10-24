@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { footerItems, navItems, NavItem, SectionId } from "../nav";
-import { appApi, isTablet, isWeb } from "../api/client";
+import { appApi, isTablet, isWeb, shellApi, ShellInfo } from "../api/client";
 import { useTheme } from "../theme";
 import Icon from "./Icon";
 import BrandLogo from "./BrandLogo";
@@ -35,7 +35,14 @@ export default function Sidebar({ active, onSelect, open = false }: { active: Se
   const [version, setVersion] = useState("");
   const [backup, setBackup] = useState<string | null>(null);
   const [sync] = useSyncStatus();
+  const [shell, setShell] = useState<ShellInfo | null>(null);
+  // "خروج" back to the start, when there's somewhere to go: a password or the other program
+  const canLogout = !!shell && (!!shell.hasPassword || shell.products.length > 1);
   const line = syncLine(sync);
+
+  useEffect(() => {
+    shellApi.info().then(setShell, () => {});
+  }, []);
 
   useEffect(() => {
     appApi.version().then(setVersion);
@@ -76,6 +83,12 @@ export default function Sidebar({ active, onSelect, open = false }: { active: Se
           <Icon name={theme === "dark" ? "sun" : "moon"} className="w-4 h-4" />
           {theme === "dark" ? "الوضع العادي" : "الوضع الليلي"}
         </button>
+        {canLogout && (
+          <button onClick={() => shellApi.logout()} className="flex items-center gap-2 font-semibold hover:text-white text-start">
+            <Icon name="logout" className="w-4 h-4" />
+            خروج
+          </button>
+        )}
         <div className="flex items-center gap-1.5">
           <span className={`w-2 h-2 rounded-full shrink-0 ${line.tone === "ok" ? "bg-in" : line.tone === "warn" ? "bg-amber" : "bg-white/30"}`} />
           {line.text}
