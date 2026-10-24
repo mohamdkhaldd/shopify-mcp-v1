@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import Database from "better-sqlite3";
 // The operations program (التشغيل): the old accounting app's backend, unchanged
 // apart from its cloud login (operations/electron/). No Electron here, so the
@@ -13,7 +14,10 @@ export const OPERATIONS_DB = "mk-operations.db";
  * syncing in the customer's own space on the new cloud.
  */
 export async function migrateLegacyOperations(target: string, legacy: string): Promise<boolean> {
-  if (fs.existsSync(target) || !fs.existsSync(legacy)) return false;
+  // once per computer: after signing out (which removes the copy) the data
+  // comes back from the cloud, never again from the old app
+  const marker = path.join(path.dirname(target), "mk-operations.migrated");
+  if (fs.existsSync(target) || fs.existsSync(marker) || !fs.existsSync(legacy)) return false;
   const src = new Database(legacy, { readonly: true, fileMustExist: true });
   try {
     await src.backup(target);
@@ -30,8 +34,10 @@ export async function migrateLegacyOperations(target: string, legacy: string): P
   } finally {
     db.close();
   }
+  fs.writeFileSync(marker, new Date().toISOString());
   return true;
 }
+
 
 /**
  * Forget everything the copied file knew about the old cloud (its login, how

@@ -6,6 +6,7 @@ import Icon from "./Icon";
 import BrandLogo from "./BrandLogo";
 import { useBrand } from "../context/BrandContext";
 import { syncLine, useSyncStatus } from "./Sync";
+import { signOutOfDevice } from "./signOut";
 
 function NavButton({ item, active, onSelect }: { item: NavItem; active: boolean; onSelect: (id: SectionId) => void }) {
   return (
@@ -36,8 +37,7 @@ export default function Sidebar({ active, onSelect, open = false }: { active: Se
   const [backup, setBackup] = useState<string | null>(null);
   const [sync] = useSyncStatus();
   const [shell, setShell] = useState<ShellInfo | null>(null);
-  // "خروج" back to the start, when there's somewhere to go: a password or the other program
-  const canLogout = !!shell && (!!shell.hasPassword || shell.products.length > 1);
+
   const line = syncLine(sync);
 
   useEffect(() => {
@@ -83,8 +83,14 @@ export default function Sidebar({ active, onSelect, open = false }: { active: Se
           <Icon name={theme === "dark" ? "sun" : "moon"} className="w-4 h-4" />
           {theme === "dark" ? "الوضع العادي" : "الوضع الليلي"}
         </button>
-        {canLogout && (
-          <button onClick={() => shellApi.logout()} className="flex items-center gap-2 font-semibold hover:text-white text-start">
+        {shell?.hasPassword && (
+          <button onClick={() => shellApi.lock()} className="flex items-center gap-2 font-semibold hover:text-white text-start">
+            <Icon name="lock" className="w-4 h-4" />
+            قفل
+          </button>
+        )}
+        {shell && (
+          <button onClick={signOutOfDevice} className="flex items-center gap-2 font-semibold hover:text-white text-start">
             <Icon name="logout" className="w-4 h-4" />
             خروج
           </button>

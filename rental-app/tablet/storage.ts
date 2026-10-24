@@ -26,6 +26,17 @@ export async function loadSaved(key = "main"): Promise<Uint8Array | null> {
   });
 }
 
+/** Signing out: this device's copy of the data goes (it's all in the cloud). */
+export async function forget(keys: string[]): Promise<void> {
+  const db = await idb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    for (const k of keys) tx.objectStore(IDB_STORE).delete(k);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 export async function save(bytes: Uint8Array, key = "main"): Promise<void> {
   const db = await idb();
   return new Promise((resolve, reject) => {

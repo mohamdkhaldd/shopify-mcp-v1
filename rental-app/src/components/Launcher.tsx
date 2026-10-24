@@ -1,6 +1,7 @@
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { licenseApi, LicenseStatus, Product, shellApi, ShellInfo } from "../api/client";
 import { Activate } from "./LicenseGate";
+import { signOutOfDevice } from "./signOut";
 
 const PROGRAMS: Record<Product, { title: string; line: string }> = {
   rental: { title: "التأجير", line: "السركي، أصحاب المعدات، الشركات، المستثمرين والأرباح" },
@@ -16,17 +17,17 @@ function Backdrop({ children, width = "max-w-[720px]" }: { children: ReactNode; 
   );
 }
 
-/** The device password, when the customer set one; forgot = the activation code. */
-function PasswordGate({ name, onOpen }: { name: string; onOpen: () => void }) {
-  const [forgot, setForgot] = useState(false);
+/** The lock screen: the company password (from the server, or offline the last one typed here). */
+function LockScreen({ name, onOpen }: { name: string; onOpen: () => void }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [forgot, setForgot] = useState(false);
   const [busy, setBusy] = useState(false);
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!value.trim()) return;
+    if (!value) return;
     setBusy(true);
-    const r = forgot ? await shellApi.resetPassword(value) : await shellApi.unlock(value);
+    const r = await shellApi.unlock(value);
     setBusy(false);
     if (r.ok) onOpen();
     else setError(r.message ?? "حصلت مشكلة");
@@ -37,43 +38,45 @@ function PasswordGate({ name, onOpen }: { name: string; onOpen: () => void }) {
       <form onSubmit={submit} className="rounded-2xl bg-white text-[#0F172A] p-6 grid gap-3 text-right shadow-2xl">
         <div className="text-center">
           <div className="text-xl font-extrabold">أهلًا، {name}</div>
-          <div className="text-sm text-[#64748B] mt-1">{forgot ? "اكتب كود التفعيل بتاع الجهاز ده عشان تشيل الباسورد" : "اكتب الباسورد عشان تدخل"}</div>
+          <div className="text-sm text-[#64748B] mt-1">اكتب باسورد الشركة عشان تدخل</div>
         </div>
         <input
           autoFocus
-          type={forgot ? "text" : "password"}
+          type="password"
           dir="ltr"
           value={value}
           onChange={(e) => {
             setValue(e.target.value);
             setError(null);
           }}
-          placeholder={forgot ? "MKTECH-XXXX-XXXX-XXXX" : "••••"}
+          placeholder="••••"
           className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-center text-lg tracking-widest outline-none focus:border-[#0B5FFF] focus:ring-2 focus:ring-[#0B5FFF]/30"
         />
         {error && <div className="rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-sm px-3 py-2 text-center">{error}</div>}
-        <button disabled={busy} className="rounded-xl bg-[#0B5FFF] text-white font-bold py-2.5 hover:bg-[#2563EB] disabled:opacity-60">
-          {busy ? "..." : forgot ? "شيل الباسورد وادخل" : "دخول"}
+        <button disabled={busy || !value} className="rounded-xl bg-[#0B5FFF] text-white font-bold py-2.5 hover:bg-[#2563EB] disabled:opacity-60">
+          {busy ? "..." : "دخول"}
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            setForgot(!forgot);
-            setValue("");
-            setError(null);
-          }}
-          className="text-sm text-[#0B5FFF] font-semibold"
-        >
-          {forgot ? "رجوع للباسورد" : "نسيت الباسورد؟"}
-        </button>
+        {forgot ? (
+          <div className="text-sm text-[#64748B] text-center leading-relaxed">
+            كلّم MK-Tech يمسح الباسورد، أو{" "}
+            <button type="button" onClick={signOutOfDevice} className="text-[#0B5FFF] font-semibold">
+              اخرج من الجهاز ده
+            </button>{" "}
+            وادخل بالكود.
+          </div>
+        ) : (
+          <button type="button" onClick={() => setForgot(true)} className="text-sm text-[#0B5FFF] font-semibold">
+            نسيت الباسورد؟
+          </button>
+        )}
       </form>
     </Backdrop>
   );
 }
 
 /**
- * The page MK-Tech opens on before a program: the activation code, the device
- * password if one is set, then — when the code opens both programs — which one
+ * The page MK-Tech opens on before a program: the activation code, the lock
+ * screen if the company has a password, then — when the code opens both programs — which one
  * to work in. A code with one program goes straight into it.
  */
 export default function Launcher() {
@@ -97,7 +100,7 @@ export default function Launcher() {
 
   if (!status || !shell) return null;
   if (status.state !== "active") return <Activate message={status.message} onDone={setStatus} />;
-  if (locked) return <PasswordGate name={status.name} onOpen={() => setShell({ ...shell, locked: false })} />;
+  if (locked) return <LockScreen name={status.name} onOpen={() => setShell({ ...shell, locked: false })} />;
 
   return (
     <Backdrop>

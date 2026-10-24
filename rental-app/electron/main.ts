@@ -13,8 +13,10 @@ import { startDeviceSync } from "./sync";
 import { deviceIdentity } from "./device";
 import { createLicenseManager, LicenseManager, LicenseStatus, Product } from "../core/license/manager";
 import { licenseServer } from "../core/license/config";
-import { OperationsBackend, startOperations } from "./operations";
-import { createLock } from "../core/shell/lock";
+import { OperationsBackend, operationsDbPath, startOperations } from "./operations";
+import { unsyncedChanges } from "../core/shell/unsynced";
+import { createPass } from "../core/shell/lock";
+import type { Db } from "../core/db";
 
 const isDev = !app.isPackaged;
 const root = path.join(__dirname, "..");
@@ -41,7 +43,7 @@ type Page = Product | "launcher";
 const TITLES: Record<Page, string> = { rental: "MK-Tech التأجير", operations: "MK-Tech التشغيل", launcher: "MK-Tech" };
 const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 const productArg = arg("product") as Product | undefined;
-/** without --product / --pass: the chooser (and the password page, if one is set) */
+/** without --product / --pass: the start page (the lock screen, if the company has a password) */
 const shellArgs = () => process.argv.slice(1).filter((a) => !a.startsWith("--product=") && !a.startsWith("--pass="));
 
 let mainWindow: BrowserWindow | null = null;
@@ -102,13 +104,20 @@ app.whenReady().then(async () => {
     expiresAt: null,
     checkBy: "",
     products: ["rental", "operations"],
+    hasPassword: false,
   };
   const licenseStatus = () => (demo ? demoStatus : license.status());
 
-  // the device password (optional): until it's typed, only the password page opens
-  const makeLock = () => createLock({ db, savedKey: () => license.savedKey() });
-  let lock = makeLock();
-  let unlocked = !lock.hasPassword() || lock.takePass(arg("pass"));
+  // the company password (optional): with one, the app opens on the lock
+  // screen and "قفل" goes back to it; opening a program from the chooser
+  // hands the restart a one-time pass
+  const hasPassword = () => {
+    const s = licenseStatus();
+    return s.state === "active" && s.hasPassword;
+  };
+  const makePass = () => createPass({ db });
+  let pass = makePass();
+  let unlocked = !hasPassword() || pass.take(arg("pass"));
   const usable = () => licenseStatus().state === "active" && unlocked;
   const products = () => {
     const s = licenseStatus();
@@ -141,36 +150,63 @@ app.whenReady().then(async () => {
     setInterval(checkLicense, 6 * 60 * 60 * 1000);
   }
   ipcMain.handle("license:status", () => licenseStatus());
-  ipcMain.handle("license:activate", (_e, { key }: { key: string }) => license.activate(key));
+  ipcMain.handle("license:activate", (_e, { key, password }: { key: string; password?: string }) => license.activate(key, password));
 
-  // ---- switching between the two programs ----
-  ipcMain.handle("shell:info", () => ({ product, products: products(), locked: !unlocked, hasPassword: lock.hasPassword() }));
+  // ---- switching between the two programs, locking, signing out ----
+  const restart = (args: string[] = []) => {
+    app.relaunch({ args: [...shellArgs(), ...args] });
+    app.exit(0);
+  };
+  ipcMain.handle("shell:info", () => ({ product, products: products(), locked: !unlocked, hasPassword: hasPassword() }));
   ipcMain.handle("shell:open", (_e, { product: next }: { product: Product }) => {
     if (!unlocked || !products().includes(next)) return { ok: false };
-    const pass = lock.hasPassword() ? [`--pass=${lock.issuePass()}`] : [];
-    app.relaunch({ args: [...shellArgs(), `--product=${next}`, ...pass] });
-    app.exit(0);
+    restart([`--product=${next}`, ...(hasPassword() ? [`--pass=${pass.issue()}`] : [])]);
     return { ok: true };
   });
-  // "خروج": back to the start — the password page, or the chooser
-  ipcMain.handle("shell:logout", () => {
-    app.relaunch({ args: shellArgs() });
-    app.exit(0);
+  // "قفل": the lock screen, until the company password is typed
+  ipcMain.handle("shell:lock", () => {
+    restart();
     return { ok: true };
   });
-  ipcMain.handle("shell:unlock", (_e, { password }: { password: string }) => {
-    if (!lock.check(password)) return { ok: false, message: "الباسورد غلط" };
-    unlocked = true;
-    return { ok: true };
-  });
-  ipcMain.handle("shell:resetPassword", (_e, { code }: { code: string }) => {
-    if (!lock.resetWithCode(code)) return { ok: false, message: "ده مش كود التفعيل بتاع الجهاز ده" };
-    unlocked = true;
-    return { ok: true };
+  ipcMain.handle("shell:unlock", async (_e, { password }: { password: string }) => {
+    const r = await license.checkPassword(password);
+    if (r.ok) unlocked = true;
+    return r;
   });
   ipcMain.handle("shell:setPassword", (_e, { current, next }: { current: string; next: string }) =>
-    unlocked ? lock.setPassword(current, next) : { ok: false, message: "ادخل الأول" },
+    unlocked ? license.setPassword(current, next) : { ok: false, message: "ادخل الأول" },
   );
+  // "خروج": this device leaves the code (its place is free again) and starts
+  // over on the activation page. Its copy of the data goes too — it's all in
+  // the cloud, and the next code may be another company's — so changes that
+  // haven't reached the cloud yet are reported first.
+  ipcMain.handle("shell:signOut", async (_e, { force }: { force?: boolean } = {}) => {
+    const opsFile = operationsDbPath();
+    const pendingOps = operations
+      ? operations.pending()
+      : fs.existsSync(opsFile)
+        ? (() => {
+            const d = new Database(opsFile, { readonly: true });
+            try {
+              return unsyncedChanges(d as unknown as Db);
+            } finally {
+              d.close();
+            }
+          })()
+        : 0;
+    const pending = unsyncedChanges(db) + pendingOps;
+    // from the lock screen ("نسيت الباسورد؟") only when nothing would be lost
+    if (pending > 0 && !unlocked) return { ok: false, message: "فيه تعديلات على الجهاز ده لسه ماوصلتش للسحابة — ادخل بالباسورد الأول" };
+    if (pending > 0 && !force) return { ok: false, pending };
+    const r = await license.signOut();
+    if (!r.ok) return r;
+    rentalSync?.stop();
+    operations?.close();
+    raw.close();
+    for (const file of [dbPath(), opsFile]) for (const ext of ["", "-wal", "-shm"]) fs.rmSync(file + ext, { force: true });
+    restart();
+    return { ok: true };
+  });
 
   // shared by both programs
   ipcMain.handle("print:preview", (_e, opts?: { singlePage?: boolean }) => mainWindow && printPreview(mainWindow, iconPath, opts?.singlePage ?? true));
@@ -237,7 +273,7 @@ app.whenReady().then(async () => {
       ({ raw, db } = openDatabase());
       registry = makeRegistry(db);
       license = makeLicense();
-      lock = makeLock();
+      pass = makePass();
       if (rentalSync) rentalSync = startRentalSync();
       mainWindow.webContents.reload();
       return { ok: true };

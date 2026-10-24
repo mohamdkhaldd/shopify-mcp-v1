@@ -159,8 +159,9 @@ export type LicenseStatus =
 
 export const licenseApi = {
   status: (): Promise<LicenseStatus> => window.api?.invoke("license:status") ?? Promise.resolve({ state: "needed", message: "البرنامج لازم يشتغل من نسخة الويندوز أو التابلت" }),
-  activate: (key: string): Promise<{ ok: true; status: LicenseStatus } | { ok: false; message: string }> =>
-    window.api?.invoke("license:activate", { key }) ?? Promise.resolve({ ok: false, message: "البرنامج لازم يشتغل من نسخة الويندوز أو التابلت" }),
+  /** needPassword: the code is right, its company asks for its password on a new device */
+  activate: (key: string, password?: string): Promise<{ ok: true; status: LicenseStatus } | { ok: false; message: string; needPassword?: boolean }> =>
+    window.api?.invoke("license:activate", { key, password }) ?? Promise.resolve({ ok: false, message: "البرنامج لازم يشتغل من نسخة الويندوز أو التابلت" }),
   /** fired after every check with the server */
   onChanged: (cb: (s: LicenseStatus) => void) => window.api?.on("license:changed", cb as (d: unknown) => void) ?? (() => {}),
 };
@@ -173,11 +174,13 @@ type ShellResult = { ok: true } | { ok: false; message?: string };
 export const shellApi = {
   info: (): Promise<ShellInfo> => window.api?.invoke("shell:info") ?? Promise.resolve({ product: "rental", products: ["rental"] }),
   open: (product: Product) => window.api?.invoke("shell:open", { product }),
-  /** back to the start: the password page (if one is set) or the chooser */
-  logout: () => window.api?.invoke("shell:logout"),
+  /** "قفل": the lock screen until the company password is typed */
+  lock: () => window.api?.invoke("shell:lock"),
   unlock: (password: string): Promise<ShellResult> => window.api!.invoke("shell:unlock", { password }),
-  resetPassword: (code: string): Promise<ShellResult> => window.api!.invoke("shell:resetPassword", { code }),
+  /** the company password, from this device (needs internet) */
   setPassword: (current: string, next: string): Promise<ShellResult> => window.api!.invoke("shell:setPassword", { current, next }),
+  /** "خروج": leave the code on this device; pending = changes not in the cloud yet (force = sign out anyway) */
+  signOut: (force = false): Promise<ShellResult | { ok: false; pending: number }> => window.api!.invoke("shell:signOut", { force }),
 };
 
 export const syncApi = {

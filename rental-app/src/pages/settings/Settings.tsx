@@ -213,9 +213,10 @@ function SyncPanel() {
   );
 }
 
-// The device password (optional): asked when MK-Tech opens and after "خروج".
-// On this device only; forgetting it is fixed with the activation code.
-function DevicePassword() {
+// The company password (optional, kept on the server): asked on every device
+// of the company when MK-Tech opens, after "قفل", and when the code is entered
+// on a new device. Changing it needs internet.
+function CompanyPassword() {
   const [has, setHas] = useState<boolean | null>(null);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -234,14 +235,14 @@ function DevicePassword() {
     setCurrent("");
     setNext("");
     setAgain("");
-    setMsg({ ok: true, text: remove ? "الباسورد اتشال" : "الباسورد اتحفظ — هيتطلب كل ما البرنامج يفتح وبعد الخروج" });
+    setMsg({ ok: true, text: remove ? "الباسورد اتشال" : "الباسورد اتحفظ لكل أجهزة الشركة" });
   }
 
   return (
-    <Panel title="باسورد الدخول" hint={has ? "شغال" : "مقفول"}>
+    <Panel title="باسورد الشركة" hint={has ? "شغال" : "مقفول"}>
       <div className="px-4 py-3.5 grid gap-3">
         <div className="text-sm text-muted">
-          لو حطيت باسورد، البرنامج هيطلبه كل ما يتفتح وكل ما تدوس "خروج". على الجهاز ده بس — ولو نسيته، كود التفعيل بيشيله.
+          باسورد واحد لكل أجهزة الشركة: بيتطلب لما البرنامج يفتح، وبعد ما تدوس "قفل"، ولما حد يدخل الكود على جهاز جديد. تغييره محتاج نت — ولو اتنسى، MK-Tech تمسحه.
         </div>
         <div className="flex flex-wrap items-end gap-2.5">
           {has && (
@@ -374,7 +375,7 @@ export default function Settings() {
         <Updates />
         <SyncPanel />
         <License />
-        <DevicePassword />
+        <CompanyPassword />
       </div>
     </div>
   );

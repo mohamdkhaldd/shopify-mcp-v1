@@ -31,7 +31,7 @@ describe("activation token", () => {
 function fakeServer() {
   const priv = ed.utils.randomPrivateKey();
   const state = {
-    codes: new Map<string, { lic?: number; customer: string; name?: string; logoUrl?: string | null; max: number; revoked: boolean; devices: Set<string> }>(),
+    codes: new Map<string, { lic?: number; customer: string; name?: string; logoUrl?: string | null; max: number; revoked: boolean; devices: Set<string>; password?: string }>(),
     online: true,
     logoFetches: 0,
   };
@@ -51,6 +51,24 @@ function fakeServer() {
     const json = (x: unknown) => ({ json: async () => x });
     if (!c) return json({ ok: false, error: "not_found" });
     if (c.revoked) return json({ ok: false, error: "revoked" });
+    if (b.action === "release") {
+      c.devices.delete(b.deviceId);
+      return json({ ok: true });
+    }
+    if (b.action === "setPassword" || b.action === "checkPassword") {
+      if (!c.devices.has(b.deviceId)) return json({ ok: false, error: "device_removed" });
+      const given = b.action === "setPassword" ? b.current : b.password;
+      if (c.password && given !== c.password) return json({ ok: false, error: "wrong_password" });
+      if (b.action === "setPassword") {
+        if (b.next && b.next.length < 4) return json({ ok: false, error: "too_short" });
+        c.password = b.next || undefined;
+      }
+      return json({ ok: true, hasPassword: !!c.password });
+    }
+    if (!c.devices.has(b.deviceId) && c.password) {
+      if (!b.password) return json({ ok: false, error: "password_required" });
+      if (b.password !== c.password) return json({ ok: false, error: "wrong_password" });
+    }
     if (!c.devices.has(b.deviceId) && c.devices.size >= c.max) return json({ ok: false, error: "full", maxDevices: c.max });
     c.devices.add(b.deviceId);
     const lic = c.lic ?? 1;
@@ -58,6 +76,7 @@ function fakeServer() {
       ok: true,
       token: sign({ v: 1, lic, customer: c.customer, name: c.name, device: b.deviceId, expiresAt: null, iat: clock, exp: clock + 14 * 86400 }),
       logoUrl: c.logoUrl ?? null,
+      hasPassword: !!c.password,
       sync: { email: `tenant-${lic}@x`, password: `pw-${lic}` },
     });
   }) as unknown as typeof globalThis.fetch;
@@ -152,5 +171,73 @@ describe("each customer's own company and cloud space", () => {
     expect((await manager(s, "laptop", db).activate("BNYN-A")).ok).toBe(true);
     expect(await manager(s, "laptop", db).activate("BNYN-B")).toEqual({ ok: false, message: "الجهاز ده عليه بيانات شركة تانية — الكود ده مينفعش عليه" });
     expect(manager(s, "laptop", db).status()).toMatchObject({ state: "active", customer: "أ" });
+  });
+});
+
+describe("company password and signing out", () => {
+  it("asks a new device for the password; devices already in keep checking in without it", async () => {
+    const s = fakeServer();
+    s.state.codes.set("MKTECH-NOUR", { customer: "شركة النور", max: 3, revoked: false, devices: new Set() });
+    const laptop = manager(s, "laptop");
+    expect((await laptop.activate("MKTECH-NOUR")).ok).toBe(true);
+    expect(laptop.status()).toMatchObject({ state: "active", hasPassword: false });
+
+    // set from the laptop: needs to be 4+ long
+    expect(await laptop.setPassword("", "12")).toEqual({ ok: false, message: expect.stringContaining("٤") });
+    expect(await laptop.setPassword("", "1234")).toEqual({ ok: true });
+    expect(laptop.status()).toMatchObject({ hasPassword: true });
+    expect((await laptop.refresh()).state).toBe("active");
+
+    const tablet = manager(s, "tablet");
+    expect(await tablet.activate("MKTECH-NOUR")).toMatchObject({ ok: false, needPassword: true });
+    expect(await tablet.activate("MKTECH-NOUR", "9999")).toEqual({ ok: false, needPassword: true, message: "الباسورد غلط" });
+    expect(await tablet.activate("MKTECH-NOUR", "1234")).toMatchObject({ ok: true, status: { hasPassword: true } });
+
+    // changing it needs the current one
+    expect(await tablet.setPassword("0000", "5678")).toEqual({ ok: false, message: "الباسورد الحالي غلط" });
+    expect((await tablet.setPassword("1234", "5678")).ok).toBe(true);
+  });
+
+  it("the lock screen checks with the server, or — offline — with the last password typed on the device", async () => {
+    const s = fakeServer();
+    s.state.codes.set("MKTECH-NOUR", { customer: "شركة النور", max: 3, revoked: false, devices: new Set(["laptop"]), password: "1234" });
+    const tablet = manager(s, "tablet");
+    expect((await tablet.activate("MKTECH-NOUR", "1234")).ok).toBe(true);
+    expect(await tablet.checkPassword("1111")).toEqual({ ok: false, message: "الباسورد غلط" });
+    s.state.online = false;
+    expect(await tablet.checkPassword("1234")).toEqual({ ok: true });
+    expect((await tablet.checkPassword("1111")).ok).toBe(false);
+    // a device that never typed it can't check it offline
+    s.state.online = true;
+    const other = manager(s, "phone");
+    s.state.codes.get("MKTECH-NOUR")!.password = undefined;
+    expect((await other.activate("MKTECH-NOUR")).ok).toBe(true);
+    s.state.codes.get("MKTECH-NOUR")!.password = "1234";
+    s.state.online = false;
+    expect(await other.checkPassword("1234")).toEqual({ ok: false, message: expect.stringContaining("نت") });
+  });
+
+  it("signing out frees the device's place and leaves it ready for any code", async () => {
+    const s = fakeServer();
+    s.state.codes.set("MKTECH-A", { lic: 1, customer: "شركة أ", max: 1, revoked: false, devices: new Set() });
+    s.state.codes.set("MKTECH-B", { lic: 2, customer: "شركة ب", max: 1, revoked: false, devices: new Set() });
+    const db = freshDb();
+    const laptop = manager(s, "laptop", db);
+    expect((await laptop.activate("MKTECH-A")).ok).toBe(true);
+    // the only place is taken
+    expect((await manager(s, "tablet").activate("MKTECH-A")).ok).toBe(false);
+
+    // needs internet, so the place really frees up
+    s.state.online = false;
+    expect((await laptop.signOut()).ok).toBe(false);
+    expect(laptop.status().state).toBe("active");
+    s.state.online = true;
+    expect(await laptop.signOut()).toEqual({ ok: true });
+    expect(laptop.status().state).toBe("needed");
+    expect(laptop.credentials()).toBeNull();
+
+    // another device takes the place; this one can enter another company's code
+    expect((await manager(s, "tablet").activate("MKTECH-A")).ok).toBe(true);
+    expect(await manager(s, "laptop", db).activate("MKTECH-B")).toMatchObject({ ok: true, status: { customer: "شركة ب" } });
   });
 });

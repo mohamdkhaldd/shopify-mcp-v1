@@ -82,8 +82,8 @@ function PersonPanel() {
   );
 }
 
-// باسورد الدخول (اختياري): بيتطلب كل ما MK-Tech يفتح وبعد "خروج". على الجهاز
-// ده بس، ولو اتنسى كود التفعيل بيشيله.
+// باسورد الشركة (اختياري، متخزّن على السيرفر): بيتطلب على كل أجهزة الشركة لما
+// MK-Tech يفتح، وبعد "قفل"، ولما الكود يتكتب على جهاز جديد. تغييره محتاج نت.
 function PasswordPanel() {
   const [has, setHas] = useState<boolean | null>(null);
   const [current, setCurrent] = useState("");
@@ -103,15 +103,15 @@ function PasswordPanel() {
     setCurrent("");
     setNext("");
     setAgain("");
-    setMsg({ ok: true, text: remove ? "الباسورد اتشال" : "الباسورد اتحفظ — هيتطلب كل ما البرنامج يفتح وبعد الخروج" });
+    setMsg({ ok: true, text: remove ? "الباسورد اتشال" : "الباسورد اتحفظ لكل أجهزة الشركة" });
   }
 
   const input = "rounded-lg border border-slate-200 px-2 py-1.5 text-sm w-36";
   return (
     <div className="bg-white rounded-card shadow-card p-5">
-      <h2 className="font-bold text-slate-700 mb-1">باسورد الدخول {has ? "— شغال" : ""}</h2>
+      <h2 className="font-bold text-slate-700 mb-1">باسورد الشركة {has ? "— شغال" : ""}</h2>
       <p className="text-xs text-slate-400 mb-3">
-        لو حطيت باسورد، البرنامج هيطلبه كل ما يتفتح وكل ما تدوس "خروج". على الجهاز ده بس — ولو نسيته، كود التفعيل بيشيله.
+        باسورد واحد لكل أجهزة الشركة: بيتطلب لما البرنامج يفتح، وبعد ما تدوس "قفل"، ولما حد يدخل الكود على جهاز جديد. تغييره محتاج نت — ولو اتنسى، MK-Tech تمسحه.
       </p>
       <div className="flex flex-wrap items-end gap-2">
         {has && (

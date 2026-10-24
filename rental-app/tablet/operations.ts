@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createDatabase } from "./sqlAdapter";
 import { loadSaved, save } from "./storage";
 import type { SyncCredentials } from "../core/license/manager";
+import { unsyncedChanges } from "../core/shell/unsynced";
 // التشغيل on the tablet / web: the old app's backend (operations/electron),
 // registered through the small Electron stand-in instead of Electron.
 import schemaModule from "../operations/electron/schema.js";
@@ -47,7 +48,9 @@ export async function startOperations(opts: {
 
   // saved like the rental file: at most once a second, and when the app goes to the background
   let saving: Promise<void> | null = null;
+  let stopped = false;
   const flush = () => {
+    if (stopped) return Promise.resolve();
     if (saving) return saving;
     const bytes = db.exportIfDirty();
     if (!bytes) return Promise.resolve();
@@ -75,5 +78,15 @@ export async function startOperations(opts: {
     "sync:setDeviceName": ({ name }: { name: string }) => sync.setDeviceName(name),
     "sync:activity": (filters: unknown) => sync.activity(filters ?? {}),
   } satisfies Record<string, Handler>);
-  return { handlers, sync, exportNow: () => db.exportNow() };
+  return {
+    handlers,
+    sync,
+    exportNow: () => db.exportNow(),
+    pending: () => unsyncedChanges(db),
+    /** signing out: nothing more is saved or sent from this file */
+    stop: () => {
+      stopped = true;
+      sync.stop();
+    },
+  };
 }

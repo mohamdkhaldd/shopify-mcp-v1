@@ -3,6 +3,8 @@ import { app, ipcMain } from "electron";
 import Database from "better-sqlite3";
 import type { SyncCredentials } from "../core/license/manager";
 import { migrateLegacyOperations, OPERATIONS_DB, setupOperationsDatabase } from "./operationsDb";
+import { unsyncedChanges } from "../core/shell/unsynced";
+import type { Db } from "../core/db";
 // The operations program (التشغيل): the old accounting app's backend, unchanged
 // apart from its cloud login (operations/electron/).
 const { registerIpcHandlers } = require("../operations/electron/ipc.js");
@@ -11,8 +13,13 @@ const { startDeviceSync } = require("../operations/electron/sync.js");
 /** Where the old app ("حسابات البنيان") kept its data on this computer. */
 export const legacyOperationsDb = () => path.join(app.getPath("appData"), "حسابات البنيان", "al-bunyan.db");
 
+/** The operations database on this computer. */
+export const operationsDbPath = () => path.join(app.getPath("userData"), OPERATIONS_DB);
+
 export interface OperationsBackend {
   sync: { ensureLogin(c: SyncCredentials): Promise<unknown>; stop(): void } | null;
+  pending(): number;
+  close(): void;
 }
 
 /** Opens التشغيل: its database, its screens' functions and its sync. */
@@ -22,7 +29,7 @@ export async function startOperations(opts: {
   onRemoteChanges: (info: unknown) => void;
   withSync: boolean;
 }): Promise<OperationsBackend> {
-  const file = path.join(app.getPath("userData"), OPERATIONS_DB);
+  const file = operationsDbPath();
   await migrateLegacyOperations(file, legacyOperationsDb());
   const db = new Database(file);
   db.pragma("journal_mode = WAL");
@@ -47,5 +54,12 @@ export async function startOperations(opts: {
   ipcMain.handle("sync:undo", (_e, { id }: { id: number }) => sync?.undo(id));
   ipcMain.handle("sync:setDeviceName", (_e, { name }: { name: string }) => sync?.setDeviceName(name) ?? offline);
   ipcMain.handle("sync:activity", (_e, filters?: unknown) => sync?.activity(filters ?? {}) ?? { rows: [], pending: 0, devices: [] });
-  return { sync };
+  return {
+    sync,
+    pending: () => unsyncedChanges(db as unknown as Db),
+    close: () => {
+      sync?.stop();
+      db.close();
+    },
+  };
 }

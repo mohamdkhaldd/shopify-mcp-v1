@@ -50,6 +50,8 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(process.env.APP_VERSION ?? "0.0.0"),
     __STORAGE_NAME__: JSON.stringify(storageName),
+    // end-to-end tests only (never set for a real build): trust a test signing key
+    __TEST_LICENSE_KEY__: JSON.stringify(process.env.TEST_LICENSE_KEY ?? ""),
   },
   build: {
     outDir: path.resolve(__dirname, process.env.PREVIEW ? "dist-preview" : "dist-tablet"),

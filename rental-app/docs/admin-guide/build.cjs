@@ -229,22 +229,21 @@ table.t{width:100%;border-collapse:separate;border-spacing:0;background:#fff;bor
     ${card("calendar", "تجديد اشتراك", `<p>غيّر <span class="k">expires_at</span> لآخر يوم في المدة الجديدة. لو فضّيته، الاشتراك بيبقى مفتوح.</p>`)}
     ${card("stop", "إيقاف عميل", `<p>خلّي <span class="k">revoked</span> = <span class="k">true</span>. البرنامج بيقفل عنده أول ما يتصل بالنت (أو بعد ١٤ يوم بالكتير لو مقفل النت). بياناته <b>مابتتمسحش</b> — رجّعها <span class="k">false</span> ويرجع زي ما كان.</p>`)}
     ${card("plus", "زيادة جهاز", `<p>زوّد الرقم في <span class="k">max_devices</span>، والعميل يدخّل نفس الكود على الجهاز الجديد.</p>`)}
-    ${card("refresh", "العميل غيّر جهازه", `<p>افتح جدول <span class="k">license_devices</span> ← لاقي الجهاز القديم (بالاسم وآخر مرة فتح) ← خلّي <span class="k">revoked</span> = <span class="k">true</span>. مكانه بيفضى، والعميل يفعّل الجديد بنفس الكود.</p>`)}
+    ${card("refresh", "العميل غيّر جهازه", `<p>العميل يدوس <b>خروج</b> من الجهاز القديم (تحت في القايمة) فمكانه يفضى، ويدخل الكود على الجديد. لو الجهاز القديم ضاع: جدول <span class="k">license_devices</span> ← الجهاز ← <span class="k">revoked</span> = <span class="k">true</span>.</p>`)}
   </div>
   ${card("devices", "تعرف مين شغال على إيه", `
     <p>جدول <span class="k">license_devices</span> — فوق دوس <b>Filter</b> واختار <span class="k">license_id</span> = رقم العميل (الـ <span class="k">id</span> بتاعه في جدول licenses):</p>
     <table class="t"><tr><th>الخانة</th><th>معناها</th></tr>
       <tr><td><span class="f">device_name</span></td><td>اسم الجهاز (مثلًا "Samsung SM-X200" أو "آيفون")</td></tr>
-      <tr><td><span class="f">platform</span></td><td><span class="en">windows</span> = لاب، <span class="en">android</span> = تابلت/موبايل، <span class="en">web</span> = آيفون أو متصفح</td></tr>
       <tr><td><span class="f">last_seen_at</span></td><td>آخر مرة الجهاز اتصل — لو من شهور، غالبًا الجهاز ده مابقاش مستخدم</td></tr>
     </table>`)}
   ${card("warn", "العميل كلمك وقالك الرسالة دي", `
     <table class="t"><tr><th>الرسالة اللي عنده</th><th>السبب</th><th>تعمل إيه</th></tr>
-      <tr><td>الكود ده مش صحيح</td><td>غلط في الكتابة</td><td>انسخ له الكود من الجدول تاني</td></tr>
       <tr><td>الكود ده اتوقف</td><td><span class="en">revoked = true</span></td><td>رجّعها <span class="en">false</span> لو هيكمل</td></tr>
       <tr><td>الاشتراك خلص</td><td><span class="en">expires_at</span> عدّى</td><td>جدد التاريخ</td></tr>
       <tr><td>متفعّل على أقصى عدد أجهزة</td><td>كل الأماكن مليانة</td><td>زوّد <span class="en">max_devices</span> أو شيل جهاز قديم</td></tr>
       <tr><td>الجهاز ده اتشال من الترخيص</td><td>انت شلت الجهاز ده</td><td>رجّع <span class="en">revoked</span> بتاعه <span class="en">false</span></td></tr>
+      <tr><td>نسي باسورد الشركة</td><td>العميل عامله من الإعدادات</td><td>امسح خانة <span class="en">password_hash</span> بتاعته (فاضية)</td></tr>
       <tr><td>مقدرناش نوصل للنت</td><td>النت عنده، أو السحابة نايمة</td><td>يجرب نت تاني؛ لو لسه، شوف الصفحة الجاية</td></tr>
     </table>`)}
   ${pnum(5, TOTAL)}

@@ -6,7 +6,7 @@ import { createSyncEngine } from "../core/sync/syncEngine";
 import { cloud } from "../core/sync/cloudConfig";
 import { callCore, makeRegistry } from "../electron/ipc";
 import { createDatabase } from "./sqlAdapter";
-import { loadSaved, save } from "./storage";
+import { forget, loadSaved, save } from "./storage";
 import { tabletAppHandlers } from "./appHandlers";
 import { Capacitor } from "@capacitor/core";
 import { Device } from "@capacitor/device";
@@ -15,9 +15,11 @@ import { bytesToHex } from "@noble/hashes/utils";
 import { createLicenseManager, Product } from "../core/license/manager";
 import { startOperations } from "./operations";
 import { licenseServer } from "../core/license/config";
-import { createLock } from "../core/shell/lock";
+import { createPass } from "../core/shell/lock";
+import { unsyncedChanges } from "../core/shell/unsynced";
 
 declare const __APP_VERSION__: string;
+declare const __TEST_LICENSE_KEY__: string;
 
 /** Inside the Android app, or the web version in a browser (iPhone, any computer). */
 const native = Capacitor.isNativePlatform();
@@ -60,6 +62,7 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
     ...(await deviceIdentity()),
     appVersion: typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "0.0.0",
     ...licenseServer,
+    ...(typeof __TEST_LICENSE_KEY__ !== "undefined" && __TEST_LICENSE_KEY__ ? { publicKey: __TEST_LICENSE_KEY__ } : {}),
     onCredentials: (c, p) => (p === "rental" ? rentalSync : opsSync)?.ensureLogin(c).catch(() => {}),
   });
   const products = (): Product[] => {
@@ -67,12 +70,16 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
     return s.state === "active" ? s.products : [];
   };
 
-  // the device password (optional): until it's typed, only the password page
-  // opens. The pass the chooser hands over works once; it's taken off the
-  // address right away, so reloading later asks again.
-  const lock = createLock({ db, savedKey: () => license.savedKey() });
+  // the company password (optional): with one, the app opens on the lock
+  // screen and "قفل" goes back to it. The pass the chooser hands over works
+  // once; it's taken off the address right away, so reloading later asks again.
+  const hasPassword = () => {
+    const s = license.status();
+    return s.state === "active" && s.hasPassword;
+  };
+  const pass = createPass({ db });
   const query = new URLSearchParams(location.search);
-  let unlocked = !lock.hasPassword() || lock.takePass(query.get("pass"));
+  let unlocked = !hasPassword() || pass.take(query.get("pass"));
   if (query.has("pass")) {
     query.delete("pass");
     history.replaceState(null, "", `${location.pathname}${query.size ? `?${query}` : ""}`);
@@ -105,7 +112,9 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
   // the rental file is saved at most once a second, and right away when the
   // app is sent to the background or closed
   let saving: Promise<void> | null = null;
+  let signedOut = false;
   const flush = () => {
+    if (signedOut) return Promise.resolve();
     if (saving) return saving;
     const bytes = db.exportIfDirty();
     if (!bytes) return Promise.resolve();
@@ -123,41 +132,57 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
   const licensed = () => license.status().state === "active" && unlocked;
   const handlers: Record<string, Handler> = {
     "license:status": () => license.status(),
-    "license:activate": ({ key }) => license.activate(key),
-    "shell:info": () => ({ product: page === "launcher" ? null : page, products: products(), locked: !unlocked, hasPassword: lock.hasPassword() }),
+    "license:activate": ({ key, password }) => license.activate(key, password),
+    "shell:info": () => ({ product: page === "launcher" ? null : page, products: products(), locked: !unlocked, hasPassword: hasPassword() }),
     // switching programs: start again on the chosen one
     "shell:open": ({ product }: { product: Product }) => {
       if (!unlocked || !products().includes(product)) return { ok: false };
-      const pass = lock.hasPassword() ? `&pass=${lock.issuePass()}` : "";
-      flush().then(() => location.replace(`${location.pathname}?product=${product}${pass}`));
+      const p = hasPassword() ? `&pass=${pass.issue()}` : "";
+      flush().then(() => location.replace(`${location.pathname}?product=${product}${p}`));
       return { ok: true };
     },
-    // "خروج": back to the start — the password page, or the chooser
-    "shell:logout": () => {
+    // "قفل": the lock screen, until the company password is typed
+    "shell:lock": () => {
       flush().then(() => location.replace(location.pathname));
       return { ok: true };
     },
-    "shell:unlock": ({ password }: { password: string }) => {
-      if (!lock.check(password)) return { ok: false, message: "الباسورد غلط" };
-      unlocked = true;
-      return { ok: true };
-    },
-    "shell:resetPassword": ({ code }: { code: string }) => {
-      if (!lock.resetWithCode(code)) return { ok: false, message: "ده مش كود التفعيل بتاع الجهاز ده" };
-      unlocked = true;
-      flush();
-      return { ok: true };
-    },
-    "shell:setPassword": ({ current, next }: { current: string; next: string }) => {
-      if (!unlocked) return { ok: false, message: "ادخل الأول" };
-      const r = lock.setPassword(current, next);
+    "shell:unlock": async ({ password }: { password: string }) => {
+      const r = await license.checkPassword(password);
+      if (r.ok) unlocked = true;
       flush();
       return r;
     },
+    "shell:setPassword": async ({ current, next }: { current: string; next: string }) => {
+      if (!unlocked) return { ok: false, message: "ادخل الأول" };
+      const r = await license.setPassword(current, next);
+      flush();
+      return r;
+    },
+    // "خروج": this device leaves the code (its place is free again) and starts
+    // over on the activation page; its copy of the data goes too (it's all in
+    // the cloud). Changes that haven't reached the cloud are reported first.
+    "shell:signOut": async ({ force }: { force?: boolean }) => {
+      const opsBytes = ops ? null : await loadSaved("operations");
+      const pendingOps = ops ? ops.pending() : opsBytes ? unsyncedChanges(createDatabase(SQL, opsBytes)) : 0;
+      const pending = unsyncedChanges(db) + pendingOps;
+      // from the lock screen ("نسيت الباسورد؟") only when nothing would be lost
+      if (pending > 0 && !unlocked) return { ok: false, message: "فيه تعديلات على الجهاز ده لسه ماوصلتش للسحابة — ادخل بالباسورد الأول" };
+      if (pending > 0 && !force) return { ok: false, pending };
+      const r = await license.signOut();
+      if (!r.ok) return r;
+      signedOut = true;
+      rentalSync?.stop();
+      ops?.stop();
+      await saving;
+      await forget(["main", "operations"]);
+      location.replace(location.pathname);
+      return { ok: true };
+    },
   };
 
+  let ops: Awaited<ReturnType<typeof startOperations>> | null = null;
   if (page === "operations") {
-    const ops = await startOperations({ SQL, native, licensed, credentials: () => license.credentials("operations"), emit });
+    ops = await startOperations({ SQL, native, licensed, credentials: () => license.credentials("operations"), emit });
     opsSync = ops.sync;
     Object.assign(handlers, tabletAppHandlers(emit, ops.exportNow, native), ops.handlers);
   } else {
