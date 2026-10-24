@@ -260,6 +260,8 @@ export interface HassanTreasuryExpense {
   date: string;
   amount: number;
   description: string;
+  /** البند (إيجار، قسط، أكل...) — في القايمة: البند ده أو البيان لو مفيش */
+  category?: string | null;
   // سطر محسوب (الخاص من العربية الملاكي) — مبيتمسحش من هنا.
   computed?: boolean;
 }
@@ -820,6 +822,10 @@ export interface Obligation {
   repeat_monthly: number;
   done_at: string | null;
   note: string | null;
+  /** مرتبات / شركاء من غير مبلغ مكتوب: اللي عليك دلوقتي، محسوب لوحده */
+  auto_amount?: number;
+  /** المرتبات: الشهر اللي المبلغ ده بتاعه */
+  for_month?: string;
 }
 
 export interface DashboardAlert {

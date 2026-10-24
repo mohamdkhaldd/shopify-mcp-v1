@@ -388,6 +388,7 @@ export const hassanApi = {
   treasuryCreate: (expense: Omit<HassanTreasuryExpense, "id">): Promise<HassanTreasuryExpense> =>
     invoke("hassanTreasury:create", expense),
   treasuryRemove: (id: number): Promise<void> => invoke("hassanTreasury:delete", { id }),
+  treasuryCategories: (): Promise<string[]> => invoke("hassanTreasury:categories"),
   penaltiesList: (month: string): Promise<HassanPenalty[]> => invoke("hassanPenalties:list", { month }),
   penaltyCreate: (penalty: Omit<HassanPenalty, "id">): Promise<HassanPenalty> => invoke("hassanPenalties:create", penalty),
   penaltyRemove: (id: number): Promise<void> => invoke("hassanPenalties:delete", { id }),

@@ -294,31 +294,10 @@ function CommissionTab({ month }: { month: string }) {
 // الخزنة دي — رصيد شخصي بحت، مالوش أي علاقة بخزنة الشركة.
 function TreasuryTab({ month }: { month: string }) {
   const [balance, setBalance] = useState<HassanTreasuryBalance | null>(null);
-  const [entries, setEntries] = useState<HassanTreasuryExpense[]>([]);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
 
-  const refresh = () => {
+  useEffect(() => {
     hassanApi.treasuryBalance(month).then(setBalance);
-    hassanApi.treasuryList(month).then(setEntries);
-  };
-
-  useEffect(refresh, [month]);
-
-  async function handleAdd(e: FormEvent) {
-    e.preventDefault();
-    if (!amount || !description) return;
-    await hassanApi.treasuryCreate({ date, amount: Number(amount), description });
-    setAmount("");
-    setDescription("");
-    refresh();
-  }
-
-  async function handleDelete(id: number) {
-    await hassanApi.treasuryRemove(id);
-    refresh();
-  }
+  }, [month]);
 
   return (
     <div className="space-y-4">
@@ -347,18 +326,59 @@ function TreasuryTab({ month }: { month: string }) {
         </div>
       </div>
 
+      <p className="no-print text-xs text-slate-400">اللي {person()} بيصرفه من خزنته بيتسجل في تبويب "مصاريف التشغيل".</p>
+    </div>
+  );
+}
+
+// مصاريف التشغيل: اللي صاحب الكوميشن بيصرفه من خزنته (إيجار، قسط، أكل...)،
+// كل مصروف على بند، وتحت إجمالي كل بند في الشهر — زي الصادر.
+function ExpensesTab({ month }: { month: string }) {
+  const [entries, setEntries] = useState<HassanTreasuryExpense[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState("");
+  const [description, setDescription] = useState("");
+
+  const refresh = () => {
+    hassanApi.treasuryList(month).then(setEntries);
+    hassanApi.treasuryCategories().then(setCategories);
+  };
+  useEffect(refresh, [month]);
+
+  async function handleAdd(e: FormEvent) {
+    e.preventDefault();
+    if (!amount || !category.trim()) return;
+    await hassanApi.treasuryCreate({ date, amount: Number(amount), category: category.trim(), description: description.trim() });
+    setAmount("");
+    setDescription("");
+    refresh();
+  }
+
+  async function handleDelete(id: number) {
+    await hassanApi.treasuryRemove(id);
+    refresh();
+  }
+
+  const total = entries.reduce((sum, e) => sum + e.amount, 0);
+  const byCategory = Object.entries(
+    entries.reduce<Record<string, number>>((acc, e) => {
+      const key = e.category || e.description;
+      acc[key] = (acc[key] ?? 0) + e.amount;
+      return acc;
+    }, {})
+  ).sort((a, b) => b[1] - a[1]);
+
+  return (
+    <div className="space-y-4">
       <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-1">دفع {person()} من خزنته — {month}</h2>
-        <p className="text-xs text-slate-400 mb-4">زي قسط أو إيجار — بتتخصم من فلوس {person()} نفسها، مش من خزنة الشركة.</p>
+        <h2 className="font-bold text-slate-800 mb-1">مصاريف التشغيل — {monthLabel(month)}</h2>
+        <p className="text-xs text-slate-400 mb-4">اللي {person()} بيصرفه من خزنته — بيتخصم من فلوسه هو، مش من خزنة الشركة.</p>
         <form onSubmit={handleAdd} className="no-print flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
           <div>
             <label className="block text-xs text-slate-400 mb-1">التاريخ</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            />
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
           </div>
           <div>
             <label className="block text-xs text-slate-400 mb-1">القيمة</label>
@@ -372,10 +392,26 @@ function TreasuryTab({ month }: { month: string }) {
             />
           </div>
           <div>
-            <label className="block text-xs text-slate-400 mb-1">بيان</label>
+            <label className="block text-xs text-slate-400 mb-1">البند</label>
             <input
               type="text"
-              placeholder="زي: قسط عربية، إيجار"
+              list="expense-categories"
+              placeholder="زي: إيجار، قسط عربية، أكل"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+            />
+            <datalist id="expense-categories">
+              {categories.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">تفاصيل</label>
+            <input
+              type="text"
+              placeholder="اختياري"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
@@ -387,26 +423,61 @@ function TreasuryTab({ month }: { month: string }) {
         </form>
 
         {entries.length === 0 ? (
-          <div className="text-sm text-slate-400">لسه مفيش حاجة اتدفعت من خزنة {person()} الشهر ده.</div>
+          <div className="text-sm text-slate-400">لسه مفيش مصاريف الشهر ده.</div>
         ) : (
-          <ul className="space-y-1">
-            {entries.map((e) => (
-              <li key={e.id} className="flex items-center justify-between text-sm">
-                <span className="text-slate-600">
-                  {e.date} — {formatEGP(e.amount)} <span className="text-slate-400">({e.description})</span>
-                </span>
-                {e.computed ? (
-                  <span className="no-print text-[11px] text-slate-400">بيتحسب من صفحة العربية الملاكي</span>
-                ) : (
-                  <button onClick={() => handleDelete(e.id as number)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
-                    حذف
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-slate-400 border-b border-slate-100">
+                <th className="text-start font-semibold py-1.5">التاريخ</th>
+                <th className="text-start font-semibold py-1.5">البند</th>
+                <th className="text-start font-semibold py-1.5">التفاصيل</th>
+                <th className="text-start font-semibold py-1.5">القيمة</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((e) => (
+                <tr key={e.id} className="border-b border-slate-50 last:border-0">
+                  <td className="py-1.5 text-slate-500 whitespace-nowrap">{e.date}</td>
+                  <td className="py-1.5 font-semibold text-slate-700">{e.category || e.description}</td>
+                  <td className="py-1.5 text-slate-500">{e.description !== (e.category || e.description) ? e.description : ""}</td>
+                  <td className="py-1.5 font-semibold text-rose-600 whitespace-nowrap">{formatEGP(e.amount)}</td>
+                  <td className="py-1.5 text-end">
+                    {e.computed ? (
+                      <span className="no-print text-[11px] text-slate-400">من صفحة العربية الملاكي</span>
+                    ) : (
+                      <button onClick={() => handleDelete(e.id as number)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
+                        حذف
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
+
+      {byCategory.length > 0 && (
+        <div className="bg-white rounded-card shadow-card p-5">
+          <h2 className="font-bold text-slate-800 mb-3">صرفت كام على كل بند — {monthLabel(month)}</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            {byCategory.map(([name, sum]) => (
+              <div key={name} className="bg-slate-50 rounded-xl px-3 py-2.5">
+                <div className="text-xs text-slate-500 truncate" title={name}>
+                  {name}
+                </div>
+                <div className="font-bold text-slate-800">{formatEGP(sum)}</div>
+                <div className="text-[11px] text-slate-400">{total > 0 ? Math.round((sum / total) * 100) : 0}% من الإجمالي</div>
+              </div>
+            ))}
+            <div className="bg-rose-50 rounded-xl px-3 py-2.5">
+              <div className="text-xs text-slate-500">الإجمالي</div>
+              <div className="font-extrabold text-rose-600">{formatEGP(total)}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1245,12 +1316,14 @@ function WorkersTab({ month }: { month: string }) {
 
 export default function Hassan() {
   const [month, setMonth] = useState(currentMonthKey());
-  const [tab, setTab] = useState<"commission" | "treasury" | "workers" | "ledger">("commission");
+  const [tab, setTab] = useState<"commission" | "treasury" | "expenses" | "workers" | "ledger">("commission");
   const printTitle =
     tab === "ledger"
       ? `حساب ${person()} الشخصي`
       : tab === "treasury"
         ? `خزنة ${person()}`
+        : tab === "expenses"
+          ? `مصاريف التشغيل — ${person()}`
         : tab === "workers"
           ? `مرتبات عمال ${person()}`
           : `كوميشن ${person()}`;
@@ -1292,6 +1365,16 @@ export default function Hassan() {
           الخزنة
         </button>
         <button
+          onClick={() => setTab("expenses")}
+          className={[
+            "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors",
+            tab === "expenses" ? "bg-primary text-white shadow-sm" : "bg-white text-slate-600 hover:bg-primary-light hover:text-primary-dark shadow-card",
+          ].join(" ")}
+        >
+          <Icon name="flow" className="w-4 h-4" />
+          مصاريف التشغيل
+        </button>
+        <button
           onClick={() => setTab("workers")}
           className={[
             "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors",
@@ -1315,6 +1398,7 @@ export default function Hassan() {
 
       {tab === "commission" && <CommissionTab month={month} />}
       {tab === "treasury" && <TreasuryTab month={month} />}
+      {tab === "expenses" && <ExpensesTab month={month} />}
       {tab === "workers" && <WorkersTab month={month} />}
       {tab === "ledger" && <LedgerTab month={month} />}
 

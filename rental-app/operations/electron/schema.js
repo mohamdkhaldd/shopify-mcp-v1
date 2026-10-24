@@ -443,6 +443,11 @@ function setupDatabase(db, { seed = true } = {}) {
   if (!workerCols.includes("day_rate")) db.exec("ALTER TABLE hassan_workers ADD COLUMN day_rate REAL");
   if (!workerCols.includes("leave_rate")) db.exec("ALTER TABLE hassan_workers ADD COLUMN leave_rate REAL");
 
+  // مصاريف التشغيل (اللي بيدفعها صاحب الكوميشن من خزنته): كل مصروف على بند
+  // (إيجار، قسط، أكل...) عشان تبان إجماليات كل بند في الشهر.
+  const expenseCols = db.prepare("PRAGMA table_info(hassan_treasury_expenses)").all().map((c) => c.name);
+  if (!expenseCols.includes("category")) db.exec("ALTER TABLE hassan_treasury_expenses ADD COLUMN category TEXT");
+
   const dailyLogsHasPaidLeave = db
     .prepare("PRAGMA table_info(daily_logs)")
     .all()

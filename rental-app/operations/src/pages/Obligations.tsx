@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { obligationsApi } from "../api/client";
 import { Obligation } from "../api/types";
 import { formatEGP } from "../utils/format";
+import { monthLabel } from "../utils/months";
 
 export const OBLIGATION_KINDS: { value: string; label: string }[] = [
   { value: "salaries", label: "مرتبات" },
@@ -27,6 +28,21 @@ export function dueText(days: number) {
   if (days === 0) return "النهارده";
   if (days === 1) return "بكرة";
   return `بعد ${days} أيام`;
+}
+
+// مرتبات وشركاء: لو المبلغ فاضي، البرنامج بيحسب "عليك كام" لوحده
+const AUTO_KINDS = ["salaries", "partners"];
+function amountCell(o: Obligation) {
+  if (o.amount != null) return formatEGP(o.amount);
+  if (o.auto_amount == null) return "—";
+  return (
+    <>
+      {formatEGP(o.auto_amount)}
+      <span className="block text-[11px] font-normal text-slate-400">
+        {o.kind === "salaries" && o.for_month ? `الباقي من مرتبات ${monthLabel(o.for_month)}` : "الباقي للشركاء كلهم"}
+      </span>
+    </>
+  );
 }
 
 const inputCls = "rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white";
@@ -81,6 +97,9 @@ export default function Obligations() {
         <p className="text-sm text-slate-500 mt-1">
           سجّل أي حاجة لازم تدفعها قبل يوم معيّن (مرتبات، شركاء، إيجار...). الصفحة الرئيسية هتنبهك قبلها بـ 3 أيام ويوم الميعاد ولو اتأخرت.
         </p>
+        <p className="text-sm text-slate-500 mt-1">
+          <b>المرتبات والشركاء:</b> اختار اليوم بس وسيب المبلغ فاضي — البرنامج بيحسب عليك كام لوحده من شيت المرتبات ومن أرصدة الشركاء. ميعاد المرتبات قبل يوم ٢٠ بيحسب مرتبات الشهر اللي فات، ومن يوم ٢٠ بيحسب الشهر نفسه.
+        </p>
       </div>
 
       <form onSubmit={add} className="bg-white rounded-card shadow-card p-5 flex flex-wrap items-end gap-2">
@@ -100,7 +119,15 @@ export default function Obligations() {
         </div>
         <div>
           <label className="block text-xs text-slate-400 mb-1">المبلغ</label>
-          <input type="number" min="0" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="اختياري" className={`${inputCls} w-28`} />
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder={AUTO_KINDS.includes(kind) ? "بيتحسب لوحده" : "اختياري"}
+            className={`${inputCls} w-32`}
+          />
         </div>
         <div>
           <label className="block text-xs text-slate-400 mb-1">قبل يوم</label>
@@ -149,7 +176,7 @@ export default function Obligations() {
                         {o.note ? ` — ${o.note}` : ""}
                       </span>
                     </td>
-                    <td className="py-2 font-semibold text-slate-700">{o.amount != null ? formatEGP(o.amount) : "—"}</td>
+                    <td className="py-2 font-semibold text-slate-700">{amountCell(o)}</td>
                     <td className="py-2">
                       <span
                         className={[

@@ -82,6 +82,7 @@ interface HassanTreasuryExpenseRow {
   date: string;
   amount: number;
   description: string;
+  category?: string | null;
 }
 
 interface ContractorPaymentRow {
@@ -1246,10 +1247,14 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
   if (channel === "hassanTreasury:list") {
     return state.hassan_treasury_expenses
       .filter((e) => e.date.startsWith(payload.month))
-      .sort((a, b) => b.date.localeCompare(a.date));
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((e) => ({ ...e, category: e.category || e.description }));
+  }
+  if (channel === "hassanTreasury:categories") {
+    return [...new Set(state.hassan_treasury_expenses.map((e) => e.category).filter(Boolean))];
   }
   if (channel === "hassanTreasury:create") {
-    const record: HassanTreasuryExpenseRow = { id: state.nextId++, ...payload };
+    const record: HassanTreasuryExpenseRow = { id: state.nextId++, ...payload, description: payload.description || payload.category };
     state.hassan_treasury_expenses.push(record);
     saveState(state);
     return record;

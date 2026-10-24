@@ -86,7 +86,27 @@ function carPersonalAllMonths(db) {
   });
 }
 
-function registerExtraHandlers(db) {
+// الالتزامات الثابتة (مرتبات / شركاء) من غير مبلغ مكتوب: البرنامج بيحسب
+// "عليك كام" لوحده من شيت المرتبات ومن أرصدة الشركاء.
+// المرتبات: ميعاد يوم ٢٠ أو بعده = مرتبات نفس الشهر، قبل ٢٠ = الشهر اللي فات.
+function salaryMonthFor(dueDate) {
+  const [y, m, d] = dueDate.split("-").map(Number);
+  if (d >= 20) return dueDate.slice(0, 7);
+  const prev = new Date(Date.UTC(y, m - 2, 1));
+  return `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+const owedTotal = (rows) => rows.reduce((sum, r) => sum + Math.max(0, r.remaining), 0);
+function owedFor(o, owed) {
+  if (o.amount != null || o.done_at || !owed) return {};
+  if (o.kind === "salaries") {
+    const month = salaryMonthFor(o.due_date);
+    return { auto_amount: owedTotal(owed.payrollSummary(month)), for_month: month };
+  }
+  if (o.kind === "partners") return { auto_amount: owedTotal(owed.partnersSummary()) };
+  return {};
+}
+
+function registerExtraHandlers(db, owed) {
   // مشاوير العربية اللي اتسجلت قبل كده بطريقة دفع من الخزنة — بقت من فلوس
   // العربية (مبتتخصمش من الخزنة).
   const carCat = carCategoryId(db);
@@ -204,7 +224,10 @@ function registerExtraHandlers(db) {
 
   // ===== الالتزامات =====
   ipcMain.handle("obligations:list", () =>
-    db.prepare("SELECT * FROM obligations ORDER BY done_at IS NOT NULL, due_date, id").all()
+    db
+      .prepare("SELECT * FROM obligations ORDER BY done_at IS NOT NULL, due_date, id")
+      .all()
+      .map((o) => ({ ...o, ...owedFor(o, owed) }))
   );
   ipcMain.handle("obligations:create", (_e, { title, kind, amount, due_date, repeat_monthly, note }) => {
     if (!(title ?? "").trim()) throw new Error("لازم تكتب الالتزام ده إيه");
@@ -228,7 +251,9 @@ function registerExtraHandlers(db) {
     const o = db.prepare("SELECT * FROM obligations WHERE id = ?").get(id);
     if (!o) throw new Error("مش موجود");
     const tx = db.transaction(() => {
-      db.prepare("UPDATE obligations SET done_at = ? WHERE id = ?").run(today(), id);
+      // a computed amount is kept as it was on the day it was paid
+      const auto = owedFor(o, owed);
+      db.prepare("UPDATE obligations SET done_at = ?, amount = COALESCE(amount, ?) WHERE id = ?").run(today(), auto.auto_amount ?? null, id);
       if (o.repeat_monthly) {
         db.prepare("INSERT INTO obligations (title, kind, amount, due_date, repeat_monthly, note) VALUES (?, ?, ?, ?, 1, ?)").run(
           o.title,
@@ -273,12 +298,13 @@ function registerExtraHandlers(db) {
     for (const o of db.prepare("SELECT * FROM obligations WHERE done_at IS NULL ORDER BY due_date").all()) {
       const d = daysBetween(now, o.due_date);
       if (d > 3) continue;
+      const auto = owedFor(o, owed);
       alerts.push({
         kind: "obligation",
         level: d < 0 ? "danger" : d === 0 ? "danger" : "warn",
         id: o.id,
         title: o.title,
-        amount: o.amount,
+        amount: o.amount ?? auto.auto_amount ?? null,
         due_date: o.due_date,
         days: d,
       });
@@ -287,4 +313,4 @@ function registerExtraHandlers(db) {
   });
 }
 
-module.exports = { registerExtraHandlers, custodyBalances, carPersonalAllMonths, CAR_CATEGORY };
+module.exports = { registerExtraHandlers, custodyBalances, carPersonalAllMonths, CAR_CATEGORY, salaryMonthFor };

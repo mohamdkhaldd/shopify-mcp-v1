@@ -811,7 +811,8 @@ function registerIpcHandlers(db) {
   // --- Payroll summary (doc section 5): daily wage = sum of driver day-values
   // across every equipment this month; monthly wage = prorated fixed rate.
   // Advances are deducted and bonuses are added for either type. ---
-  ipcMain.handle("payroll:summary", (_e, { month }) => {
+  ipcMain.handle("payroll:summary", (_e, { month }) => payrollSummary(month));
+  function payrollSummary(month) {
     const employees = db.prepare("SELECT * FROM employees ORDER BY name").all();
     const driverLogsStmt = db.prepare(
       "SELECT * FROM daily_logs WHERE role = 'driver' AND person_name = ? AND date LIKE ?"
@@ -878,7 +879,7 @@ function registerIpcHandlers(db) {
         remaining: netPay - paidTotal,
       };
     });
-  });
+  }
 
   // --- Payroll detail: the per-driver "payslip" — every day worked this
   // month, which equipment, and what it paid, plus advances and bonuses.
@@ -1315,7 +1316,15 @@ function registerIpcHandlers(db) {
   });
 
   ipcMain.handle("hassanTreasury:list", (_e, { month }) => {
-    const rows = db.prepare("SELECT * FROM hassan_treasury_expenses WHERE date LIKE ? ORDER BY date DESC").all(`${month}%`);
+    // البند: اللي اتكتب، ولو مفيش (مصاريف قديمة) — مرتبات العمال أو البيان نفسه
+    const rows = db
+      .prepare(
+        `SELECT x.*, COALESCE(NULLIF(TRIM(x.category), ''),
+           CASE WHEN EXISTS (SELECT 1 FROM hassan_worker_entries w WHERE w.treasury_expense_id = x.id) THEN 'مرتبات العمال' END,
+           x.description) AS category
+         FROM hassan_treasury_expenses x WHERE x.date LIKE ? ORDER BY x.date DESC, x.id DESC`
+      )
+      .all(`${month}%`);
     // سطر محسوب (مش متسجل): الخاص من العربية الملاكي الشهر ده.
     const car = carPersonalAllMonths(db).find((c) => c.month === month);
     if (car && car.personal > 0) {
@@ -1324,15 +1333,25 @@ function registerIpcHandlers(db) {
         date: car.lastDate,
         amount: car.personal,
         description: `العربية الملاكي — خاص (بنزين وزيت ${Math.round(car.fuelTotal).toLocaleString("en-US")} − مشاوير شغل ${Math.round(car.tripsTotal).toLocaleString("en-US")})`,
+        category: "العربية الملاكي",
         computed: true,
       });
     }
     return rows;
   });
+  ipcMain.handle("hassanTreasury:categories", () =>
+    db
+      .prepare("SELECT category FROM hassan_treasury_expenses WHERE TRIM(COALESCE(category, '')) <> '' GROUP BY category ORDER BY MAX(date) DESC")
+      .all()
+      .map((r) => r.category)
+  );
   ipcMain.handle("hassanTreasury:create", (_e, expense) => {
+    const category = (expense.category ?? "").trim() || null;
+    const description = (expense.description ?? "").trim() || category || "";
+    if (!description) throw new Error("اكتب البند");
     const info = db
-      .prepare("INSERT INTO hassan_treasury_expenses (date, amount, description) VALUES (@date, @amount, @description)")
-      .run(expense);
+      .prepare("INSERT INTO hassan_treasury_expenses (date, amount, description, category) VALUES (?, ?, ?, ?)")
+      .run(expense.date, expense.amount, description, category);
     const created = db.prepare("SELECT * FROM hassan_treasury_expenses WHERE id = ?").get(info.lastInsertRowid);
     pushToCloud("hassan_treasury_expenses", created.id, created);
     return created;
@@ -1591,7 +1610,8 @@ function registerIpcHandlers(db) {
     return income - expense - driverSalaryExpense;
   }
 
-  ipcMain.handle("partners:summary", () => {
+  ipcMain.handle("partners:summary", () => partnersSummary());
+  function partnersSummary() {
     const partners = db.prepare("SELECT * FROM partners ORDER BY name").all();
     const sharesStmt = db.prepare(
       `SELECT eps.equipment_id, eps.percentage, e.name AS equipment_name
@@ -1617,7 +1637,7 @@ function registerIpcHandlers(db) {
         remaining: totalDue - totalPaid,
       };
     });
-  });
+  }
 
   ipcMain.handle("partners:detail", (_e, { partner_id, month }) => {
     const partner = db.prepare("SELECT * FROM partners WHERE id = ?").get(partner_id);
@@ -2680,7 +2700,7 @@ function registerIpcHandlers(db) {
     return { ok: true };
   });
 
-  registerExtraHandlers(db);
+  registerExtraHandlers(db, { payrollSummary, partnersSummary });
 }
 
 module.exports = { registerIpcHandlers };
