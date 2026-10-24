@@ -142,8 +142,8 @@ body{font-family:Tajawal,Inter,sans-serif;color:var(--navy);-webkit-print-color-
   <div class="brand"><div style="text-align:right"><div class="wm">MK-Tech</div><div class="tl">Business Systems &amp; Software</div></div><img src="mk-icon.png"></div>
   <div class="hero">
     <span class="kicker">دليل التسطيب</span>
-    <h1>برنامج <b>التأجير</b><br>على أي جهاز عندك</h1>
-    <p>اختار الجهاز اللي حابب تشتغل عليه، وتابع الخطوات. ينفع تشغّل البرنامج على أكتر من جهاز في نفس الوقت، وكلهم بيشوفوا نفس البيانات أول بأول.</p>
+    <h1>برامج <b>MK-Tech</b><br>على أي جهاز عندك</h1>
+    <p>برنامج التأجير وبرنامج التشغيل في تطبيق واحد — كود التفعيل بيحدد اللي هيفتحلك. اختار الجهاز اللي حابب تشتغل عليه وتابع الخطوات؛ ينفع أكتر من جهاز في نفس الوقت، وكلهم بيشوفوا نفس البيانات أول بأول.</p>
   </div>
   <div class="tiles">
     <div class="tile">${icon("laptop")}<b>لاب ويندوز</b><span>برنامج بيتسطّب على الجهاز</span></div>
@@ -155,7 +155,7 @@ body{font-family:Tajawal,Inter,sans-serif;color:var(--navy);-webkit-print-color-
 </div>
 
 <div class="page inner">
-  <div class="top"><div class="mini"><img src="mk-icon.png"><b>MK-Tech</b></div><div class="pt">دليل تسطيب برنامج التأجير</div></div>
+  <div class="top"><div class="mini"><img src="mk-icon.png"><b>MK-Tech</b></div><div class="pt">دليل تسطيب MK-Tech</div></div>
   ${section({
     icon: "laptop", title: "لاب أو كمبيوتر ويندوز", sub: '<bdi dir="ltr">Windows 10</bdi> أو <bdi dir="ltr">11</bdi>', tag: "ملف تسطيب EXE",
     link: "windows", linkLabel: "لينك تحميل البرنامج",
@@ -163,7 +163,7 @@ body{font-family:Tajawal,Inter,sans-serif;color:var(--navy);-webkit-print-color-
       "افتح اللينك من اللاب، والملف هينزل على طول.",
       "لو كروم قال إن الملف <b>مش آمن</b>: دوس على التلات نقط جنب الملف ← <span class=\"k\">Keep</span>.",
       "افتح الملف. لو ظهرت شاشة زرقا <b>Windows protected your PC</b>: دوس <span class=\"k\">More info</span> ← <span class=\"k\">Run anyway</span>.",
-      "اختار مكان التسطيب (أو سيبه زي ما هو) ودوس <b>Install</b>. هتلاقي أيقونة <b>MK-Tech التأجير</b> على سطح المكتب.",
+      "اختار مكان التسطيب (أو سيبه زي ما هو) ودوس <b>Install</b>. هتلاقي أيقونة <b>MK-Tech</b> على سطح المكتب.",
       "افتح البرنامج واكتب <b>كود التفعيل</b> اللي معاك.",
     ],
     note: "الرسايل دي بتظهر مع أي برنامج جديد على ويندوز، ومش معناها إن فيه مشكلة. بتظهر أول مرة بس، والتحديثات بعد كده بتنزل لوحدها.",
@@ -182,7 +182,7 @@ body{font-family:Tajawal,Inter,sans-serif;color:var(--navy);-webkit-print-color-
 </div>
 
 <div class="page inner">
-  <div class="top"><div class="mini"><img src="mk-icon.png"><b>MK-Tech</b></div><div class="pt">دليل تسطيب برنامج التأجير</div></div>
+  <div class="top"><div class="mini"><img src="mk-icon.png"><b>MK-Tech</b></div><div class="pt">دليل تسطيب MK-Tech</div></div>
   ${section({
     icon: "phone", title: "موبايل أندرويد", sub: "نفس تطبيق التابلت، بشكل مظبوط على الموبايل", tag: "تطبيق APK",
     link: "android", linkLabel: "نفس لينك التابلت",
