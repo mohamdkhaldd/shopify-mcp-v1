@@ -1,0 +1,452 @@
+{
+ "steps": [
+  {
+   "date": "2026-09-02",
+   "text": "close-july"
+  }
+ ],
+ "months": {
+  "2026-08": {
+   "contracts": [
+    {
+     "contract": "لودر/الأمل",
+     "clientDays": 27,
+     "supplierDays": 27,
+     "clientBase": 81000,
+     "vat": 11340,
+     "invoice": 92340,
+     "supplierCost": 67500,
+     "margin": 13500,
+     "tax5": 675,
+     "contractExpenses": 1500,
+     "net": 11325
+    },
+    {
+     "contract": "حفار/الأمل",
+     "clientDays": 15,
+     "supplierDays": 15,
+     "clientBase": 60000,
+     "vat": 8400,
+     "invoice": 68400,
+     "supplierCost": 48000,
+     "margin": 12000,
+     "tax5": 600,
+     "contractExpenses": 2000,
+     "net": 9400
+    }
+   ],
+   "generalExpenses": 11000,
+   "monthNet": 9725,
+   "carryIn": 0,
+   "management": 4862.5,
+   "investorsPool": 4862.5,
+   "investors": [
+    {
+     "name": "أحمد",
+     "share": 2917.5
+    },
+    {
+     "name": "خالد",
+     "share": 1945
+    }
+   ],
+   "remainderToManagement": 0,
+   "vatTotal": 19740,
+   "tax5Total": 1275
+  },
+  "2026-09": {
+   "contracts": [
+    {
+     "contract": "لودر/الأمل",
+     "clientDays": 26,
+     "supplierDays": 26,
+     "clientBase": 78000,
+     "vat": 10920,
+     "invoice": 88920,
+     "supplierCost": 65000,
+     "margin": 13000,
+     "tax5": 650,
+     "contractExpenses": 0,
+     "net": 12350
+    },
+    {
+     "contract": "حفار/الأمل",
+     "clientDays": 26,
+     "supplierDays": 26,
+     "clientBase": 108500,
+     "vat": 15190,
+     "invoice": 123690,
+     "supplierCost": 86800,
+     "margin": 21700,
+     "tax5": 1085,
+     "contractExpenses": 0,
+     "net": 20615
+    },
+    {
+     "contract": "ونش/النور",
+     "clientDays": 27,
+     "supplierDays": 27,
+     "clientBase": 140400,
+     "vat": 19656,
+     "invoice": 160056,
+     "supplierCost": 108000,
+     "margin": 32400,
+     "tax5": 1620,
+     "contractExpenses": 2500,
+     "net": 28280
+    },
+    {
+     "contract": "بلدوزر/حسام",
+     "clientDays": 30,
+     "supplierDays": 30,
+     "clientBase": 135000,
+     "vat": 0,
+     "invoice": 135000,
+     "supplierCost": 105000,
+     "margin": 30000,
+     "tax5": 0,
+     "contractExpenses": 1800,
+     "net": 28200
+    }
+   ],
+   "generalExpenses": 11000,
+   "monthNet": 78445,
+   "carryIn": 0,
+   "management": 39222.51,
+   "investorsPool": 39222.5,
+   "investors": [
+    {
+     "name": "أحمد",
+     "share": 18102.69
+    },
+    {
+     "name": "خالد",
+     "share": 12068.46
+    },
+    {
+     "name": "منى",
+     "share": 9051.34
+    }
+   ],
+   "remainderToManagement": 0.01,
+   "vatTotal": 45766,
+   "tax5Total": 3355
+  },
+  "2026-10": {
+   "contracts": [
+    {
+     "contract": "لودر/الأمل",
+     "clientDays": 26,
+     "supplierDays": 26,
+     "clientBase": 78000,
+     "vat": 10920,
+     "invoice": 88920,
+     "supplierCost": 65000,
+     "margin": 13000,
+     "tax5": 650,
+     "contractExpenses": 0,
+     "net": 12350
+    },
+    {
+     "contract": "حفار/الأمل",
+     "clientDays": 26,
+     "supplierDays": 26,
+     "clientBase": 104000,
+     "vat": 14560,
+     "invoice": 118560,
+     "supplierCost": 83200,
+     "margin": 20800,
+     "tax5": 1040,
+     "contractExpenses": 0,
+     "net": 19760
+    },
+    {
+     "contract": "ونش/النور",
+     "clientDays": 31,
+     "supplierDays": 31,
+     "clientBase": 161200,
+     "vat": 22568,
+     "invoice": 183768,
+     "supplierCost": 124000,
+     "margin": 37200,
+     "tax5": 1860,
+     "contractExpenses": 0,
+     "net": 35340
+    }
+   ],
+   "generalExpenses": 11000,
+   "monthNet": 56450,
+   "carryIn": 0,
+   "management": 28225,
+   "investorsPool": 28225,
+   "investors": [
+    {
+     "name": "أحمد",
+     "share": 11290
+    },
+    {
+     "name": "خالد",
+     "share": 11290
+    },
+    {
+     "name": "منى",
+     "share": 5645
+    }
+   ],
+   "remainderToManagement": 0,
+   "vatTotal": 48048,
+   "tax5Total": 3550
+  }
+ },
+ "checkpoints": [
+  {
+   "label": "آخر أغسطس",
+   "date": "2026-08-31",
+   "treasury": {
+    "balance": 451500,
+    "taxHeld": 1275,
+    "profitsDue": 0,
+    "available": 450225
+   },
+   "investors": [
+    {
+     "name": "م. أحمد سالم",
+     "capital": 300000,
+     "payableNow": 0,
+     "paid": 0
+    },
+    {
+     "name": "أ. خالد منصور",
+     "capital": 200000,
+     "payableNow": 0,
+     "paid": 0
+    },
+    {
+     "name": "د. منى عادل",
+     "capital": 0,
+     "payableNow": 0,
+     "paid": 0
+    }
+   ],
+   "management": {
+    "releasable": 0,
+    "paid": 0
+   },
+   "suppliers": [
+    {
+     "name": "الحاج سيد عبد الله",
+     "fromSarki": 115500,
+     "deductions": 4000,
+     "paid": 30000,
+     "remaining": 81500
+    },
+    {
+     "name": "م. عادل فهمي",
+     "fromSarki": 0,
+     "deductions": 0,
+     "paid": 0,
+     "remaining": 0
+    },
+    {
+     "name": "أبو يوسف للمعدات",
+     "fromSarki": 0,
+     "deductions": 0,
+     "paid": 0,
+     "remaining": 0
+    }
+   ],
+   "clients": [
+    {
+     "name": "شركة الأمل للمقاولات",
+     "invoiced": 160740,
+     "paid": 0,
+     "remaining": 160740
+    },
+    {
+     "name": "شركة النور للإنشاءات",
+     "invoiced": 0,
+     "paid": 0,
+     "remaining": 0
+    },
+    {
+     "name": "م. حسام فؤاد",
+     "invoiced": 0,
+     "paid": 0,
+     "remaining": 0
+    }
+   ]
+  },
+  {
+   "label": "آخر سبتمبر",
+   "date": "2026-09-30",
+   "treasury": {
+    "balance": 600200,
+    "taxHeld": 3355,
+    "profitsDue": 0,
+    "available": 596845
+   },
+   "investors": [
+    {
+     "name": "م. أحمد سالم",
+     "capital": 300000,
+     "payableNow": 0,
+     "paid": 2917.5
+    },
+    {
+     "name": "أ. خالد منصور",
+     "capital": 200000,
+     "payableNow": 0,
+     "paid": 1945
+    },
+    {
+     "name": "د. منى عادل",
+     "capital": 150000,
+     "payableNow": 0,
+     "paid": 0
+    }
+   ],
+   "management": {
+    "releasable": 4862.5,
+    "paid": 4862.5
+   },
+   "suppliers": [
+    {
+     "name": "الحاج سيد عبد الله",
+     "fromSarki": 267300,
+     "deductions": 4000,
+     "paid": 90000,
+     "remaining": 173300
+    },
+    {
+     "name": "م. عادل فهمي",
+     "fromSarki": 108000,
+     "deductions": 6000,
+     "paid": 50000,
+     "remaining": 52000
+    },
+    {
+     "name": "أبو يوسف للمعدات",
+     "fromSarki": 105000,
+     "deductions": 0,
+     "paid": 0,
+     "remaining": 105000
+    }
+   ],
+   "clients": [
+    {
+     "name": "شركة الأمل للمقاولات",
+     "invoiced": 373350,
+     "paid": 160740,
+     "remaining": 212610
+    },
+    {
+     "name": "شركة النور للإنشاءات",
+     "invoiced": 160056,
+     "paid": 0,
+     "remaining": 160056
+    },
+    {
+     "name": "م. حسام فؤاد",
+     "invoiced": 135000,
+     "paid": 0,
+     "remaining": 135000
+    }
+   ]
+  },
+  {
+   "label": "آخر أكتوبر",
+   "date": "2026-10-31",
+   "treasury": {
+    "balance": 859256.47,
+    "taxHeld": 13047.17,
+    "profitsDue": 14487.34,
+    "available": 831721.96
+   },
+   "investors": [
+    {
+     "name": "م. أحمد سالم",
+     "capital": 300000,
+     "payableNow": 2955.27,
+     "paid": 19261.16
+    },
+    {
+     "name": "أ. خالد منصور",
+     "capital": 300000,
+     "payableNow": 2810.76,
+     "paid": 12840.77
+    },
+    {
+     "name": "د. منى عادل",
+     "capital": 150000,
+     "payableNow": 1477.63,
+     "paid": 8171.82
+    }
+   ],
+   "management": {
+    "releasable": 47517.46,
+    "paid": 40273.78
+   },
+   "suppliers": [
+    {
+     "name": "الحاج سيد عبد الله",
+     "fromSarki": 415500,
+     "deductions": 4000,
+     "paid": 210000,
+     "remaining": 201500
+    },
+    {
+     "name": "م. عادل فهمي",
+     "fromSarki": 232000,
+     "deductions": 6000,
+     "paid": 130000,
+     "remaining": 96000
+    },
+    {
+     "name": "أبو يوسف للمعدات",
+     "fromSarki": 105000,
+     "deductions": 0,
+     "paid": 70000,
+     "remaining": 35000
+    }
+   ],
+   "clients": [
+    {
+     "name": "شركة الأمل للمقاولات",
+     "invoiced": 580830,
+     "paid": 460740,
+     "remaining": 120090
+    },
+    {
+     "name": "شركة النور للإنشاءات",
+     "invoiced": 343824,
+     "paid": 150000,
+     "remaining": 193824
+    },
+    {
+     "name": "م. حسام فؤاد",
+     "invoiced": 135000,
+     "paid": 110000,
+     "remaining": 25000
+    }
+   ]
+  }
+ ],
+ "firstMonthInvoices": 160740,
+ "payoutsAug": {
+  "ahmed": 2917.5,
+  "khaled": 1945,
+  "management": 4862.5
+ },
+ "payoutsSep": {
+  "ahmed": 16343.66,
+  "khaled": 10895.77,
+  "mona": 8171.82,
+  "management": 35411.28
+ },
+ "taxes": {
+  "julVat": 19740,
+  "julT5": 1275,
+  "augVat": 45766,
+  "augT5": 3355
+ }
+}
