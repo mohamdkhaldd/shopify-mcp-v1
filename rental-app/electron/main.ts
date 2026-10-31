@@ -210,10 +210,10 @@ app.whenReady().then(async () => {
 
   // shared by both programs
   ipcMain.handle("print:preview", (_e, opts?: { singlePage?: boolean }) => mainWindow && printPreview(mainWindow, iconPath, opts?.singlePage ?? true));
-  ipcMain.handle("print:savePdf", async (_e, { name }: { name: string }) => {
+  ipcMain.handle("print:savePdf", async (_e, { name, pages }: { name: string; pages?: boolean }) => {
     if (!mainWindow) return null;
     const r = await dialog.showSaveDialog(mainWindow, { defaultPath: `${name}.pdf`, filters: [{ name: "PDF", extensions: ["pdf"] }] });
-    return r.canceled || !r.filePath ? null : savePdf(mainWindow, r.filePath);
+    return r.canceled || !r.filePath ? null : savePdf(mainWindow, r.filePath, pages);
   });
   const notifyRemote = (info: unknown) => mainWindow?.webContents.send("sync:remoteChanges", info);
 

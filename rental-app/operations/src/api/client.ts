@@ -374,7 +374,7 @@ export const printApi = {
       return { saved: true };
     }
     // اللاب بيرجع مكان الملف (أو null لو اتلغى)، والتابلت بيفتح شاشة الطباعة.
-    const r = await window.api.invoke("print:savePdf", { name: fileName.replace(/[\\/:*?"<>|]/g, "-"), singlePage: false });
+    const r = await window.api.invoke("print:savePdf", { name: fileName.replace(/[\\/:*?"<>|]/g, "-"), singlePage: false, pages: true });
     return typeof r === "string" ? { saved: true, filePath: r } : { saved: r !== null };
   },
 };

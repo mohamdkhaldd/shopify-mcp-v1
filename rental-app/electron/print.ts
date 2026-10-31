@@ -45,8 +45,13 @@ export async function printPreview(source: BrowserWindow, iconPath: string, sing
   await previewWindow.loadURL(`file://${file}`);
 }
 
-/** "PDF" button: same rendering, saved where the user chooses. */
-export async function savePdf(source: BrowserWindow, file: string) {
-  fs.writeFileSync(file, await renderPdf(source.webContents, false));
+/** "PDF" button: same rendering, saved where the user chooses. `pages` = the
+ *  page lays itself out as whole A4 sheets (التشغيل's partner file): print it
+ *  as-is, no extra margins and no scaling, so no sheet spills onto the next. */
+export async function savePdf(source: BrowserWindow, file: string, pages = false) {
+  const pdf = pages
+    ? await source.webContents.printToPDF({ printBackground: true, pageSize: "A4", margins: { marginType: "none" }, preferCSSPageSize: true })
+    : await renderPdf(source.webContents, false);
+  fs.writeFileSync(file, pdf);
   return file;
 }
