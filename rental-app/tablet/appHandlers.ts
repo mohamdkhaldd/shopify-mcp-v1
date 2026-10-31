@@ -163,7 +163,8 @@ export function tabletAppHandlers(emit: (channel: string, data: unknown) => void
     },
     "print:preview": ({ singlePage = true }: { singlePage?: boolean }) => print(singlePage, native),
     // Android's and the browser's print screens both have "Save as PDF"
-    "print:savePdf": () => print(true, native),
+    // ملف متعدد الصفحات (ملف الشريك في التشغيل) بيتطبع بصفحاته زي ما هي.
+    "print:savePdf": ({ singlePage = true }: { singlePage?: boolean } = {}) => print(singlePage, native),
     "export:excel": async ({ fileName, sheets }: { fileName: string; sheets: ExcelSheet[] }) => {
       const buf = await buildWorkbook(sheets).xlsx.writeBuffer();
       return deliver(`${fileName}.xlsx`, new Uint8Array(buf as ArrayBuffer), fileName);

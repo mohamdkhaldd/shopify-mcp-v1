@@ -24,7 +24,60 @@ body {
   display: none;
 }
 
+/* ملف الشريك: كل شيت صفحة A4 (جوه هوامش الطباعة العادية). */
+.pkg-page {
+  width: 186mm;
+  height: 266mm;
+  margin-left: auto;
+  margin-right: auto;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.12);
+}
+
 @media print {
+  html.pkg-printing {
+    font-size: 16px !important;
+  }
+  html.pkg-printing body > *:not(.pkg-overlay) {
+    display: none !important;
+  }
+  html.pkg-printing .pkg-overlay {
+    position: static !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  html.pkg-printing .pkg-toolbar {
+    display: none !important;
+  }
+  html.pkg-printing .pkg-pages {
+    padding: 0 !important;
+  }
+  html.pkg-printing .pkg-pages > * {
+    margin-top: 0 !important;
+  }
+  html.pkg-printing .pkg-page {
+    box-shadow: none !important;
+    break-after: page;
+    page-break-after: always;
+  }
+  html.pkg-printing .pkg-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  /* السركي الورقي: الصورة على قد الورقة. */
+  .paper-sheet {
+    break-after: page;
+  }
+  .paper-sheet:last-child {
+    break-after: auto;
+  }
+  .paper-sheet-page {
+    max-width: none !important;
+    width: 100% !important;
+    height: 255mm !important;
+    aspect-ratio: auto !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
   .no-print {
     display: none !important;
   }

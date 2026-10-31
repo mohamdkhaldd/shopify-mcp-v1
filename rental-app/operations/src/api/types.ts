@@ -772,9 +772,15 @@ export interface Custody {
   low: boolean;
 }
 
+export type CustodyTarget = "general" | "equipment" | "supplier" | "car" | "advance" | "salary";
+
 export interface CustodyEntry {
   id: number;
   custody_id: number;
+  target: CustodyTarget | null;
+  supplier_name: string | null;
+  car_kind: string | null;
+  employee_name: string | null;
   date: string;
   type: "expense" | "topup" | "return";
   amount: number;
@@ -844,4 +850,13 @@ export interface AttendanceRow {
   worker_id: number;
   date: string;
   status: AttendanceStatus;
+}
+
+// صورة السركي الورقي اللي من الشركة.
+export interface PaperSheet {
+  id: number;
+  equipment_id: number;
+  month: string;
+  image: string;
+  note: string | null;
 }

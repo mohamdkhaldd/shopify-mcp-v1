@@ -9,8 +9,10 @@ import { currentMonthKey, monthLabel } from "../../utils/months";
 import DailyLogTable from "./DailyLogTable";
 import ExpensesTable from "./ExpensesTable";
 import ProfitSummary from "./ProfitSummary";
+import PaperSheets from "./PaperSheets";
+import PartnerPackage from "./PartnerPackage";
 
-type Tab = "summary" | "driver" | "contractor" | "market" | "expenses";
+type Tab = "summary" | "driver" | "contractor" | "market" | "expenses" | "paper";
 
 const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: "summary", label: "الأرباح وتوزيع الشركاء", icon: "reports" },
@@ -18,6 +20,7 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: "driver", label: "السركي", icon: "salaries" },
   { id: "market", label: "سركي سوق", icon: "equipment" },
   { id: "expenses", label: "المصروفات", icon: "treasury" },
+  { id: "paper", label: "السركي الورقي", icon: "reports" },
 ];
 
 // الشيفتات (سركي/مقاول) بتفرق بس في التابات دي — سركي السوق والمصروفات
@@ -31,6 +34,7 @@ interface EquipmentDetailProps {
 
 export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailProps) {
   const [tab, setTab] = useState<Tab>("summary");
+  const [showPackage, setShowPackage] = useState(false);
   const [month, setMonth] = useState(currentMonthKey());
   const [employees, setEmployees] = useState<{ id: number; name: string; rate: number; wage_type: WageType }[]>([]);
   const [contractors, setContractors] = useState<{ id: number; name: string }[]>([]);
@@ -120,6 +124,12 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPackage(true)}
+            className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold bg-primary text-white hover:bg-primary-dark shadow-card"
+          >
+            📄 ملف الشريك
+          </button>
           <PrintButton />
           <MonthPicker month={month} onChange={setMonth} />
         </div>
@@ -264,7 +274,11 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
         <ExpensesTable equipmentId={equipment.id} month={month} onChanged={() => setRefreshKey((k) => k + 1)} />
       )}
 
-      <PrintSignoff />
+      {tab === "paper" && <PaperSheets equipmentId={equipment.id} month={month} />}
+
+      {tab !== "paper" && <PrintSignoff />}
+
+      {showPackage && <PartnerPackage equipment={equipment} month={month} onClose={() => setShowPackage(false)} />}
     </div>
   );
 }
