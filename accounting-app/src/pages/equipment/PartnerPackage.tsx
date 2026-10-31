@@ -55,7 +55,8 @@ function Page({ title, equipment, month, children }: { title: string; equipment:
   });
 
   return (
-    <div ref={box} className="pkg-page bg-white text-slate-900 overflow-hidden">
+    <div className="pkg-page bg-white text-slate-900">
+      <div ref={box} className="w-full h-full overflow-hidden">
       <div ref={content}>
         <div className="flex items-center justify-between border-b-2 border-slate-800 pb-2 mb-4">
           <div className="flex items-center gap-3">
@@ -72,6 +73,7 @@ function Page({ title, equipment, month, children }: { title: string; equipment:
           </div>
         </div>
         {children}
+        </div>
       </div>
     </div>
   );
@@ -151,8 +153,10 @@ export default function PartnerPackage({ equipment, month, onClose }: { equipmen
 
   // الطباعة وقت الملف ده بتطلع صفحاته بس.
   useEffect(() => {
-    document.documentElement.classList.add("pkg-printing");
-    return () => document.documentElement.classList.remove("pkg-printing");
+    const html = document.documentElement;
+    html.style.setProperty("--pkg-root-font", getComputedStyle(html).fontSize);
+    html.classList.add("pkg-printing");
+    return () => html.classList.remove("pkg-printing");
   }, []);
 
   async function save() {

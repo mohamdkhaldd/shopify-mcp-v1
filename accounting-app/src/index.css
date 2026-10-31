@@ -21,10 +21,19 @@ body {
   display: none;
 }
 
-/* ملف الشريك: كل شيت صفحة A4 (بعد هوامش 8 مم). */
+/* ملف الشريك: كل شيت ورقة A4 كاملة والهامش جواها (10 مم)، وبتتطبع من غير
+   هوامش زيادة (@page pkg) — فمفيش صفحة تفيض على اللي بعدها. */
+@page pkg {
+  size: A4;
+  margin: 0;
+}
 .pkg-page {
-  width: 194mm;
-  height: 279mm;
+  page: pkg;
+  box-sizing: border-box;
+  width: 210mm;
+  height: 296mm;
+  padding: 10mm;
+  overflow: hidden;
   margin-left: auto;
   margin-right: auto;
   box-shadow: 0 4px 18px rgba(15, 23, 42, 0.12);
@@ -32,7 +41,7 @@ body {
 
 @media print {
   html.pkg-printing {
-    font-size: 16px !important;
+    font-size: var(--pkg-root-font, 16px) !important;
   }
   html.pkg-printing body > *:not(.pkg-overlay) {
     display: none !important;
