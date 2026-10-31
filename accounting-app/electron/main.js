@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -100,6 +100,23 @@ ipcMain.handle("print:preview", async () => {
     printPreviewWindow = null;
   });
   await printPreviewWindow.loadURL(`file://${tmpPath}`);
+});
+
+// ملف متعدد الصفحات (ملف الشريك): كل صفحة متظبطة على ورقة A4 من الشاشة نفسها،
+// فبنطبعه زي ما هو (من غير تصغير لصفحة واحدة) ونحفظه PDF في المكان اللي تختاره.
+ipcMain.handle("print:savePdf", async (_e, { fileName } = {}) => {
+  if (!mainWindow) return { saved: false };
+  const pdf = await mainWindow.webContents.printToPDF({ printBackground: true, preferCSSPageSize: true });
+  const safeName = String(fileName || "ملف").replace(/[\\/:*?"<>|]/g, "-");
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: "حفظ الملف",
+    defaultPath: path.join(app.getPath("documents"), `${safeName}.pdf`),
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+  });
+  if (canceled || !filePath) return { saved: false };
+  fs.writeFileSync(filePath, pdf);
+  shell.openPath(filePath);
+  return { saved: true, filePath };
 });
 
 // تحديث تلقائي: كل ما نصدر نسخة جديدة على GitHub Releases، البرنامج بيكتشفها

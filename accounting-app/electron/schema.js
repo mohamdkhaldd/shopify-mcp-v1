@@ -272,7 +272,21 @@ CREATE TABLE IF NOT EXISTS custody_entries (
   amount REAL NOT NULL,
   description TEXT,
   method TEXT,
-  expense_id INTEGER REFERENCES monthly_expenses(id) ON DELETE CASCADE
+  expense_id INTEGER REFERENCES monthly_expenses(id) ON DELETE CASCADE,
+  target TEXT,
+  supplier_payment_id INTEGER REFERENCES supplier_payments(id) ON DELETE CASCADE,
+  car_fuel_id INTEGER REFERENCES car_fuel(id) ON DELETE CASCADE,
+  advance_id INTEGER REFERENCES employee_advances(id) ON DELETE CASCADE,
+  salary_payment_id INTEGER REFERENCES salary_payments(id) ON DELETE CASCADE
+);
+
+-- صور السركي الورقي اللي بيتاخد من الشركة — لكل معدة وشهر (ممكن أكتر من ورقة).
+CREATE TABLE IF NOT EXISTS equipment_paper_sheets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  equipment_id INTEGER NOT NULL REFERENCES equipment(id) ON DELETE CASCADE,
+  month TEXT NOT NULL,
+  image TEXT NOT NULL,
+  note TEXT
 );
 
 -- العربية الملاكي: كل مرة بنزين/زيت/صيانة. المشاوير بتتسجل مصروف "عربية
@@ -435,6 +449,20 @@ function setupDatabase(db, { seed = true } = {}) {
   const workerCols = db.prepare("PRAGMA table_info(hassan_workers)").all().map((c) => c.name);
   if (!workerCols.includes("day_rate")) db.exec("ALTER TABLE hassan_workers ADD COLUMN day_rate REAL");
   if (!workerCols.includes("leave_rate")) db.exec("ALTER TABLE hassan_workers ADD COLUMN leave_rate REAL");
+
+  // الصرف من العهدة بقى ممكن يكون لمورد / العربية الملاكي / سلفة أو مرتب سواق —
+  // كل واحد بيتسجل في مكانه ومربوط بسطر العهدة.
+  const custodyCols = db.prepare("PRAGMA table_info(custody_entries)").all().map((c) => c.name);
+  if (!custodyCols.includes("target")) db.exec("ALTER TABLE custody_entries ADD COLUMN target TEXT");
+  const custodyLinks = {
+    supplier_payment_id: "supplier_payments",
+    car_fuel_id: "car_fuel",
+    advance_id: "employee_advances",
+    salary_payment_id: "salary_payments",
+  };
+  for (const [col, parent] of Object.entries(custodyLinks)) {
+    if (!custodyCols.includes(col)) db.exec(`ALTER TABLE custody_entries ADD COLUMN ${col} INTEGER REFERENCES ${parent}(id) ON DELETE CASCADE`);
+  }
 
   const dailyLogsHasPaidLeave = db
     .prepare("PRAGMA table_info(daily_logs)")

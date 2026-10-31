@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import PrintButton from "../components/PrintButton";
 import { PrintHeader, PrintSignoff } from "../components/PrintSignoff";
-import { custodyApi, equipmentApi, expenseCategoriesApi } from "../api/client";
-import { Custody as CustodyRow, CustodyStatement, Equipment, ExpenseCategory } from "../api/types";
+import { custodyApi, employeesApi, equipmentApi, expenseCategoriesApi, suppliersApi } from "../api/client";
+import { Custody as CustodyRow, CustodyStatement, CustodyTarget, Driver, Equipment, ExpenseCategory } from "../api/types";
 import { formatEGP } from "../utils/format";
 import { PAYMENT_METHODS, paymentMethodLabel } from "../utils/paymentMethods";
 
@@ -14,6 +14,33 @@ function todayISO(): string {
 const errorText = (err: unknown) => String((err as Error)?.message ?? err).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
 
 const inputCls = "rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white";
+
+// الصرف من العهدة اتصرف على إيه — وكل اختيار بيتسجل في مكانه.
+const TARGETS: { value: CustodyTarget; label: string; hint: string }[] = [
+  { value: "general", label: "عام", hint: "بيتسجل في العهدة بس." },
+  { value: "equipment", label: "مصروف معدة", hint: "بيظهر في مصروفات المعدة (طريقة الدفع: عهدة) من غير ما يتخصم من الخزنة." },
+  { value: "supplier", label: "دفعة لمورد", hint: "بتقلل الفلوس اللي علينا للمورد ده، ومبتتخصمش من الخزنة." },
+  { value: "car", label: "العربية الملاكي", hint: "بتتسجل بنزين/زيت في صفحة العربية الملاكي." },
+  { value: "advance", label: "سلفة سواق", hint: "بتتكتب في شيت مرتب السواق إنه أخد سلفة (طريقة الدفع: عهدة)." },
+  { value: "salary", label: "مرتب سواق", hint: "بتتكتب في شيت مرتب السواق دفعة مرتب (طريقة الدفع: عهدة)." },
+];
+
+function entryTarget(e: CustodyStatement["entries"][number]): string {
+  switch (e.target) {
+    case "supplier":
+      return `المورد ${e.supplier_name ?? ""}`;
+    case "car":
+      return `العربية الملاكي${e.car_kind ? ` — ${e.car_kind}` : ""}`;
+    case "advance":
+      return `سلفة ${e.employee_name ?? ""}`;
+    case "salary":
+      return `مرتب ${e.employee_name ?? ""}`;
+    case "equipment":
+      return e.equipment_name ?? "معدة";
+    default:
+      return e.equipment_name ?? "عام";
+  }
+}
 
 function ProgressBar({ c }: { c: CustodyRow }) {
   const pct = c.given > 0 ? Math.max(0, Math.min(100, (c.remaining / c.given) * 100)) : 0;
@@ -30,12 +57,16 @@ function CustodyPanel({
   id,
   equipment,
   categories,
+  suppliers,
+  employees,
   onChanged,
   onNotice,
 }: {
   id: number;
   equipment: Equipment[];
   categories: ExpenseCategory[];
+  suppliers: string[];
+  employees: Driver[];
   onChanged: () => void;
   onNotice: (n: { ok: boolean; low?: boolean; text: string }) => void;
 }) {
@@ -43,8 +74,13 @@ function CustodyPanel({
   const [date, setDate] = useState(todayISO());
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [target, setTarget] = useState<CustodyTarget>("general");
   const [equipmentId, setEquipmentId] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [supplierName, setSupplierName] = useState("");
+  const [carKind, setCarKind] = useState("بنزين");
+  const [employeeId, setEmployeeId] = useState("");
+  const [salaryMonth, setSalaryMonth] = useState(todayISO().slice(0, 7));
   const [moveType, setMoveType] = useState<"topup" | "return">("topup");
   const [moveAmount, setMoveAmount] = useState("");
   const [moveMethod, setMoveMethod] = useState("cash");
@@ -61,7 +97,8 @@ function CustodyPanel({
 
   async function addExpense(e: FormEvent) {
     e.preventDefault();
-    if (!amount || !description.trim()) return;
+    if (!amount) return;
+    if ((target === "general" || target === "equipment") && !description.trim()) return;
     try {
       const c = await custodyApi.addEntry({
         custody_id: id,
@@ -69,8 +106,13 @@ function CustodyPanel({
         type: "expense",
         amount: Number(amount),
         description,
-        equipment_id: equipmentId ? Number(equipmentId) : null,
-        category_id: categoryId ? Number(categoryId) : null,
+        target,
+        equipment_id: target === "equipment" && equipmentId ? Number(equipmentId) : null,
+        category_id: target === "equipment" && categoryId ? Number(categoryId) : null,
+        supplier_name: target === "supplier" ? supplierName : null,
+        car_kind: target === "car" ? carKind : null,
+        employee_id: (target === "advance" || target === "salary") && employeeId ? Number(employeeId) : null,
+        salary_month: target === "advance" || target === "salary" ? salaryMonth : null,
       });
       setAmount("");
       setDescription("");
@@ -212,10 +254,10 @@ function CustodyPanel({
               <tr key={e.id} className="border-b border-slate-50 last:border-0">
                 <td className="py-1.5 text-slate-500 whitespace-nowrap">{e.date}</td>
                 <td className="py-1.5 text-slate-600">
-                  {e.type === "expense" ? e.description ?? "مصروف" : e.type === "topup" ? `زيادة على العهدة (${paymentMethodLabel(e.method)})` : `رجوع للخزنة (${paymentMethodLabel(e.method)})`}
+                  {e.type === "expense" ? e.description ?? TARGETS.find((t) => t.value === e.target)?.label ?? "مصروف" : e.type === "topup" ? `زيادة على العهدة (${paymentMethodLabel(e.method)})` : `رجوع للخزنة (${paymentMethodLabel(e.method)})`}
                   {e.category_name && <span className="text-xs text-slate-400"> — {e.category_name}</span>}
                 </td>
-                <td className="py-1.5 text-slate-500">{e.type === "expense" ? e.equipment_name ?? "عام" : "—"}</td>
+                <td className="py-1.5 text-slate-500">{e.type === "expense" ? entryTarget(e) : "—"}</td>
                 <td className={`py-1.5 font-semibold ${e.type === "topup" ? "text-primary-dark" : "text-rose-600"}`}>
                   {e.type === "topup" ? "+" : "−"} {formatEGP(e.amount)}
                 </td>
@@ -236,6 +278,13 @@ function CustodyPanel({
           <div>
             <div className="text-xs font-bold text-slate-500 mb-1.5">صرف من العهدة (مش من الخزنة)</div>
             <form onSubmit={addExpense} className="flex flex-wrap items-end gap-2">
+              <select value={target} onChange={(e) => setTarget(e.target.value as CustodyTarget)} className={`${inputCls} font-semibold`}>
+                {TARGETS.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
               <input
                 type="number"
@@ -246,30 +295,79 @@ function CustodyPanel({
                 onChange={(e) => setAmount(e.target.value)}
                 className={`${inputCls} w-28`}
               />
-              <input placeholder="اتصرف في إيه؟" value={description} onChange={(e) => setDescription(e.target.value)} className={`${inputCls} min-w-[180px]`} />
-              <select value={equipmentId} onChange={(e) => setEquipmentId(e.target.value)} className={inputCls}>
-                <option value="">عام (مش على معدة)</option>
-                {equipment.map((eq) => (
-                  <option key={eq.id} value={eq.id}>
-                    على {eq.name}
-                  </option>
-                ))}
-              </select>
-              {equipmentId && (
-                <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputCls}>
-                  <option value="">نوع المصروف</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
+              {target === "equipment" && (
+                <>
+                  <select value={equipmentId} onChange={(e) => setEquipmentId(e.target.value)} className={inputCls}>
+                    <option value="">أنهي معدة؟</option>
+                    {equipment.map((eq) => (
+                      <option key={eq.id} value={eq.id}>
+                        {eq.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputCls}>
+                    <option value="">نوع المصروف</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+              {target === "supplier" && (
+                <>
+                  <input list="custody-suppliers" placeholder="اسم المورد" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} className={inputCls} />
+                  <datalist id="custody-suppliers">
+                    {suppliers.map((n) => (
+                      <option key={n} value={n} />
+                    ))}
+                  </datalist>
+                </>
+              )}
+              {target === "car" && (
+                <select value={carKind} onChange={(e) => setCarKind(e.target.value)} className={inputCls}>
+                  {["بنزين", "زيت", "صيانة", "غسيل", "أخرى"].map((k) => (
+                    <option key={k}>{k}</option>
                   ))}
                 </select>
               )}
-              <button type="submit" className="bg-rose-600 text-white rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-rose-700">
+              {(target === "advance" || target === "salary") && (
+                <>
+                  <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className={inputCls}>
+                    <option value="">أنهي سواق؟</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="flex items-center gap-1 text-xs text-slate-500">
+                    عن شهر
+                    <input type="month" value={salaryMonth} onChange={(e) => setSalaryMonth(e.target.value)} className={inputCls} />
+                  </label>
+                </>
+              )}
+              <input
+                placeholder={target === "general" || target === "equipment" ? "اتصرف في إيه؟" : "ملاحظة (اختياري)"}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className={`${inputCls} min-w-[160px]`}
+              />
+              <button
+                type="submit"
+                disabled={
+                  !amount ||
+                  (target === "equipment" && !equipmentId) ||
+                  (target === "supplier" && !supplierName.trim()) ||
+                  ((target === "advance" || target === "salary") && !employeeId)
+                }
+                className="bg-rose-600 text-white rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-rose-700 disabled:opacity-50"
+              >
                 سجّل الصرف
               </button>
             </form>
-            {equipmentId && <p className="text-[11px] text-slate-400 mt-1">هيظهر كمان في مصروفات المعدة (طريقة الدفع: عهدة) من غير ما يتخصم من الخزنة تاني.</p>}
+            <p className="text-[11px] text-slate-400 mt-1">{TARGETS.find((t) => t.value === target)?.hint}</p>
           </div>
           <div>
             <div className="text-xs font-bold text-slate-500 mb-1.5">زيادة على العهدة / رجوع الباقي للخزنة</div>
@@ -313,6 +411,8 @@ export default function Custody() {
   const [openId, setOpenId] = useState<number | null>(null);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [suppliers, setSuppliers] = useState<string[]>([]);
+  const [employees, setEmployees] = useState<Driver[]>([]);
   const [holder, setHolder] = useState("");
   const [date, setDate] = useState(todayISO());
   const [amount, setAmount] = useState("");
@@ -326,6 +426,8 @@ export default function Custody() {
     refresh();
     equipmentApi.list().then(setEquipment);
     expenseCategoriesApi.list().then(setCategories);
+    suppliersApi.names().then(setSuppliers);
+    employeesApi.list().then(setEmployees);
   }, []);
 
   async function create(e: FormEvent) {
@@ -476,7 +578,12 @@ export default function Custody() {
             id={open.id}
             equipment={equipment}
             categories={categories}
-            onChanged={refresh}
+            suppliers={suppliers}
+            employees={employees}
+            onChanged={() => {
+              refresh();
+              suppliersApi.names().then(setSuppliers);
+            }}
             onNotice={(n) => {
               setNotice(n);
               window.scrollTo({ top: 0, behavior: "smooth" });

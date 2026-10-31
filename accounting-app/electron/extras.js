@@ -118,10 +118,21 @@ function registerExtraHandlers(db) {
     return { ok: true };
   });
   ipcMain.handle("custodies:delete", (_e, { id }) => {
-    // المصروفات اللي اتسجلت على المعدات من العهدة دي بتتمسح معاها.
+    // كل اللي اتسجل من العهدة دي (مصروفات معدات، دفعات موردين، بنزين، سلف
+    // ومرتبات) بيتمسح معاها.
     const tx = db.transaction(() => {
-      const ids = db.prepare("SELECT expense_id FROM custody_entries WHERE custody_id = ? AND expense_id IS NOT NULL").all(id);
-      for (const r of ids) db.prepare("DELETE FROM monthly_expenses WHERE id = ?").run(r.expense_id);
+      const linked = [
+        ["expense_id", "monthly_expenses"],
+        ["supplier_payment_id", "supplier_payments"],
+        ["car_fuel_id", "car_fuel"],
+        ["advance_id", "employee_advances"],
+        ["salary_payment_id", "salary_payments"],
+      ];
+      for (const [col, table] of linked) {
+        for (const r of db.prepare(`SELECT ${col} AS v FROM custody_entries WHERE custody_id = ? AND ${col} IS NOT NULL`).all(id)) {
+          db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(r.v);
+        }
+      }
       db.prepare("DELETE FROM custodies WHERE id = ?").run(id);
     });
     tx();
@@ -133,10 +144,20 @@ function registerExtraHandlers(db) {
     let balance = c.amount;
     const entries = db
       .prepare(
-        `SELECT ce.*, e.name AS equipment_name, ec.name AS category_name FROM custody_entries ce
+        `SELECT ce.*, e.name AS equipment_name, ec.name AS category_name,
+                s.name AS supplier_name, cf.kind AS car_kind,
+                COALESCE(ea_emp.name, sp_emp.name) AS employee_name
+         FROM custody_entries ce
          LEFT JOIN monthly_expenses me ON me.id = ce.expense_id
          LEFT JOIN equipment e ON e.id = me.equipment_id
          LEFT JOIN expense_categories ec ON ec.id = me.category_id
+         LEFT JOIN supplier_payments spp ON spp.id = ce.supplier_payment_id
+         LEFT JOIN suppliers s ON s.id = spp.supplier_id
+         LEFT JOIN car_fuel cf ON cf.id = ce.car_fuel_id
+         LEFT JOIN employee_advances ea ON ea.id = ce.advance_id
+         LEFT JOIN employees ea_emp ON ea_emp.id = ea.employee_id
+         LEFT JOIN salary_payments sal ON sal.id = ce.salary_payment_id
+         LEFT JOIN employees sp_emp ON sp_emp.id = sal.employee_id
          WHERE ce.custody_id = ? ORDER BY ce.date, ce.id`
       )
       .all(id)
@@ -146,41 +167,110 @@ function registerExtraHandlers(db) {
       });
     return { ...c, entries };
   });
-  ipcMain.handle("custodyEntries:create", (_e, { custody_id, date, type, amount, description, method, equipment_id, category_id }) => {
-    const custody = custodyBalances(db).find((c) => c.id === custody_id);
-    if (!custody) throw new Error("العهدة مش موجودة");
-    if (!["expense", "topup", "return"].includes(type)) throw new Error("نوع الحركة غلط");
-    const value = Number(amount);
-    if (!(value > 0)) throw new Error("لازم مبلغ");
-    if (type !== "topup" && value > custody.remaining + 0.005) {
-      throw new Error(`المبلغ أكبر من الباقي في العهدة (${Math.round(custody.remaining).toLocaleString("en-US")} ج.م)`);
-    }
-    const tx = db.transaction(() => {
-      let expenseId = null;
-      if (type === "expense" && equipment_id) {
-        // مصروف على معدة: بيظهر في مصروفات المعدة وأرباحها، وطريقة دفعه
-        // "عهدة" فمبيتخصمش من الخزنة تاني.
-        expenseId = db
-          .prepare(
-            `INSERT INTO monthly_expenses (equipment_id, month, date, category_id, amount, payment_method, note, payee)
-             VALUES (?, ?, ?, ?, ?, 'custody', ?, ?)`
-          )
-          .run(equipment_id, date.slice(0, 7), date, category_id || null, value, description?.trim() || null, `عهدة ${custody.holder}`).lastInsertRowid;
+  // الصرف من العهدة بيتسجل في مكانه حسب هو اتصرف على إيه — وطريقة الدفع
+  // "عهدة" فمبيتخصمش من الخزنة تاني:
+  //  equipment: مصروف على المعدة | supplier: دفعة للمورد (بتقلل اللي علينا له)
+  //  car: بنزين/زيت للعربية الملاكي | advance: سلفة سواق | salary: دفعة مرتب سواق
+  ipcMain.handle(
+    "custodyEntries:create",
+    (_e, { custody_id, date, type, amount, description, method, target, equipment_id, category_id, supplier_name, car_kind, employee_id, salary_month }) => {
+      const custody = custodyBalances(db).find((c) => c.id === custody_id);
+      if (!custody) throw new Error("العهدة مش موجودة");
+      if (!["expense", "topup", "return"].includes(type)) throw new Error("نوع الحركة غلط");
+      const value = Number(amount);
+      if (!(value > 0)) throw new Error("لازم مبلغ");
+      if (type !== "topup" && value > custody.remaining + 0.005) {
+        throw new Error(`المبلغ أكبر من الباقي في العهدة (${Math.round(custody.remaining).toLocaleString("en-US")} ج.م)`);
       }
-      db.prepare(
-        "INSERT INTO custody_entries (custody_id, date, type, amount, description, method, expense_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
-      ).run(custody_id, date, type, value, description?.trim() || null, type === "expense" ? null : method || custody.method, expenseId);
-    });
-    tx();
-    return custodyBalances(db).find((c) => c.id === custody_id);
-  });
+      // متوافق مع النسخة القديمة: لو مفيش target ومعاه معدة يبقى على معدة.
+      const kind = type !== "expense" ? null : target || (equipment_id ? "equipment" : "general");
+      const note = description?.trim() || null;
+      const from = `عهدة ${custody.holder}`;
+      const links = { expense_id: null, supplier_payment_id: null, car_fuel_id: null, advance_id: null, salary_payment_id: null };
+      const tx = db.transaction(() => {
+        if (kind === "equipment") {
+          if (!equipment_id) throw new Error("اختار المعدة");
+          links.expense_id = db
+            .prepare(
+              `INSERT INTO monthly_expenses (equipment_id, month, date, category_id, amount, payment_method, note, payee)
+               VALUES (?, ?, ?, ?, ?, 'custody', ?, ?)`
+            )
+            .run(equipment_id, date.slice(0, 7), date, category_id || null, value, note, from).lastInsertRowid;
+        } else if (kind === "supplier") {
+          const name = (supplier_name ?? "").trim();
+          if (!name) throw new Error("اختار المورد");
+          let supplier = db.prepare("SELECT * FROM suppliers WHERE name = ?").get(name);
+          if (!supplier) supplier = { id: db.prepare("INSERT INTO suppliers (name) VALUES (?)").run(name).lastInsertRowid };
+          links.supplier_payment_id = db
+            .prepare("INSERT INTO supplier_payments (supplier_id, date, amount, method, note) VALUES (?, ?, ?, 'custody', ?)")
+            .run(supplier.id, date, value, note ? `${note} — ${from}` : from).lastInsertRowid;
+        } else if (kind === "car") {
+          carCategoryId(db, true);
+          links.car_fuel_id = db
+            .prepare("INSERT INTO car_fuel (date, kind, amount, note) VALUES (?, ?, ?, ?)")
+            .run(date, (car_kind ?? "").trim() || "بنزين", value, note ? `${note} — ${from}` : from).lastInsertRowid;
+        } else if (kind === "advance" || kind === "salary") {
+          if (!employee_id) throw new Error("اختار السواق");
+          const month = salary_month || date.slice(0, 7);
+          const table = kind === "advance" ? "employee_advances" : "salary_payments";
+          const id = db
+            .prepare(`INSERT INTO ${table} (employee_id, month, date, amount, payment_method, note) VALUES (?, ?, ?, ?, 'custody', ?)`)
+            .run(employee_id, month, date, value, note ? `${note} — ${from}` : from).lastInsertRowid;
+          if (kind === "advance") links.advance_id = id;
+          else links.salary_payment_id = id;
+        }
+        db.prepare(
+          `INSERT INTO custody_entries (custody_id, date, type, amount, description, method, target, expense_id, supplier_payment_id, car_fuel_id, advance_id, salary_payment_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          custody_id,
+          date,
+          type,
+          value,
+          note,
+          type === "expense" ? null : method || custody.method,
+          kind,
+          links.expense_id,
+          links.supplier_payment_id,
+          links.car_fuel_id,
+          links.advance_id,
+          links.salary_payment_id
+        );
+      });
+      tx();
+      return custodyBalances(db).find((c) => c.id === custody_id);
+    }
+  );
   ipcMain.handle("custodyEntries:delete", (_e, { id }) => {
     const entry = db.prepare("SELECT * FROM custody_entries WHERE id = ?").get(id);
     const tx = db.transaction(() => {
+      // الحاجة اللي اتسجلت من الصرف ده (مصروف/دفعة مورد/بنزين/سلفة/مرتب) بتتمسح معاه.
       if (entry?.expense_id) db.prepare("DELETE FROM monthly_expenses WHERE id = ?").run(entry.expense_id);
+      if (entry?.supplier_payment_id) db.prepare("DELETE FROM supplier_payments WHERE id = ?").run(entry.supplier_payment_id);
+      if (entry?.car_fuel_id) db.prepare("DELETE FROM car_fuel WHERE id = ?").run(entry.car_fuel_id);
+      if (entry?.advance_id) db.prepare("DELETE FROM employee_advances WHERE id = ?").run(entry.advance_id);
+      if (entry?.salary_payment_id) db.prepare("DELETE FROM salary_payments WHERE id = ?").run(entry.salary_payment_id);
       db.prepare("DELETE FROM custody_entries WHERE id = ?").run(id);
     });
     tx();
+    return { ok: true };
+  });
+
+  // ===== السركي الورقي (صور) =====
+  ipcMain.handle("paperSheets:list", (_e, { equipment_id, month }) =>
+    db.prepare("SELECT * FROM equipment_paper_sheets WHERE equipment_id = ? AND month = ? ORDER BY id").all(equipment_id, month)
+  );
+  ipcMain.handle("paperSheets:create", (_e, { equipment_id, month, image, note }) => {
+    if (!image) throw new Error("مفيش صورة");
+    db.prepare("INSERT INTO equipment_paper_sheets (equipment_id, month, image, note) VALUES (?, ?, ?, ?)").run(equipment_id, month, image, note?.trim() || null);
+    return { ok: true };
+  });
+  ipcMain.handle("paperSheets:replace", (_e, { id, image }) => {
+    db.prepare("UPDATE equipment_paper_sheets SET image = ? WHERE id = ?").run(image, id);
+    return { ok: true };
+  });
+  ipcMain.handle("paperSheets:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM equipment_paper_sheets WHERE id = ?").run(id);
     return { ok: true };
   });
 

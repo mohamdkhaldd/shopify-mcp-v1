@@ -448,6 +448,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
   if (channel === "sync:activity") return { rows: [], pending: [], devices: [] };
   // فلوس علينا لجهات تانية — مش متاحة في نسخة المعاينة.
   if (channel === "creditors:list") return [];
+  if (channel === "paperSheets:list") return [];
   if (channel === "custodies:list" || channel === "obligations:list" || channel === "alerts:dashboard" || channel === "hassanAttendance:list") return [];
   if (channel === "car:summary")
     return { month: payload?.month, fuel: [], trips: [], byEquipment: [], fuelTotal: 0, tripsTotal: 0, personal: 0, over: 0, categoryId: null, yearPersonal: 0 };

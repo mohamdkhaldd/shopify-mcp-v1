@@ -2653,6 +2653,7 @@ function registerIpcHandlers(db) {
       db.prepare("DELETE FROM supplier_payments").run();
       db.prepare("DELETE FROM creditor_entries").run();
       db.prepare("DELETE FROM custodies").run();
+      db.prepare("DELETE FROM equipment_paper_sheets").run();
       db.prepare("DELETE FROM car_fuel").run();
       db.prepare("DELETE FROM obligations").run();
       db.prepare("DELETE FROM hassan_worker_attendance").run();

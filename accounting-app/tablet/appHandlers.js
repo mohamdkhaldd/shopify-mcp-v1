@@ -132,6 +132,16 @@ export function tabletAppHandlers(emit = () => {}) {
       }
       return { ok: true };
     },
+    // ملف متعدد الصفحات جاهز بمقاس A4 — بيتطبع زي ما هو (من شاشة الطباعة
+    // تختار "حفظ PDF" أو طابعة).
+    "print:savePdf": async (_e, { fileName } = {}) => {
+      try {
+        await Printer.print({ name: fileName || document.title || "البنيان" });
+      } catch {
+        window.print();
+      }
+      return { saved: true };
+    },
     "print:preview": async () => {
       const cleanup = fitPrintToOnePage();
       try {

@@ -1,5 +1,7 @@
 import { mockInvoke } from "./mockDb";
 import {
+  PaperSheet,
+  CustodyTarget,
   AttendanceRow,
   AttendanceStatus,
   CarSummary,
@@ -131,6 +133,7 @@ const ENTITY_LABELS: Record<string, string> = {
   supplierPayments: "دفعة لمورد",
   waste: "هالك",
   custodies: "عهدة",
+  paperSheets: "صورة السركي الورقي",
   custodyEntries: "حركة في عهدة",
   carFuel: "بنزين / زيت العربية",
   obligations: "ميعاد التزام",
@@ -360,6 +363,22 @@ export const syncApi = {
     window.api?.on ? window.api.on("sync:remoteChanges", callback) : () => {},
 };
 
+export const printApi = {
+  // يطبع/يحفظ الصفحة الحالية PDF بصفحاتها زي ما هي (من غير تصغير لورقة واحدة).
+  savePdf: async (fileName: string): Promise<{ saved: boolean; filePath?: string }> => {
+    if (window.api) return window.api.invoke("print:savePdf", { fileName });
+    window.print();
+    return { saved: true };
+  },
+};
+
+export const paperSheetsApi = {
+  list: (equipment_id: number, month: string): Promise<PaperSheet[]> => invoke("paperSheets:list", { equipment_id, month }),
+  create: (s: { equipment_id: number; month: string; image: string; note: string | null }) => invoke("paperSheets:create", s),
+  replace: (id: number, image: string) => invoke("paperSheets:replace", { id, image }),
+  remove: (id: number) => invoke("paperSheets:delete", { id }),
+};
+
 export const appApi = {
   getVersion: (): Promise<string> => invoke("app:getVersion"),
   checkForUpdate: (): Promise<AppUpdateStatus> => invoke("app:checkForUpdate"),
@@ -547,8 +566,13 @@ export const custodyApi = {
     amount: number;
     description: string | null;
     method?: string | null;
+    target?: CustodyTarget;
     equipment_id?: number | null;
     category_id?: number | null;
+    supplier_name?: string | null;
+    car_kind?: string | null;
+    employee_id?: number | null;
+    salary_month?: string | null;
   }): Promise<Custody> => invoke("custodyEntries:create", e),
   removeEntry: (id: number) => invoke("custodyEntries:delete", { id }),
 };
