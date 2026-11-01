@@ -31,7 +31,7 @@ body {
   page: pkg;
   box-sizing: border-box;
   width: 210mm;
-  height: 296mm;
+  height: 295mm;
   padding: 10mm;
   overflow: hidden;
   margin-left: auto;
@@ -45,6 +45,14 @@ body {
   }
   html.pkg-printing body > *:not(.pkg-overlay) {
     display: none !important;
+  }
+  html.pkg-printing,
+  html.pkg-printing body {
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
   }
   html.pkg-printing .pkg-overlay {
     position: static !important;

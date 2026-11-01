@@ -156,7 +156,15 @@ export default function PartnerPackage({ equipment, month, onClose }: { equipmen
     const html = document.documentElement;
     html.style.setProperty("--pkg-root-font", getComputedStyle(html).fontSize);
     html.classList.add("pkg-printing");
-    return () => html.classList.remove("pkg-printing");
+    // وقت الملف ده بس: كل الصفحات A4 من غير هوامش — فالمتصفح (نسخة الويب)
+    // ملوش مكان يكتب فيه اللينك والتاريخ فوق وتحت، ومفيش ورقة زيادة.
+    const pageStyle = document.createElement("style");
+    pageStyle.textContent = "@page { size: A4; margin: 0; }";
+    document.head.appendChild(pageStyle);
+    return () => {
+      html.classList.remove("pkg-printing");
+      pageStyle.remove();
+    };
   }, []);
 
   async function save() {
