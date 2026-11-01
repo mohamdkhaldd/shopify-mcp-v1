@@ -147,6 +147,32 @@ function driverWageForLog(db, log, cache) {
   return computeDriverWageValue(log, info.rate);
 }
 
+// حافز السواق بيتحط مصروف على المعدة اللي اشتغل عليها في شهر الحافز — ولو
+// اشتغل الشهر ده على أكتر من معدة بيتقسم على أيام شغله على كل واحدة.
+function driverBonusShares(db, equipmentId, month) {
+  const bonuses = db
+    .prepare(
+      `SELECT b.amount, COALESCE(NULLIF(b.month, ''), substr(b.date, 1, 7)) AS month, e.name
+       FROM employee_bonuses b JOIN employees e ON e.id = b.employee_id
+       ${month ? "WHERE COALESCE(NULLIF(b.month, ''), substr(b.date, 1, 7)) = ?" : ""}`
+    )
+    .all(...(month ? [month] : []));
+  const daysStmt = db.prepare(
+    `SELECT equipment_id, COUNT(*) AS c FROM daily_logs
+     WHERE role = 'driver' AND person_name = ? AND date LIKE ? AND NOT (is_day_off = 1 AND is_paid_leave = 0)
+     GROUP BY equipment_id`
+  );
+  const byName = new Map();
+  for (const b of bonuses) {
+    const rows = daysStmt.all(b.name, `${b.month}%`);
+    const total = rows.reduce((sum, r) => sum + r.c, 0);
+    const mine = rows.find((r) => r.equipment_id === equipmentId)?.c ?? 0;
+    if (!total || !mine) continue;
+    byName.set(b.name, (byName.get(b.name) ?? 0) + (b.amount * mine) / total);
+  }
+  return [...byName.entries()].map(([name, amount]) => ({ name, amount }));
+}
+
 function driverSalaryForEquipment(db, equipmentId, month) {
   const logs = month
     ? db
@@ -154,7 +180,8 @@ function driverSalaryForEquipment(db, equipmentId, month) {
         .all(equipmentId, `${month}%`)
     : db.prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = 'driver'").all(equipmentId);
   const cache = new Map();
-  return logs.reduce((sum, l) => sum + driverWageForLog(db, l, cache), 0);
+  const wages = logs.reduce((sum, l) => sum + driverWageForLog(db, l, cache), 0);
+  return wages + driverBonusShares(db, equipmentId, month).reduce((sum, b) => sum + b.amount, 0);
 }
 
 // نفس حساب مرتب السائق بس مقسّم بالاسم — لو أكتر من سواق شغلوا على نفس
@@ -170,7 +197,9 @@ function driverSalaryBreakdownForEquipment(db, equipmentId, month) {
     const amount = driverWageForLog(db, l, cache);
     if (amount > 0) byDriver.set(l.person_name, (byDriver.get(l.person_name) ?? 0) + amount);
   }
-  return [...byDriver.entries()].map(([name, amount]) => ({ name, amount }));
+  const rows = [...byDriver.entries()].map(([name, amount]) => ({ name, amount }));
+  for (const b of driverBonusShares(db, equipmentId, month)) rows.push({ name: `${b.name} — حافز`, amount: b.amount });
+  return rows;
 }
 
 // صافي ربح معدة واحدة في شهر واحد — دخل السركي + السركي سوق ناقص المصروفات

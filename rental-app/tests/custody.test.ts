@@ -92,3 +92,30 @@ describe("own funds (المكنيكي والسكن)", () => {
     expect(call("hassan:treasuryBalance", { month: "2026-10" }).monthCommission).toBe(2500);
   });
 });
+
+describe("driver bonus", () => {
+  it("is an expense on the equipment he worked on, split by his days", () => {
+    const db = setupOperationsDatabase(new Database(":memory:"));
+    registerIpcHandlers(db);
+    db.prepare("INSERT INTO employees (name, wage_type, rate, fixed_salary) VALUES ('محمود', 'daily', 500, 0)").run();
+    const emp = db.prepare("SELECT id FROM employees").get() as { id: number };
+    const a = call("equipment:create", { name: "لودر", purchase_price: 0, shares: [] });
+    const b = call("equipment:create", { name: "كرين", purchase_price: 0, shares: [] });
+    const day = (equipment_id: number, d: number) =>
+      call("dailyLogs:upsert", {
+        equipment_id, date: `2026-10-${String(d).padStart(2, "0")}`, role: "driver", shift_label: "", person_name: "محمود",
+        actual_hours: 8, base_hours: 8, day_rate: 2500, is_paid_leave: false, is_day_off: false, fixed_value: null,
+        hassan_commission: null, note: null, site_name: null, overtime_rate: null,
+      });
+    for (let d = 1; d <= 10; d++) day(a.id, d);
+    for (let d = 11; d <= 15; d++) day(b.id, d);
+    const before = call("equipment:summary", { equipment_id: a.id, month: "2026-10" }).driverSalaryExpense;
+    call("employeeBonuses:create", { employee_id: emp.id, month: "2026-10", date: "2026-10-30", amount: 1500, payment_method: "cash", note: "شغل كويس" });
+
+    const sa = call("equipment:summary", { equipment_id: a.id, month: "2026-10" });
+    const sb = call("equipment:summary", { equipment_id: b.id, month: "2026-10" });
+    expect(sa.driverSalaryExpense - before).toBe(1000);
+    expect(sa.driverSalaryBreakdown).toContainEqual({ name: "محمود — حافز", amount: 1000 });
+    expect(sb.driverSalaryBreakdown).toContainEqual({ name: "محمود — حافز", amount: 500 });
+  });
+});
