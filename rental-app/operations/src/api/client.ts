@@ -1,5 +1,7 @@
 import { mockInvoke } from "./mockDb";
 import {
+  FundDetail,
+  FundSummary,
   PaperSheet,
   CustodyTarget,
   AttendanceRow,
@@ -137,6 +139,7 @@ const entityLabels = (): Record<string, string> => ({
   waste: "هالك",
   custodies: "عهدة",
   paperSheets: "صورة السركي الورقي",
+  fundExpenses: "صرف من خزنة",
   custodyEntries: "حركة في عهدة",
   carFuel: "بنزين / زيت العربية",
   obligations: "ميعاد التزام",
@@ -248,10 +251,10 @@ export const contractorsApi = {
 
 export const expenseCategoriesApi = {
   list: (): Promise<ExpenseCategory[]> => invoke("expenseCategories:list"),
-  create: (name: string, counts_as_commission = false): Promise<ExpenseCategory> =>
-    invoke("expenseCategories:create", { name, counts_as_commission }),
-  update: (id: number, name: string, counts_as_commission: boolean): Promise<ExpenseCategory> =>
-    invoke("expenseCategories:update", { id, name, counts_as_commission }),
+  create: (name: string, counts_as_commission = false, own_fund = false): Promise<ExpenseCategory> =>
+    invoke("expenseCategories:create", { name, counts_as_commission, own_fund }),
+  update: (id: number, name: string, counts_as_commission: boolean, own_fund = false): Promise<ExpenseCategory> =>
+    invoke("expenseCategories:update", { id, name, counts_as_commission, own_fund }),
   remove: (id: number): Promise<void> => invoke("expenseCategories:delete", { id }),
 };
 
@@ -608,4 +611,11 @@ export const alertsApi = {
 export const attendanceApi = {
   list: (worker_id: number, month: string): Promise<AttendanceRow[]> => invoke("hassanAttendance:list", { worker_id, month }),
   set: (worker_id: number, date: string, status: AttendanceStatus | null) => invoke("hassanAttendance:set", { worker_id, date, status }),
+};
+
+export const fundsApi = {
+  list: (month: string): Promise<FundSummary[]> => invoke("funds:list", { month }),
+  detail: (category_id: number, month: string): Promise<FundDetail> => invoke("funds:detail", { category_id, month }),
+  addExpense: (e: { category_id: number; date: string; amount: number; description: string | null }) => invoke("fundExpenses:create", e),
+  removeExpense: (id: number) => invoke("fundExpenses:delete", { id }),
 };

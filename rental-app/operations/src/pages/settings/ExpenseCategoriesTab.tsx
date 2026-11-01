@@ -28,8 +28,9 @@ export default function ExpenseCategoriesTab() {
     await refresh();
   }
 
-  async function handleToggleCommission(item: ExpenseCategory) {
-    await expenseCategoriesApi.update(item.id, item.name, !item.counts_as_commission);
+  // عادي / بيتحسب في الكوميشن / خزنة لوحدها (المكنيكي والسكن).
+  async function handleMode(item: ExpenseCategory, mode: string) {
+    await expenseCategoriesApi.update(item.id, item.name, mode === "commission", mode === "fund");
     await refresh();
   }
 
@@ -39,7 +40,7 @@ export default function ExpenseCategoriesTab() {
     await expenseCategoriesApi.remove(id);
     await refresh();
     pushUndo(`اتمسح نوع المصروف "${item.name}"`, async () => {
-      await expenseCategoriesApi.create(item.name, item.counts_as_commission);
+      await expenseCategoriesApi.create(item.name, item.counts_as_commission, !!item.own_fund);
       await refresh();
     });
   }
@@ -48,8 +49,8 @@ export default function ExpenseCategoriesTab() {
     <div className="bg-white rounded-card shadow-card p-5">
       <h2 className="font-bold text-slate-800 mb-1">أنواع المصروفات</h2>
       <p className="text-xs text-slate-400 mb-4">
-        علّم "يحسب في كوميشن {person()}" على أي نوع زي المكنيكي أو السكن — أي مصروف من النوع ده على أي معدة يتضاف تلقائيًا
-        لكوميشن {person()}، من غير ما تسجله مرتين.
+        "يتحسب في كوميشن {person()}": أي مصروف من النوع ده على أي معدة يتضاف لكوميشن {person()}. "خزنة لوحدها" (زي المكنيكي
+        والسكن): بيدخل خزنة باسم النوع ده في صفحة {person()} ← الخزن، مش في الكوميشن.
       </p>
 
       <form onSubmit={handleAdd} className="flex flex-wrap items-center gap-2 mb-5">
@@ -92,15 +93,15 @@ export default function ExpenseCategoriesTab() {
                 <span className="text-sm font-semibold text-slate-700">{item.name}</span>
               </div>
               <div className="flex items-center gap-4">
-                <label className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <input
-                    type="checkbox"
-                    checked={item.counts_as_commission}
-                    onChange={() => handleToggleCommission(item)}
-                    className="w-4 h-4 accent-primary"
-                  />
-                  كوميشن {person()}
-                </label>
+                <select
+                  value={item.own_fund ? "fund" : item.counts_as_commission ? "commission" : "normal"}
+                  onChange={(e) => handleMode(item, e.target.value)}
+                  className="rounded-lg border border-slate-200 px-2 py-1 text-xs bg-white"
+                >
+                  <option value="normal">مصروف عادي</option>
+                  <option value="commission">يتحسب في كوميشن {person()}</option>
+                  <option value="fund">خزنة لوحدها</option>
+                </select>
                 <button
                   onClick={() => handleDelete(item.id)}
                   className="text-xs text-rose-500 hover:text-rose-700 font-semibold"

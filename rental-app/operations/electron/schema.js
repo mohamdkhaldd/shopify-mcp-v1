@@ -260,6 +260,17 @@ CREATE TABLE IF NOT EXISTS creditor_entries (
 -- العهد: مبلغ بيتسلم لشخص (طالع من حساب في الخزنة)، وهو بيصرف منه — المصروف
 -- بيتخصم من العهدة مش من الخزنة. لو المصروف على معدة بيتسجل كمان في مصروفات
 -- المعدة (طريقة الدفع "عهدة") ومربوط بسطر العهدة.
+-- خزن لوحدها (المكنيكي، السكن...): نوع مصروف متعلّم "خزنة لوحدها" — كل
+-- مصروف منه على أي معدة بيدخل خزنته هو (مش كوميشن صاحب الكوميشن)، واللي
+-- بيتصرف منها بيتسجل هنا.
+CREATE TABLE IF NOT EXISTS fund_expenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category_id INTEGER NOT NULL REFERENCES expense_categories(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  amount REAL NOT NULL,
+  description TEXT
+);
+
 CREATE TABLE IF NOT EXISTS custodies (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   holder TEXT NOT NULL,
@@ -522,6 +533,15 @@ function setupDatabase(db, { seed = true } = {}) {
     .some((col) => col.name === "counts_as_commission");
   if (!expenseCategoriesHasCommissionFlag) {
     db.exec("ALTER TABLE expense_categories ADD COLUMN counts_as_commission INTEGER NOT NULL DEFAULT 0");
+  }
+
+  // "خزنة لوحدها": المكنيكي والسكن كانوا بيتحسبوا في الكوميشن — أول ما العمود
+  // يتضاف بيتنقلوا لخزنة لوحدهم (مرة واحدة بس؛ بعدها الاختيار من الإعدادات).
+  const categoryCols = db.prepare("PRAGMA table_info(expense_categories)").all().map((c) => c.name);
+  if (!categoryCols.includes("own_fund")) {
+    db.exec("ALTER TABLE expense_categories ADD COLUMN own_fund INTEGER NOT NULL DEFAULT 0");
+    db.exec(`UPDATE expense_categories SET own_fund = 1, counts_as_commission = 0
+             WHERE counts_as_commission = 1 AND (name LIKE '%مكنيكي%' OR name LIKE '%ميكانيكي%' OR name LIKE '%سكن%')`);
   }
 
   const monthlyExpensesColumns = db.prepare("PRAGMA table_info(monthly_expenses)").all();

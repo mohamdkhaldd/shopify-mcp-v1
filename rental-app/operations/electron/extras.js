@@ -276,6 +276,46 @@ function registerExtraHandlers(db, owed) {
     return { ok: true };
   });
 
+  // ===== خزن لوحدها (المكنيكي، السكن...) =====
+  // الداخل = كل مصروف من النوع ده على المعدات، والخارج = اللي اتصرف منها.
+  ipcMain.handle("funds:list", (_e, { month }) => {
+    const sum = (sql, ...args) => db.prepare(sql).get(...args).total;
+    return db
+      .prepare("SELECT id, name FROM expense_categories WHERE own_fund = 1 ORDER BY name")
+      .all()
+      .map((c) => {
+        const allIn = sum("SELECT COALESCE(SUM(amount), 0) AS total FROM monthly_expenses WHERE category_id = ?", c.id);
+        const monthIn = sum("SELECT COALESCE(SUM(amount), 0) AS total FROM monthly_expenses WHERE category_id = ? AND month = ?", c.id, month);
+        const allOut = sum("SELECT COALESCE(SUM(amount), 0) AS total FROM fund_expenses WHERE category_id = ?", c.id);
+        const monthOut = sum("SELECT COALESCE(SUM(amount), 0) AS total FROM fund_expenses WHERE category_id = ? AND date LIKE ?", c.id, `${month}%`);
+        return { category_id: c.id, name: c.name, monthIn, monthOut, allIn, allOut, balance: allIn - allOut };
+      });
+  });
+  ipcMain.handle("funds:detail", (_e, { category_id, month }) => ({
+    incoming: db
+      .prepare(
+        `SELECT me.id, COALESCE(me.date, me.month || '-01') AS date, me.amount, me.note, e.name AS equipment_name
+         FROM monthly_expenses me JOIN equipment e ON e.id = me.equipment_id
+         WHERE me.category_id = ? AND me.month = ? ORDER BY 2, me.id`
+      )
+      .all(category_id, month),
+    outgoing: db.prepare("SELECT * FROM fund_expenses WHERE category_id = ? AND date LIKE ? ORDER BY date, id").all(category_id, `${month}%`),
+  }));
+  ipcMain.handle("fundExpenses:create", (_e, { category_id, date, amount, description }) => {
+    if (!(Number(amount) > 0)) throw new Error("لازم مبلغ");
+    db.prepare("INSERT INTO fund_expenses (category_id, date, amount, description) VALUES (?, ?, ?, ?)").run(
+      category_id,
+      date,
+      Number(amount),
+      description?.trim() || null
+    );
+    return { ok: true };
+  });
+  ipcMain.handle("fundExpenses:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM fund_expenses WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
   // ===== السركي الورقي (صور) =====
   ipcMain.handle("paperSheets:list", (_e, { equipment_id, month }) =>
     db.prepare("SELECT * FROM equipment_paper_sheets WHERE equipment_id = ? AND month = ? ORDER BY id").all(equipment_id, month)

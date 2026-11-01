@@ -1,4 +1,5 @@
 import { Fragment, FormEvent, useEffect, useState } from "react";
+import FundsTab from "./hassan/FundsTab";
 import MonthPicker from "../components/equipment/MonthPicker";
 import PrintButton from "../components/PrintButton";
 import { PrintHeader, PrintSignoff } from "../components/PrintSignoff";
@@ -1316,12 +1317,14 @@ function WorkersTab({ month }: { month: string }) {
 
 export default function Hassan() {
   const [month, setMonth] = useState(currentMonthKey());
-  const [tab, setTab] = useState<"commission" | "treasury" | "expenses" | "workers" | "ledger">("commission");
+  const [tab, setTab] = useState<"commission" | "treasury" | "funds" | "expenses" | "workers" | "ledger">("commission");
   const printTitle =
     tab === "ledger"
       ? `حساب ${person()} الشخصي`
       : tab === "treasury"
         ? `خزنة ${person()}`
+        : tab === "funds"
+          ? "الخزن (المكنيكي والسكن)"
         : tab === "expenses"
           ? `مصاريف التشغيل — ${person()}`
         : tab === "workers"
@@ -1365,6 +1368,16 @@ export default function Hassan() {
           الخزنة
         </button>
         <button
+          onClick={() => setTab("funds")}
+          className={[
+            "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors",
+            tab === "funds" ? "bg-primary text-white shadow-sm" : "bg-white text-slate-600 hover:bg-primary-light hover:text-primary-dark shadow-card",
+          ].join(" ")}
+        >
+          <Icon name="custody" className="w-4 h-4" />
+          خزنة المكنيكي والسكن
+        </button>
+        <button
           onClick={() => setTab("expenses")}
           className={[
             "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors",
@@ -1398,6 +1411,7 @@ export default function Hassan() {
 
       {tab === "commission" && <CommissionTab month={month} />}
       {tab === "treasury" && <TreasuryTab month={month} />}
+      {tab === "funds" && <FundsTab month={month} />}
       {tab === "expenses" && <ExpensesTab month={month} />}
       {tab === "workers" && <WorkersTab month={month} />}
       {tab === "ledger" && <LedgerTab month={month} />}

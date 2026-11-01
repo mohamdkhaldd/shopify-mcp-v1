@@ -311,22 +311,27 @@ function registerIpcHandlers(db) {
   ipcMain.handle("expenseCategories:list", () =>
     db.prepare("SELECT * FROM expense_categories ORDER BY name").all()
   );
-  ipcMain.handle("expenseCategories:create", (_e, { name, counts_as_commission }) => {
+  // own_fund: "خزنة لوحدها" (المكنيكي، السكن) — مبيتحسبش في الكوميشن.
+  ipcMain.handle("expenseCategories:create", (_e, { name, counts_as_commission, own_fund }) => {
+    const fund = own_fund ? 1 : 0;
+    const commission = counts_as_commission && !fund ? 1 : 0;
     const info = db
-      .prepare("INSERT INTO expense_categories (name, counts_as_commission) VALUES (?, ?)")
-      .run(name.trim(), counts_as_commission ? 1 : 0);
-    const created = { id: info.lastInsertRowid, name: name.trim(), counts_as_commission: !!counts_as_commission };
+      .prepare("INSERT INTO expense_categories (name, counts_as_commission, own_fund) VALUES (?, ?, ?)")
+      .run(name.trim(), commission, fund);
+    const created = { id: info.lastInsertRowid, name: name.trim(), counts_as_commission: !!commission, own_fund: !!fund };
     pushToCloud("expense_categories", created.id, created);
     return created;
   });
   // بيسمح تحدد نوع مصروف زي "مكنيكي" أو "سكن" إن قيمته على كل معدة تتحسب
   // تلقائيًا ضمن كوميشن حسن — مفيش داعي تسجلها مرتين.
-  ipcMain.handle("expenseCategories:update", (_e, { id, name, counts_as_commission }) => {
+  ipcMain.handle("expenseCategories:update", (_e, { id, name, counts_as_commission, own_fund }) => {
     const existing = db.prepare("SELECT * FROM expense_categories WHERE id = ?").get(id);
     const trimmedName = name.trim();
-    db.prepare("UPDATE expense_categories SET name = ?, counts_as_commission = ? WHERE id = ?").run(
+    const fund = own_fund ? 1 : 0;
+    db.prepare("UPDATE expense_categories SET name = ?, counts_as_commission = ?, own_fund = ? WHERE id = ?").run(
       trimmedName,
-      counts_as_commission ? 1 : 0,
+      counts_as_commission && !fund ? 1 : 0,
+      fund,
       id
     );
     pushToCloud("expense_categories", id, { name: trimmedName, counts_as_commission: !!counts_as_commission, old_name: existing?.name });
@@ -2687,6 +2692,7 @@ function registerIpcHandlers(db) {
       db.prepare("DELETE FROM creditor_entries").run();
       db.prepare("DELETE FROM custodies").run();
       db.prepare("DELETE FROM equipment_paper_sheets").run();
+      db.prepare("DELETE FROM fund_expenses").run();
       db.prepare("DELETE FROM car_fuel").run();
       db.prepare("DELETE FROM obligations").run();
       db.prepare("DELETE FROM hassan_worker_attendance").run();

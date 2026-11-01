@@ -38,6 +38,23 @@ export interface ExpenseCategory {
   id: number;
   name: string;
   counts_as_commission: boolean;
+  // "خزنة لوحدها" (المكنيكي، السكن) — مبيتحسبش في الكوميشن.
+  own_fund?: boolean;
+}
+
+export interface FundSummary {
+  category_id: number;
+  name: string;
+  monthIn: number;
+  monthOut: number;
+  allIn: number;
+  allOut: number;
+  balance: number;
+}
+
+export interface FundDetail {
+  incoming: { id: number; date: string; amount: number; note: string | null; equipment_name: string }[];
+  outgoing: { id: number; category_id: number; date: string; amount: number; description: string | null }[];
 }
 
 export type DailyLogRole = "driver" | "contractor" | "market";

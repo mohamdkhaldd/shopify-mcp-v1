@@ -62,3 +62,33 @@ describe("paper timesheet photos", () => {
     expect(call("paperSheets:list", { equipment_id: eq.id, month: "2026-11" })).toHaveLength(0);
   });
 });
+
+describe("own funds (المكنيكي والسكن)", () => {
+  it("move out of the commission into their own fund, with their own spending", () => {
+    const db = setupOperationsDatabase(new Database(":memory:"));
+    registerIpcHandlers(db);
+    // an older database: the mechanic and housing used to count as commission
+    db.exec("ALTER TABLE expense_categories DROP COLUMN own_fund");
+    db.prepare("INSERT INTO expense_categories (name, counts_as_commission) VALUES ('مكنيكي', 1), ('سكن', 1), ('عمولة', 1), ('صيانة', 0)").run();
+    const eq = call("equipment:create", { name: "لودر", purchase_price: 0, shares: [] });
+    const cat = (n: string) => (db.prepare("SELECT id FROM expense_categories WHERE name = ?").get(n) as { id: number }).id;
+    for (const [n, amount] of [["مكنيكي", 3000], ["سكن", 2000], ["عمولة", 500]] as const) {
+      call("monthlyExpenses:create", { equipment_id: eq.id, month: "2026-10", date: "2026-10-05", category_id: cat(n), amount, payment_method: "cash", note: null, receipt_image: null, paid_amount: null, payee: null });
+    }
+    expect(call("hassan:treasuryBalance", { month: "2026-10" }).monthCommission).toBe(5500);
+
+    setupOperationsDatabase(db); // the update runs on the next start
+    expect(call("hassan:treasuryBalance", { month: "2026-10" }).monthCommission).toBe(500);
+    call("fundExpenses:create", { category_id: cat("مكنيكي"), date: "2026-10-20", amount: 1200, description: "قطعة" });
+    const funds = call("funds:list", { month: "2026-10" }) as any[];
+    expect(funds.map((f) => [f.name, f.monthIn, f.monthOut, f.balance])).toEqual([
+      ["سكن", 2000, 0, 2000],
+      ["مكنيكي", 3000, 1200, 1800],
+    ]);
+
+    // the choice stays the user's: back to commission from the settings
+    call("expenseCategories:update", { id: cat("سكن"), name: "سكن", counts_as_commission: true, own_fund: false });
+    setupOperationsDatabase(db);
+    expect(call("hassan:treasuryBalance", { month: "2026-10" }).monthCommission).toBe(2500);
+  });
+});

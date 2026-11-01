@@ -90,6 +90,8 @@ function describe(r: SyncActivityRow): string {
         : d.type === "topup"
           ? `زيادة على عهدة ${ref.custody_id ?? ""} ${money(d.amount)}`
           : `رجوع باقي عهدة ${ref.custody_id ?? ""} ${money(d.amount)}`;
+    case "fund_expenses":
+      return `صرف من خزنة ${ref.category_id ?? ""} ${money(d.amount)}${d.description ? ` — ${d.description}` : ""}`;
     case "equipment_paper_sheets":
       return `صورة السركي الورقي${eq} — شهر ${d.month ?? ""}`;
     case "car_fuel":
