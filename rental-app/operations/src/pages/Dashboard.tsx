@@ -143,7 +143,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (id: SectionId)
           value={monthDues ? formatEGP(monthDues.partnersRemaining) : "..."}
           icon="partners"
           tone="neutral"
-          sub="نصيبهم من ربح الشهر ده − اللي اتدفعلهم الشهر ده"
+          sub="نصيبهم من ربح الشهر ده اللي لسه متدفعش (الدفعات بتسدد الأقدم الأول)"
           onClick={() => openDrilldown("monthPartners")}
         />
         <KpiCard

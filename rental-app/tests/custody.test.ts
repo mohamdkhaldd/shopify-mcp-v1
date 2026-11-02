@@ -225,3 +225,23 @@ describe("money owed to the company (contractors)", () => {
     expect(call("dashboard:summary").totalReceivables).toBe(10000);
   });
 });
+
+describe("money owed to partners this month", () => {
+  it("payments settle the oldest profit first", () => {
+    const db = setupOperationsDatabase(new Database(":memory:"));
+    registerIpcHandlers(db);
+    call("partners:create", { name: "شريك", opening_balance: 0 });
+    const pid = (db.prepare("SELECT id FROM partners").get() as { id: number }).id;
+    const eq = call("equipment:create", { name: "لودر", purchase_price: 0, shares: [{ partner_id: pid, percentage: 100 }] });
+    const income = (date: string, value: number) =>
+      call("dailyLogs:upsert", {
+        equipment_id: eq.id, date, role: "market", shift_label: "", person_name: "", actual_hours: null, base_hours: null,
+        day_rate: null, is_paid_leave: false, is_day_off: false, fixed_value: value, hassan_commission: null, note: null, site_name: null, overtime_rate: null,
+      });
+    income("2026-10-10", 20000);
+    income("2026-11-10", 5000);
+    call("partnerPayments:create", { partner_id: pid, date: "2026-11-03", amount: 20000, method: "cash", note: "عن أكتوبر" });
+    expect(call("dashboard:monthDues", { month: "2026-11" }).partnersRemaining).toBe(5000);
+    expect(call("dashboard:monthDues", { month: "2026-10" }).partnersRemaining).toBe(0);
+  });
+});

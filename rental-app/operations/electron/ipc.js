@@ -2481,6 +2481,21 @@ function registerIpcHandlers(db) {
       })
       .filter((c) => c.due !== 0);
 
+    // ربح المعدة في الشهور اللي بعد الشهر ده (عشان نحسب الباقي لحد آخره).
+    const afterCache = new Map();
+    const equipmentProfitAfter = (equipmentId) => {
+      if (!afterCache.has(equipmentId)) {
+        const months = db
+          .prepare(
+            `SELECT DISTINCT substr(date, 1, 7) AS m FROM daily_logs WHERE equipment_id = ? AND substr(date, 1, 7) > ?
+             UNION SELECT DISTINCT month AS m FROM monthly_expenses WHERE equipment_id = ? AND month > ?`
+          )
+          .all(equipmentId, month, equipmentId, month)
+          .map((r) => r.m);
+        afterCache.set(equipmentId, months.reduce((sum, m) => sum + equipmentMonthNetProfit(db, equipmentId, m), 0));
+      }
+      return afterCache.get(equipmentId);
+    };
     const profitCache = new Map();
     const equipmentProfit = (equipmentId) => {
       if (!profitCache.has(equipmentId)) profitCache.set(equipmentId, equipmentMonthNetProfit(db, equipmentId, month));
@@ -2494,12 +2509,18 @@ function registerIpcHandlers(db) {
           .prepare("SELECT equipment_id, percentage FROM equipment_partner_shares WHERE partner_id = ?")
           .all(p.id);
         const due = shares.reduce((sum, sh) => sum + (equipmentProfit(sh.equipment_id) * sh.percentage) / 100, 0);
-        const paid = db
-          .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM partner_payments WHERE partner_id = ? AND date LIKE ?")
-          .get(p.id, `${month}%`).total;
-        return { id: p.id, name: p.name, due, paid, remaining: due - paid };
+        // زي المقاولين: الدفعات بتسدد الأقدم الأول — اللي لسه متدفعش من نصيب
+        // الشهر ده = الباقي له لحد آخر الشهر ده، بس مش أكتر من نصيب الشهر.
+        const uptoMonth = shares.reduce(
+          (sum, sh) => sum + ((equipmentAllTimeProfit(sh.equipment_id) - equipmentProfitAfter(sh.equipment_id)) * sh.percentage) / 100,
+          0
+        );
+        const allPaid = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM partner_payments WHERE partner_id = ?").get(p.id).total;
+        const outstanding = (p.opening_balance ?? 0) + uptoMonth - allPaid;
+        const remaining = Math.max(0, Math.min(due, outstanding));
+        return { id: p.id, name: p.name, due, paid: Math.max(0, due) - remaining, remaining };
       })
-      .filter((p) => p.due !== 0 || p.paid !== 0);
+      .filter((p) => p.due !== 0);
 
     return {
       month,
