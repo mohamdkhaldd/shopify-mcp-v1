@@ -5,6 +5,9 @@ import { Fraction, Piasters } from "./money";
 //   overtime hours                = MAX(0, actual − base)
 //   overtime hourly rate (empty)  = day rate ÷ base hours
 //   day total                     = day rate + overtime hours × overtime rate
+//   short day (actual < base)     = day rate − missing hours × (day rate ÷ base hours)
+//                                   (عطل مثلًا: 6 من 8 ساعات = ¾ اليومية — الأوفر
+//                                   بس هو اللي ليه سعر مختلف)
 export interface SarkiDay {
   isDayOff: boolean;
   actualHoursMilli: number | null;
@@ -32,10 +35,22 @@ export function overtimeMilli(day: SarkiDay): number {
   return Math.max(0, day.actualHoursMilli - day.baseHoursMilli);
 }
 
+/** Hours missing from a short day (actual below base), in milli-hours. */
+export function shortMilli(day: SarkiDay): number {
+  if (day.isDayOff || day.actualHoursMilli == null) return 0;
+  return Math.max(0, day.baseHoursMilli - day.actualHoursMilli);
+}
+
 /** Exact value of one day (no truncation). */
 export function dayValue(day: SarkiDay, def: DefaultRate): Fraction {
   if (day.isDayOff) return Fraction.of(0);
   const rate = dayRate(day, def);
+  const short = shortMilli(day);
+  if (short > 0 && day.baseHoursMilli > 0) {
+    // rate × actual / base — the missing hours at the normal hourly rate
+    const worked = Math.max(0, day.baseHoursMilli - short);
+    return new Fraction(rate.n * BigInt(worked), rate.d * BigInt(day.baseHoursMilli));
+  }
   const ot = overtimeMilli(day);
   if (ot === 0) return rate;
   if (day.overtimeRatePt != null) return rate.add(Fraction.of(BigInt(ot) * BigInt(day.overtimeRatePt), 1000));

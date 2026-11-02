@@ -62,8 +62,13 @@ describe("sarki day rules (same as the old app)", () => {
   it("explicit overtime rate wins", () => {
     expect(dayValue(day({ actualHoursMilli: 10_000, overtimeRatePt: egp(400) }), { unit: "day", ratePt: egp(3000) }).toPiasters()).toBe(egp(3800));
   });
-  it("fewer hours than base don't reduce the day", () => {
-    expect(dayValue(day({ actualHoursMilli: 5_000 }), { unit: "day", ratePt: egp(3000) }).toPiasters()).toBe(egp(3000));
+  it("a short day (عطل) loses the missing hours at the normal hourly rate", () => {
+    // 6 of 8 hours at 3,000 a day = 3,000 − 2 × 375 = 2,250
+    expect(dayValue(day({ actualHoursMilli: 6_000 }), { unit: "day", ratePt: egp(3000) }).toPiasters()).toBe(egp(2250));
+    // the overtime rate doesn't apply to missing hours
+    expect(dayValue(day({ actualHoursMilli: 6_000, overtimeRatePt: egp(500) }), { unit: "day", ratePt: egp(3000) }).toPiasters()).toBe(egp(2250));
+    // empty actual hours = a full normal day
+    expect(dayValue(day({ actualHoursMilli: null }), { unit: "day", ratePt: egp(3000) }).toPiasters()).toBe(egp(3000));
   });
   it("a month adds up exact fractions and drops the sub-piaster part once", () => {
     // 2,555/8 per hour × 1 h = 319.375 → each day 2,874.375; 3 days = 8,623.125

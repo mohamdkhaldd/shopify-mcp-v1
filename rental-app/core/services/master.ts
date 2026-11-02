@@ -162,7 +162,11 @@ export function updateSupplier(db: Db, id: number, v: { name: string; phone?: st
 /** Name, site and the agreed day rate — what the owner's page shows for each machine. */
 export function updateEquipment(db: Db, id: number, v: { name: string; siteName?: string | null; supplierRatePt?: number | null }) {
   if (!v.name.trim()) throw new UserError("اكتب اسم المعدة");
-  db.prepare("UPDATE equipment SET name = ?, site_name = ?, supplier_rate_pt = ? WHERE id = ? AND deleted_at IS NULL").run(v.name.trim(), v.siteName ?? null, v.supplierRatePt ?? null, id);
+  // الموقع والسعر مش بيتكتبوا مع المعدة (بيتغيروا كتير — مكانهم السركي): لو
+  // متبعتوش بيفضلوا زي ما هم.
+  db.prepare("UPDATE equipment SET name = ? WHERE id = ? AND deleted_at IS NULL").run(v.name.trim(), id);
+  if (v.siteName !== undefined) db.prepare("UPDATE equipment SET site_name = ? WHERE id = ?").run(v.siteName, id);
+  if (v.supplierRatePt !== undefined) db.prepare("UPDATE equipment SET supplier_rate_pt = ? WHERE id = ?").run(v.supplierRatePt, id);
 }
 
 export function updateClient(db: Db, id: number, v: { kind: "company" | "individual"; name: string; phone?: string | null; taxId?: string | null }) {

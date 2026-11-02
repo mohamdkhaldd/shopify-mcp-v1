@@ -9,7 +9,6 @@ import Modal from "../../components/Modal";
 import MoneyEntry from "../../components/MoneyEntry";
 import Icon from "../../components/Icon";
 import { dateLabel, monthLabel, pounds } from "../../utils/format";
-import { moneyToPt, ptToInput } from "../../utils/input";
 
 type Selected = NonNullable<SuppliersView["selected"]>;
 type Tab = "statement" | "equipment" | "sheet" | "deductions" | "payments";
@@ -102,15 +101,13 @@ function Statement({ s }: { s: Selected }) {
 }
 
 function EquipmentForm({ supplierId, initial, onClose, onSaved }: { supplierId: number; initial?: Selected["equipment"][number]; onClose: () => void; onSaved: () => void }) {
+  // اسم المعدة بس — الموقع واليومية بيتغيروا كل شوية، فمكانهم العقد والسركي.
   const [name, setName] = useState(initial?.name ?? "");
-  const [site, setSite] = useState(initial?.site_name ?? "");
-  const [rate, setRate] = useState(ptToInput(initial?.supplier_rate_pt));
   const [error, setError] = useState<string | null>(null);
   async function save() {
     try {
-      const v = { name, siteName: site.trim() || null, supplierRatePt: moneyToPt(rate) };
-      if (initial) await api.updateEquipment({ id: initial.id, ...v });
-      else await api.createEquipment({ supplierId, name, siteName: v.siteName ?? undefined, supplierRatePt: v.supplierRatePt ?? undefined });
+      if (initial) await api.updateEquipment({ id: initial.id, name });
+      else await api.createEquipment({ supplierId, name });
       onSaved();
       onClose();
     } catch (e) {
@@ -134,13 +131,8 @@ function EquipmentForm({ supplierId, initial, onClose, onSaved }: { supplierId: 
         <Labeled label="اسم المعدة">
           <TextInput value={name} onChange={(e) => setName(e.target.value)} className="w-56" autoFocus />
         </Labeled>
-        <Labeled label="الموقع">
-          <TextInput value={site} onChange={(e) => setSite(e.target.value)} className="w-56" />
-        </Labeled>
-        <Labeled label="اليومية المتفق عليها">
-          <TextInput value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" className="w-32" />
-        </Labeled>
       </div>
+      <p className="mt-2 text-xs text-muted">الموقع واليومية بيتكتبوا في العقد والسركي (بيتغيروا كل شوية).</p>
       {error && <div className="mt-3"><ErrorBox message={error} /></div>}
     </Modal>
   );
@@ -341,8 +333,6 @@ export default function Suppliers() {
                     <thead>
                       <tr>
                         <th>المعدة</th>
-                        <th>الموقع</th>
-                        <th className="n">اليومية المتفق عليها</th>
                         <th>الحالة</th>
                         <th />
                       </tr>
@@ -350,7 +340,7 @@ export default function Suppliers() {
                     <tbody>
                       {s.equipment.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="text-center text-muted py-6">
+                          <td colSpan={3} className="text-center text-muted py-6">
                             مفيش معدات متسجلة.
                           </td>
                         </tr>
@@ -360,8 +350,6 @@ export default function Suppliers() {
                           <td>
                             <b>{e.name}</b>
                           </td>
-                          <td>{e.site_name ?? "—"}</td>
-                          <td className="n">{e.supplier_rate_pt != null ? pounds(e.supplier_rate_pt) : "—"}</td>
                           <td>{e.working ? <Pill tone="in">شغالة</Pill> : <Pill>فاضية</Pill>}</td>
                           <td className="text-end whitespace-nowrap">
                             <button className="no-print text-xs font-bold text-amber-deep hover:underline me-3" onClick={() => setForm({ equipment: e })}>
