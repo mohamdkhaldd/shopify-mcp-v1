@@ -196,3 +196,32 @@ describe("installments (أقساط صاحب الكوميشن)", () => {
     expect(call("hassanLedger:balanceByParty")).toEqual([{ party_name: "أحمد علي", netDebt: 1500, netDue: 0 }]);
   });
 });
+
+describe("money owed to the company (contractors)", () => {
+  it("is never negative: payments settle the oldest work first, overpaid contractors don't offset others", () => {
+    const db = setupOperationsDatabase(new Database(":memory:"));
+    registerIpcHandlers(db);
+    const eq = call("equipment:create", { name: "لودر", purchase_price: 0, shares: [] });
+    call("contractors:create", { name: "حماد", opening_balance: 0 });
+    call("contractors:create", { name: "مرزوق", opening_balance: 0 });
+    const cid = (n: string) => (db.prepare("SELECT id FROM contractors WHERE name = ?").get(n) as { id: number }).id;
+    const work = (person: string, date: string, rate: number) =>
+      call("dailyLogs:upsert", {
+        equipment_id: eq.id, date, role: "contractor", shift_label: "", person_name: person, actual_hours: 8, base_hours: 8,
+        day_rate: rate, is_paid_leave: false, is_day_off: false, fixed_value: null, hassan_commission: null, note: null, site_name: null, overtime_rate: null,
+      });
+    work("حماد", "2026-10-05", 30000);
+    work("حماد", "2026-11-05", 10000);
+    call("contractorPayments:create", { contractor_id: cid("حماد"), date: "2026-11-02", amount: 30000, method: "cash", note: "عن أكتوبر" });
+    // مرزوق دفع مقدّم أكتر من شغله
+    work("مرزوق", "2026-11-06", 5000);
+    call("contractorPayments:create", { contractor_id: cid("مرزوق"), date: "2026-11-06", amount: 8000, method: "cash", note: null });
+
+    const nov = call("dashboard:monthDues", { month: "2026-11" });
+    expect(nov.contractors.find((c: any) => c.name === "حماد")).toMatchObject({ due: 10000, remaining: 10000 });
+    expect(nov.contractors.find((c: any) => c.name === "مرزوق").remaining).toBe(0);
+    expect(nov.contractorsRemaining).toBe(10000);
+    expect(call("dashboard:monthDues", { month: "2026-10" }).contractorsRemaining).toBe(0);
+    expect(call("dashboard:summary").totalReceivables).toBe(10000);
+  });
+});

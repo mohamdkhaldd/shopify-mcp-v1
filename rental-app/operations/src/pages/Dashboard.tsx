@@ -134,7 +134,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (id: SectionId)
           value={monthDues ? formatEGP(monthDues.contractorsRemaining) : "..."}
           icon="contractors"
           tone="neutral"
-          sub="شغل المقاولين الشهر ده − اللي دفعوه الشهر ده"
+          sub="شغل المقاولين الشهر ده اللي لسه متدفعش (الدفعات بتسدد الأقدم الأول)"
           onClick={() => openDrilldown("monthContractors")}
         />
         <KpiCard

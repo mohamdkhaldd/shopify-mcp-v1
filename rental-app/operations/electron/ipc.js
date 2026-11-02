@@ -2466,16 +2466,20 @@ function registerIpcHandlers(db) {
       .prepare("SELECT * FROM contractors ORDER BY name")
       .all()
       .map((c) => {
-        const work = db
-          .prepare("SELECT * FROM daily_logs WHERE role = 'contractor' AND person_name = ? AND date LIKE ?")
-          .all(c.name, `${month}%`)
-          .reduce((sum, l) => sum + computeDayValue(l), 0);
-        const paid = db
-          .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM contractor_payments WHERE contractor_id = ? AND date LIKE ?")
-          .get(c.id, `${month}%`).total;
-        return { id: c.id, name: c.name, due: work, paid, remaining: work - paid };
+        // الدفعات بتسدد الأقدم الأول: اللي لسه متدفعش من شغل الشهر ده = الباقي
+        // على المقاول كله (من غير شغل الشهور اللي بعده)، بس مش أكتر من شغل
+        // الشهر نفسه — فدفعة الشهر ده عن الشهر اللي فات متطلعهوش بالسالب.
+        const logs = db.prepare("SELECT * FROM daily_logs WHERE role = 'contractor' AND person_name = ?").all(c.name);
+        const sumOf = (pred) => logs.filter(pred).reduce((sum, l) => sum + computeDayValue(l), 0);
+        const work = sumOf((l) => l.date.startsWith(month));
+        const workAfter = sumOf((l) => l.date.slice(0, 7) > month);
+        const allWork = sumOf(() => true);
+        const allPaid = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM contractor_payments WHERE contractor_id = ?").get(c.id).total;
+        const outstanding = (c.opening_balance ?? 0) + allWork - allPaid - workAfter;
+        const remaining = Math.max(0, Math.min(work, outstanding));
+        return { id: c.id, name: c.name, due: work, paid: work - remaining, remaining };
       })
-      .filter((c) => c.due !== 0 || c.paid !== 0);
+      .filter((c) => c.due !== 0);
 
     const profitCache = new Map();
     const equipmentProfit = (equipmentId) => {
@@ -2564,7 +2568,8 @@ function registerIpcHandlers(db) {
       const totalPaid = db
         .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM contractor_payments WHERE contractor_id = ?")
         .get(c.id).total;
-      return sum + (totalWork - totalPaid);
+      // المقاول اللي دافع زيادة (فلوسه عندنا) مبيتخصمش من اللي على الباقيين.
+      return sum + Math.max(0, totalWork - totalPaid);
     }, 0);
 
     const partners = db.prepare("SELECT * FROM partners").all();
