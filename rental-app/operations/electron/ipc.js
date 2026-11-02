@@ -1338,8 +1338,20 @@ function registerIpcHandlers(db) {
     const monthSpent =
       db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_treasury_expenses WHERE date LIKE ?").get(`${month}%`).total +
       (car.find((c) => c.month === month)?.personal ?? 0);
+    // فلوسه الشخصية اللي دخلت/طلعت من خزنة الشركة (الحساب الشخصي بحساب).
+    const ledgerCash = (where, ...args) =>
+      db
+        .prepare(
+          `SELECT COALESCE(SUM(CASE WHEN type IN ('loan', 'collection') THEN amount ELSE -amount END), 0) AS total
+           FROM hassan_ledger WHERE method IS NOT NULL ${where}`
+        )
+        .get(...args).total;
+    const allTimeLedger = ledgerCash("");
+    const monthLedger = ledgerCash("AND date LIKE ?", `${month}%`);
     return {
-      balance: allTimeCommission - allTimeSpent,
+      balance: allTimeCommission - allTimeSpent + allTimeLedger,
+      allTimeLedger,
+      monthLedger,
       allTimeCommission,
       allTimeSpent,
       monthCommission,
@@ -1474,8 +1486,8 @@ function registerIpcHandlers(db) {
   ipcMain.handle("hassanLedger:create", (_e, entry) => {
     const info = db
       .prepare(
-        `INSERT INTO hassan_ledger (date, type, amount, party_name, description, note)
-         VALUES (@date, @type, @amount, @party_name, @description, @note)`
+        `INSERT INTO hassan_ledger (date, type, amount, party_name, description, note, method)
+         VALUES (@date, @type, @amount, @party_name, @description, @note, @method)`
       )
       .run({
         date: entry.date,
@@ -1484,6 +1496,7 @@ function registerIpcHandlers(db) {
         party_name: entry.party_name ?? null,
         description: entry.description ?? null,
         note: entry.note ?? null,
+        method: entry.method || null,
       });
     const created = db.prepare("SELECT * FROM hassan_ledger WHERE id = ?").get(info.lastInsertRowid);
     pushToCloud("hassan_ledger", created.id, created);
@@ -1813,6 +1826,16 @@ function registerIpcHandlers(db) {
       .forEach((r) => add(r.date, "out", `سداد لـ ${r.creditor_name}${r.note ? ` (${r.note})` : ""}`, r.amount));
 
     // العهد: المبلغ اللي اتسلم (وأي زيادة) طالع من الخزنة، والباقي اللي رجع داخل.
+    // الحساب الشخصي لصاحب الكوميشن: اللي اتقبض/اتدفع فعلًا من خزنة الشركة —
+    // استلف أو حصّل = داخل، سدد أو سلّف حد = طالع.
+    const LEDGER_CASH = { loan: ["in", "استلف"], collection: ["in", "حصّل"], repayment: ["out", "سدد"], due: ["out", "سلّف"] };
+    db.prepare("SELECT date, amount, type, party_name, description FROM hassan_ledger WHERE method = ?")
+      .all(account)
+      .forEach((r) => {
+        const [direction, verb] = LEDGER_CASH[r.type] ?? ["out", ""];
+        add(r.date, direction, `الحساب الشخصي: ${verb}${r.party_name ? ` — ${r.party_name}` : ""}${r.description ? ` (${r.description})` : ""}`, r.amount);
+      });
+
     // خزنة واحدة: الصرف من الكوميشن طالع فعلًا من حساب في خزنة الشركة.
     db.prepare(
       `SELECT x.date, x.amount, COALESCE(NULLIF(TRIM(x.category), ''), x.description) AS item FROM hassan_treasury_expenses x WHERE x.method = ?`

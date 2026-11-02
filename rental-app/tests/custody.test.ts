@@ -139,3 +139,22 @@ describe("one treasury", () => {
     expect(call("hassan:treasuryBalance", { month: "2026-10" }).balance).toBe(before - 700 - 3000 - 2000);
   });
 });
+
+describe("personal account through the treasury", () => {
+  it("money in and out follows the type, only when an account is chosen", () => {
+    const db = setupOperationsDatabase(new Database(":memory:"));
+    registerIpcHandlers(db);
+    const before = call("hassan:treasuryBalance", { month: "2026-10" }).balance;
+    call("hassanLedger:create", { date: "2026-10-02", type: "loan", amount: 10000, party_name: "أحمد", description: null, note: null, method: "instapay" });
+    call("hassanLedger:create", { date: "2026-10-09", type: "repayment", amount: 4000, party_name: "أحمد", description: null, note: null, method: "cash" });
+    call("hassanLedger:create", { date: "2026-10-10", type: "due", amount: 500, party_name: "محمد", description: null, note: null, method: null });
+
+    const insta = JSON.stringify(call("treasury:accountTransactions", { account_name: "instapay", month: "2026-10" }));
+    const cash = JSON.stringify(call("treasury:accountTransactions", { account_name: "cash", month: "2026-10" }));
+    expect(insta).toContain("الحساب الشخصي: استلف — أحمد");
+    expect(cash).toContain("الحساب الشخصي: سدد — أحمد");
+    expect(cash).not.toContain("محمد");
+    expect(call("hassan:treasuryBalance", { month: "2026-10" }).balance).toBe(before + 10000 - 4000);
+    expect(call("hassanLedger:balance").netDebt).toBe(6000);
+  });
+});

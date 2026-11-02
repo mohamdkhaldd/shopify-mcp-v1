@@ -307,7 +307,8 @@ function TreasuryTab({ month }: { month: string }) {
         <div className="text-sm text-slate-500 font-semibold">كوميشن {person()} اللي ليه جوه خزنة الشركة لحد دلوقتي</div>
         <div className="mt-2 text-2xl font-extrabold text-primary">{formatEGP(balance?.balance ?? 0)}</div>
         <p className="text-xs text-slate-400 mt-1">
-          فلوسه جوه خزنة الشركة نفسها (مفيش خزنة لوحدها): بتزيد بكوميشنه كل شهر، وبتقل لما يصرف منها — والصرف ده بيطلع من خزنة الشركة.
+          فلوسه جوه خزنة الشركة نفسها (مفيش خزنة لوحدها): بتزيد بكوميشنه كل شهر وباللي استلفه أو حصّله في حسابه الشخصي، وبتقل لما
+          يصرف منها أو يسدد — وكل ده بيدخل ويطلع من خزنة الشركة.
         </p>
       </div>
 
@@ -329,6 +330,12 @@ function TreasuryTab({ month }: { month: string }) {
           <div className="font-bold text-slate-700">{formatEGP(balance?.allTimeSpent ?? 0)}</div>
         </div>
       </div>
+      {!!balance?.allTimeLedger && (
+        <p className="text-xs text-slate-500">
+          + صافي فلوس الحساب الشخصي اللي دخلت/طلعت من الخزنة (كل الوقت):{" "}
+          <span className={`font-bold ${balance.allTimeLedger >= 0 ? "text-primary-dark" : "text-rose-600"}`}>{formatEGP(balance.allTimeLedger)}</span>
+        </p>
+      )}
 
       <p className="no-print text-xs text-slate-400">اللي {person()} بيصرفه من كوميشنه بيتسجل في تبويب "مصاريف التشغيل".</p>
     </div>
@@ -510,6 +517,9 @@ function LedgerTab({ month }: { month: string }) {
   const [amount, setAmount] = useState("");
   const [partyName, setPartyName] = useState("");
   const [description, setDescription] = useState("");
+  // من/لـ أنهي حساب في خزنة الشركة — فاضي = تسجيل بس من غير فلوس.
+  const [method, setMethod] = useState("");
+  const cashIn = type === "loan" || type === "collection";
 
   const refresh = () => {
     hassanApi.ledgerList(month).then(setEntries);
@@ -529,6 +539,7 @@ function LedgerTab({ month }: { month: string }) {
       party_name: partyName || null,
       description: description || null,
       note: null,
+      method: method || null,
     });
     setAmount("");
     setPartyName("");
@@ -635,10 +646,24 @@ function LedgerTab({ month }: { month: string }) {
               className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
             />
           </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">الفلوس {cashIn ? "دخلت الخزنة في" : "طلعت من الخزنة من"}</label>
+            <select value={method} onChange={(e) => setMethod(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white">
+              <option value="">من غير فلوس — تسجيل بس</option>
+              {PAYMENT_METHODS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <button type="submit" className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold hover:bg-primary-dark">
             إضافة
           </button>
         </form>
+        <p className="no-print text-[11px] text-slate-400 -mt-2 mb-4">
+          لو اخترت حساب: استلف أو حصّل = الفلوس بتدخل الحساب ده في خزنة الشركة، سدد أو سلّف حد = بتطلع منه — وبتتحسب في فلوس {person()} اللي جوه الخزنة.
+        </p>
 
         {entries.length === 0 ? (
           <div className="text-sm text-slate-400">لسه مفيش حركات مسجلة الشهر ده.</div>
@@ -651,6 +676,7 @@ function LedgerTab({ month }: { month: string }) {
                 <th className="text-start font-semibold py-2">القيمة</th>
                 <th className="text-start font-semibold py-2">الجهة</th>
                 <th className="text-start font-semibold py-2">بيان</th>
+                <th className="text-start font-semibold py-2">الفلوس</th>
                 <th className="no-print"></th>
               </tr>
             </thead>
@@ -662,6 +688,9 @@ function LedgerTab({ month }: { month: string }) {
                   <td className="py-2 text-slate-600">{formatEGP(e.amount)}</td>
                   <td className="py-2 text-slate-500">{e.party_name ?? "—"}</td>
                   <td className="py-2 text-slate-500">{e.description ?? "—"}</td>
+                  <td className="py-2 text-slate-500">
+                    {e.method ? `${e.type === "loan" || e.type === "collection" ? "دخلت" : "طلعت"} — ${paymentMethodLabel(e.method)}` : "تسجيل بس"}
+                  </td>
                   <td className="no-print py-2">
                     <button onClick={() => handleDelete(e.id)} className="text-xs text-rose-500 hover:text-rose-700 font-semibold">
                       حذف

@@ -259,6 +259,8 @@ export interface HassanLedgerEntry {
   party_name: string | null;
   description: string | null;
   note: string | null;
+  /** من/لـ أنهي حساب في خزنة الشركة (فاضي = تسجيل بس) */
+  method?: string | null;
 }
 
 export interface HassanBalance {
@@ -293,6 +295,9 @@ export interface HassanTreasuryBalance {
   monthSpent: number;
   monthPenalties: number;
   allTimePenalties: number;
+  /** صافي فلوس الحساب الشخصي اللي دخلت/طلعت من خزنة الشركة */
+  allTimeLedger?: number;
+  monthLedger?: number;
 }
 
 export interface HassanPenalty {
