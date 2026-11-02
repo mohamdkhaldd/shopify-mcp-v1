@@ -271,6 +271,27 @@ CREATE TABLE IF NOT EXISTS fund_expenses (
   description TEXT
 );
 
+-- أقساط صاحب الكوميشن (قسط عربية، جمعية...): قيمة القسط وعدده وأول ميعاد،
+-- وكل قسط بيتدفع بيتسجل صرف من كوميشنه (طالع من خزنة الشركة).
+CREATE TABLE IF NOT EXISTS hassan_installments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  amount REAL NOT NULL,
+  count INTEGER,
+  start_date TEXT NOT NULL,
+  note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS hassan_installment_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  installment_id INTEGER NOT NULL REFERENCES hassan_installments(id) ON DELETE CASCADE,
+  number INTEGER NOT NULL,
+  due_date TEXT NOT NULL,
+  paid_date TEXT NOT NULL,
+  amount REAL NOT NULL,
+  treasury_expense_id INTEGER REFERENCES hassan_treasury_expenses(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS custodies (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   holder TEXT NOT NULL,

@@ -1,5 +1,6 @@
 import { mockInvoke } from "./mockDb";
 import {
+  HassanInstallment,
   FundDetail,
   FundSummary,
   PaperSheet,
@@ -140,6 +141,8 @@ const entityLabels = (): Record<string, string> => ({
   custodies: "عهدة",
   paperSheets: "صورة السركي الورقي",
   fundExpenses: "صرف من خزنة",
+  installments: "قسط",
+  installmentPayments: "دفعة قسط",
   custodyEntries: "حركة في عهدة",
   carFuel: "بنزين / زيت العربية",
   obligations: "ميعاد التزام",
@@ -407,6 +410,10 @@ export const hassanApi = {
   ledgerCreate: (entry: Omit<HassanLedgerEntry, "id">): Promise<HassanLedgerEntry> =>
     invoke("hassanLedger:create", entry),
   ledgerRemove: (id: number): Promise<void> => invoke("hassanLedger:delete", { id }),
+  ledgerUpdate: (entry: HassanLedgerEntry): Promise<HassanLedgerEntry> => invoke("hassanLedger:update", entry),
+  renameParty: (from: string, to: string) => invoke("hassanLedger:renameParty", { from, to }),
+  deleteParty: (name: string) => invoke("hassanLedger:deleteParty", { name }),
+  partyEntries: (name: string): Promise<HassanLedgerEntry[]> => invoke("hassanLedger:partyEntries", { name }),
   balance: (): Promise<HassanBalance> => invoke("hassanLedger:balance"),
   balanceByParty: (): Promise<HassanPartyBalance[]> => invoke("hassanLedger:balanceByParty"),
   treasuryBalance: (month: string): Promise<HassanTreasuryBalance> => invoke("hassan:treasuryBalance", { month }),
@@ -619,4 +626,14 @@ export const fundsApi = {
   detail: (category_id: number, month: string): Promise<FundDetail> => invoke("funds:detail", { category_id, month }),
   addExpense: (e: { category_id: number; date: string; amount: number; description: string | null }) => invoke("fundExpenses:create", e),
   removeExpense: (id: number) => invoke("fundExpenses:delete", { id }),
+};
+
+export const installmentsApi = {
+  list: (): Promise<HassanInstallment[]> => invoke("installments:list"),
+  create: (i: { title: string; amount: number; count: number | null; start_date: string; note: string | null }) => invoke("installments:create", i),
+  update: (i: { id: number; title: string; amount: number; count: number | null; start_date: string; note: string | null }) =>
+    invoke("installments:update", i),
+  remove: (id: number, withPayments: boolean) => invoke("installments:delete", { id, withPayments }),
+  pay: (id: number, date: string, method: string, amount?: number) => invoke("installments:pay", { id, date, method, amount }),
+  removePayment: (id: number) => invoke("installmentPayments:delete", { id }),
 };

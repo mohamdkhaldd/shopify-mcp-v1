@@ -28,20 +28,20 @@ export default function DashboardAlerts({ onNavigate }: { onNavigate?: (id: Sect
       {alerts.map((a) => (
         <button
           key={`${a.kind}-${a.id}`}
-          onClick={() => onNavigate?.(a.kind === "custody" ? "custody" : "obligations")}
+          onClick={() => onNavigate?.(a.kind === "custody" ? "custody" : a.kind === "installment" ? "hassan" : "obligations")}
           className={[
             "w-full flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm text-start border",
             a.level === "danger" ? "bg-rose-50 border-rose-200 text-rose-800" : "bg-amber-50 border-amber-200 text-amber-900",
           ].join(" ")}
         >
           <span className="font-bold">
-            {a.kind === "custody" ? "💼 " : "⏰ "}
-            {a.kind === "obligation" ? `عليك التزام: ${a.title}` : a.title}
-            {a.amount != null && <span className="font-extrabold"> {a.kind === "obligation" ? "بقيمة " : ""}{formatEGP(a.amount)}</span>}
-            {a.kind === "obligation" && a.due_date && <span className="font-semibold"> — ميعاده {a.due_date}</span>}
+            {a.kind === "custody" ? "💼 " : a.kind === "installment" ? "💳 " : "⏰ "}
+            {a.kind === "obligation" ? `عليك التزام: ${a.title}` : a.kind === "installment" ? `عليك ${a.title}` : a.title}
+            {a.amount != null && <span className="font-extrabold"> {a.kind !== "custody" ? "بقيمة " : ""}{formatEGP(a.amount)}</span>}
+            {a.kind !== "custody" && a.due_date && <span className="font-semibold"> — ميعاده {a.due_date}</span>}
           </span>
           <span className="text-xs font-bold rounded-lg bg-white/70 px-2 py-1">
-            {a.kind === "obligation" && a.days != null ? dueText(a.days) : "افتح العهد ←"}
+            {a.kind !== "custody" && a.days != null ? dueText(a.days) : "افتح العهد ←"}
           </span>
         </button>
       ))}

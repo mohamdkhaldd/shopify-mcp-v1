@@ -18,6 +18,34 @@ function nextMonthSameDay(dateStr) {
   return `${ny}-${String(nm).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
 }
 
+// نفس يوم أول ميعاد بعد n شهر (ولو الشهر أقصر، آخر يوم فيه).
+function addMonths(dateStr, n) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const total = (m - 1) + n;
+  const ny = y + Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  const last = new Date(ny, nm, 0).getDate();
+  return `${ny}-${String(nm).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
+}
+
+// قسط: اتدفع كام، الجاي رقم كام وميعاده إمتى، وفاضل كام.
+function installmentState(db, inst) {
+  const payments = db.prepare("SELECT * FROM hassan_installment_payments WHERE installment_id = ? ORDER BY number, id").all(inst.id);
+  const paidCount = payments.length;
+  const done = inst.count != null && paidCount >= inst.count;
+  return {
+    ...inst,
+    payments,
+    paidCount,
+    paidTotal: payments.reduce((s, p) => s + p.amount, 0),
+    remainingCount: inst.count != null ? Math.max(0, inst.count - paidCount) : null,
+    remainingAmount: inst.count != null ? Math.max(0, inst.count - paidCount) * inst.amount : null,
+    done,
+    nextNumber: done ? null : paidCount + 1,
+    nextDue: done ? null : addMonths(inst.start_date, paidCount),
+  };
+}
+
 function daysBetween(a, b) {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
 }
@@ -316,6 +344,79 @@ function registerExtraHandlers(db, owed) {
     return { ok: true };
   });
 
+  // ===== أقساط صاحب الكوميشن =====
+  const installmentsAll = () => db.prepare("SELECT * FROM hassan_installments ORDER BY id").all().map((i) => installmentState(db, i));
+  ipcMain.handle("installments:list", () =>
+    installmentsAll().map((i) => ({ ...i, days: i.nextDue ? daysBetween(today(), i.nextDue) : null }))
+  );
+  ipcMain.handle("installments:create", (_e, { title, amount, count, start_date, note }) => {
+    if (!(title ?? "").trim()) throw new Error("اكتب القسط ده إيه");
+    if (!(Number(amount) > 0)) throw new Error("لازم قيمة القسط");
+    if (!start_date) throw new Error("لازم ميعاد أول قسط");
+    db.prepare("INSERT INTO hassan_installments (title, amount, count, start_date, note) VALUES (?, ?, ?, ?, ?)").run(
+      title.trim(),
+      Number(amount),
+      Number(count) > 0 ? Math.round(Number(count)) : null,
+      start_date,
+      note?.trim() || null
+    );
+    return { ok: true };
+  });
+  ipcMain.handle("installments:update", (_e, { id, title, amount, count, start_date, note }) => {
+    db.prepare("UPDATE hassan_installments SET title = ?, amount = ?, count = ?, start_date = ?, note = ? WHERE id = ?").run(
+      (title ?? "").trim(),
+      Number(amount) || 0,
+      Number(count) > 0 ? Math.round(Number(count)) : null,
+      start_date,
+      note?.trim() || null,
+      id
+    );
+    return { ok: true };
+  });
+  // مسح القسط: المدفوع منه بيفضل متسجل صرف من الكوميشن (فلوس طلعت فعلًا)،
+  // إلا لو اخترت تمسحه معاه.
+  ipcMain.handle("installments:delete", (_e, { id, withPayments }) => {
+    const tx = db.transaction(() => {
+      if (withPayments) {
+        for (const p of db.prepare("SELECT treasury_expense_id FROM hassan_installment_payments WHERE installment_id = ? AND treasury_expense_id IS NOT NULL").all(id)) {
+          db.prepare("DELETE FROM hassan_treasury_expenses WHERE id = ?").run(p.treasury_expense_id);
+        }
+      } else {
+        db.prepare("UPDATE hassan_installment_payments SET treasury_expense_id = NULL WHERE installment_id = ?").run(id);
+      }
+      db.prepare("DELETE FROM hassan_installments WHERE id = ?").run(id);
+    });
+    tx();
+    return { ok: true };
+  });
+  // "دفعت": القسط الجاي بيتسجل صرف من الكوميشن (طالع من الحساب ده في خزنة الشركة).
+  ipcMain.handle("installments:pay", (_e, { id, date, method, amount }) => {
+    const inst = installmentsAll().find((i) => i.id === id);
+    if (!inst) throw new Error("القسط مش موجود");
+    if (inst.done) throw new Error("الأقساط دي خلصت");
+    const value = Number(amount) > 0 ? Number(amount) : inst.amount;
+    const tx = db.transaction(() => {
+      const description = `قسط ${inst.title} (${inst.nextNumber}${inst.count ? ` من ${inst.count}` : ""})`;
+      const expenseId = db
+        .prepare("INSERT INTO hassan_treasury_expenses (date, amount, description, category, method) VALUES (?, ?, ?, 'أقساط', ?)")
+        .run(date || today(), value, description, method || "cash").lastInsertRowid;
+      db.prepare(
+        "INSERT INTO hassan_installment_payments (installment_id, number, due_date, paid_date, amount, treasury_expense_id) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run(id, inst.nextNumber, inst.nextDue, date || today(), value, expenseId);
+    });
+    tx();
+    return installmentState(db, db.prepare("SELECT * FROM hassan_installments WHERE id = ?").get(id));
+  });
+  ipcMain.handle("installmentPayments:delete", (_e, { id }) => {
+    const p = db.prepare("SELECT * FROM hassan_installment_payments WHERE id = ?").get(id);
+    const tx = db.transaction(() => {
+      if (p?.treasury_expense_id) db.prepare("DELETE FROM hassan_treasury_expenses WHERE id = ?").run(p.treasury_expense_id);
+      db.prepare("DELETE FROM hassan_installment_payments WHERE id = ?").run(id);
+    });
+    tx();
+    return { ok: true };
+  });
+
   // ===== السركي الورقي (صور) =====
   ipcMain.handle("paperSheets:list", (_e, { equipment_id, month }) =>
     db.prepare("SELECT * FROM equipment_paper_sheets WHERE equipment_id = ? AND month = ? ORDER BY id").all(equipment_id, month)
@@ -436,6 +537,20 @@ function registerExtraHandlers(db, owed) {
         title: o.title,
         amount: o.amount ?? auto.auto_amount ?? null,
         due_date: o.due_date,
+        days: d,
+      });
+    }
+    for (const i of installmentsAll()) {
+      if (!i.nextDue) continue;
+      const d = daysBetween(now, i.nextDue);
+      if (d > 3) continue;
+      alerts.push({
+        kind: "installment",
+        level: d <= 0 ? "danger" : "warn",
+        id: i.id,
+        title: `قسط ${i.title}${i.count ? ` (${i.nextNumber} من ${i.count})` : ""}`,
+        amount: i.amount,
+        due_date: i.nextDue,
         days: d,
       });
     }

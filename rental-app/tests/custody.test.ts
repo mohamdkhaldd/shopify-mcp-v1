@@ -158,3 +158,41 @@ describe("personal account through the treasury", () => {
     expect(call("hassanLedger:balance").netDebt).toBe(6000);
   });
 });
+
+describe("installments (أقساط صاحب الكوميشن)", () => {
+  it("next due date, paying from the treasury, alerts, undo", () => {
+    const db = setupOperationsDatabase(new Database(":memory:"));
+    registerIpcHandlers(db);
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const soon = new Date(Date.now() + 2 * 864e5);
+    call("installments:create", { title: "العربية", amount: 5000, count: 12, start_date: iso(soon), note: null });
+    let [inst] = call("installments:list") as any[];
+    expect(inst).toMatchObject({ nextNumber: 1, nextDue: iso(soon), remainingAmount: 60000, days: 2 });
+    expect((call("alerts:dashboard") as any[]).find((a) => a.kind === "installment")).toMatchObject({ title: "قسط العربية (1 من 12)", amount: 5000 });
+
+    const before = call("hassan:treasuryBalance", { month: iso(new Date()).slice(0, 7) }).balance;
+    call("installments:pay", { id: inst.id, date: iso(new Date()), method: "instapay" });
+    [inst] = call("installments:list") as any[];
+    expect(inst).toMatchObject({ paidCount: 1, nextNumber: 2, remainingCount: 11 });
+    expect(call("hassan:treasuryBalance", { month: iso(new Date()).slice(0, 7) }).balance).toBe(before - 5000);
+    const insta = JSON.stringify(call("treasury:accountTransactions", { account_name: "instapay", month: iso(new Date()).slice(0, 7) }));
+    expect(insta).toContain("قسط العربية (1 من 12)");
+
+    call("installmentPayments:delete", { id: inst.payments[0].id });
+    [inst] = call("installments:list") as any[];
+    expect(inst.paidCount).toBe(0);
+    expect(call("hassan:treasuryBalance", { month: iso(new Date()).slice(0, 7) }).balance).toBe(before);
+  });
+
+  it("personal account: rename and delete a party, edit an entry", () => {
+    const db = setupOperationsDatabase(new Database(":memory:"));
+    registerIpcHandlers(db);
+    call("hassanLedger:create", { date: "2026-10-02", type: "loan", amount: 1000, party_name: "احمد", description: null, note: null, method: "cash" });
+    call("hassanLedger:create", { date: "2026-10-03", type: "due", amount: 300, party_name: "محمد", description: null, note: null, method: "cash" });
+    call("hassanLedger:renameParty", { from: "احمد", to: "أحمد علي" });
+    const [e] = call("hassanLedger:partyEntries", { name: "أحمد علي" }) as any[];
+    call("hassanLedger:update", { ...e, amount: 1500 });
+    call("hassanLedger:deleteParty", { name: "محمد" });
+    expect(call("hassanLedger:balanceByParty")).toEqual([{ party_name: "أحمد علي", netDebt: 1500, netDue: 0 }]);
+  });
+});

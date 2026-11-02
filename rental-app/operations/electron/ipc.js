@@ -1506,6 +1506,37 @@ function registerIpcHandlers(db) {
     db.prepare("DELETE FROM hassan_ledger WHERE id = ?").run(id);
     return { ok: true };
   });
+  ipcMain.handle("hassanLedger:update", (_e, entry) => {
+    db.prepare(
+      `UPDATE hassan_ledger SET date = @date, type = @type, amount = @amount, party_name = @party_name, description = @description, method = @method
+       WHERE id = @id`
+    ).run({
+      id: entry.id,
+      date: entry.date,
+      type: entry.type,
+      amount: Number(entry.amount) || 0,
+      party_name: entry.party_name?.trim() || null,
+      description: entry.description?.trim() || null,
+      method: entry.method || "cash",
+    });
+    return db.prepare("SELECT * FROM hassan_ledger WHERE id = ?").get(entry.id);
+  });
+  // الرصيد بالتفصيل: تغيير اسم شخص/جهة في كل حركاته، أو مسحه هو وكل حركاته.
+  const partyWhere = "COALESCE(NULLIF(TRIM(party_name), ''), 'بدون تحديد') = ?";
+  ipcMain.handle("hassanLedger:renameParty", (_e, { from, to }) => {
+    const name = (to ?? "").trim();
+    if (!name) throw new Error("اكتب الاسم الجديد");
+    db.prepare(`UPDATE hassan_ledger SET party_name = ? WHERE ${partyWhere}`).run(name, from);
+    return { ok: true };
+  });
+  ipcMain.handle("hassanLedger:deleteParty", (_e, { name }) => {
+    db.prepare(`DELETE FROM hassan_ledger WHERE ${partyWhere}`).run(name);
+    return { ok: true };
+  });
+  ipcMain.handle("hassanLedger:partyEntries", (_e, { name }) =>
+    db.prepare(`SELECT * FROM hassan_ledger WHERE ${partyWhere} ORDER BY date, id`).all(name)
+  );
+
   ipcMain.handle("hassanLedger:balance", () => {
     const sums = db
       .prepare("SELECT type, COALESCE(SUM(amount), 0) AS total FROM hassan_ledger GROUP BY type")
@@ -1838,10 +1869,13 @@ function registerIpcHandlers(db) {
 
     // خزنة واحدة: الصرف من الكوميشن طالع فعلًا من حساب في خزنة الشركة.
     db.prepare(
-      `SELECT x.date, x.amount, COALESCE(NULLIF(TRIM(x.category), ''), x.description) AS item FROM hassan_treasury_expenses x WHERE x.method = ?`
+      `SELECT x.date, x.amount, NULLIF(TRIM(x.category), '') AS category, x.description FROM hassan_treasury_expenses x WHERE x.method = ?`
     )
       .all(account)
-      .forEach((r) => add(r.date, "out", `من الكوميشن: ${r.item}`, r.amount));
+      .forEach((r) => {
+        const item = r.category && r.description && r.description !== r.category ? `${r.category} — ${r.description}` : r.category || r.description;
+        add(r.date, "out", `من الكوميشن: ${item}`, r.amount);
+      });
 
     db.prepare("SELECT date, amount, holder FROM custodies WHERE method = ?")
       .all(account)
@@ -2752,6 +2786,7 @@ function registerIpcHandlers(db) {
       db.prepare("DELETE FROM custodies").run();
       db.prepare("DELETE FROM equipment_paper_sheets").run();
       db.prepare("DELETE FROM fund_expenses").run();
+      db.prepare("DELETE FROM hassan_installments").run();
       db.prepare("DELETE FROM car_fuel").run();
       db.prepare("DELETE FROM obligations").run();
       db.prepare("DELETE FROM hassan_worker_attendance").run();

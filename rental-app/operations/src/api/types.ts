@@ -859,7 +859,7 @@ export interface Obligation {
 }
 
 export interface DashboardAlert {
-  kind: "custody" | "obligation";
+  kind: "custody" | "obligation" | "installment";
   level: "warn" | "danger";
   id: number;
   title: string;
@@ -883,4 +883,33 @@ export interface PaperSheet {
   month: string;
   image: string;
   note: string | null;
+}
+
+// أقساط صاحب الكوميشن
+export interface HassanInstallmentPayment {
+  id: number;
+  installment_id: number;
+  number: number;
+  due_date: string;
+  paid_date: string;
+  amount: number;
+  treasury_expense_id: number | null;
+}
+
+export interface HassanInstallment {
+  id: number;
+  title: string;
+  amount: number;
+  count: number | null;
+  start_date: string;
+  note: string | null;
+  payments: HassanInstallmentPayment[];
+  paidCount: number;
+  paidTotal: number;
+  remainingCount: number | null;
+  remainingAmount: number | null;
+  done: boolean;
+  nextNumber: number | null;
+  nextDue: string | null;
+  days: number | null;
 }
