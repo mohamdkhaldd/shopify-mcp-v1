@@ -5,7 +5,7 @@ import { formatPounds } from "../core/calc/money";
 import { closeMonth, recordAdjustment } from "../core/services/close";
 import { today } from "../core/db";
 import { deleteEntity, deletePreview, restoreDeleted } from "../core/services/deletion";
-import { createClient, createEquipment, createExpenseCategory, createInvestor, createSupplier, setRates, updateInvestor, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier } from "../core/services/master";
+import { createClient, createEquipment, createExpenseCategory, createInvestor, createSupplier, setRates, updateInvestor, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier, endContract, reopenContract } from "../core/services/master";
 import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, recordTaxPayment, reinvestProfit } from "../core/services/ledger";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
 
@@ -36,6 +36,8 @@ export function makeRegistry(db: Db) {
     updateSupplier: (a: { id: number; name: string; phone?: string | null }) => updateSupplier(db, a.id, a),
     createEquipment: (a: { name: string; supplierId: number; siteName?: string; supplierRatePt?: number }) => createEquipment(db, a),
     updateEquipment: (a: { id: number; name: string; siteName?: string | null; supplierRatePt?: number | null }) => updateEquipment(db, a.id, a),
+    endContract: (a: { id: number; endDate: string }) => endContract(db, a.id, a.endDate),
+    reopenContract: (a: { id: number }) => reopenContract(db, a.id),
     partySheet: (a: { contractId: number; month: string; side: Side }) => getPartySheet(db, a.contractId, a.month, a.side),
     supplierPayment: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
       recordSupplierPayment(db, a, { confirmNegative: a.confirmNegative }),
@@ -119,6 +121,10 @@ function labelFor(db: Db, fn: string, a: any): string | null {
       return `تعديل صاحب معدة: ${a.name}`;
     case "createEquipment":
       return `معدة جديدة: ${a.name}`;
+    case "endContract":
+      return `العقد خلص يوم ${day(a.endDate)}`;
+    case "reopenContract":
+      return "رجوع العقد شغال";
     case "updateEquipment":
       return `تعديل معدة: ${a.name}`;
     case "supplierPayment":

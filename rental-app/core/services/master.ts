@@ -173,3 +173,17 @@ export function updateClient(db: Db, id: number, v: { kind: "company" | "individ
   if (!v.name.trim()) throw new UserError("اكتب اسم الشركة أو الفرد");
   db.prepare("UPDATE clients SET kind = ?, name = ?, phone = ?, tax_id = ? WHERE id = ? AND deleted_at IS NULL").run(v.kind, v.name.trim(), v.phone ?? null, v.taxId ?? null, id);
 }
+
+/** "العقد خلص": بيتقفل في التاريخ ده، والمعدة بتبقى فاضية عند صاحبها من بعده. */
+export function endContract(db: Db, id: number, endDate: string) {
+  const c = db.prepare("SELECT start_date FROM contracts WHERE id = ? AND deleted_at IS NULL").get(id) as { start_date: string } | undefined;
+  if (!c) throw new UserError("العقد مش موجود");
+  if (!endDate) throw new UserError("اختار تاريخ نهاية العقد");
+  if (endDate < c.start_date) throw new UserError("تاريخ النهاية قبل تاريخ البداية");
+  db.prepare("UPDATE contracts SET end_date = ?, status = 'ended' WHERE id = ?").run(endDate, id);
+}
+
+/** رجّع العقد شغال (لو اتقفل بالغلط) — من غير تاريخ نهاية. */
+export function reopenContract(db: Db, id: number) {
+  db.prepare("UPDATE contracts SET end_date = NULL, status = 'active' WHERE id = ? AND deleted_at IS NULL").run(id);
+}

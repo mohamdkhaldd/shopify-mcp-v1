@@ -27,7 +27,7 @@ export function dashboardView(db: Db, month: string = monthOf(today()), now: str
   const generalExpensesPt = m?.generalExpensesPt ?? 0;
 
   const active = books.raw.contracts
-    .filter((c) => c.status === "active")
+    .filter((c) => c.status === "active" && (!c.end_date || c.end_date >= asOf))
     .map((c) => {
       const r = rows.find((x) => x.contractId === c.id);
       return {
@@ -103,11 +103,13 @@ function monthsOfContract(c: { start_date: string; end_date: string | null }, no
 export function sarkiView(db: Db, contractId?: number, month?: string, now: string = today()) {
   const contracts = db
     .prepare(
-      `SELECT c.id, c.code, c.status, e.name AS equipment, cl.name AS client FROM contracts c
+      `SELECT c.id, c.code,
+              CASE WHEN c.status = 'active' AND c.end_date IS NOT NULL AND c.end_date < ? THEN 'ended' ELSE c.status END AS status,
+              e.name AS equipment, cl.name AS client FROM contracts c
        JOIN equipment e ON e.id = c.equipment_id JOIN clients cl ON cl.id = c.client_id
-       WHERE c.deleted_at IS NULL ORDER BY (c.status = 'active') DESC, c.id DESC`,
+       WHERE c.deleted_at IS NULL ORDER BY (c.status = 'active' AND (c.end_date IS NULL OR c.end_date >= ?)) DESC, c.id DESC`,
     )
-    .all() as { id: number; code: string; status: string; equipment: string; client: string }[];
+    .all(now, now) as { id: number; code: string; status: string; equipment: string; client: string }[];
   const id = contractId && contracts.some((c) => c.id === contractId) ? contractId : contracts[0]?.id;
   if (!id) return { contracts, contract: null };
   const c = db
@@ -139,7 +141,8 @@ export function sarkiView(db: Db, contractId?: number, month?: string, now: stri
       supplierRatePt: c.supplier_rate_pt as number,
       startDate: c.start_date as string,
       endDate: c.end_date as string | null,
-      status: c.status as string,
+      // عقد بتاريخ نهاية عدّى = خلص، حتى لو محدش داس "العقد خلص".
+      status: (c.status === "active" && c.end_date && (c.end_date as string) < now ? "ended" : c.status) as string,
     },
     month: m,
     months,
@@ -191,7 +194,12 @@ export function suppliersView(db: Db, supplierId?: number, now: string = today()
   if (!id) return { list, selected: null };
   const st = supplierStatement(db, id, now, books);
   const active = new Map(
-    (db.prepare("SELECT equipment_id, site_name FROM contracts WHERE supplier_id = ? AND status = 'active' AND deleted_at IS NULL").all(id) as { equipment_id: number; site_name: string | null }[]).map((c) => [
+    // شغالة = عقد مفتوح ولسه موصلش لتاريخ نهايته.
+    (
+      db
+        .prepare("SELECT equipment_id, site_name FROM contracts WHERE supplier_id = ? AND status = 'active' AND deleted_at IS NULL AND (end_date IS NULL OR end_date >= ?)")
+        .all(id, now) as { equipment_id: number; site_name: string | null }[]
+    ).map((c) => [
       c.equipment_id,
       c,
     ]),

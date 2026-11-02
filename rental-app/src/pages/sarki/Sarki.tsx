@@ -10,6 +10,8 @@ import { milliToHours } from "../../utils/input";
 import { ClientSheet, SupplierSheet } from "./Sheets";
 import { ClientBulk, SupplierBulk } from "./BulkTools";
 import NewContract from "./NewContract";
+import Modal from "../../components/Modal";
+import { Labeled, TextInput } from "../../components/Field";
 
 type Tab = "client" | "supplier";
 type Deleting = { entity: "work_logs" | "contracts"; id: number };
@@ -23,8 +25,44 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+// "العقد خلص": بيتقفل في التاريخ ده (النهارده لو مكتبتش غيره)، والمعدة بتبقى
+// فاضية عند صاحبها من بعده.
+function EndContract({ id, startDate, onClose, onDone, onError }: { id: number; startDate: string; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {
+  const now = new Date();
+  const [date, setDate] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`);
+  async function save() {
+    try {
+      await api.endContract(id, date);
+      onClose();
+      onDone(`العقد خلص يوم ${dateLabel(date)} — المعدة بقت فاضية عند صاحبها`);
+    } catch (e) {
+      onError((e as Error).message);
+    }
+  }
+  return (
+    <Modal
+      title="العقد خلص"
+      onClose={onClose}
+      footer={
+        <>
+          <Button onClick={onClose}>إلغاء</Button>
+          <Button primary onClick={save}>
+            خلص العقد
+          </Button>
+        </>
+      }
+    >
+      <Labeled label="آخر يوم في العقد">
+        <TextInput type="date" min={startDate} value={date} onChange={(e) => setDate(e.target.value)} />
+      </Labeled>
+      <p className="mt-2 text-xs text-muted">بعد اليوم ده العقد بيتقفل، والمعدة بتظهر "فاضية" في معدات صاحبها.</p>
+    </Modal>
+  );
+}
+
 function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki; onDelete: (d: Deleting) => void; onDone: (m: string) => void; onError: (m: string) => void; reload: () => void }) {
   const [tab, setTab] = useState<Tab>("client");
+  const [ending, setEnding] = useState(false);
   const c = v.contract;
   const t = v.client.totals;
   return (
@@ -40,6 +78,27 @@ function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki;
             <Pill tone="tax">عليه {[c.vatApplies && "١٤٪", c.tax5Applies && "٥٪"].filter(Boolean).join(" و ")}</Pill>
           ) : (
             <Pill>من غير ضرايب</Pill>
+          )}
+          {c.status === "active" ? (
+            <Button onClick={() => setEnding(true)} title="العقد خلص">
+              ⏹ العقد خلص
+            </Button>
+          ) : (
+            <>
+              <Pill>منتهي</Pill>
+              <Button
+                onClick={async () => {
+                  try {
+                    await api.reopenContract(c.id);
+                    onDone("العقد رجع شغال");
+                  } catch (e) {
+                    onError((e as Error).message);
+                  }
+                }}
+              >
+                رجّعه شغال
+              </Button>
+            </>
           )}
           <PrintButtons pdfName={`سركي ${c.code} ${monthLabel(v.month)}`} singlePage={false} />
           <Button danger onClick={() => onDelete({ entity: "contracts", id: c.id })} title="حذف العقد">
@@ -103,6 +162,7 @@ function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki;
       <div className="no-print text-xs text-muted px-4 py-2.5 border-t border-line">
         الدايرة الحمرا جنب اليوم = مشتغلش (اكتب السبب في البيان). الساعات الفعلية فاضية = يوم كامل. الأوفر تايم = الفعلية − الأساسية، وسعر ساعته لو فاضي = اليومية ÷ الساعات الأساسية.
       </div>
+      {ending && <EndContract id={c.id} startDate={c.startDate} onClose={() => setEnding(false)} onDone={onDone} onError={onError} />}
     </Panel>
   );
 }
