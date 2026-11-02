@@ -2,7 +2,8 @@ import { FormEvent, useEffect, useState } from "react";
 import Icon from "../components/Icon";
 import Modal from "../components/Modal";
 import MonthPicker from "../components/equipment/MonthPicker";
-import { treasuryApi } from "../api/client";
+import { hassanApi, treasuryApi } from "../api/client";
+import { person } from "../person";
 import { TreasuryExtras, TreasuryStatement, TreasurySummaryRow } from "../api/types";
 import { currentMonthKey, monthLabel } from "../utils/months";
 import { formatEGP } from "../utils/format";
@@ -289,7 +290,15 @@ export default function Treasury() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
 
-  const refresh = () => Promise.all([treasuryApi.summary(month).then(setRows), treasuryApi.extras(month).then(setExtras)]);
+  // كوميشن صاحب الكوميشن اللي لسه جوه الخزنة (خزنة واحدة للكل).
+  const [commission, setCommission] = useState<number | null>(null);
+
+  const refresh = () =>
+    Promise.all([
+      treasuryApi.summary(month).then(setRows),
+      treasuryApi.extras(month).then(setExtras),
+      hassanApi.treasuryBalance(month).then((b) => setCommission(b.balance), () => setCommission(null)),
+    ]);
 
   useEffect(() => {
     setLoading(true);
@@ -350,6 +359,12 @@ export default function Treasury() {
             <div className="bg-white rounded-card shadow-card p-5">
               <div className="text-sm text-slate-500 font-semibold">الكاش الحقيقي في كل الحسابات دلوقتي</div>
               <div className={`mt-2 text-2xl font-extrabold ${totalBalance >= 0 ? "text-primary" : "text-rose-600"}`}>{formatEGP(totalBalance)}</div>
+              {commission != null && (
+                <div className="mt-1 text-xs text-slate-500">
+                  منها كوميشن {person()}: <span className="font-bold text-slate-700">{formatEGP(commission)}</span> — والباقي للشركة{" "}
+                  <span className="font-bold text-slate-700">{formatEGP(totalBalance - commission)}</span>
+                </div>
+              )}
             </div>
             <div className="bg-white rounded-card shadow-card p-5">
               <div className="text-sm text-slate-500 font-semibold">دخل فعلًا — {monthLabel(month)}</div>

@@ -446,6 +446,7 @@ export const hassanApi = {
     type: HassanWorkerEntryType;
     amount: number;
     note: string | null;
+    method?: string;
   }): Promise<HassanWorkerEntry> => invoke("hassanWorkerEntries:create", entry),
   workerEntryRemove: (id: number): Promise<void> => invoke("hassanWorkerEntries:delete", { id }),
   workersPayroll: (month: string): Promise<HassanWorkerPayroll> => invoke("hassanWorkers:payroll", { month }),

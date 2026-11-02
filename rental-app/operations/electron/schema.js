@@ -472,6 +472,9 @@ function setupDatabase(db, { seed = true } = {}) {
   // (إيجار، قسط، أكل...) عشان تبان إجماليات كل بند في الشهر.
   const expenseCols = db.prepare("PRAGMA table_info(hassan_treasury_expenses)").all().map((c) => c.name);
   if (!expenseCols.includes("category")) db.exec("ALTER TABLE hassan_treasury_expenses ADD COLUMN category TEXT");
+  // خزنة واحدة: الصرف من الكوميشن بقى طالع من حساب في خزنة الشركة (method).
+  // الصرف القديم (قبل التغيير ده) فاضي — مبيأثرش على الخزنة بأثر رجعي.
+  if (!expenseCols.includes("method")) db.exec("ALTER TABLE hassan_treasury_expenses ADD COLUMN method TEXT");
 
   // الصرف من العهدة بقى ممكن يكون لمورد / العربية الملاكي / سلفة أو مرتب سواق —
   // كل واحد بيتسجل في مكانه ومربوط بسطر العهدة.

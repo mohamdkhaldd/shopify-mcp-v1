@@ -25,6 +25,7 @@ import {
 import { currentMonthKey, monthLabel } from "../utils/months";
 import { formatEGP } from "../utils/format";
 import { person } from "../person";
+import { PAYMENT_METHODS, paymentMethodLabel } from "../utils/paymentMethods";
 
 const ledgerTypes = (): { value: HassanLedgerType; label: string }[] => [
   { value: "loan", label: `سلفة/دين على ${person()}` },
@@ -303,9 +304,11 @@ function TreasuryTab({ month }: { month: string }) {
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-card shadow-card p-5">
-        <div className="text-sm text-slate-500 font-semibold">رصيد خزنة {person()} (كل الوقت)</div>
+        <div className="text-sm text-slate-500 font-semibold">كوميشن {person()} اللي ليه جوه خزنة الشركة لحد دلوقتي</div>
         <div className="mt-2 text-2xl font-extrabold text-primary">{formatEGP(balance?.balance ?? 0)}</div>
-        <p className="text-xs text-slate-400 mt-1">بيزيد بكوميشنه كل شهر، وبيقل بس لما هو يدفع منه — مالوش علاقة بخزنة الشركة.</p>
+        <p className="text-xs text-slate-400 mt-1">
+          فلوسه جوه خزنة الشركة نفسها (مفيش خزنة لوحدها): بتزيد بكوميشنه كل شهر، وبتقل لما يصرف منها — والصرف ده بيطلع من خزنة الشركة.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -327,7 +330,7 @@ function TreasuryTab({ month }: { month: string }) {
         </div>
       </div>
 
-      <p className="no-print text-xs text-slate-400">اللي {person()} بيصرفه من خزنته بيتسجل في تبويب "مصاريف التشغيل".</p>
+      <p className="no-print text-xs text-slate-400">اللي {person()} بيصرفه من كوميشنه بيتسجل في تبويب "مصاريف التشغيل".</p>
     </div>
   );
 }
@@ -341,6 +344,7 @@ function ExpensesTab({ month }: { month: string }) {
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
+  const [method, setMethod] = useState("cash");
 
   const refresh = () => {
     hassanApi.treasuryList(month).then(setEntries);
@@ -351,7 +355,7 @@ function ExpensesTab({ month }: { month: string }) {
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
     if (!amount || !category.trim()) return;
-    await hassanApi.treasuryCreate({ date, amount: Number(amount), category: category.trim(), description: description.trim() });
+    await hassanApi.treasuryCreate({ date, amount: Number(amount), category: category.trim(), description: description.trim(), method });
     setAmount("");
     setDescription("");
     refresh();
@@ -375,7 +379,9 @@ function ExpensesTab({ month }: { month: string }) {
     <div className="space-y-4">
       <div className="bg-white rounded-card shadow-card p-5">
         <h2 className="font-bold text-slate-800 mb-1">مصاريف التشغيل — {monthLabel(month)}</h2>
-        <p className="text-xs text-slate-400 mb-4">اللي {person()} بيصرفه من خزنته — بيتخصم من فلوسه هو، مش من خزنة الشركة.</p>
+        <p className="text-xs text-slate-400 mb-4">
+          اللي {person()} بيصرفه من كوميشنه — بيطلع من الحساب اللي تختاره في خزنة الشركة، وبيتخصم من كوميشنه.
+        </p>
         <form onSubmit={handleAdd} className="no-print flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
           <div>
             <label className="block text-xs text-slate-400 mb-1">التاريخ</label>
@@ -418,6 +424,16 @@ function ExpensesTab({ month }: { month: string }) {
               className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
             />
           </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">طالع من</label>
+            <select value={method} onChange={(e) => setMethod(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white">
+              {PAYMENT_METHODS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <button type="submit" className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold hover:bg-primary-dark">
             إضافة
           </button>
@@ -432,6 +448,7 @@ function ExpensesTab({ month }: { month: string }) {
                 <th className="text-start font-semibold py-1.5">التاريخ</th>
                 <th className="text-start font-semibold py-1.5">البند</th>
                 <th className="text-start font-semibold py-1.5">التفاصيل</th>
+                <th className="text-start font-semibold py-1.5">طالع من</th>
                 <th className="text-start font-semibold py-1.5">القيمة</th>
                 <th></th>
               </tr>
@@ -442,6 +459,7 @@ function ExpensesTab({ month }: { month: string }) {
                   <td className="py-1.5 text-slate-500 whitespace-nowrap">{e.date}</td>
                   <td className="py-1.5 font-semibold text-slate-700">{e.category || e.description}</td>
                   <td className="py-1.5 text-slate-500">{e.description !== (e.category || e.description) ? e.description : ""}</td>
+                  <td className="py-1.5 text-slate-500">{e.computed ? "—" : e.method ? paymentMethodLabel(e.method) : "قديم"}</td>
                   <td className="py-1.5 font-semibold text-rose-600 whitespace-nowrap">{formatEGP(e.amount)}</td>
                   <td className="py-1.5 text-end">
                     {e.computed ? (
@@ -684,6 +702,9 @@ function WorkerEntryForm({
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [method, setMethod] = useState("cash");
+  // الدفعة والسلفة فلوس طالعة من خزنة الشركة (من الكوميشن) — من أنهي حساب.
+  const paysOut = type === "payment" || type === "advance";
 
   useEffect(() => {
     if (suggestedAmount !== undefined) setAmount(suggestedAmount > 0 ? String(suggestedAmount) : "");
@@ -692,7 +713,7 @@ function WorkerEntryForm({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!amount || (noteRequired && !note.trim())) return;
-    await hassanApi.workerEntryCreate({ worker_id: workerId, month, date, type, amount: Number(amount), note: note || null });
+    await hassanApi.workerEntryCreate({ worker_id: workerId, month, date, type, amount: Number(amount), note: note || null, method });
     if (suggestedAmount === undefined) setAmount("");
     setNote("");
     onSaved();
@@ -717,6 +738,15 @@ function WorkerEntryForm({
         onChange={(e) => setNote(e.target.value)}
         className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
       />
+      {paysOut && (
+        <select value={method} onChange={(e) => setMethod(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white">
+          {PAYMENT_METHODS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      )}
       <button type="submit" className={`${buttonClass} text-white rounded-lg px-3 py-1.5 text-sm font-semibold`}>
         {buttonLabel}
       </button>
@@ -961,7 +991,7 @@ function WorkerSlip({
             />
           )}
           <p className="no-print text-xs text-slate-400">
-            دفعة المرتب والسلفة بيتخصموا من خزنة {person()} على طول ويظهروا هناك باسم العامل. الحافز والخصم بيغيّروا المستحق بس.
+            دفعة المرتب والسلفة بتطلع من الحساب اللي تختاره في خزنة الشركة وبتتخصم من كوميشن {person()} باسم العامل. الحافز والخصم بيغيّروا المستحق بس.
           </p>
 
           {row.daily && (
@@ -1071,7 +1101,7 @@ function WorkersTab({ month }: { month: string }) {
           <div className="mt-2 text-2xl font-extrabold text-slate-800">{formatEGP(payroll?.totalNet ?? 0)}</div>
         </div>
         <div className="bg-white rounded-card shadow-card p-5">
-          <div className="text-sm text-slate-500 font-semibold">اتصرف من خزنة {person()}</div>
+          <div className="text-sm text-slate-500 font-semibold">اتصرف من كوميشن {person()}</div>
           <div className="mt-2 text-2xl font-extrabold text-rose-600">{formatEGP(payroll?.totalPaid ?? 0)}</div>
         </div>
         <div className="bg-white rounded-card shadow-card p-5">
@@ -1365,7 +1395,7 @@ export default function Hassan() {
           ].join(" ")}
         >
           <Icon name="treasury" className="w-4 h-4" />
-          الخزنة
+          الكوميشن اللي في الخزنة
         </button>
         <button
           onClick={() => setTab("funds")}

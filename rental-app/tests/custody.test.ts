@@ -119,3 +119,23 @@ describe("driver bonus", () => {
     expect(sb.driverSalaryBreakdown).toContainEqual({ name: "محمود — حافز", amount: 500 });
   });
 });
+
+describe("one treasury", () => {
+  it("spending from the commission leaves the company treasury and comes off the commission", () => {
+    const db = setupOperationsDatabase(new Database(":memory:"));
+    registerIpcHandlers(db);
+    const before = call("hassan:treasuryBalance", { month: "2026-10" }).balance;
+
+    // an old expense (before one treasury): no account → the treasury doesn't change
+    db.prepare("INSERT INTO hassan_treasury_expenses (date, amount, description) VALUES ('2026-10-02', 700, 'قديم')").run();
+    call("hassanTreasury:create", { date: "2026-10-03", amount: 3000, category: "إيجار", description: "", method: "cash" });
+    const w = call("hassanWorkers:create", { name: "علي", job: null, monthly_salary: 6000, start_month: "2026-10" });
+    call("hassanWorkerEntries:create", { worker_id: w.id, month: "2026-10", date: "2026-10-05", type: "payment", amount: 2000, note: null, method: "cash" });
+
+    const cash = JSON.stringify(call("treasury:accountTransactions", { account_name: "cash", month: "2026-10" }));
+    expect(cash).toContain("من الكوميشن: إيجار");
+    expect(cash).toContain("مرتب علي");
+    expect(cash).not.toContain("قديم");
+    expect(call("hassan:treasuryBalance", { month: "2026-10" }).balance).toBe(before - 700 - 3000 - 2000);
+  });
+});

@@ -279,6 +279,8 @@ export interface HassanTreasuryExpense {
   description: string;
   /** البند (إيجار، قسط، أكل...) — في القايمة: البند ده أو البيان لو مفيش */
   category?: string | null;
+  /** طالع من أنهي حساب في خزنة الشركة (فاضي = صرف قديم قبل الخزنة الواحدة) */
+  method?: string | null;
   // سطر محسوب (الخاص من العربية الملاكي) — مبيتمسحش من هنا.
   computed?: boolean;
 }

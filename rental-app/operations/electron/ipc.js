@@ -1213,7 +1213,7 @@ function registerIpcHandlers(db) {
   );
 
   const WORKER_ENTRY_LABEL = { payment: "مرتب", advance: "سلفة" };
-  ipcMain.handle("hassanWorkerEntries:create", (_e, { worker_id, month, date, type, amount, note }) => {
+  ipcMain.handle("hassanWorkerEntries:create", (_e, { worker_id, month, date, type, amount, note, method }) => {
     const worker = db.prepare("SELECT * FROM hassan_workers WHERE id = ?").get(worker_id);
     if (!worker) throw new Error("العامل مش موجود");
     const tx = db.transaction(() => {
@@ -1225,8 +1225,8 @@ function registerIpcHandlers(db) {
           note?.trim() ? ` — ${note.trim()}` : ""
         }`;
         const info = db
-          .prepare("INSERT INTO hassan_treasury_expenses (date, amount, description) VALUES (?, ?, ?)")
-          .run(date, amount, description);
+          .prepare("INSERT INTO hassan_treasury_expenses (date, amount, description, method) VALUES (?, ?, ?, ?)")
+          .run(date, amount, description, method || "cash");
         treasuryExpenseId = info.lastInsertRowid;
         const created = db.prepare("SELECT * FROM hassan_treasury_expenses WHERE id = ?").get(treasuryExpenseId);
         pushToCloud("hassan_treasury_expenses", created.id, created);
@@ -1384,8 +1384,8 @@ function registerIpcHandlers(db) {
     const description = (expense.description ?? "").trim() || category || "";
     if (!description) throw new Error("اكتب البند");
     const info = db
-      .prepare("INSERT INTO hassan_treasury_expenses (date, amount, description, category) VALUES (?, ?, ?, ?)")
-      .run(expense.date, expense.amount, description, category);
+      .prepare("INSERT INTO hassan_treasury_expenses (date, amount, description, category, method) VALUES (?, ?, ?, ?, ?)")
+      .run(expense.date, expense.amount, description, category, expense.method || "cash");
     const created = db.prepare("SELECT * FROM hassan_treasury_expenses WHERE id = ?").get(info.lastInsertRowid);
     pushToCloud("hassan_treasury_expenses", created.id, created);
     return created;
@@ -1813,6 +1813,13 @@ function registerIpcHandlers(db) {
       .forEach((r) => add(r.date, "out", `سداد لـ ${r.creditor_name}${r.note ? ` (${r.note})` : ""}`, r.amount));
 
     // العهد: المبلغ اللي اتسلم (وأي زيادة) طالع من الخزنة، والباقي اللي رجع داخل.
+    // خزنة واحدة: الصرف من الكوميشن طالع فعلًا من حساب في خزنة الشركة.
+    db.prepare(
+      `SELECT x.date, x.amount, COALESCE(NULLIF(TRIM(x.category), ''), x.description) AS item FROM hassan_treasury_expenses x WHERE x.method = ?`
+    )
+      .all(account)
+      .forEach((r) => add(r.date, "out", `من الكوميشن: ${r.item}`, r.amount));
+
     db.prepare("SELECT date, amount, holder FROM custodies WHERE method = ?")
       .all(account)
       .forEach((r) => add(r.date, "out", `عهدة لـ ${r.holder}`, r.amount));
