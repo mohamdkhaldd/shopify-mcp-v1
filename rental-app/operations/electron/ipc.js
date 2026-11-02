@@ -1496,7 +1496,7 @@ function registerIpcHandlers(db) {
         party_name: entry.party_name ?? null,
         description: entry.description ?? null,
         note: entry.note ?? null,
-        method: entry.method || null,
+        method: entry.method || "cash",
       });
     const created = db.prepare("SELECT * FROM hassan_ledger WHERE id = ?").get(info.lastInsertRowid);
     pushToCloud("hassan_ledger", created.id, created);

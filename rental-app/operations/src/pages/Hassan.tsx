@@ -517,8 +517,8 @@ function LedgerTab({ month }: { month: string }) {
   const [amount, setAmount] = useState("");
   const [partyName, setPartyName] = useState("");
   const [description, setDescription] = useState("");
-  // من/لـ أنهي حساب في خزنة الشركة — فاضي = تسجيل بس من غير فلوس.
-  const [method, setMethod] = useState("");
+  // من/لـ أنهي حساب في خزنة الشركة.
+  const [method, setMethod] = useState("cash");
   const cashIn = type === "loan" || type === "collection";
 
   const refresh = () => {
@@ -539,7 +539,7 @@ function LedgerTab({ month }: { month: string }) {
       party_name: partyName || null,
       description: description || null,
       note: null,
-      method: method || null,
+      method,
     });
     setAmount("");
     setPartyName("");
@@ -649,7 +649,6 @@ function LedgerTab({ month }: { month: string }) {
           <div>
             <label className="block text-xs text-slate-400 mb-1">الفلوس {cashIn ? "دخلت الخزنة في" : "طلعت من الخزنة من"}</label>
             <select value={method} onChange={(e) => setMethod(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white">
-              <option value="">من غير فلوس — تسجيل بس</option>
               {PAYMENT_METHODS.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
@@ -662,7 +661,7 @@ function LedgerTab({ month }: { month: string }) {
           </button>
         </form>
         <p className="no-print text-[11px] text-slate-400 -mt-2 mb-4">
-          لو اخترت حساب: استلف أو حصّل = الفلوس بتدخل الحساب ده في خزنة الشركة، سدد أو سلّف حد = بتطلع منه — وبتتحسب في فلوس {person()} اللي جوه الخزنة.
+          استلف أو حصّل = الفلوس بتدخل الحساب ده في خزنة الشركة، سدد أو سلّف حد = بتطلع منه — وبتتحسب في فلوس {person()} اللي جوه الخزنة.
         </p>
 
         {entries.length === 0 ? (
@@ -689,7 +688,7 @@ function LedgerTab({ month }: { month: string }) {
                   <td className="py-2 text-slate-500">{e.party_name ?? "—"}</td>
                   <td className="py-2 text-slate-500">{e.description ?? "—"}</td>
                   <td className="py-2 text-slate-500">
-                    {e.method ? `${e.type === "loan" || e.type === "collection" ? "دخلت" : "طلعت"} — ${paymentMethodLabel(e.method)}` : "تسجيل بس"}
+                    {e.method ? `${e.type === "loan" || e.type === "collection" ? "دخلت" : "طلعت"} — ${paymentMethodLabel(e.method)}` : "قديم"}
                   </td>
                   <td className="no-print py-2">
                     <button onClick={() => handleDelete(e.id)} className="text-xs text-rose-500 hover:text-rose-700 font-semibold">
