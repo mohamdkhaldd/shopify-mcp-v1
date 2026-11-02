@@ -3,6 +3,7 @@ import Icon from "../components/Icon";
 import Modal from "../components/Modal";
 import MonthPicker from "../components/equipment/MonthPicker";
 import { hassanApi, treasuryApi } from "../api/client";
+import MonthMovements from "./treasury/MonthMovements";
 import { person } from "../person";
 import { TreasuryExtras, TreasuryStatement, TreasurySummaryRow } from "../api/types";
 import { currentMonthKey, monthLabel } from "../utils/months";
@@ -289,6 +290,7 @@ export default function Treasury() {
   const [openingAccount, setOpeningAccount] = useState<TreasurySummaryRow | null>(null);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
+  const [movements, setMovements] = useState<"in" | "out" | null>(null);
 
   // كوميشن صاحب الكوميشن اللي لسه جوه الخزنة (خزنة واحدة للكل).
   const [commission, setCommission] = useState<number | null>(null);
@@ -366,14 +368,16 @@ export default function Treasury() {
                 </div>
               )}
             </div>
-            <div className="bg-white rounded-card shadow-card p-5">
+            <button onClick={() => setMovements("in")} className="bg-white rounded-card shadow-card p-5 text-start hover:ring-2 hover:ring-primary/30">
               <div className="text-sm text-slate-500 font-semibold">دخل فعلًا — {monthLabel(month)}</div>
               <div className="mt-2 text-2xl font-extrabold text-primary">{formatEGP(totalIn)}</div>
-            </div>
-            <div className="bg-white rounded-card shadow-card p-5">
+              <div className="no-print text-[11px] text-primary font-semibold mt-1">دوس تشوف وتعدّل</div>
+            </button>
+            <button onClick={() => setMovements("out")} className="bg-white rounded-card shadow-card p-5 text-start hover:ring-2 hover:ring-primary/30">
               <div className="text-sm text-slate-500 font-semibold">اتصرف فعلًا — {monthLabel(month)}</div>
               <div className="mt-2 text-2xl font-extrabold text-rose-600">{formatEGP(totalOut)}</div>
-            </div>
+              <div className="no-print text-[11px] text-primary font-semibold mt-1">دوس تشوف وتعدّل</div>
+            </button>
           </div>
           <p className="text-xs text-slate-400 -mt-3">
             التحويلات بين الحسابات بتظهر في دخل وخرج كل حساب لوحده، بس مجموعها في الكل صفر.
@@ -545,6 +549,7 @@ export default function Treasury() {
           }}
         />
       )}
+      {movements && <MonthMovements month={month} direction={movements} onClose={() => setMovements(null)} onChanged={refresh} />}
     </div>
   );
 }

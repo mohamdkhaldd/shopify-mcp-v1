@@ -17,7 +17,7 @@ interface PackageData {
 
 // صفحة A4 واحدة: المحتوى بيتصغر لوحده لو أطول أو أعرض من الورقة، عشان كل
 // شيت يطلع في ورقة واحدة بالظبط.
-function Page({ title, equipment, month, children }: { title: string; equipment: Equipment; month: string; children: ReactNode }) {
+export function Page({ title, heading, month, children }: { title: string; heading: string; month: string; children: ReactNode }) {
   const brand = useBrand();
   const box = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
@@ -66,7 +66,7 @@ function Page({ title, equipment, month, children }: { title: string; equipment:
             <div>
               <div className="font-extrabold text-lg">{brand.customer || brand.name}</div>
               <div className="text-sm text-slate-600">
-                {equipment.name} — {title}
+                {heading} — {title}
               </div>
             </div>
           </div>
@@ -127,12 +127,21 @@ function DriverSheet({ logs }: { logs: DailyLog[] }) {
   );
 }
 
-// ملف الشريك: الصفحات كلها جاهزة على ورق A4 — السركي الورقي، شيت السركي
-// بالسعر، المصروفات، وتقسيمة الفلوس — وبيتحفظ PDF واحد.
-export default function PartnerPackage({ equipment, month, onClose }: { equipment: Equipment; month: string; onClose: () => void }) {
+// صفحات معدة واحدة في الشهر: السركي الورقي، شيت السركي بالسعر، المصروفات،
+// وتقسيمة الفلوس — بتستخدم في ملف الشريك من المعدة ومن صفحة الشريك.
+export function EquipmentPages({
+  equipment,
+  month,
+  onReady,
+  skipEmpty = false,
+}: {
+  equipment: Equipment;
+  month: string;
+  onReady?: () => void;
+  // في ملف الشريك من صفحة الشريك: المعدة اللي مفيهاش أي حاجة الشهر ده متطلعش.
+  skipEmpty?: boolean;
+}) {
   const [data, setData] = useState<PackageData | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -152,66 +161,20 @@ export default function PartnerPackage({ equipment, month, onClose }: { equipmen
       setData({ summary, sheets, driverSheets, market: market.filter((l) => l.fixed_value), expenses });
     })();
   }, [equipment.id, month]);
-
-  // الطباعة وقت الملف ده بتطلع صفحاته بس.
   useEffect(() => {
-    const html = document.documentElement;
-    html.style.setProperty("--pkg-root-font", getComputedStyle(html).fontSize);
-    html.classList.add("pkg-printing");
-    // وقت الملف ده بس: كل الصفحات A4 من غير هوامش — فالمتصفح (نسخة الويب)
-    // ملوش مكان يكتب فيه اللينك والتاريخ فوق وتحت، ومفيش ورقة زيادة.
-    const pageStyle = document.createElement("style");
-    pageStyle.textContent = "@page { size: A4; margin: 0; }";
-    document.head.appendChild(pageStyle);
-    return () => {
-      html.classList.remove("pkg-printing");
-      pageStyle.remove();
-    };
-  }, []);
-
-  async function save() {
-    setSaving(true);
-    setMessage("");
-    try {
-      const r = await printApi.savePdf(`ملف الشريك - ${equipment.name} - ${monthLabel(month)} ${month.slice(0, 4)}`);
-      if (r.filePath) setMessage(`اتحفظ: ${r.filePath}`);
-    } finally {
-      setSaving(false);
-    }
-  }
+    if (data) onReady?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   const s = data?.summary;
   const expensesTotal = (data?.expenses ?? []).reduce((sum, e) => sum + e.amount, 0);
-
-  return createPortal(
-    <div className="pkg-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-200" dir="rtl">
-      <div className="pkg-toolbar sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 bg-white shadow px-5 py-3">
-        <div>
-          <div className="font-extrabold text-slate-900">ملف الشريك — {equipment.name}</div>
-          <div className="text-xs text-slate-500">
-            {monthLabel(month)} {month.slice(0, 4)} — {message || "كل شيت في ورقة A4 لوحده"}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={save}
-            disabled={!data || saving}
-            className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
-          >
-            {saving ? "جاري التجهيز..." : "⬇ حفظ PDF"}
-          </button>
-          <button onClick={onClose} className="bg-slate-100 text-slate-600 rounded-xl px-4 py-2 text-sm font-semibold">
-            إغلاق
-          </button>
-        </div>
-      </div>
-
-      {!data || !s ? (
-        <div className="p-10 text-center text-slate-500">جاري تجهيز الملف...</div>
-      ) : (
-        <div className="pkg-pages py-6 space-y-6">
+  if (!data || !s) return <div className="p-6 text-center text-slate-500">جاري تجهيز {equipment.name}...</div>;
+  const empty = !data.sheets.length && !data.market.length && !data.expenses.length && data.driverSheets.every((d) => !d.logs.length);
+  if (skipEmpty && empty) return null;
+  return (
+    <>
           {data.sheets.map((sheet, i) => (
-            <Page key={sheet.id} title={`السركي الورقي من الشركة${data.sheets.length > 1 ? ` (${i + 1})` : ""}`} equipment={equipment} month={month}>
+            <Page key={sheet.id} title={`السركي الورقي من الشركة${data.sheets.length > 1 ? ` (${i + 1})` : ""}`} heading={equipment.name} month={month}>
               <div className="flex items-center justify-center" style={{ height: "222mm" }}>
                 <img src={sheet.image} alt="" className="max-w-full max-h-full object-contain" />
               </div>
@@ -219,13 +182,13 @@ export default function PartnerPackage({ equipment, month, onClose }: { equipmen
           ))}
 
           {data.driverSheets.map((d) => (
-            <Page key={`d-${d.label}`} title={`شيت السركي${d.label ? ` — ${d.label}` : ""}`} equipment={equipment} month={month}>
+            <Page key={`d-${d.label}`} title={`شيت السركي${d.label ? ` — ${d.label}` : ""}`} heading={equipment.name} month={month}>
               {d.logs.length ? <DriverSheet logs={d.logs} /> : <div className="text-sm text-slate-500">مفيش أيام متسجلة الشهر ده.</div>}
             </Page>
           ))}
 
           {data.market.length > 0 && (
-            <Page title="سركي سوق" equipment={equipment} month={month}>
+            <Page title="سركي سوق" heading={equipment.name} month={month}>
               <table className="w-full text-sm">
                 <thead>
                   <tr>
@@ -247,7 +210,7 @@ export default function PartnerPackage({ equipment, month, onClose }: { equipmen
             </Page>
           )}
 
-          <Page title="المصروفات" equipment={equipment} month={month}>
+          <Page title="المصروفات" heading={equipment.name} month={month}>
             <table className="w-full text-sm">
               <thead>
                 <tr>
@@ -286,7 +249,7 @@ export default function PartnerPackage({ equipment, month, onClose }: { equipmen
             </table>
           </Page>
 
-          <Page title="تقسيمة الفلوس" equipment={equipment} month={month}>
+          <Page title="تقسيمة الفلوس" heading={equipment.name} month={month}>
             <table className="w-full text-base mb-6">
               <tbody>
                 <tr>
@@ -336,9 +299,96 @@ export default function PartnerPackage({ equipment, month, onClose }: { equipmen
               </div>
             </div>
           </Page>
+    </>
+  );
+}
+
+// الإطار: شريط فوق فيه "حفظ PDF"، والطباعة وقته بتطلع الصفحات بس (A4 من غير هوامش).
+export function PackageShell({
+  title,
+  subtitle,
+  fileName,
+  ready,
+  onClose,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  fileName: string;
+  ready: boolean;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    const html = document.documentElement;
+    html.style.setProperty("--pkg-root-font", getComputedStyle(html).fontSize);
+    html.classList.add("pkg-printing");
+    // وقت الملف ده بس: كل الصفحات A4 من غير هوامش — فالمتصفح (نسخة الويب)
+    // ملوش مكان يكتب فيه اللينك والتاريخ فوق وتحت، ومفيش ورقة زيادة.
+    const pageStyle = document.createElement("style");
+    pageStyle.textContent = "@page { size: A4; margin: 0; }";
+    document.head.appendChild(pageStyle);
+    return () => {
+      html.classList.remove("pkg-printing");
+      pageStyle.remove();
+    };
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    setMessage("");
+    try {
+      const r = await printApi.savePdf(fileName);
+      if (r.filePath) setMessage(`اتحفظ: ${r.filePath}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return createPortal(
+    <div className="pkg-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-200" dir="rtl">
+      <div className="pkg-toolbar sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 bg-white shadow px-5 py-3">
+        <div>
+          <div className="font-extrabold text-slate-900">{title}</div>
+          <div className="text-xs text-slate-500">
+            {subtitle} — {message || "كل شيت في ورقة A4 لوحده"}
+          </div>
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={save}
+            disabled={!ready || saving}
+            className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
+          >
+            {saving ? "جاري التجهيز..." : ready ? "⬇ حفظ PDF" : "جاري التجهيز..."}
+          </button>
+          <button onClick={onClose} className="bg-slate-100 text-slate-600 rounded-xl px-4 py-2 text-sm font-semibold">
+            إغلاق
+          </button>
+        </div>
+      </div>
+      <div className="pkg-pages py-6 space-y-6">{children}</div>
     </div>,
     document.body
+  );
+}
+
+// ملف الشريك من صفحة المعدة: صفحات المعدة دي بس.
+export default function PartnerPackage({ equipment, month, onClose }: { equipment: Equipment; month: string; onClose: () => void }) {
+  const [ready, setReady] = useState(false);
+  const period = `${monthLabel(month)} ${month.slice(0, 4)}`;
+  return (
+    <PackageShell
+      title={`ملف الشريك — ${equipment.name}`}
+      subtitle={period}
+      fileName={`ملف الشريك - ${equipment.name} - ${period}`}
+      ready={ready}
+      onClose={onClose}
+    >
+      <EquipmentPages equipment={equipment} month={month} onReady={() => setReady(true)} />
+    </PackageShell>
   );
 }

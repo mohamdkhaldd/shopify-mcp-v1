@@ -1558,7 +1558,7 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     const equipmentBreakdown = equipmentList.map((e) => {
       const share = e.shares.find((s) => s.partner_id === partner_id)!;
       const netProfit = equipmentMonthNetProfit(e.id, month);
-      return { equipment_name: e.name, percentage: share.percentage, monthAmount: (netProfit * share.percentage) / 100 };
+      return { equipment_name: e.name, percentage: share.percentage, monthAmount: (netProfit * share.percentage) / 100, shiftIncome: [] };
     });
     const monthDue = equipmentBreakdown.reduce((sum, e) => sum + e.monthAmount, 0);
 

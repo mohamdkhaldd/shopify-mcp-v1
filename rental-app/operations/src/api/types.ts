@@ -913,3 +913,14 @@ export interface HassanInstallment {
   nextDue: string | null;
   days: number | null;
 }
+
+// حركة فلوس في الخزنة (من أي جدول) — بتتعدّل وتتمسح من صفحة الخزنة.
+export interface MonthMovement {
+  date: string;
+  direction: "in" | "out";
+  label: string;
+  amount: number;
+  account: string;
+  src?: string;
+  src_id?: number;
+}

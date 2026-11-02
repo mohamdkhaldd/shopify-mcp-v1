@@ -1,5 +1,6 @@
 import { mockInvoke } from "./mockDb";
 import {
+  MonthMovement,
   HassanInstallment,
   FundDetail,
   FundSummary,
@@ -486,6 +487,9 @@ export const partnersDashboardApi = {
 };
 
 export const treasuryApi = {
+  monthMovements: (month: string, direction: "in" | "out"): Promise<MonthMovement[]> => invoke("treasury:monthMovements", { month, direction }),
+  movementUpdate: (m: { src: string; src_id: number; date: string; amount: number; account: string }) => invoke("treasury:movementUpdate", m),
+  movementDelete: (src: string, src_id: number) => invoke("treasury:movementDelete", { src, src_id }),
   list: (): Promise<TreasuryAccount[]> => invoke("treasury:list"),
   setOpening: (id: number, opening_balance: number, opening_date: string | null): Promise<void> =>
     invoke("treasury:setOpening", { id, opening_balance, opening_date }),
@@ -628,7 +632,18 @@ export const fundsApi = {
   removeExpense: (id: number) => invoke("fundExpenses:delete", { id }),
 };
 
+// باسورد الأقساط: الشاشة بتبعت hash بس (SHA-256) — الباسورد نفسه مبيتخزنش.
+export async function hashPin(pin: string): Promise<string> {
+  const bytes = new TextEncoder().encode(`mk-installments:${pin}`);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export const installmentsApi = {
+  lockStatus: (): Promise<{ locked: boolean }> => invoke("installments:lockStatus"),
+  checkLock: async (pin: string): Promise<boolean> => (await invoke("installments:checkLock", { hash: await hashPin(pin) })).ok,
+  setLock: async (oldPin: string | null, newPin: string | null) =>
+    invoke("installments:setLock", { oldHash: oldPin ? await hashPin(oldPin) : null, hash: newPin ? await hashPin(newPin) : null }),
   list: (): Promise<HassanInstallment[]> => invoke("installments:list"),
   create: (i: { title: string; amount: number; count: number | null; start_date: string; note: string | null }) => invoke("installments:create", i),
   update: (i: { id: number; title: string; amount: number; count: number | null; start_date: string; note: string | null }) =>

@@ -7,6 +7,7 @@ import { currentMonthKey } from "../../utils/months";
 import MonthPicker from "../../components/equipment/MonthPicker";
 import PrintButton from "../../components/PrintButton";
 import { PrintHeader, PrintSignoff } from "../../components/PrintSignoff";
+import PartnerFile from "./PartnerFile";
 
 interface PartnerDetailViewProps {
   partnerId: number;
@@ -20,6 +21,7 @@ export default function PartnerDetailView({ partnerId, onBack }: PartnerDetailVi
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
   const [note, setNote] = useState("");
+  const [showFile, setShowFile] = useState(false);
 
   const refresh = () => partnersDashboardApi.detail(partnerId, month).then(setDetail);
 
@@ -59,6 +61,12 @@ export default function PartnerDetailView({ partnerId, onBack }: PartnerDetailVi
           <h1 className="text-2xl font-extrabold text-slate-900">{detail.partner.name}</h1>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowFile(true)}
+            className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold bg-primary text-white hover:bg-primary-dark shadow-card"
+          >
+            📄 ملف الشريك
+          </button>
           <PrintButton />
           <MonthPicker month={month} onChange={setMonth} />
         </div>
@@ -223,6 +231,7 @@ export default function PartnerDetailView({ partnerId, onBack }: PartnerDetailVi
       </div>
 
       <PrintSignoff />
+      {showFile && <PartnerFile detail={detail} month={month} onClose={() => setShowFile(false)} />}
     </div>
   );
 }

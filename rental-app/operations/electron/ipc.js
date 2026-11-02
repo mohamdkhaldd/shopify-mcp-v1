@@ -1804,11 +1804,11 @@ function registerIpcHandlers(db) {
     )
       .all(account)
       .forEach((r) =>
-        add(r.date, "out", `مصروف ${r.category_name ?? "بدون نوع"} — ${r.equipment_name}${r.payee ? ` — ${r.payee}` : ""}`, r.paid)
+        add(r.date, "out", `مصروف ${r.category_name ?? "بدون نوع"} — ${r.equipment_name}${r.payee ? ` — ${r.payee}` : ""}`, r.paid, { src: "monthly_expenses", src_id: r.id })
       );
 
     db.prepare(
-      `SELECT ep.date, ep.amount, me.payee, e.name AS equipment_name, ec.name AS category_name
+      `SELECT ep.id, ep.date, ep.amount, me.payee, e.name AS equipment_name, ec.name AS category_name
        FROM expense_payments ep
        JOIN monthly_expenses me ON me.id = ep.expense_id
        JOIN equipment e ON e.id = me.equipment_id
@@ -1817,92 +1817,98 @@ function registerIpcHandlers(db) {
     )
       .all(account)
       .forEach((r) =>
-        add(r.date, "out", `دفعة آجل: ${r.category_name ?? "مصروف"} — ${r.equipment_name}${r.payee ? ` — ${r.payee}` : ""}`, r.amount)
+        add(r.date, "out", `دفعة آجل: ${r.category_name ?? "مصروف"} — ${r.equipment_name}${r.payee ? ` — ${r.payee}` : ""}`, r.amount, { src: "expense_payments", src_id: r.id })
       );
 
     const employeeMoney = (table, label) =>
       db
         .prepare(
-          `SELECT t.date, t.month, t.amount, e.name AS employee_name FROM ${table} t
+          `SELECT t.id, t.date, t.month, t.amount, e.name AS employee_name FROM ${table} t
            JOIN employees e ON e.id = t.employee_id WHERE t.payment_method = ?`
         )
         .all(account)
         .forEach((r) => {
           const note = equipmentDaysNote(db, r.employee_name, r.month ?? r.date.slice(0, 7));
-          add(r.date, "out", `${label}: ${r.employee_name}${note ? ` (${note})` : ""}`, r.amount);
+          add(r.date, "out", `${label}: ${r.employee_name}${note ? ` (${note})` : ""}`, r.amount, { src: table, src_id: r.id });
         });
     employeeMoney("employee_advances", "سلفة");
     employeeMoney("employee_bonuses", "مكافأة");
     employeeMoney("salary_payments", "دفعة مرتب");
 
     db.prepare(
-      `SELECT pp.date, pp.amount, p.name AS partner_name FROM partner_payments pp
+      `SELECT pp.id, pp.date, pp.amount, p.name AS partner_name FROM partner_payments pp
        JOIN partners p ON p.id = pp.partner_id WHERE pp.method = ?`
     )
       .all(account)
-      .forEach((r) => add(r.date, "out", `دفعة للشريك: ${r.partner_name}`, r.amount));
+      .forEach((r) => add(r.date, "out", `دفعة للشريك: ${r.partner_name}`, r.amount, { src: "partner_payments", src_id: r.id }));
 
     db.prepare(
-      `SELECT sp.date, sp.amount, s.name AS supplier_name FROM supplier_payments sp
+      `SELECT sp.id, sp.date, sp.amount, s.name AS supplier_name FROM supplier_payments sp
        JOIN suppliers s ON s.id = sp.supplier_id WHERE sp.method = ?`
     )
       .all(account)
-      .forEach((r) => add(r.date, "out", `دفعة للمورد: ${r.supplier_name}`, r.amount));
+      .forEach((r) => add(r.date, "out", `دفعة للمورد: ${r.supplier_name}`, r.amount, { src: "supplier_payments", src_id: r.id }));
 
     db.prepare(
-      `SELECT ce.date, ce.amount, ce.note, c.name AS creditor_name FROM creditor_entries ce
+      `SELECT ce.id, ce.date, ce.amount, ce.note, c.name AS creditor_name FROM creditor_entries ce
        JOIN creditors c ON c.id = ce.creditor_id WHERE ce.type = 'payment' AND ce.method = ?`
     )
       .all(account)
-      .forEach((r) => add(r.date, "out", `سداد لـ ${r.creditor_name}${r.note ? ` (${r.note})` : ""}`, r.amount));
+      .forEach((r) => add(r.date, "out", `سداد لـ ${r.creditor_name}${r.note ? ` (${r.note})` : ""}`, r.amount, { src: "creditor_entries", src_id: r.id }));
 
     // العهد: المبلغ اللي اتسلم (وأي زيادة) طالع من الخزنة، والباقي اللي رجع داخل.
     // الحساب الشخصي لصاحب الكوميشن: اللي اتقبض/اتدفع فعلًا من خزنة الشركة —
     // استلف أو حصّل = داخل، سدد أو سلّف حد = طالع.
     const LEDGER_CASH = { loan: ["in", "استلف"], collection: ["in", "حصّل"], repayment: ["out", "سدد"], due: ["out", "سلّف"] };
-    db.prepare("SELECT date, amount, type, party_name, description FROM hassan_ledger WHERE method = ?")
+    db.prepare("SELECT id, date, amount, type, party_name, description FROM hassan_ledger WHERE method = ?")
       .all(account)
       .forEach((r) => {
         const [direction, verb] = LEDGER_CASH[r.type] ?? ["out", ""];
-        add(r.date, direction, `الحساب الشخصي: ${verb}${r.party_name ? ` — ${r.party_name}` : ""}${r.description ? ` (${r.description})` : ""}`, r.amount);
+        add(r.date, direction, `الحساب الشخصي: ${verb}${r.party_name ? ` — ${r.party_name}` : ""}${r.description ? ` (${r.description})` : ""}`, r.amount, {
+          src: "hassan_ledger",
+          src_id: r.id,
+        });
       });
 
     // خزنة واحدة: الصرف من الكوميشن طالع فعلًا من حساب في خزنة الشركة.
     db.prepare(
-      `SELECT x.date, x.amount, NULLIF(TRIM(x.category), '') AS category, x.description FROM hassan_treasury_expenses x WHERE x.method = ?`
+      `SELECT x.id, x.date, x.amount, NULLIF(TRIM(x.category), '') AS category, x.description FROM hassan_treasury_expenses x WHERE x.method = ?`
     )
       .all(account)
       .forEach((r) => {
         const item = r.category && r.description && r.description !== r.category ? `${r.category} — ${r.description}` : r.category || r.description;
-        add(r.date, "out", `من الكوميشن: ${item}`, r.amount);
+        add(r.date, "out", `من الكوميشن: ${item}`, r.amount, { src: "hassan_treasury_expenses", src_id: r.id });
       });
 
-    db.prepare("SELECT date, amount, holder FROM custodies WHERE method = ?")
+    db.prepare("SELECT id, date, amount, holder FROM custodies WHERE method = ?")
       .all(account)
-      .forEach((r) => add(r.date, "out", `عهدة لـ ${r.holder}`, r.amount));
+      .forEach((r) => add(r.date, "out", `عهدة لـ ${r.holder}`, r.amount, { src: "custodies", src_id: r.id }));
     db.prepare(
-      `SELECT ce.date, ce.amount, ce.type, c.holder FROM custody_entries ce
+      `SELECT ce.id, ce.date, ce.amount, ce.type, c.holder FROM custody_entries ce
        JOIN custodies c ON c.id = ce.custody_id WHERE ce.type IN ('topup', 'return') AND ce.method = ?`
     )
       .all(account)
       .forEach((r) =>
-        add(r.date, r.type === "topup" ? "out" : "in", r.type === "topup" ? `زيادة عهدة ${r.holder}` : `رجوع باقي عهدة ${r.holder}`, r.amount)
+        add(r.date, r.type === "topup" ? "out" : "in", r.type === "topup" ? `زيادة عهدة ${r.holder}` : `رجوع باقي عهدة ${r.holder}`, r.amount, {
+          src: "custody_entries",
+          src_id: r.id,
+        })
       );
 
-    db.prepare("SELECT date, amount, note FROM waste_entries WHERE payment_method = ?")
+    db.prepare("SELECT id, date, amount, note FROM waste_entries WHERE payment_method = ?")
       .all(account)
-      .forEach((r) => add(r.date, "out", `هالك${r.note ? `: ${r.note}` : ""}`, r.amount));
+      .forEach((r) => add(r.date, "out", `هالك${r.note ? `: ${r.note}` : ""}`, r.amount, { src: "waste_entries", src_id: r.id }));
 
     db.prepare(
-      `SELECT cp.date, cp.amount, c.name AS contractor_name FROM contractor_payments cp
+      `SELECT cp.id, cp.date, cp.amount, c.name AS contractor_name FROM contractor_payments cp
        JOIN contractors c ON c.id = cp.contractor_id WHERE cp.method = ?`
     )
       .all(account)
-      .forEach((r) => add(r.date, "in", `دفعة من المقاول: ${r.contractor_name}`, r.amount));
+      .forEach((r) => add(r.date, "in", `دفعة من المقاول: ${r.contractor_name}`, r.amount, { src: "contractor_payments", src_id: r.id }));
 
     db.prepare("SELECT * FROM other_income WHERE method = ?")
       .all(account)
-      .forEach((r) => add(r.date, "in", `إيراد آخر${r.description ? `: ${r.description}` : ""}`, r.amount, { other_income_id: r.id }));
+      .forEach((r) => add(r.date, "in", `إيراد آخر${r.description ? `: ${r.description}` : ""}`, r.amount, { other_income_id: r.id, src: "other_income", src_id: r.id }));
 
     db.prepare("SELECT * FROM treasury_transfers WHERE from_account = ? OR to_account = ?")
       .all(account, account)
@@ -1911,6 +1917,8 @@ function registerIpcHandlers(db) {
         const other = ACCOUNT_NAME_AR[out ? r.to_account : r.from_account] ?? "";
         add(r.date, out ? "out" : "in", `تحويل ${out ? "إلى" : "من"} ${other}${r.note ? ` — ${r.note}` : ""}`, r.amount, {
           transfer_id: r.id,
+          src: "treasury_transfers",
+          src_id: r.id,
         });
       });
 
@@ -1919,6 +1927,8 @@ function registerIpcHandlers(db) {
       .forEach((r) =>
         add(r.date, r.amount >= 0 ? "in" : "out", `تسوية جرد (${r.amount >= 0 ? "زيادة" : "عجز"})${r.note ? `: ${r.note}` : ""}`, Math.abs(r.amount), {
           adjustment_id: r.id,
+          src: "treasury_adjustments",
+          src_id: r.id,
         })
       );
 
@@ -1997,6 +2007,90 @@ function registerIpcHandlers(db) {
 
   // كشف حساب لشهر: كل حركة بتاريخها والرصيد بعدها. الحركات اللي قبل تاريخ
   // رصيد البداية بتظهر بس من غير ما تأثر على الرصيد (البداية متعدّة بعدها).
+  // كل حركات الشهر (داخل أو طالع) في كل الحسابات — عشان تتعدّل أو تتمسح من
+  // صفحة الخزنة وإنت بتظبط الأرصدة.
+  ipcMain.handle("treasury:monthMovements", (_e, { month, direction }) =>
+    db
+      .prepare("SELECT name FROM treasury_accounts")
+      .all()
+      .flatMap((a) => cashMovements(a.name).map((m) => ({ ...m, account: a.name })))
+      .filter((m) => m.date.startsWith(month) && (!direction || m.direction === direction))
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  );
+
+  // تعديل حركة من الخزنة: التاريخ والمبلغ والحساب — في الجدول اللي جاية منه.
+  const MOVEMENT_COLUMNS = {
+    monthly_expenses: { method: "payment_method" },
+    expense_payments: { method: "method" },
+    employee_advances: { method: "payment_method" },
+    employee_bonuses: { method: "payment_method" },
+    salary_payments: { method: "payment_method" },
+    partner_payments: { method: "method" },
+    supplier_payments: { method: "method" },
+    creditor_entries: { method: "method" },
+    hassan_ledger: { method: "method" },
+    hassan_treasury_expenses: { method: "method" },
+    custodies: { method: "method" },
+    custody_entries: { method: "method" },
+    waste_entries: { method: "payment_method" },
+    contractor_payments: { method: "method" },
+    other_income: { method: "method" },
+    treasury_transfers: { method: null },
+    treasury_adjustments: { method: null },
+  };
+  ipcMain.handle("treasury:movementUpdate", (_e, { src, src_id, date, amount, account }) => {
+    const cfg = MOVEMENT_COLUMNS[src];
+    if (!cfg) throw new Error("الحركة دي مينفعش تتعدّل من هنا");
+    const value = Number(amount);
+    if (!(value > 0)) throw new Error("لازم مبلغ");
+    const tx = db.transaction(() => {
+      if (src === "monthly_expenses") {
+        // المصروف: اللي اتدفع وقت التسجيل هو اللي بيطلع من الخزنة.
+        const me = db.prepare("SELECT * FROM monthly_expenses WHERE id = ?").get(src_id);
+        if (me.paid_amount == null) db.prepare("UPDATE monthly_expenses SET amount = ? WHERE id = ?").run(value, src_id);
+        else db.prepare("UPDATE monthly_expenses SET paid_amount = ? WHERE id = ?").run(Math.min(value, me.amount), src_id);
+        db.prepare("UPDATE monthly_expenses SET date = ? WHERE id = ?").run(date, src_id);
+      } else if (src === "treasury_adjustments") {
+        const adj = db.prepare("SELECT amount FROM treasury_adjustments WHERE id = ?").get(src_id);
+        db.prepare("UPDATE treasury_adjustments SET date = ?, amount = ? WHERE id = ?").run(date, adj.amount < 0 ? -value : value, src_id);
+      } else {
+        db.prepare(`UPDATE ${src} SET date = ?, amount = ? WHERE id = ?`).run(date, value, src_id);
+      }
+      if (account && cfg.method) db.prepare(`UPDATE ${src} SET ${cfg.method} = ? WHERE id = ?`).run(account, src_id);
+      // دفعة/سلفة عامل جاية من مرتبات العمال — المبلغ هناك يتظبط معاها.
+      if (src === "hassan_treasury_expenses") {
+        db.prepare("UPDATE hassan_worker_entries SET amount = ?, date = ? WHERE treasury_expense_id = ?").run(value, date, src_id);
+        db.prepare("UPDATE hassan_installment_payments SET amount = ?, paid_date = ? WHERE treasury_expense_id = ?").run(value, date, src_id);
+      }
+    });
+    tx();
+    return { ok: true };
+  });
+  ipcMain.handle("treasury:movementDelete", (_e, { src, src_id }) => {
+    if (!MOVEMENT_COLUMNS[src]) throw new Error("الحركة دي مينفعش تتمسح من هنا");
+    const tx = db.transaction(() => {
+      if (src === "hassan_treasury_expenses") db.prepare("DELETE FROM hassan_worker_entries WHERE treasury_expense_id = ?").run(src_id);
+      if (src === "custody_entries" || src === "custodies") {
+        const where = src === "custodies" ? "custody_id = ?" : "id = ?";
+        const linked = [
+          ["expense_id", "monthly_expenses"],
+          ["supplier_payment_id", "supplier_payments"],
+          ["car_fuel_id", "car_fuel"],
+          ["advance_id", "employee_advances"],
+          ["salary_payment_id", "salary_payments"],
+        ];
+        for (const [col, table] of linked) {
+          for (const r of db.prepare(`SELECT ${col} AS v FROM custody_entries WHERE ${where} AND ${col} IS NOT NULL`).all(src_id)) {
+            db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(r.v);
+          }
+        }
+      }
+      db.prepare(`DELETE FROM ${src} WHERE id = ?`).run(src_id);
+    });
+    tx();
+    return { ok: true };
+  });
+
   ipcMain.handle("treasury:accountTransactions", (_e, { account_name, month }) => {
     const acc = db.prepare("SELECT * FROM treasury_accounts WHERE name = ?").get(account_name);
     const from = acc?.opening_date ?? "";

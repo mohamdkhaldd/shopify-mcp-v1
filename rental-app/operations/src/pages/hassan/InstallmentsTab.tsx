@@ -174,7 +174,7 @@ function InstallmentCard({ inst, onChanged }: { inst: HassanInstallment; onChang
 
 // أقساط صاحب الكوميشن: عليه كام قسط إيه، وزرار "دفعت"، وتنبيه في الصفحة
 // الرئيسية قبل الميعاد بـ 3 أيام.
-export default function InstallmentsTab() {
+function InstallmentsContent({ onLock, locked }: { onLock: () => void; locked: boolean }) {
   const [list, setList] = useState<HassanInstallment[] | null>(null);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -205,6 +205,7 @@ export default function InstallmentsTab() {
 
   return (
     <div className="space-y-4">
+      <LockBar locked={locked} onLock={onLock} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-white rounded-card shadow-card p-5">
           <div className="text-sm text-slate-500 font-semibold">أقساط كل شهر</div>
@@ -258,6 +259,135 @@ export default function InstallmentsTab() {
           ))}
         </>
       )}
+    </div>
+  );
+}
+
+// أزرار الباسورد فوق الأقساط: اعمل باسورد / غيّره / شيله / اقفل دلوقتي.
+function LockBar({ locked, onLock }: { locked: boolean; onLock: () => void }) {
+  const [mode, setMode] = useState<"" | "set" | "change" | "remove">("");
+  const [oldPin, setOldPin] = useState("");
+  const [pin, setPin] = useState("");
+  const [pin2, setPin2] = useState("");
+  const [message, setMessage] = useState("");
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setMessage("");
+    if (mode !== "remove" && (pin.length < 4 || pin !== pin2)) {
+      setMessage(pin.length < 4 ? "الباسورد 4 أرقام/حروف على الأقل" : "الباسوردين مش زي بعض");
+      return;
+    }
+    try {
+      await installmentsApi.setLock(locked ? oldPin : null, mode === "remove" ? null : pin);
+      setMode("");
+      setOldPin("");
+      setPin("");
+      setPin2("");
+      setMessage(mode === "remove" ? "اتشال الباسورد" : "اتحفظ الباسورد ✓");
+      window.dispatchEvent(new Event("installments-lock-changed"));
+    } catch (err) {
+      setMessage(String((err as Error)?.message ?? err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ""));
+    }
+  }
+
+  return (
+    <div className="no-print bg-white rounded-card shadow-card px-5 py-3 flex flex-wrap items-center gap-3 text-sm">
+      <span className="font-semibold text-slate-600">{locked ? "🔒 الأقساط مقفولة بباسورد" : "🔓 الأقساط من غير باسورد"}</span>
+      {locked ? (
+        <>
+          <button onClick={onLock} className="rounded-lg bg-slate-800 text-white px-3 py-1 text-xs font-bold">
+            اقفل دلوقتي
+          </button>
+          <button onClick={() => setMode(mode === "change" ? "" : "change")} className="text-xs font-semibold text-primary">
+            غيّر الباسورد
+          </button>
+          <button onClick={() => setMode(mode === "remove" ? "" : "remove")} className="text-xs font-semibold text-rose-500">
+            شيل الباسورد
+          </button>
+        </>
+      ) : (
+        <button onClick={() => setMode(mode === "set" ? "" : "set")} className="rounded-lg bg-primary text-white px-3 py-1 text-xs font-bold">
+          اعمل باسورد للأقساط
+        </button>
+      )}
+      {mode && (
+        <form onSubmit={submit} className="w-full flex flex-wrap items-end gap-2">
+          {locked && (
+            <input type="password" value={oldPin} onChange={(e) => setOldPin(e.target.value)} placeholder="الباسورد الحالي" className={inputCls} />
+          )}
+          {mode !== "remove" && (
+            <>
+              <input type="password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="الباسورد الجديد" className={inputCls} />
+              <input type="password" value={pin2} onChange={(e) => setPin2(e.target.value)} placeholder="اكتبه تاني" className={inputCls} />
+            </>
+          )}
+          <button type="submit" className="bg-primary text-white rounded-lg px-3 py-1.5 text-sm font-semibold">
+            {mode === "remove" ? "شيل الباسورد" : "حفظ"}
+          </button>
+        </form>
+      )}
+      {message && <span className="text-xs font-semibold text-slate-600">{message}</span>}
+    </div>
+  );
+}
+
+// الأقساط مقفولة بباسورد: كل حاجة عليها بلور لحد ما تكتب الباسورد (بيتقفل
+// تاني لما تسيب التاب أو تدوس "اقفل دلوقتي").
+export default function InstallmentsTab() {
+  const [locked, setLocked] = useState<boolean | null>(null);
+  const [open, setOpen] = useState(false);
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+
+  const load = () => installmentsApi.lockStatus().then((s) => setLocked(s.locked));
+  useEffect(() => {
+    load();
+    const onChange = () => load();
+    window.addEventListener("installments-lock-changed", onChange);
+    return () => window.removeEventListener("installments-lock-changed", onChange);
+  }, []);
+
+  async function unlock(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (await installmentsApi.checkLock(pin)) {
+      setOpen(true);
+      setPin("");
+    } else setError("الباسورد غلط");
+  }
+
+  if (locked == null) return <div className="text-sm text-slate-400">جاري التحميل...</div>;
+  if (!locked || open) return <InstallmentsContent locked={locked} onLock={() => setOpen(false)} />;
+  return (
+    <div className="relative">
+      {/* مكان الأقساط متغطي — البيانات نفسها مبتتحملش لحد ما الباسورد يتكتب */}
+      <div className="blur-md select-none pointer-events-none space-y-4" aria-hidden>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-white rounded-card shadow-card h-24" />
+          <div className="bg-white rounded-card shadow-card h-24" />
+        </div>
+        <div className="bg-white rounded-card shadow-card h-40" />
+        <div className="bg-white rounded-card shadow-card h-40" />
+      </div>
+      <div className="absolute inset-0 flex items-start justify-center pt-16">
+        <form onSubmit={unlock} className="bg-white rounded-card shadow-card p-6 w-full max-w-xs space-y-3 text-center">
+          <div className="text-3xl">🔒</div>
+          <div className="font-bold text-slate-800">الأقساط مقفولة</div>
+          <input
+            type="password"
+            autoFocus
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            placeholder="اكتب الباسورد"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-center"
+          />
+          {error && <div className="text-xs font-semibold text-rose-600">{error}</div>}
+          <button type="submit" className="w-full bg-primary text-white rounded-lg py-2 text-sm font-bold">
+            افتح
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

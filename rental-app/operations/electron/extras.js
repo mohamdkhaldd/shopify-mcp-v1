@@ -344,6 +344,24 @@ function registerExtraHandlers(db, owed) {
     return { ok: true };
   });
 
+  // ===== باسورد الأقساط =====
+  // بيتخزن hash بس (من الشاشة) في إعدادات الشركة اللي بتتزامن على كل أجهزتها.
+  const lockHash = () => db.prepare("SELECT value FROM app_settings WHERE key = 'installments_lock'").get()?.value || null;
+  ipcMain.handle("installments:lockStatus", () => ({ locked: !!lockHash() }));
+  ipcMain.handle("installments:checkLock", (_e, { hash }) => ({ ok: !!hash && hash === lockHash() }));
+  ipcMain.handle("installments:setLock", (_e, { oldHash, hash }) => {
+    const current = lockHash();
+    if (current && oldHash !== current) throw new Error("الباسورد القديم غلط");
+    if (hash) {
+      db.prepare(
+        "INSERT INTO app_settings (key, value) VALUES ('installments_lock', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+      ).run(hash);
+    } else {
+      db.prepare("DELETE FROM app_settings WHERE key = 'installments_lock'").run();
+    }
+    return { ok: true };
+  });
+
   // ===== أقساط صاحب الكوميشن =====
   const installmentsAll = () => db.prepare("SELECT * FROM hassan_installments ORDER BY id").all().map((i) => installmentState(db, i));
   ipcMain.handle("installments:list", () =>
@@ -544,12 +562,14 @@ function registerExtraHandlers(db, owed) {
       if (!i.nextDue) continue;
       const d = daysBetween(now, i.nextDue);
       if (d > 3) continue;
+      // الأقساط مقفولة بباسورد: التنبيه بيقول إن فيه قسط وميعاده بس.
+      const hidden = !!lockHash();
       alerts.push({
         kind: "installment",
         level: d <= 0 ? "danger" : "warn",
         id: i.id,
-        title: `قسط ${i.title}${i.count ? ` (${i.nextNumber} من ${i.count})` : ""}`,
-        amount: i.amount,
+        title: hidden ? "قسط (الأقساط مقفولة بباسورد)" : `قسط ${i.title}${i.count ? ` (${i.nextNumber} من ${i.count})` : ""}`,
+        amount: hidden ? null : i.amount,
         due_date: i.nextDue,
         days: d,
       });

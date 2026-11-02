@@ -245,3 +245,50 @@ describe("money owed to partners this month", () => {
     expect(call("dashboard:monthDues", { month: "2026-10" }).partnersRemaining).toBe(0);
   });
 });
+
+describe("treasury: the month's movements can be edited and deleted", () => {
+  it("edits reach the original record (amount, date, account) and deletes remove it", () => {
+    const db = setupOperationsDatabase(new Database(":memory:"));
+    registerIpcHandlers(db);
+    call("partners:create", { name: "شريك", opening_balance: 0 });
+    const pid = (db.prepare("SELECT id FROM partners").get() as { id: number }).id;
+    call("partnerPayments:create", { partner_id: pid, date: "2026-11-03", amount: 5000, method: "cash", note: null });
+    call("hassanTreasury:create", { date: "2026-11-04", amount: 1000, category: "أكل", description: "", method: "cash" });
+
+    let out = call("treasury:monthMovements", { month: "2026-11", direction: "out" }) as any[];
+    expect(out.map((m) => [m.src, m.amount, m.account])).toEqual([
+      ["partner_payments", 5000, "cash"],
+      ["hassan_treasury_expenses", 1000, "cash"],
+    ]);
+    const pay = out[0];
+    call("treasury:movementUpdate", { src: pay.src, src_id: pay.src_id, date: "2026-11-05", amount: 4500, account: "instapay" });
+    expect(db.prepare("SELECT date, amount, method FROM partner_payments").get()).toEqual({ date: "2026-11-05", amount: 4500, method: "instapay" });
+
+    call("treasury:movementDelete", { src: out[1].src, src_id: out[1].src_id });
+    out = call("treasury:monthMovements", { month: "2026-11", direction: "out" }) as any[];
+    expect(out.map((m) => [m.src, m.amount, m.account])).toEqual([["partner_payments", 4500, "instapay"]]);
+    expect(() => call("treasury:movementUpdate", { src: "partners", src_id: pid, date: "2026-11-05", amount: 1, account: "cash" })).toThrow();
+  });
+});
+
+describe("installments password", () => {
+  it("stores only a hash; changing needs the old one; alerts hide the details while locked", () => {
+    const db = setupOperationsDatabase(new Database(":memory:"));
+    registerIpcHandlers(db);
+    expect(call("installments:lockStatus")).toEqual({ locked: false });
+    call("installments:setLock", { oldHash: null, hash: "h1" });
+    expect(call("installments:checkLock", { hash: "h1" })).toEqual({ ok: true });
+    expect(call("installments:checkLock", { hash: "x" })).toEqual({ ok: false });
+    expect(() => call("installments:setLock", { oldHash: "wrong", hash: "h2" })).toThrow();
+
+    const d = new Date(Date.now() + 864e5);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    call("installments:create", { title: "العربية", amount: 5000, count: 3, start_date: iso, note: null });
+    const alert = (call("alerts:dashboard") as any[]).find((a) => a.kind === "installment");
+    expect(alert.title).not.toContain("العربية");
+    expect(alert.amount).toBeNull();
+
+    call("installments:setLock", { oldHash: "h1", hash: null });
+    expect(call("installments:lockStatus")).toEqual({ locked: false });
+  });
+});
