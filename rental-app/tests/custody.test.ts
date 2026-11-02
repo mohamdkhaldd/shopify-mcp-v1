@@ -141,7 +141,7 @@ describe("one treasury", () => {
 });
 
 describe("personal account through the treasury", () => {
-  it("money in and out follows the type, only when an account is chosen", () => {
+  it("money in and out follows the type (cash when no account is given)", () => {
     const db = setupOperationsDatabase(new Database(":memory:"));
     registerIpcHandlers(db);
     const before = call("hassan:treasuryBalance", { month: "2026-10" }).balance;
@@ -153,8 +153,8 @@ describe("personal account through the treasury", () => {
     const cash = JSON.stringify(call("treasury:accountTransactions", { account_name: "cash", month: "2026-10" }));
     expect(insta).toContain("الحساب الشخصي: استلف — أحمد");
     expect(cash).toContain("الحساب الشخصي: سدد — أحمد");
-    expect(cash).not.toContain("محمد");
-    expect(call("hassan:treasuryBalance", { month: "2026-10" }).balance).toBe(before + 10000 - 4000);
+    expect(cash).toContain("الحساب الشخصي: سلّف — محمد");
+    expect(call("hassan:treasuryBalance", { month: "2026-10" }).balance).toBe(before + 10000 - 4000 - 500);
     expect(call("hassanLedger:balance").netDebt).toBe(6000);
   });
 });
