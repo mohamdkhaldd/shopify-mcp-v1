@@ -10,6 +10,7 @@ import { MoneyTable, TrashButton } from "../../components/party";
 import { dateLabel, monthLabel, percentFromBp, pounds } from "../../utils/format";
 import { moneyToPt } from "../../utils/input";
 import { today } from "../../../core/db";
+import ManagersPanels from "./Managers";
 
 function ContractsTable({ v }: { v: ManagementView }) {
   const t = v.totals;
@@ -298,6 +299,36 @@ function AdjustmentEntry({ v, onSaved }: { v: ManagementView; onSaved: () => voi
   );
 }
 
+function ManagementPayout({ v, onSaved }: { v: ManagementView; onSaved: () => void }) {
+  const [who, setWho] = useState("");
+  const people = v.managers.people.map((p) => p.name);
+  return (
+    <MoneyEntry
+      title="صرف من نصيب الإدارة"
+      contracts={[]}
+      saveLabel="صرف"
+      extra={
+        people.length > 0 && (
+          <Labeled label="لمين">
+            <Select value={who} onChange={(e) => setWho(e.target.value)}>
+              <option value="">الإدارة (عموماً)</option>
+              {v.managers.people.map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.name} — باقي له {pounds(p.balancePt)}
+                </option>
+              ))}
+            </Select>
+          </Labeled>
+        )
+      }
+      onSave={async (x) => {
+        await api.managementPayout({ date: x.date, amountPt: x.amountPt, note: x.note || undefined, managerName: who || null, confirmNegative: x.confirmNegative });
+        onSaved();
+      }}
+    />
+  );
+}
+
 export default function Management() {
   const [month, setMonth] = useState<string | undefined>();
   const [v, setV] = useState<ManagementView | null>(null);
@@ -385,6 +416,8 @@ export default function Management() {
       </div>
 
       <ContractsTable v={v} />
+
+      <ManagersPanels v={v} onSaved={load} />
 
       {v.byEquipment.length > 0 && (
         <Panel title="حسب المعدة">
@@ -499,15 +532,7 @@ export default function Management() {
             نصيب الإدارة لحد النهارده {pounds(v.management.accruedPt)} — اتحصّل منه {pounds(v.management.releasablePt)} — اتصرف {pounds(v.management.paidPt)} —{" "}
             <b>ينفع يتصرف دلوقتي {pounds(v.management.payableNowPt)}</b>
           </div>
-          <MoneyEntry
-            title="صرف من نصيب الإدارة"
-            contracts={[]}
-            saveLabel="صرف"
-            onSave={async (x) => {
-              await api.managementPayout({ date: x.date, amountPt: x.amountPt, note: x.note || undefined, confirmNegative: x.confirmNegative });
-              load();
-            }}
-          />
+          <ManagementPayout v={v} onSaved={load} />
           <MoneyTable rows={v.payouts} noteHeader="ملاحظة" contracts={[]} onDelete={(id) => setDeleting({ entity: "profit_payouts", id })} />
         </Panel>
       </div>

@@ -1,3 +1,4 @@
+import { contractManagers, managersReport } from "./managers";
 import { Db, monthOf, today } from "../db";
 import { computeBooks } from "./books";
 import { clientStatement, dashboard, supplierStatement, taxFile } from "./reports";
@@ -344,9 +345,10 @@ export function managementView(db: Db, month?: string, now: string = today()) {
 
   const payouts = (
     db
-      .prepare("SELECT id, date, amount_pt, note FROM profit_payouts WHERE payee_kind = 'management' AND deleted_at IS NULL AND reversal_of IS NULL ORDER BY date DESC")
-      .all() as { id: number; date: string; amount_pt: number; note: string | null }[]
-  ).map((p) => ({ id: p.id, date: p.date, contractId: null, amountPt: p.amount_pt, note: p.note }));
+      .prepare("SELECT id, date, amount_pt, note, manager_name FROM profit_payouts WHERE payee_kind = 'management' AND deleted_at IS NULL AND reversal_of IS NULL ORDER BY date DESC")
+      .all() as { id: number; date: string; amount_pt: number; note: string | null; manager_name: string | null }[]
+  ).map((p) => ({ id: p.id, date: p.date, contractId: null, amountPt: p.amount_pt, note: [p.manager_name, p.note].filter(Boolean).join(" — ") || null }));
+  const managerLists = contractManagers(db);
 
   // months close in order, and only after they end
   const closable = books.months.find((x) => !x.closed && x.month < monthOf(now))?.month ?? null;
@@ -380,7 +382,8 @@ export function managementView(db: Db, month?: string, now: string = today()) {
     },
     expenses,
     categories: db.prepare("SELECT id, name FROM expense_categories WHERE deleted_at IS NULL ORDER BY name").all() as { id: number; name: string }[],
-    contracts: contracts.map((c) => ({ id: c.id, code: c.code, equipment: equipment.get(c.equipment_id) ?? "", active: c.status === "active" })),
+    contracts: contracts.map((c) => ({ id: c.id, code: c.code, equipment: equipment.get(c.equipment_id) ?? "", active: c.status === "active", managers: managerLists.get(c.id) ?? [] })),
+    managers: managersReport(db, books, m?.month ?? monthOf(now)),
     history: books.months
       .map((x) => ({
         month: x.month,

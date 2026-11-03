@@ -73,7 +73,8 @@ export const api = {
   createExpenseCategory: (name: string) => call<number>("createExpenseCategory", { name }),
   expense: (v: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
     call<number>("expense", v),
-  managementPayout: (v: { date: string; amountPt: number; note?: string; confirmNegative?: boolean }) => call<number>("managementPayout", v),
+  managementPayout: (v: { date: string; amountPt: number; note?: string; managerName?: string | null; confirmNegative?: boolean }) => call<number>("managementPayout", v),
+  setContractManagers: (v: { contractId: number; managers: { name: string; shareBp: number }[] }) => call("setContractManagers", v),
   closeMonth: (month: string) => call<void>("closeMonth", { month }),
   adjustment: (v: { targetMonth: string; contractId: number; kind: "client_base" | "supplier_cost"; amountPt: number; reason: string }) => call<number>("adjustment", v),
   investors: (month?: string) => call<InvestorsView>("investors", { month }),

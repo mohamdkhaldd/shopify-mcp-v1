@@ -188,10 +188,22 @@ CREATE TABLE IF NOT EXISTS capital_movements (
   ${reversalCheck}
 );
 
+-- شركاء الإدارة في كل عقد ونسبة كل واحد (مجموعها ١٠٠٪)؛ التغيير بيقفل القديم ويضيف الجديد
+CREATE TABLE IF NOT EXISTS contract_managers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  contract_id INTEGER NOT NULL REFERENCES contracts(id),
+  name TEXT NOT NULL,
+  share_bp INTEGER NOT NULL CHECK (typeof(share_bp) = 'integer' AND share_bp > 0 AND share_bp <= 10000),
+  deleted_at TEXT,
+  delete_reason TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS profit_payouts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   payee_kind TEXT NOT NULL CHECK (payee_kind IN ('investor', 'management')),
   investor_id INTEGER REFERENCES investors(id),
+  manager_name TEXT,
   date TEXT NOT NULL,
   ${pt("amount_pt")},
   note TEXT,
@@ -440,6 +452,8 @@ export const SCHEMA_VERSION = 1;
 export function setupDatabase(db: Db): Db {
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(DDL);
+  // صرف من نصيب الإدارة لشريك إدارة معين (فاضي = للإدارة عمومًا).
+  if (!columnsOf(db, "profit_payouts").includes("manager_name")) db.exec("ALTER TABLE profit_payouts ADD COLUMN manager_name TEXT");
   const business = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'sync_%' AND name NOT IN ('audit_log', 'app_settings', 'actions', 'activity_log')")
     .all()

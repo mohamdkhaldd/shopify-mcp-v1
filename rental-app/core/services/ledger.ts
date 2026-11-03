@@ -146,7 +146,11 @@ export function recordTaxPayment(db: Db, v: { tax: "vat" | "tax5"; periodMonth?:
 }
 
 /** Profit payout. Only what clients have actually paid for can be paid out. */
-export function recordPayout(db: Db, v: { payee: "investor" | "management"; investorId?: number; date: string; amountPt: number; note?: string }, opts: Opts = {}) {
+export function recordPayout(
+  db: Db,
+  v: { payee: "investor" | "management"; investorId?: number; managerName?: string | null; date: string; amountPt: number; note?: string },
+  opts: Opts = {},
+) {
   positive(v.amountPt);
   return db.transaction(() => {
     const b = computeBooks(db, v.date);
@@ -159,10 +163,12 @@ export function recordPayout(db: Db, v: { payee: "investor" | "management"; inve
     if (b.treasury.balancePt - b.treasury.taxHeldPt < v.amountPt && !opts.confirmNegative) throw new CashWarning(b.treasury.balancePt - b.treasury.taxHeldPt - v.amountPt);
     const id = insertId(
       db
-        .prepare("INSERT INTO profit_payouts (payee_kind, investor_id, date, amount_pt, note) VALUES (?, ?, ?, ?, ?)")
-        .run(v.payee, v.payee === "investor" ? v.investorId : null, v.date, v.amountPt, v.note ?? null),
+        .prepare("INSERT INTO profit_payouts (payee_kind, investor_id, manager_name, date, amount_pt, note) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(v.payee, v.payee === "investor" ? v.investorId : null, v.payee === "management" ? v.managerName?.trim() || null : null, v.date, v.amountPt, v.note ?? null),
     );
-    treasury(db, { date: v.date, direction: "out", amountPt: v.amountPt, type: "profit_payout", table: "profit_payouts", id, partyKind: v.payee, partyId: v.investorId ?? null, note: v.note });
+    const who = v.payee === "management" ? v.managerName?.trim() : "";
+    const note = who ? [who, v.note].filter(Boolean).join(" — ") : v.note;
+    treasury(db, { date: v.date, direction: "out", amountPt: v.amountPt, type: "profit_payout", table: "profit_payouts", id, partyKind: v.payee, partyId: v.investorId ?? null, note });
     return id;
   })();
 }
@@ -173,7 +179,7 @@ const REVERSIBLE: Record<string, string[]> = {
   supplier_deductions: ["supplier_id", "contract_id", "paid_from_treasury"],
   expenses: ["kind", "contract_id", "category_id"],
   capital_movements: ["investor_id", "kind"],
-  profit_payouts: ["payee_kind", "investor_id"],
+  profit_payouts: ["payee_kind", "investor_id", "manager_name"],
   tax_payments: ["tax", "period_month", "receipt_no"],
 };
 

@@ -6,6 +6,7 @@ import { closeMonth, recordAdjustment } from "../core/services/close";
 import { today } from "../core/db";
 import { deleteEntity, deletePreview, restoreDeleted } from "../core/services/deletion";
 import { createClient, createEquipment, createExpenseCategory, createInvestor, createSupplier, setRates, updateInvestor, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier, endContract, reopenContract } from "../core/services/master";
+import { ManagerShare, setContractManagers } from "../core/services/managers";
 import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, recordTaxPayment, reinvestProfit } from "../core/services/ledger";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
 
@@ -56,8 +57,9 @@ export function makeRegistry(db: Db) {
     createExpenseCategory: (a: { name: string }) => createExpenseCategory(db, a.name),
     expense: (a: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
       recordExpense(db, a, { confirmNegative: a.confirmNegative }),
-    managementPayout: (a: { date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
-      recordPayout(db, { payee: "management", date: a.date, amountPt: a.amountPt, note: a.note }, { confirmNegative: a.confirmNegative }),
+    managementPayout: (a: { date: string; amountPt: number; note?: string; managerName?: string | null; confirmNegative?: boolean }) =>
+      recordPayout(db, { payee: "management", managerName: a.managerName, date: a.date, amountPt: a.amountPt, note: a.note }, { confirmNegative: a.confirmNegative }),
+    setContractManagers: (a: { contractId: number; managers: ManagerShare[] }) => setContractManagers(db, a.contractId, a.managers),
     closeMonth: (a: { month: string }) => {
       closeMonth(db, a.month, today());
     },
@@ -144,7 +146,11 @@ function labelFor(db: Db, fn: string, a: any): string | null {
     case "expense":
       return `${a.kind === "general" ? "مصروف عام" : "مصروف عقد"} ${egp(a.amountPt)}${a.note ? ` — ${a.note}` : ""}`;
     case "managementPayout":
-      return `صرف من نصيب الإدارة ${egp(a.amountPt)}`;
+      return `صرف من نصيب الإدارة ${egp(a.amountPt)}${a.managerName ? ` لـ ${a.managerName}` : ""}`;
+    case "setContractManagers": {
+      const c = db.prepare("SELECT code FROM contracts WHERE id = ?").get(a.contractId) as { code: string } | undefined;
+      return `شركاء الإدارة في العقد ${c?.code ?? ""}`;
+    }
     case "closeMonth":
       return `قفل شهر ${a.month}`;
     case "adjustment":
