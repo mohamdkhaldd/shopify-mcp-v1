@@ -5,6 +5,23 @@ import { formatEGP } from "../../utils/format";
 import { PAYMENT_METHODS, paymentMethodLabel } from "../../utils/paymentMethods";
 import PrintButton from "../../components/PrintButton";
 import { PrintHeader, PrintSignoff } from "../../components/PrintSignoff";
+import { currentMonthKey, monthLabel } from "../../utils/months";
+
+// "2026-11" → "نوفمبر 2026"، و"opening" → "رصيد قديم".
+function monthName(m: string) {
+  return m === "opening" ? "رصيد قديم" : `${monthLabel(m)} ${m.slice(0, 4)}`;
+}
+
+function relativeTag(m: string) {
+  if (m === "opening") return "";
+  const [cy, cm] = currentMonthKey().split("-").map(Number);
+  const [y, mm] = m.split("-").map(Number);
+  const diff = (cy - y) * 12 + (cm - mm);
+  if (diff === 0) return "الشهر ده";
+  if (diff === 1) return "الشهر اللي فات";
+  if (diff === 2) return "اللي قبله";
+  return "";
+}
 
 interface ContractorDetailViewProps {
   contractorId: number;
@@ -17,6 +34,7 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
   const [note, setNote] = useState("");
+  const [forMonth, setForMonth] = useState("");
 
   const refresh = () => contractorsDashboardApi.detail(contractorId).then(setDetail);
 
@@ -28,9 +46,17 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
   async function handleAddPayment(e: FormEvent) {
     e.preventDefault();
     if (!amount) return;
-    await contractorPaymentsApi.create({ contractor_id: contractorId, date, amount: Number(amount), method, note: note || null });
+    await contractorPaymentsApi.create({
+      contractor_id: contractorId,
+      date,
+      amount: Number(amount),
+      method,
+      note: note || null,
+      for_month: forMonth || null,
+    });
     setAmount("");
     setNote("");
+    setForMonth("");
     await refresh();
   }
 
@@ -71,6 +97,47 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
           <div className="text-sm text-slate-500 font-semibold">الباقي عليه</div>
           <div className="mt-2 text-xl font-extrabold text-rose-600">{formatEGP(detail.remaining)}</div>
         </div>
+      </div>
+
+      <div className="bg-white rounded-card shadow-card p-5">
+        <h2 className="font-bold text-slate-800 mb-1">المستحق عليه شهر بشهر</h2>
+        <p className="text-xs text-slate-400 mb-4">
+          كل شهر: شغله كان بكام، واتدفع عنه كام، وباقي عليه كام. الدفعة اللي بتحدد إنها عن شهر معين بتروح للشهر ده؛ واللي من غير شهر بتسدد الأقدم الأول.
+        </p>
+        {detail.months.length === 0 ? (
+          <div className="text-sm text-slate-400">لسه ملوش شغل مسجل.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-slate-400 border-b border-slate-100">
+                <th className="text-start font-semibold py-2">الشهر</th>
+                <th className="text-start font-semibold py-2">الشغل</th>
+                <th className="text-start font-semibold py-2">اتدفع عنه</th>
+                <th className="text-start font-semibold py-2">الباقي</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.months.map((m) => (
+                <tr key={m.month} className="border-b border-slate-50 last:border-0">
+                  <td className="py-2 font-semibold text-slate-700">
+                    {monthName(m.month)}
+                    {relativeTag(m.month) && <span className="ms-2 text-xs font-semibold text-slate-400">({relativeTag(m.month)})</span>}
+                  </td>
+                  <td className="py-2 text-slate-700">{formatEGP(m.work)}</td>
+                  <td className="py-2 text-primary">{formatEGP(m.paid)}</td>
+                  <td className={`py-2 font-bold ${m.remaining > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                    {m.remaining > 0 ? formatEGP(m.remaining) : "خالص ✓"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {detail.advance > 0 && (
+          <div className="mt-3 rounded-xl bg-emerald-50 text-emerald-800 px-4 py-2 text-sm font-semibold">
+            دافع زيادة (مقدّم) {formatEGP(detail.advance)} — هتتخصم من شغله الجاي.
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-card shadow-card p-5">
@@ -130,6 +197,18 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
               </option>
             ))}
           </select>
+          <select value={forMonth} onChange={(e) => setForMonth(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm">
+            <option value="">عن أقدم شهر عليه (تلقائي)</option>
+            {[...new Set([currentMonthKey(), ...detail.months.map((m) => m.month)])].map((m) => {
+              const row = detail.months.find((r) => r.month === m);
+              return (
+                <option key={m} value={m}>
+                  عن {monthName(m)}
+                  {row && row.remaining > 0 ? ` — باقي ${formatEGP(row.remaining)}` : ""}
+                </option>
+              );
+            })}
+          </select>
           <input
             type="text"
             placeholder="ملاحظة (اختياري)"
@@ -150,6 +229,7 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
               <tr className="text-slate-400 border-b border-slate-100">
                 <th className="text-start font-semibold py-2">التاريخ</th>
                 <th className="text-start font-semibold py-2">القيمة</th>
+                <th className="text-start font-semibold py-2">عن شهر</th>
                 <th className="text-start font-semibold py-2">طريقة الدفع</th>
                 <th className="text-start font-semibold py-2">ملاحظة</th>
                 <th></th>
@@ -160,6 +240,7 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
                 <tr key={p.id} className="border-b border-slate-50 last:border-0">
                   <td className="py-2 text-slate-500">{p.date}</td>
                   <td className="py-2 font-semibold text-slate-700">{formatEGP(p.amount)}</td>
+                  <td className="py-2 text-slate-500">{p.for_month ? monthName(p.for_month) : "تلقائي"}</td>
                   <td className="py-2 text-slate-500">{paymentMethodLabel(p.method)}</td>
                   <td className="py-2 text-slate-500">{p.note ?? "—"}</td>
                   <td className="py-2">

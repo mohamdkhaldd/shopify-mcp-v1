@@ -28,6 +28,47 @@ function computeDayValue(log) {
   return dayRate + diffHours * hourlyRate;
 }
 
+// حساب المقاول شهر بشهر: شغل كل شهر، واتدفع عنه كام، والباقي. الدفعة اللي
+// متسجل إنها "عن شهر كذا" بتروح للشهر ده بالظبط؛ والدفعات اللي من غير شهر
+// (والزيادة عن شغل الشهر اللي اتحددت له) بتسدد الأقدم الأول — الرصيد القديم
+// وبعدين أقدم شهر. "opening" = الرصيد القديم قبل أول شهر.
+function contractorMonthBreakdown(db, contractor) {
+  const logs = db
+    .prepare("SELECT * FROM daily_logs WHERE role = 'contractor' AND person_name = ?")
+    .all(contractor.name);
+  const payments = db.prepare("SELECT * FROM contractor_payments WHERE contractor_id = ?").all(contractor.id);
+  const rows = new Map();
+  const row = (month) => {
+    if (!rows.has(month)) rows.set(month, { month, work: 0, paid: 0, remaining: 0 });
+    return rows.get(month);
+  };
+  if (contractor.opening_balance) row("opening").work += contractor.opening_balance;
+  for (const l of logs) row(l.date.slice(0, 7)).work += computeDayValue(l);
+  let pool = 0;
+  for (const p of payments) {
+    if (p.for_month) row(p.for_month).paid += p.amount;
+    else pool += p.amount;
+  }
+  // "opening" < أي "YYYY-MM"؟ لأ — فبنرتب بإيدينا: الرصيد القديم الأول.
+  const ordered = [...rows.values()].sort((a, b) =>
+    a.month === "opening" ? -1 : b.month === "opening" ? 1 : a.month.localeCompare(b.month)
+  );
+  for (const r of ordered) {
+    if (r.paid > r.work) {
+      pool += r.paid - r.work;
+      r.paid = r.work;
+    }
+  }
+  for (const r of ordered) {
+    const take = Math.min(pool, Math.max(0, r.work - r.paid));
+    r.paid += take;
+    pool -= take;
+    r.remaining = r.work - r.paid;
+  }
+  // pool اللي فاضل = دفع زيادة (مقدّم) عن كل اللي عليه.
+  return { months: ordered.filter((r) => r.work !== 0 || r.paid !== 0), advance: pool };
+}
+
 // مرتب السائق مبني على سعره الثابت المسجل في الإعدادات، مش على أي رقم متكتب
 // في شيت السركي (ده بقى بيمثل قد إيه المعدة اشتغلت بيه، رقم مختلف تمامًا).
 // بيتطبق على أصحاب الأجر اليومي بس — مفيش أوفر تايم ولا إجازة جمعة تلقائية،
@@ -1576,10 +1617,17 @@ function registerIpcHandlers(db) {
   ipcMain.handle("contractorPayments:create", (_e, payment) => {
     const info = db
       .prepare(
-        `INSERT INTO contractor_payments (contractor_id, date, amount, method, note)
-         VALUES (@contractor_id, @date, @amount, @method, @note)`
+        `INSERT INTO contractor_payments (contractor_id, date, amount, method, note, for_month)
+         VALUES (@contractor_id, @date, @amount, @method, @note, @for_month)`
       )
-      .run({ ...payment, method: payment.method || "cash", note: payment.note ?? null });
+      .run({
+        contractor_id: payment.contractor_id,
+        date: payment.date,
+        amount: payment.amount,
+        method: payment.method || "cash",
+        note: payment.note ?? null,
+        for_month: payment.for_month || null,
+      });
     const created = db.prepare("SELECT * FROM contractor_payments WHERE id = ?").get(info.lastInsertRowid);
     const contractor = db.prepare("SELECT name FROM contractors WHERE id = ?").get(payment.contractor_id);
     if (contractor) pushToCloud("contractor_payments", created.id, { contractor_name: contractor.name, ...created });
@@ -1641,9 +1689,12 @@ function registerIpcHandlers(db) {
     const totalWork = contractor.opening_balance + logs.reduce((sum, l) => sum + computeDayValue(l), 0);
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
+    const { months, advance } = contractorMonthBreakdown(db, contractor);
     return {
       contractor,
       workByEquipment: [...byEquipment.values()],
+      months: months.reverse(),
+      advance,
       payments,
       totalWork,
       totalPaid,
@@ -2560,17 +2611,11 @@ function registerIpcHandlers(db) {
       .prepare("SELECT * FROM contractors ORDER BY name")
       .all()
       .map((c) => {
-        // الدفعات بتسدد الأقدم الأول: اللي لسه متدفعش من شغل الشهر ده = الباقي
-        // على المقاول كله (من غير شغل الشهور اللي بعده)، بس مش أكتر من شغل
-        // الشهر نفسه — فدفعة الشهر ده عن الشهر اللي فات متطلعهوش بالسالب.
-        const logs = db.prepare("SELECT * FROM daily_logs WHERE role = 'contractor' AND person_name = ?").all(c.name);
-        const sumOf = (pred) => logs.filter(pred).reduce((sum, l) => sum + computeDayValue(l), 0);
-        const work = sumOf((l) => l.date.startsWith(month));
-        const workAfter = sumOf((l) => l.date.slice(0, 7) > month);
-        const allWork = sumOf(() => true);
-        const allPaid = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM contractor_payments WHERE contractor_id = ?").get(c.id).total;
-        const outstanding = (c.opening_balance ?? 0) + allWork - allPaid - workAfter;
-        const remaining = Math.max(0, Math.min(work, outstanding));
+        // نفس حساب شيت المقاول شهر بشهر: الدفعة اللي عن شهر معين بتروح له،
+        // والباقي بيسدد الأقدم الأول — فمفيش رقم بالسالب.
+        const r = contractorMonthBreakdown(db, c).months.find((m) => m.month === month);
+        const work = r?.work ?? 0;
+        const remaining = Math.max(0, r?.remaining ?? 0);
         return { id: c.id, name: c.name, due: work, paid: work - remaining, remaining };
       })
       .filter((c) => c.due !== 0);

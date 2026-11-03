@@ -87,7 +87,8 @@ CREATE TABLE IF NOT EXISTS contractor_payments (
   date TEXT NOT NULL,
   amount REAL NOT NULL,
   method TEXT,
-  note TEXT
+  note TEXT,
+  for_month TEXT
 );
 
 CREATE TABLE IF NOT EXISTS expense_categories (
@@ -499,6 +500,9 @@ function setupDatabase(db, { seed = true } = {}) {
   // الحساب الشخصي: الحركة اتدفعت/اتقبضت من أنهي حساب في خزنة الشركة (فاضي = تسجيل بس).
   const ledgerCols = db.prepare("PRAGMA table_info(hassan_ledger)").all().map((c) => c.name);
   if (!ledgerCols.includes("method")) db.exec("ALTER TABLE hassan_ledger ADD COLUMN method TEXT");
+  // دفعة المقاول "عن شهر كذا" (فاضي = تسدد الأقدم الأول).
+  const contractorPayCols = db.prepare("PRAGMA table_info(contractor_payments)").all().map((c) => c.name);
+  if (!contractorPayCols.includes("for_month")) db.exec("ALTER TABLE contractor_payments ADD COLUMN for_month TEXT");
 
   // الصرف من العهدة بقى ممكن يكون لمورد / العربية الملاكي / سلفة أو مرتب سواق —
   // كل واحد بيتسجل في مكانه ومربوط بسطر العهدة.

@@ -368,6 +368,15 @@ export interface ContractorPayment {
   amount: number;
   method: string;
   note: string | null;
+  // الدفعة عن أنهي شهر (YYYY-MM أو "opening" للرصيد القديم)؛ فاضي = تسدد الأقدم الأول.
+  for_month?: string | null;
+}
+
+export interface ContractorMonthRow {
+  month: string;
+  work: number;
+  paid: number;
+  remaining: number;
 }
 
 export interface ContractorSummary {
@@ -388,6 +397,10 @@ export interface ContractorWorkByEquipment {
 export interface ContractorDetail {
   contractor: Contractor;
   workByEquipment: ContractorWorkByEquipment[];
+  // الأحدث الأول.
+  months: ContractorMonthRow[];
+  // دفع زيادة عن كل اللي عليه.
+  advance: number;
   payments: ContractorPayment[];
   totalWork: number;
   totalPaid: number;

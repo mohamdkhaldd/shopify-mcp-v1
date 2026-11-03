@@ -224,6 +224,36 @@ describe("money owed to the company (contractors)", () => {
     expect(call("dashboard:monthDues", { month: "2026-10" }).contractorsRemaining).toBe(0);
     expect(call("dashboard:summary").totalReceivables).toBe(10000);
   });
+
+  it("shows the sheet month by month, and a payment tagged for a month goes to that month", () => {
+    const db = setupOperationsDatabase(new Database(":memory:"));
+    registerIpcHandlers(db);
+    const eq = call("equipment:create", { name: "لودر", purchase_price: 0, shares: [] });
+    call("contractors:create", { name: "حماد", opening_balance: 2000 });
+    const id = (db.prepare("SELECT id FROM contractors WHERE name = 'حماد'").get() as { id: number }).id;
+    const work = (date: string, rate: number) =>
+      call("dailyLogs:upsert", {
+        equipment_id: eq.id, date, role: "contractor", shift_label: "", person_name: "حماد", actual_hours: 8, base_hours: 8,
+        day_rate: rate, is_paid_leave: false, is_day_off: false, fixed_value: null, hassan_commission: null, note: null, site_name: null, overtime_rate: null,
+      });
+    work("2026-09-10", 9000);
+    work("2026-10-10", 10000);
+    work("2026-11-10", 11000);
+    // دفع عن أكتوبر بالتحديد، ودفعة تانية من غير شهر (تسدد الأقدم: الرصيد القديم وبعدين سبتمبر).
+    call("contractorPayments:create", { contractor_id: id, date: "2026-11-02", amount: 4000, method: "cash", note: null, for_month: "2026-10" });
+    call("contractorPayments:create", { contractor_id: id, date: "2026-11-03", amount: 5000, method: "cash", note: null });
+
+    const d = call("contractors:detail", { contractor_id: id });
+    expect(d.months.map((m: any) => [m.month, m.work, m.paid, m.remaining])).toEqual([
+      ["2026-11", 11000, 0, 11000],
+      ["2026-10", 10000, 4000, 6000],
+      ["2026-09", 9000, 3000, 6000],
+      ["opening", 2000, 2000, 0],
+    ]);
+    expect(d.remaining).toBe(23000);
+    expect(d.payments.find((p: any) => p.amount === 4000).for_month).toBe("2026-10");
+    expect(call("dashboard:monthDues", { month: "2026-10" }).contractors[0]).toMatchObject({ due: 10000, paid: 4000, remaining: 6000 });
+  });
 });
 
 describe("money owed to partners this month", () => {
