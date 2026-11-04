@@ -35,6 +35,7 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
   const [method, setMethod] = useState("cash");
   const [note, setNote] = useState("");
   const [forMonth, setForMonth] = useState("");
+  const [showMonths, setShowMonths] = useState(false);
 
   const refresh = () => contractorsDashboardApi.detail(contractorId).then(setDetail);
 
@@ -85,10 +86,15 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-card shadow-card p-5">
+        <button
+          type="button"
+          onClick={() => setShowMonths((v) => !v)}
+          className={`text-start bg-white rounded-card shadow-card p-5 border-2 transition ${showMonths ? "border-primary" : "border-transparent hover:border-primary/40"}`}
+        >
           <div className="text-sm text-slate-500 font-semibold">إجمالي المستحق عليه</div>
           <div className="mt-2 text-xl font-extrabold text-slate-900">{formatEGP(detail.totalWork)}</div>
-        </div>
+          <div className="no-print mt-1 text-xs font-bold text-primary">{showMonths ? "اخفي التفاصيل ▲" : "دوس هنا: عليه كام كل شهر ▼"}</div>
+        </button>
         <div className="bg-white rounded-card shadow-card p-5">
           <div className="text-sm text-slate-500 font-semibold">إجمالي المدفوع منه</div>
           <div className="mt-2 text-xl font-extrabold text-primary">{formatEGP(detail.totalPaid)}</div>
@@ -99,46 +105,67 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
         </div>
       </div>
 
-      <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-1">المستحق عليه شهر بشهر</h2>
-        <p className="text-xs text-slate-400 mb-4">
-          كل شهر: شغله كان بكام، واتدفع عنه كام، وباقي عليه كام. الدفعة اللي بتحدد إنها عن شهر معين بتروح للشهر ده؛ واللي من غير شهر بتسدد الأقدم الأول.
-        </p>
-        {detail.months.length === 0 ? (
-          <div className="text-sm text-slate-400">لسه ملوش شغل مسجل.</div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-slate-400 border-b border-slate-100">
-                <th className="text-start font-semibold py-2">الشهر</th>
-                <th className="text-start font-semibold py-2">الشغل</th>
-                <th className="text-start font-semibold py-2">اتدفع عنه</th>
-                <th className="text-start font-semibold py-2">الباقي</th>
-              </tr>
-            </thead>
-            <tbody>
-              {detail.months.map((m) => (
-                <tr key={m.month} className="border-b border-slate-50 last:border-0">
-                  <td className="py-2 font-semibold text-slate-700">
-                    {monthName(m.month)}
-                    {relativeTag(m.month) && <span className="ms-2 text-xs font-semibold text-slate-400">({relativeTag(m.month)})</span>}
-                  </td>
-                  <td className="py-2 text-slate-700">{formatEGP(m.work)}</td>
-                  <td className="py-2 text-primary">{formatEGP(m.paid)}</td>
-                  <td className={`py-2 font-bold ${m.remaining > 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                    {m.remaining > 0 ? formatEGP(m.remaining) : "خالص ✓"}
-                  </td>
+      {showMonths && (
+        <div className="bg-white rounded-card shadow-card p-5">
+          <h2 className="font-bold text-slate-800 mb-1">المستحق عليه شهر بشهر</h2>
+          <p className="text-xs text-slate-400 mb-4">
+            كل شهر: شغله كان بكام، واتسدد منه كام ومن أنهي دفعة، وفاضل كام. الدفعة اللي اخترت إنها عن شهر معين بتروح للشهر ده؛ والدفعة "التلقائي" بتسدد الشهور اللي فاتت الأول (الأقدم فالأحدث).
+          </p>
+          {detail.months.length === 0 ? (
+            <div className="text-sm text-slate-400">لسه ملوش شغل مسجل.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-100">
+                  <th className="text-start font-semibold py-2">الشهر</th>
+                  <th className="text-start font-semibold py-2">عليه</th>
+                  <th className="text-start font-semibold py-2">اتسدد منه</th>
+                  <th className="text-start font-semibold py-2">اتسدد من دفعة</th>
+                  <th className="text-start font-semibold py-2">فاضل من الشهر ده</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {detail.advance > 0 && (
-          <div className="mt-3 rounded-xl bg-emerald-50 text-emerald-800 px-4 py-2 text-sm font-semibold">
-            دافع زيادة (مقدّم) {formatEGP(detail.advance)} — هتتخصم من شغله الجاي.
-          </div>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {detail.months.map((m) => (
+                  <tr key={m.month} className="border-b border-slate-50 last:border-0 align-top">
+                    <td className="py-2 font-semibold text-slate-700">
+                      {monthName(m.month)}
+                      {relativeTag(m.month) && <span className="ms-2 text-xs font-semibold text-slate-400">({relativeTag(m.month)})</span>}
+                    </td>
+                    <td className="py-2 text-slate-700">{formatEGP(m.work)}</td>
+                    <td className="py-2 text-primary">{formatEGP(m.paid)}</td>
+                    <td className="py-2 text-xs text-slate-500">
+                      {m.covered.length === 0
+                        ? "—"
+                        : m.covered.map((c, i) => (
+                            <div key={i}>
+                              {formatEGP(c.amount)} — دفعة {c.date}
+                            </div>
+                          ))}
+                    </td>
+                    <td className={`py-2 font-bold ${m.remaining > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                      {m.remaining > 0 ? formatEGP(m.remaining) : "خالص ✓"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td className="pt-2 font-bold text-slate-700">الإجمالي</td>
+                  <td className="pt-2 font-bold">{formatEGP(detail.totalWork)}</td>
+                  <td className="pt-2 font-bold text-primary">{formatEGP(detail.months.reduce((s, m) => s + m.paid, 0))}</td>
+                  <td />
+                  <td className="pt-2 font-bold text-rose-600">{formatEGP(detail.months.reduce((s, m) => s + m.remaining, 0))}</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+          {detail.advance > 0 && (
+            <div className="mt-3 rounded-xl bg-emerald-50 text-emerald-800 px-4 py-2 text-sm font-semibold">
+              دافع زيادة (مقدّم) {formatEGP(detail.advance)} — هتتخصم من شغله الجاي.
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-card shadow-card p-5">
         <h2 className="font-bold text-slate-800 mb-1">توزيع المستحق على المعدات</h2>

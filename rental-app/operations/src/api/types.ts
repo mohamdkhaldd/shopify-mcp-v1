@@ -377,6 +377,8 @@ export interface ContractorMonthRow {
   work: number;
   paid: number;
   remaining: number;
+  /** الدفعات اللي سددت الشهر ده (الأقدم بيتسدد الأول) */
+  covered: { date: string; amount: number; payment_id: number }[];
 }
 
 export interface ContractorSummary {

@@ -29,42 +29,58 @@ function computeDayValue(log) {
 }
 
 // حساب المقاول شهر بشهر: شغل كل شهر، واتدفع عنه كام، والباقي. الدفعة اللي
-// متسجل إنها "عن شهر كذا" بتروح للشهر ده بالظبط؛ والدفعات اللي من غير شهر
-// (والزيادة عن شغل الشهر اللي اتحددت له) بتسدد الأقدم الأول — الرصيد القديم
-// وبعدين أقدم شهر. "opening" = الرصيد القديم قبل أول شهر.
+// اخترت إنها "عن شهر كذا" بتروح للشهر ده؛ والدفعة من غير شهر بتسدد الشهور
+// اللي فاتت الأول (الأقدم فالأحدث).
+// "opening" = الرصيد القديم قبل أول شهر.
 function contractorMonthBreakdown(db, contractor) {
   const logs = db
     .prepare("SELECT * FROM daily_logs WHERE role = 'contractor' AND person_name = ?")
     .all(contractor.name);
-  const payments = db.prepare("SELECT * FROM contractor_payments WHERE contractor_id = ?").all(contractor.id);
+  const payments = db
+    .prepare("SELECT * FROM contractor_payments WHERE contractor_id = ? ORDER BY date, id")
+    .all(contractor.id);
   const rows = new Map();
   const row = (month) => {
-    if (!rows.has(month)) rows.set(month, { month, work: 0, paid: 0, remaining: 0 });
+    if (!rows.has(month)) rows.set(month, { month, work: 0, paid: 0, remaining: 0, covered: [] });
     return rows.get(month);
   };
   if (contractor.opening_balance) row("opening").work += contractor.opening_balance;
   for (const l of logs) row(l.date.slice(0, 7)).work += computeDayValue(l);
-  let pool = 0;
-  for (const p of payments) {
-    if (p.for_month) row(p.for_month).paid += p.amount;
-    else pool += p.amount;
-  }
   // "opening" < أي "YYYY-MM"؟ لأ — فبنرتب بإيدينا: الرصيد القديم الأول.
   const ordered = [...rows.values()].sort((a, b) =>
     a.month === "opening" ? -1 : b.month === "opening" ? 1 : a.month.localeCompare(b.month)
   );
-  for (const r of ordered) {
-    if (r.paid > r.work) {
-      pool += r.paid - r.work;
-      r.paid = r.work;
+  // الدفعة اللي متحدد إنها "عن شهر كذا" بتروح للشهر ده؛ والزيادة عنه
+  // والدفعات اللي من غير شهر بتسدد الأقدم الأول (بترتيب تاريخ الدفعة).
+  // وكل شهر بيعرف اتسدد من أنهي دفعة وبكام.
+  const byMonth = new Map(ordered.map((r) => [r.month, r]));
+  const spread = (p, amount) => {
+    let left = amount;
+    for (const r of ordered) {
+      if (left <= 0) break;
+      const take = Math.min(left, Math.max(0, r.work - r.paid));
+      if (take <= 0) continue;
+      r.paid += take;
+      r.covered.push({ date: p.date, amount: take, payment_id: p.id });
+      left -= take;
     }
+    return left;
+  };
+  const leftovers = [];
+  for (const p of payments.filter((x) => x.for_month)) {
+    const r = byMonth.get(p.for_month);
+    const take = r ? Math.min(p.amount, Math.max(0, r.work - r.paid)) : 0;
+    if (take > 0) {
+      r.paid += take;
+      r.covered.push({ date: p.date, amount: take, payment_id: p.id });
+    }
+    if (p.amount - take > 0) leftovers.push({ p, amount: p.amount - take });
   }
-  for (const r of ordered) {
-    const take = Math.min(pool, Math.max(0, r.work - r.paid));
-    r.paid += take;
-    pool -= take;
-    r.remaining = r.work - r.paid;
-  }
+  let pool = 0;
+  for (const p of payments.filter((x) => !x.for_month)) leftovers.push({ p, amount: p.amount });
+  leftovers.sort((a, b) => a.p.date.localeCompare(b.p.date) || a.p.id - b.p.id);
+  for (const { p, amount } of leftovers) pool += spread(p, amount);
+  for (const r of ordered) r.remaining = r.work - r.paid;
   // pool اللي فاضل = دفع زيادة (مقدّم) عن كل اللي عليه.
   return { months: ordered.filter((r) => r.work !== 0 || r.paid !== 0), advance: pool };
 }

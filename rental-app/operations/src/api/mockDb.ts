@@ -1443,29 +1443,43 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
     // نفس حساب الشهور اللي في ipc.js (contractorMonthBreakdown).
-    const rows = new Map<string, { month: string; work: number; paid: number; remaining: number }>();
+    const rows = new Map<string, { month: string; work: number; paid: number; remaining: number; covered: { date: string; amount: number; payment_id: number }[] }>();
     const row = (m: string) => {
-      if (!rows.has(m)) rows.set(m, { month: m, work: 0, paid: 0, remaining: 0 });
+      if (!rows.has(m)) rows.set(m, { month: m, work: 0, paid: 0, remaining: 0, covered: [] as { date: string; amount: number; payment_id: number }[] });
       return rows.get(m)!;
     };
     if (contractor.opening_balance) row("opening").work += contractor.opening_balance;
     for (const l of logs) row(l.date.slice(0, 7)).work += computeDayValue(l);
-    let pool = 0;
-    for (const p of payments) {
-      const forMonth = p.for_month;
-      if (forMonth) row(forMonth).paid += p.amount;
-      else pool += p.amount;
-    }
     const ordered = [...rows.values()].sort((a, b) =>
       a.month === "opening" ? -1 : b.month === "opening" ? 1 : a.month.localeCompare(b.month)
     );
-    for (const r of ordered) if (r.paid > r.work) { pool += r.paid - r.work; r.paid = r.work; }
-    for (const r of ordered) {
-      const take = Math.min(pool, Math.max(0, r.work - r.paid));
-      r.paid += take;
-      pool -= take;
-      r.remaining = r.work - r.paid;
+    const byMonth = new Map(ordered.map((r) => [r.month, r]));
+    const leftovers: { p: (typeof payments)[number]; amount: number }[] = [];
+    for (const p of payments.filter((x) => x.for_month)) {
+      const r = byMonth.get(p.for_month!);
+      const take = r ? Math.min(p.amount, Math.max(0, r.work - r.paid)) : 0;
+      if (r && take > 0) {
+        r.paid += take;
+        r.covered.push({ date: p.date, amount: take, payment_id: p.id });
+      }
+      if (p.amount - take > 0) leftovers.push({ p, amount: p.amount - take });
     }
+    for (const p of payments.filter((x) => !x.for_month)) leftovers.push({ p, amount: p.amount });
+    leftovers.sort((x, y) => x.p.date.localeCompare(y.p.date) || x.p.id - y.p.id);
+    let pool = 0;
+    for (const { p, amount } of leftovers) {
+      let left = amount;
+      for (const r of ordered) {
+        if (left <= 0) break;
+        const take = Math.min(left, Math.max(0, r.work - r.paid));
+        if (take <= 0) continue;
+        r.paid += take;
+        r.covered.push({ date: p.date, amount: take, payment_id: p.id });
+        left -= take;
+      }
+      pool += left;
+    }
+    for (const r of ordered) r.remaining = r.work - r.paid;
 
     return {
       contractor,

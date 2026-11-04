@@ -251,6 +251,11 @@ describe("money owed to the company (contractors)", () => {
       ["opening", 2000, 2000, 0],
     ]);
     expect(d.remaining).toBe(23000);
+    // كل شهر بيعرف اتسدد من أنهي دفعة
+    const cov = (m: string) => d.months.find((x: any) => x.month === m).covered.map((c: any) => [c.date, c.amount]);
+    expect(cov("2026-10")).toEqual([["2026-11-02", 4000]]);
+    expect(cov("opening")).toEqual([["2026-11-03", 2000]]);
+    expect(cov("2026-09")).toEqual([["2026-11-03", 3000]]);
     expect(d.payments.find((p: any) => p.amount === 4000).for_month).toBe("2026-10");
     expect(call("dashboard:monthDues", { month: "2026-10" }).contractors[0]).toMatchObject({ due: 10000, paid: 4000, remaining: 6000 });
   });
