@@ -133,9 +133,17 @@ export function tabletAppHandlers(emit: (channel: string, data: unknown) => void
     "app:checkForUpdate": async () => {
       if (!native) return { state: "not-available", version: VERSION };
       try {
-        const res = await fetch(`https://api.github.com/repos/${RELEASES}/releases?per_page=20`);
-        if (!res.ok) throw new Error(`GitHub ${res.status}`);
-        const releases = (await res.json()) as { tag_name?: string; assets?: { name: string; browser_download_url: string }[] }[];
+        // GitHub بيرتب نسخ اللابتوب (v0.1.x) قبل نسخ التابلت (tablet-v…)، فبنقلّب
+        // في كل الصفحات مش أول ٢٠ بس — وإلا التابلت مش بيشوف نسخه الجديدة.
+        type Release = { tag_name?: string; assets?: { name: string; browser_download_url: string }[] };
+        const releases: Release[] = [];
+        for (let page = 1; page <= 10; page++) {
+          const res = await fetch(`https://api.github.com/repos/${RELEASES}/releases?per_page=100&page=${page}`);
+          if (!res.ok) throw new Error(`GitHub ${res.status}`);
+          const batch = (await res.json()) as Release[];
+          releases.push(...batch);
+          if (batch.length < 100) break;
+        }
         const latest = releases
           .filter((r) => r.tag_name?.startsWith("tablet-v"))
           .map((r) => ({ version: r.tag_name!.slice("tablet-v".length), asset: r.assets?.find((a) => a.name.endsWith(".apk")) }))
