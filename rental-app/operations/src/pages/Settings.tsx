@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { appApi, confirmSetting, syncApi, systemApi } from "../api/client";
+import { appApi, confirmSetting, feeAmount, feeRulesApi, syncApi, systemApi } from "../api/client";
 import { AppUpdateStatus, SyncStatus } from "../api/types";
 import Icon from "../components/Icon";
 import DriversTab from "./settings/DriversTab";
@@ -150,6 +150,66 @@ function PasswordPanel() {
   );
 }
 
+// عمولة التحويل لكل حساب (انستا باي: ٠٫١٪، أقل حاجة ٠٫٥ ج، أقصى ٢٠ ج).
+// بتتخصم بس لما تختار "تحويل" وإنت بتسجل الحركة — "دفع" من غير عمولة.
+const FEE_ACCOUNTS = [
+  ["instapay", "انستا باي"],
+  ["wallet", "اكسيس باي"],
+  ["vodafone_cash", "فودفون كاش"],
+] as const;
+function TransferFees() {
+  const [rules, setRules] = useState<Record<string, { pct: string; min: string; max: string }>>({});
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    feeRulesApi.get().then((r) => {
+      const out: Record<string, { pct: string; min: string; max: string }> = {};
+      for (const [k] of FEE_ACCOUNTS) out[k] = { pct: String(r[k]?.pct ?? ""), min: String(r[k]?.min ?? ""), max: r[k]?.max == null ? "" : String(r[k]?.max) };
+      setRules(out);
+    });
+  }, []);
+  async function save() {
+    const out: Record<string, { pct: number; min: number; max: number | null }> = {};
+    for (const [k] of FEE_ACCOUNTS) {
+      const r = rules[k];
+      if (!r || (!r.pct && !r.min)) continue;
+      out[k] = { pct: Number(r.pct) || 0, min: Number(r.min) || 0, max: r.max.trim() ? Number(r.max) : null };
+    }
+    await feeRulesApi.set(out);
+    setMsg("اتحفظ");
+  }
+  const input = "rounded-lg border border-slate-200 px-2 py-1.5 text-sm w-20";
+  return (
+    <div className="bg-white rounded-card shadow-card p-5">
+      <h2 className="font-bold text-slate-700 mb-1">عمولة التحويل</h2>
+      <p className="text-xs text-slate-400 mb-3">لما فلوس تطلع من الحساب ده، البرنامج يسألك «تحويل ولا دفع؟» — التحويل بتتخصم عليه العمولة دي، والدفع من غير. سيبها فاضية لو الحساب ملوش عمولة.</p>
+      <div className="grid gap-2">
+        {FEE_ACCOUNTS.map(([k, label]) => {
+          const r = rules[k] ?? { pct: "", min: "", max: "" };
+          const set = (patch: Partial<typeof r>) => setRules((x) => ({ ...x, [k]: { ...r, ...patch } }));
+          const example = feeAmount({ pct: Number(r.pct), min: Number(r.min), max: r.max ? Number(r.max) : null }, 5000);
+          return (
+            <div key={k} className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="w-24 font-semibold text-slate-700">{label}</span>
+              <input className={input} value={r.pct} onChange={(e) => set({ pct: e.target.value })} placeholder="٪" inputMode="decimal" />
+              <span className="text-slate-400">٪ — أقل حاجة</span>
+              <input className={input} value={r.min} onChange={(e) => set({ min: e.target.value })} placeholder="ج" inputMode="decimal" />
+              <span className="text-slate-400">— أقصى</span>
+              <input className={input} value={r.max} onChange={(e) => set({ max: e.target.value })} placeholder="من غير حد" inputMode="decimal" />
+              {example > 0 && <span className="text-xs text-slate-400">(تحويل ٥٠٠٠ ج = عمولة {example} ج)</span>}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <button onClick={save} className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold">
+          حفظ
+        </button>
+        {msg && <span className="text-sm text-emerald-600 font-semibold">{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
 // تأكيد قبل أي إضافة أو مسح — بيتحفظ على الجهاز ده بس.
 function ConfirmToggle() {
   const [on, setOn] = useState(confirmSetting.get());
@@ -285,6 +345,7 @@ export default function Settings() {
       <PasswordPanel />
 
       <ConfirmToggle />
+      <TransferFees />
 
       <div className="bg-white rounded-card shadow-card p-5">
         <h2 className="font-bold text-slate-700 mb-1">الإصدار والتحديثات</h2>

@@ -106,6 +106,8 @@ export interface MonthlyExpense {
   payee: string | null;
   paid_total?: number;
   remaining?: number;
+  /** عمولة التحويل (انستا باي) اللي اتدفعت عليه، لو اتبعت "تحويل" */
+  transfer_fee?: number | null;
 }
 
 export interface PartnerDistributionRow {

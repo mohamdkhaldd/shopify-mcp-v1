@@ -1,4 +1,5 @@
-const { ipcMain } = require("electron");
+const { wrapIpc } = require("./fees");
+const ipcMain = wrapIpc(require("electron").ipcMain);
 
 // اسم نوع المصروف اللي بيتسجل بيه مشوار العربية الملاكي على معدة.
 const CAR_CATEGORY = "عربية ملاكي";

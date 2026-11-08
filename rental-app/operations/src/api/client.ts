@@ -221,10 +221,88 @@ function confirmChange(channel: string, payload: unknown): boolean {
   return ok;
 }
 
-function invoke(channel: string, payload?: unknown): Promise<any> {
-  if (!confirmChange(channel, payload)) return Promise.reject(new CancelledError());
-  if (window.api) return window.api.invoke(channel, payload);
-  return mockInvoke(channel, payload);
+// ---------- عمولة التحويل (انستا باي) ----------
+// لما فلوس تطلع من حساب عليه عمولة، بنسأل: "تحويل" (عليه العمولة) ولا "دفع"
+// (من غير). الإجابة بتتبعت مع الحركة (transfer_fee) والباك إند بيسجل العمولة.
+type FeeRule = { pct?: number; min?: number; max?: number | null };
+const FEE_CHANNELS: Record<string, { method: string; out?: (p: Record<string, unknown>) => boolean }> = {
+  "monthlyExpenses:create": { method: "payment_method" },
+  "expensePayments:create": { method: "method" },
+  "employeeAdvances:create": { method: "payment_method" },
+  "employeeBonuses:create": { method: "payment_method" },
+  "salaryPayments:create": { method: "payment_method" },
+  "partnerPayments:create": { method: "method" },
+  "supplierPayments:create": { method: "method" },
+  "creditorEntries:create": { method: "method", out: (p) => p.type === "payment" },
+  "hassanLedger:create": { method: "method", out: (p) => p.type === "repayment" || p.type === "due" },
+  "hassanTreasury:create": { method: "method" },
+  "installments:pay": { method: "method" },
+  "custodies:create": { method: "method" },
+  "waste:create": { method: "payment_method" },
+  "treasury:createTransfer": { method: "from_account" },
+};
+const rawInvoke = (channel: string, payload?: unknown): Promise<any> => (window.api ? window.api.invoke(channel, payload) : mockInvoke(channel, payload));
+let feeRulesCache: Promise<Record<string, FeeRule>> | null = null;
+export const feeRulesApi = {
+  get: (): Promise<Record<string, FeeRule>> => (feeRulesCache ??= rawInvoke("fees:get").catch(() => ({}))),
+  set: async (rules: Record<string, FeeRule>) => {
+    feeRulesCache = null;
+    return rawInvoke("fees:set", { rules });
+  },
+};
+export function feeAmount(rule: FeeRule | undefined, amount: number) {
+  if (!rule || !(amount > 0) || (!rule.pct && !rule.min)) return 0;
+  let fee = (amount * (Number(rule.pct) || 0)) / 100;
+  fee = Math.max(fee, Number(rule.min) || 0);
+  if (rule.max != null && String(rule.max) !== "") fee = Math.min(fee, Number(rule.max));
+  return Math.round(fee * 100) / 100;
+}
+
+/** شباك صغير بزرارين: "تحويل" / "دفع" (أو إلغاء). */
+function askTransferOrPay(account: string, amount: number, fee: number): Promise<"transfer" | "pay" | null> {
+  return new Promise((resolve) => {
+    const wrap = document.createElement("div");
+    wrap.setAttribute("dir", "rtl");
+    wrap.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;font-family:inherit";
+    const name = account === "instapay" ? "انستا باي" : account === "wallet" ? "اكسيس باي" : account === "vodafone_cash" ? "فودفون كاش" : account;
+    const n = (x: number) => x.toLocaleString("en-US");
+    wrap.innerHTML = `<div style="background:#fff;border-radius:16px;padding:22px 24px;max-width:420px;width:92%;box-shadow:0 20px 50px rgba(0,0,0,.25)">
+      <div style="font-weight:800;font-size:17px;color:#0f172a;margin-bottom:6px">الفلوس دي اتبعتت من ${name} إزاي؟</div>
+      <div style="font-size:14px;color:#475569;line-height:1.8;margin-bottom:16px">«تحويل» عليه عمولة ${name}: <b>${n(fee)} ج</b> على ${n(amount)} ج — «دفع» (فاتورة/تاجر) من غير عمولة.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button data-v="transfer" style="flex:1;background:#1d4ed8;color:#fff;border:0;border-radius:10px;padding:10px;font-weight:700;cursor:pointer">تحويل (+ ${n(fee)} ج)</button>
+        <button data-v="pay" style="flex:1;background:#e2e8f0;color:#0f172a;border:0;border-radius:10px;padding:10px;font-weight:700;cursor:pointer">دفع (من غير عمولة)</button>
+        <button data-v="" style="background:none;border:0;color:#64748b;padding:10px;cursor:pointer">إلغاء</button>
+      </div></div>`;
+    wrap.addEventListener("click", (e) => {
+      const b = (e.target as HTMLElement).closest("button");
+      if (!b) return;
+      wrap.remove();
+      const v = b.getAttribute("data-v");
+      resolve(v === "transfer" ? "transfer" : v === "pay" ? "pay" : null);
+    });
+    document.body.appendChild(wrap);
+  });
+}
+
+async function withFeeChoice(channel: string, payload: unknown): Promise<unknown> {
+  const cfg = FEE_CHANNELS[channel];
+  if (!cfg || !payload || typeof payload !== "object" || typeof document === "undefined") return payload;
+  const p = payload as Record<string, unknown>;
+  if (cfg.out && !cfg.out(p)) return payload;
+  const account = String(p[cfg.method] ?? "");
+  const amount = Number(p.paid_amount ?? p.amount);
+  const fee = feeAmount((await feeRulesApi.get())[account], amount);
+  if (!(fee > 0)) return payload;
+  const choice = await askTransferOrPay(account, amount, fee);
+  if (!choice) throw new CancelledError();
+  return { ...p, transfer_fee: choice === "transfer" };
+}
+
+async function invoke(channel: string, payload?: unknown): Promise<any> {
+  if (!confirmChange(channel, payload)) throw new CancelledError();
+  const p = await withFeeChoice(channel, payload);
+  return rawInvoke(channel, p);
 }
 
 export const partnersApi = {

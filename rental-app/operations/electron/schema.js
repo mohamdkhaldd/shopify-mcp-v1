@@ -760,6 +760,16 @@ function setupDatabase(db, { seed = true } = {}) {
     );
     -- تسوية الجرد: لما الفلوس المعدودة فعلًا تختلف عن المحسوبة، الفرق بيتسجل
     -- هنا (موجب = زيادة، سالب = عجز) عشان الرصيد يتظبط على الحقيقة.
+    -- عمولة التحويل (انستا باي...) على حركة طالعة "تحويل" — مربوطة بيها (src/src_id)
+    CREATE TABLE IF NOT EXISTS transfer_fees (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      account TEXT NOT NULL,
+      amount REAL NOT NULL,
+      base_amount REAL,
+      src TEXT NOT NULL,
+      src_id INTEGER NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS treasury_adjustments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       account TEXT NOT NULL,

@@ -327,3 +327,19 @@ describe("installments password", () => {
     expect(call("installments:lockStatus")).toEqual({ locked: false });
   });
 });
+
+describe("instapay transfer fee (operations)", () => {
+  it("a 'transfer' from instapay adds the fee next to it; a 'payment' doesn't; deleting removes it", () => {
+    const db = setupOperationsDatabase(new Database(":memory:"));
+    registerIpcHandlers(db);
+    const p1 = call("supplierPayments:create", { supplier_name: "محل", date: "2026-11-02", amount: 5000, method: "instapay", note: null, transfer_fee: true });
+    call("supplierPayments:create", { supplier_name: "محل", date: "2026-11-03", amount: 3000, method: "instapay", note: null, transfer_fee: false });
+    call("supplierPayments:create", { supplier_name: "محل", date: "2026-11-04", amount: 50000, method: "instapay", note: null, transfer_fee: true });
+    const out = call("treasury:monthMovements", { month: "2026-11", direction: "out" }) as any[];
+    const fees = out.filter((m) => m.src === "transfer_fees").map((m) => m.amount);
+    expect(fees).toEqual([5, 20]); // ٠٫١٪ من ٥٠٠٠ = ٥، ومن ٥٠٠٠٠ = ٥٠ بس الأقصى ٢٠
+    expect(out.find((m) => m.src === "supplier_payments" && m.src_id === p1.id).label).toContain("اتدفع 5,000 + عمولة انستا باي 5");
+    call("supplierPayments:delete", { id: p1.id });
+    expect((call("treasury:monthMovements", { month: "2026-11", direction: "out" }) as any[]).filter((m) => m.src === "transfer_fees").map((m) => m.amount)).toEqual([20]);
+  });
+});

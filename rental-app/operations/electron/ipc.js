@@ -1,4 +1,5 @@
-const { ipcMain } = require("electron");
+const { wrapIpc, setFeeDb, feeRules } = require("./fees");
+const ipcMain = wrapIpc(require("electron").ipcMain);
 const { pushToCloud } = require("./sync");
 const { registerExtraHandlers, carPersonalAllMonths, CAR_CATEGORY } = require("./extras");
 
@@ -293,6 +294,7 @@ function equipmentShiftIncomeBreakdown(db, equipmentId, monthKey) {
 }
 
 function registerIpcHandlers(db) {
+  setFeeDb(db);
   // --- Partners ---
   ipcMain.handle("partners:list", () => db.prepare("SELECT * FROM partners ORDER BY name").all());
   ipcMain.handle("partners:create", (_e, { name, opening_balance }) => {
@@ -734,7 +736,8 @@ function registerIpcHandlers(db) {
     db
       .prepare(
         `SELECT me.*, ec.name AS category_name,
-                COALESCE(me.paid_amount, me.amount) + COALESCE((SELECT SUM(amount) FROM expense_payments WHERE expense_id = me.id), 0) AS paid_total
+                COALESCE(me.paid_amount, me.amount) + COALESCE((SELECT SUM(amount) FROM expense_payments WHERE expense_id = me.id), 0) AS paid_total,
+                (SELECT SUM(amount) FROM transfer_fees WHERE src = 'monthly_expenses' AND src_id = me.id) AS transfer_fee
          FROM monthly_expenses me
          LEFT JOIN expense_categories ec ON ec.id = me.category_id
          WHERE me.equipment_id = ? AND me.month = ? ORDER BY me.date, me.id`
@@ -1999,6 +2002,15 @@ function registerIpcHandlers(db) {
         })
       );
 
+    // عمولة التحويل: الحركة الأصلية مكتوب جنبها "اتدفع كذا + عمولة كذا"، والعمولة
+    // نفسها سطر طالع لوحده من نفس الحساب.
+    const accName = ACCOUNT_NAME_AR[account] ?? account;
+    for (const f of db.prepare("SELECT * FROM transfer_fees WHERE account = ?").all(account)) {
+      const base = rows.find((r) => r.src === f.src && r.src_id === f.src_id);
+      if (base) base.label += ` — اتدفع ${Number(f.base_amount ?? base.amount).toLocaleString("en-US")} + عمولة ${accName} ${Number(f.amount).toLocaleString("en-US")}`;
+      add(f.date, "out", `عمولة ${accName}${base ? ` على: ${base.label.split(" — اتدفع")[0]}` : ""}`, f.amount, { src: "transfer_fees", src_id: f.id });
+    }
+
     rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     return rows;
   }
@@ -2027,6 +2039,15 @@ function registerIpcHandlers(db) {
       "INSERT INTO app_settings (key, value) VALUES ('commission_name', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
     ).run(String(name ?? "").trim());
     return { ok: true };
+  });
+
+  // نسبة عمولة التحويل لكل حساب: { instapay: { pct, min, max } } — بتتزامن على كل الأجهزة
+  ipcMain.handle("fees:get", () => feeRules(db));
+  ipcMain.handle("fees:set", (_e, { rules }) => {
+    db.prepare(
+      "INSERT INTO app_settings (key, value) VALUES ('transfer_fee_rules', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    ).run(JSON.stringify(rules ?? {}));
+    return feeRules(db);
   });
 
   ipcMain.handle("treasury:list", () => {
@@ -2104,6 +2125,7 @@ function registerIpcHandlers(db) {
     other_income: { method: "method" },
     treasury_transfers: { method: null },
     treasury_adjustments: { method: null },
+    transfer_fees: { method: "account" },
   };
   ipcMain.handle("treasury:movementUpdate", (_e, { src, src_id, date, amount, account }) => {
     const cfg = MOVEMENT_COLUMNS[src];

@@ -254,6 +254,11 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
                   <td className="py-2 font-semibold text-slate-700">{exp.category_name ?? "—"}</td>
                   <td className="py-2 text-slate-600 whitespace-nowrap">
                     {formatEGP(exp.amount)}
+                    {(exp.transfer_fee ?? 0) > 0 && (
+                      <span className="no-print ms-1.5 rounded-md bg-indigo-50 text-indigo-700 px-1.5 py-0.5 text-[11px] font-bold" title="عمولة التحويل اتخصمت من الخزنة">
+                        + عمولة انستا {formatEGP(exp.transfer_fee ?? 0)}
+                      </span>
+                    )}
                     {/* للشاشة بس — الطباعة (اللي بتروح للشريك) فيها القيمة كاملة وبس. */}
                     {(exp.remaining ?? 0) > 0 && (
                       <span
