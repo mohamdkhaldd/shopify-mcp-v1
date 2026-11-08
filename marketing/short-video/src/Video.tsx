@@ -2,6 +2,7 @@ import React from "react";
 import { AbsoluteFill, Audio, Sequence, interpolate, staticFile, useCurrentFrame } from "remotion";
 import { layout, OVERLAP, SceneId, totalFrames } from "./timeline";
 import music from "./music.json";
+import { cues } from "./sfx";
 import { fontFaces, Subtitle, clamp } from "./ui";
 import { Hook, Question, Pain, MonthEnd, Reveal, Sarki, Home, Tax, Secure, Cta } from "./scenes";
 
@@ -42,6 +43,11 @@ export const ShortAd: React.FC<{ subtitles: boolean }> = ({ subtitles }) => (
             <S />
           </Enter>
           {subtitles && <Subtitle text={s.say} len={s.len} />}
+          {cues[s.id].map(([at, file, vol], k) => (
+            <Sequence key={k} from={at} durationInFrames={75} name={`sfx ${file}`}>
+              <Audio src={staticFile(`sfx/${file}.mp3`)} volume={vol} />
+            </Sequence>
+          ))}
           {s.clip && (
             <Sequence from={i === 0 ? 0 : OVERLAP}>
               <Audio src={staticFile(s.clip)} />
