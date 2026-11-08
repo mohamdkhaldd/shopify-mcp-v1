@@ -13,6 +13,13 @@ const LINKS = {
   android: "https://github.com/mohamdkhaldd/mk-tech/releases/download/tablet-latest/mk-tech-rental-tablet.apk",
   web: "https://mohamdkhaldd.github.io/mk-tech/",
 };
+// كل عميل/موظف: الكود، والبرنامج اللي الكود بيفتحه، واسم الملف
+//   CODE=MKTECH-XXXX-XXXX-XXXX PRODUCT="برنامج التأجير بس" COMPANY="البنيان" OUT=/path/file.docx node build.cjs
+const CODE = process.env.CODE || "MKTECH-XXXX-XXXX-XXXX";
+const PRODUCT = process.env.PRODUCT || "";
+const COMPANY = process.env.COMPANY || "";
+const PASSWORD_NOTE = process.env.PASSWORD_NOTE === "1";
+const OUT = process.env.OUT || path.join(__dirname, "MK-Tech-كود-التفعيل.docx");
 const NAVY = "0F172A", BLUE = "0B5FFF", MUTED = "64748B", LINE = "E2E8F0";
 const FONT = "Segoe UI";
 
@@ -87,7 +94,7 @@ const b = (text) => t(text, { bold: true, size: 21 });
         }),
         new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: BLUE, space: 4 } }, spacing: { after: 200 }, children: [] }),
         p(t("أهلًا بيك في MK-Tech 👋", { bold: true, size: 34, color: NAVY })),
-        p(t("ده كود التفعيل بتاع شركتكم، وتحته طريقة تسطيب البرنامج على كل جهاز. اختار الجهاز اللي تحبه — وينفع أكتر من جهاز في نفس الوقت، وكلهم بيشوفوا نفس البيانات.", { size: 21, color: "334155" }), { spacing: { after: 200 } }),
+        p(t(`ده كود التفعيل ${COMPANY ? `بتاع ${COMPANY}` : "بتاع شركتكم"}، وتحته طريقة تسطيب البرنامج على كل جهاز. اختار الجهاز اللي تحبه — وينفع أكتر من جهاز في نفس الوقت، وكلهم بيشوفوا نفس البيانات.`, { size: 21, color: "334155" }), { spacing: { after: 200 } }),
 
         // the code — the one thing to change for each customer
         new Table({
@@ -97,8 +104,14 @@ const b = (text) => t(text, { bold: true, size: 21 });
             width: { size: W, type: WidthType.DXA }, shading: { type: ShadingType.CLEAR, color: "auto", fill: "EFF6FF" }, margins: { top: 160, bottom: 160, left: 200, right: 200 },
             children: [
               new Paragraph({ alignment: AlignmentType.CENTER, bidirectional: true, spacing: { after: 60 }, children: [t("كود التفعيل", { bold: true, size: 22, color: BLUE })] }),
-              new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 60 }, children: [new TextRun({ text: "MKTECH-XXXX-XXXX-XXXX", bold: true, size: 44, font: "Consolas", color: NAVY, characterSpacing: 40, highlight: "yellow" })] }),
+              new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 60 }, children: [new TextRun({ text: CODE, bold: true, size: 44, font: "Consolas", color: NAVY, characterSpacing: 40, highlight: "yellow" })] }),
+              ...(PRODUCT
+                ? [new Paragraph({ alignment: AlignmentType.CENTER, bidirectional: true, spacing: { after: 60 }, children: [t("الكود ده بيفتح: ", { size: 22, color: NAVY }), t(PRODUCT, { bold: true, size: 24, color: BLUE })] })]
+                : []),
               new Paragraph({ alignment: AlignmentType.CENTER, bidirectional: true, spacing: { after: 0 }, children: [t("اكتبه مرة واحدة على كل جهاز — وأول مرة لازم يكون فيه نت.", { size: 18, color: MUTED })] }),
+              ...(PASSWORD_NOTE
+                ? [new Paragraph({ alignment: AlignmentType.CENTER, bidirectional: true, spacing: { before: 60, after: 0 }, children: [t("أول مرة على أي جهاز هيطلب ", { size: 18, color: MUTED }), t("باسورد الشركة", { bold: true, size: 18, color: NAVY }), t(" — خده من الإدارة.", { size: 18, color: MUTED })] })]
+                : []),
             ],
           })] })],
         }),
@@ -127,6 +140,6 @@ const b = (text) => t(text, { bold: true, size: 21 });
       ],
     }],
   });
-  fs.writeFileSync(path.join(__dirname, "MK-Tech-كود-التفعيل.docx"), await Packer.toBuffer(doc));
+  fs.writeFileSync(OUT, await Packer.toBuffer(doc));
   console.log("ok");
 })().catch((e) => { console.error(e); process.exit(1); });
