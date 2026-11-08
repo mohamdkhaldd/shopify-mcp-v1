@@ -1,0 +1,5 @@
+node_modules/
+out/
+public/voice/
+capture/shots/
+capture/*.json
