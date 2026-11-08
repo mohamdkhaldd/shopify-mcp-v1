@@ -28,14 +28,14 @@ export default function OutgoingIncoming() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">الصادر والوارد</h1>
           <p className="text-sm text-slate-500 mt-1">
             كل فلوس الشركة اللي خرجت (مصاريف معدات، دفعات شركاء وموردين، سلف ومكافآت، هالك) وكل الفلوس اللي دخلت من المقاولين.
           </p>
         </div>
-        <div className="no-print flex items-center gap-2">
+        <div className="no-print flex items-center gap-2 flex-wrap">
           <MonthPicker month={month} onChange={setMonth} />
           <PrintButton />
         </div>

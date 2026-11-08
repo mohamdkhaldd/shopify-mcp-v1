@@ -108,7 +108,7 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
     <div className="space-y-6">
       <PrintHeader title={printTitle} subtitle={`${monthLabel(month)} ${month.split("-")[0]}`} />
 
-      <div className="no-print flex items-center justify-between">
+      <div className="no-print flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
@@ -123,7 +123,7 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setShowPackage(true)}
             className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold bg-primary text-white hover:bg-primary-dark shadow-card"

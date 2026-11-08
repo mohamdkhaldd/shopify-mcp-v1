@@ -50,7 +50,7 @@ export default function PartnerDetailView({ partnerId, onBack }: PartnerDetailVi
     <div className="space-y-6">
       <PrintHeader title={`${detail.partner.name} — كشف حساب الشريك`} />
 
-      <div className="no-print flex items-center justify-between">
+      <div className="no-print flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
@@ -60,7 +60,7 @@ export default function PartnerDetailView({ partnerId, onBack }: PartnerDetailVi
           </button>
           <h1 className="text-2xl font-extrabold text-slate-900">{detail.partner.name}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setShowFile(true)}
             className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold bg-primary text-white hover:bg-primary-dark shadow-card"

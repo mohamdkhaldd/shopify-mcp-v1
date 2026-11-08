@@ -37,12 +37,12 @@ export default function Reports() {
     <div className="space-y-6">
       <PrintHeader title="التقرير الشهري الشامل" subtitle={`${monthLabel(month)} ${month.split("-")[0]}`} />
 
-      <div className="no-print flex items-center justify-between">
+      <div className="no-print flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">التقارير</h1>
           <p className="text-sm text-slate-500 mt-1">ملخص شامل لكل أرقام الشركة الشهر ده في مكان واحد.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <PrintButton />
           <MonthPicker month={month} onChange={setMonth} />
         </div>

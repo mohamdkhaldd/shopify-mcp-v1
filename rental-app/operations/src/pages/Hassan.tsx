@@ -1530,12 +1530,12 @@ export default function Hassan() {
     <div className="space-y-6">
       <PrintHeader title={printTitle} subtitle={`${monthLabel(month)} ${month.slice(0, 4)}`} />
 
-      <div className="no-print flex items-center justify-between">
+      <div className="no-print flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">{person()}</h1>
           <p className="text-sm text-slate-500 mt-1">كوميشن {person()} على تأجير المعدات، منفصل عن حسابه الشخصي.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <PrintButton />
           <MonthPicker month={month} onChange={setMonth} />
         </div>

@@ -19,7 +19,7 @@ export function Panel({ title, hint, actions, children, className = "" }: { titl
         <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 py-3.5 border-b border-line">
           <h2 className="m-0 font-display text-[15px] font-bold">{title}</h2>
           {hint && <span className="text-xs font-semibold text-muted">{hint}</span>}
-          {actions && <div className="no-print flex gap-2">{actions}</div>}
+          {actions && <div className="no-print flex flex-wrap gap-2">{actions}</div>}
         </div>
       )}
       {children}

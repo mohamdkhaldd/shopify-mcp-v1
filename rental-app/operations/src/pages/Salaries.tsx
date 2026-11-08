@@ -486,7 +486,7 @@ export default function Salaries() {
 
   return (
     <div className="space-y-6">
-      <div className="no-print flex items-center justify-between">
+      <div className="no-print flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">الرواتب</h1>
           <p className="text-sm text-slate-500 mt-1">

@@ -72,7 +72,7 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
     <div className="space-y-6">
       <PrintHeader title={`${detail.contractor.name} — كشف حساب المقاول`} />
 
-      <div className="no-print flex items-center justify-between">
+      <div className="no-print flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
