@@ -82,3 +82,22 @@ describe("statement rows follow the 'for month', not the payment date", () => {
     expect(s.totals.paidPt).toBe(egp(20_000));
   });
 });
+
+import { dashboardView } from "../core/services/views";
+describe("dashboard month picker", () => {
+  it("picking an old month still lists every month up to today", () => {
+    const db = freshDb();
+    const id = newContract(db, {
+      client: { kind: "individual", name: "م" },
+      equipment: { name: "بوكيت", supplier: { name: "ص" } },
+      unit: "day",
+      clientRatePt: egp(3000),
+      supplierRatePt: egp(2000),
+      startDate: "2026-08-01",
+    }) as number;
+    fillRange(db, id, "client", "2026-08-01", "2026-08-10", {});
+    const v = dashboardView(db, "2026-08", "2026-11-05");
+    expect(v.month).toBe("2026-08");
+    expect(v.months.map((m) => m.month)).toEqual(["2026-08", "2026-09", "2026-10", "2026-11"]);
+  });
+});

@@ -14,6 +14,20 @@ export function asOfForMonth(month: string, now: string = today()) {
   return month < monthOf(now) ? lastDayOf(month) : now;
 }
 
+/** كل الشهور من أول شهر فيه بيانات لحد شهر النهارده، والمقفول منها. */
+function allMonthsUntil(db: Db, from: string, to: string) {
+  const closed = new Set((db.prepare("SELECT month FROM month_closes").all() as { month: string }[]).map((r) => r.month));
+  const out: { month: string; closed: boolean }[] = [];
+  let [y, m] = (from < to ? from : to).split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  while (y < ty || (y === ty && m <= tm)) {
+    const key = `${y}-${String(m).padStart(2, "0")}`;
+    out.push({ month: key, closed: closed.has(key) });
+    if (++m > 12) [y, m] = [y + 1, 1];
+  }
+  return out;
+}
+
 export function dashboardView(db: Db, month: string = monthOf(today()), now: string = today()) {
   const asOf = asOfForMonth(month, now);
   const books = computeBooks(db, asOf);
@@ -48,7 +62,8 @@ export function dashboardView(db: Db, month: string = monthOf(today()), now: str
   return {
     month,
     asOf,
-    months: books.months.map((x) => ({ month: x.month, closed: x.closed })),
+    // كل الشهور لحد النهارده (مش لحد الشهر المختار بس) — عشان ترجع لأي شهر من نفس الصفحة
+    months: allMonthsUntil(db, books.months[0]?.month ?? monthOf(now), monthOf(now)),
     closed: !!m?.closed,
     kpis: {
       balancePt: d.treasury.balancePt,
