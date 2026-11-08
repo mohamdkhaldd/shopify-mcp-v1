@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, appApi, Deletable, InvestorsView } from "../../api/client";
+import { api, ApiError, appApi, Deletable, InvestorsView, Money as MoneyPick } from "../../api/client";
+import AccountFields, { moneyProblem, useAccounts } from "../../components/AccountFields";
 import { Button, ErrorBox, Kpi, Loading, Money, Note, PageHeader, Panel, Pill } from "../../components/ui";
 import { Labeled, Select, TextInput } from "../../components/Field";
 import { PrintButtons, PrintHeader } from "../../components/Print";
@@ -71,6 +72,9 @@ function MoneyForm({ mode, v, onSaved }: { mode: "capital" | "payout"; v: Invest
   const [confirmCash, setConfirmCash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const inv = v.investors.find((i) => String(i.investorId) === investor);
+  const [money, setMoney] = useState<MoneyPick>({});
+  const accounts = useAccounts();
+  const direction = mode === "capital" && kind === "deposit" ? "in" : "out";
 
   async function save(confirmNegative = false) {
     setError(null);
@@ -79,14 +83,17 @@ function MoneyForm({ mode, v, onSaved }: { mode: "capital" | "payout"; v: Invest
       const amountPt = moneyToPt(amount);
       if (!amountPt || amountPt <= 0) throw new Error("اكتب المبلغ");
       const investorId = Number(investor);
+      const problem = !(mode === "payout" && reinvest) && moneyProblem(money, accounts, direction);
+      if (problem) throw new Error(problem);
+      const m = { ...money, account: money.account || accounts[0]?.key };
       if (mode === "capital") {
-        await api.capital({ investorId, kind, date, amountPt, note: note.trim() || undefined, confirmNegative });
+        await api.capital({ investorId, kind, date, amountPt, note: note.trim() || undefined, confirmNegative, ...m });
         onSaved(kind === "deposit" ? "الإيداع اتسجل" : "السحب اتسجل");
       } else if (reinvest) {
         await api.reinvest({ investorId, date, amountPt });
         onSaved("الأرباح اتحطت في رأس ماله");
       } else {
-        await api.investorPayout({ investorId, date, amountPt, note: note.trim() || undefined, confirmNegative });
+        await api.investorPayout({ investorId, date, amountPt, note: note.trim() || undefined, confirmNegative, ...m });
         onSaved("الصرف اتسجل");
       }
       setAmount("");
@@ -131,6 +138,7 @@ function MoneyForm({ mode, v, onSaved }: { mode: "capital" | "payout"; v: Invest
             <TextInput value={note} onChange={(e) => setNote(e.target.value)} className="w-44" />
           </Labeled>
         )}
+        {!(mode === "payout" && reinvest) && <AccountFields direction={direction} value={money} onChange={setMoney} amountPt={(() => { try { return moneyToPt(amount); } catch { return null; } })()} />}
         {mode === "payout" && (
           <label className="flex items-center gap-1.5 text-sm font-semibold self-center">
             <input type="checkbox" checked={reinvest} onChange={(e) => setReinvest(e.target.checked)} /> حطها في رأس ماله بدل ما ياخدها

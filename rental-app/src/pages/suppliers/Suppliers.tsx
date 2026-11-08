@@ -109,6 +109,7 @@ function SupplierPayment({ s, contractChoices, onSaved }: { s: Selected; contrac
   const [forMonth, setForMonth] = useState("");
   return (
     <MoneyEntry
+      direction="out"
       title="دفعة لصاحب المعدة — اختار عن أنهي شهر، أو سيبها تلقائي تسدد أقدم شهر"
       contracts={contractChoices}
       notePlaceholder="كاش / تحويل / شيك رقم ..."
@@ -123,6 +124,7 @@ function SupplierPayment({ s, contractChoices, onSaved }: { s: Selected; contrac
           note: x.note || undefined,
           forMonth: forMonth || null,
           confirmNegative: x.confirmNegative,
+          ...x.money,
         });
         setForMonth("");
         onSaved();
@@ -402,6 +404,7 @@ export default function Suppliers() {
             {tab === "deductions" && (
               <>
                 <MoneyEntry
+                  direction="out"
                   key={`d-${s.supplier.id}`}
                   title="حاجة دفعناها عنه (بتتخصم من حسابه)"
                   contracts={contractChoices}
@@ -409,7 +412,7 @@ export default function Suppliers() {
                   notePlaceholder="سولار / قطع غيار / ..."
                   saveLabel="حفظ الخصم"
                   onSave={async (x) => {
-                    await api.supplierDeduction({ supplierId: s.supplier.id, contractId: x.contractId, date: x.date, amountPt: x.amountPt, note: x.note, confirmNegative: x.confirmNegative });
+                    await api.supplierDeduction({ supplierId: s.supplier.id, contractId: x.contractId, date: x.date, amountPt: x.amountPt, note: x.note, confirmNegative: x.confirmNegative, ...x.money });
                     load();
                   }}
                 />

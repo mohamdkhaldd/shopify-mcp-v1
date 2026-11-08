@@ -502,6 +502,8 @@ export interface TreasuryFilters {
   type?: string;
   /** "client:3", "supplier:1", "investor:2", "contract:5", "management" */
   party?: string;
+  /** حساب واحد بس (انستا باي / محفظة) — والرصيد بيبقى رصيد الحساب ده */
+  account?: string;
 }
 
 export function treasuryView(db: Db, f: TreasuryFilters = {}, now: string = today()) {
@@ -514,9 +516,36 @@ export function treasuryView(db: Db, f: TreasuryFilters = {}, now: string = toda
   };
   const partyName = (kind: string | null, id: number | null) =>
     kind === "management" ? "الإدارة" : kind && id != null ? names[kind]?.get(id) ?? "" : kind === null && id === null ? "" : "";
-  const all = db
-    .prepare("SELECT id, date, direction, amount_pt, type, party_kind, party_id, note FROM treasury_entries WHERE deleted_at IS NULL AND date <= ? ORDER BY date, id")
-    .all(now) as { id: number; date: string; direction: "in" | "out"; amount_pt: number; type: string; party_kind: string | null; party_id: number | null; note: string | null }[];
+  const accName = new Map(books.treasury.byAccount.map((a) => [a.key, a.name]));
+  type Ev = { id: number; date: string; direction: "in" | "out"; amount_pt: number; type: string; party_kind: string | null; party_id: number | null; note: string | null; account: string; held_by: string | null; transfer?: boolean };
+  // الفلوس اللي كانت مع حد بتظهر يوم ما وصلت الخزنة؛ اللي لسه مع حد مش هنا (ليها قايمة لوحدها).
+  const entries = (
+    db
+      .prepare("SELECT id, date, direction, amount_pt, type, party_kind, party_id, note, account, held_by, delivered_at FROM treasury_entries WHERE deleted_at IS NULL ORDER BY date, id")
+      .all() as (Ev & { delivered_at: string | null })[]
+  )
+    .filter((e) => !e.held_by || e.delivered_at)
+    .map((e) => ({ ...e, date: e.held_by ? e.delivered_at! : e.date }))
+    .filter((e) => e.date <= now);
+  // التحويل بين الحسابات: بيظهر لما تختار حساب (طالع من واحد وداخل التاني)
+  const transfers = f.account
+    ? (db.prepare("SELECT * FROM treasury_transfers WHERE deleted_at IS NULL AND date <= ? AND (from_account = ? OR to_account = ?)").all(now, f.account, f.account) as Record<string, any>[]).map(
+        (x): Ev => ({
+          id: -x.id,
+          date: x.date,
+          direction: x.from_account === f.account ? "out" : "in",
+          amount_pt: x.amount_pt,
+          type: "transfer",
+          party_kind: null,
+          party_id: null,
+          note: `${x.from_account === f.account ? "تحويل لـ" : "تحويل من"} ${accName.get(x.from_account === f.account ? x.to_account : x.from_account) ?? ""}${x.note ? ` — ${x.note}` : ""}`,
+          account: f.account!,
+          held_by: null,
+          transfer: true,
+        }),
+      )
+    : [];
+  const all = [...entries.filter((e) => !f.account || e.account === f.account), ...transfers].sort((a, b) => a.date.localeCompare(b.date) || Math.abs(a.id) - Math.abs(b.id));
   let running = 0;
   const withBalance = all.map((e) => {
     const signed = e.direction === "in" ? e.amount_pt : -e.amount_pt;
@@ -525,10 +554,11 @@ export function treasuryView(db: Db, f: TreasuryFilters = {}, now: string = toda
       id: e.id,
       date: e.date,
       type: e.type,
-      typeLabel: TREASURY_TYPES[e.type] ?? e.type,
+      typeLabel: e.type === "transfer" ? "تحويل بين الحسابات" : TREASURY_TYPES[e.type] ?? e.type,
       party: partyName(e.party_kind, e.party_id),
       partyKey: e.party_kind === "management" ? "management" : e.party_kind ? `${e.party_kind}:${e.party_id}` : "",
-      note: e.note,
+      note: e.held_by ? [e.note, `استلمها ${e.held_by}`].filter(Boolean).join(" — ") : e.note,
+      account: accName.get(e.account) ?? e.account,
       inPt: signed > 0 ? signed : 0,
       outPt: signed < 0 ? -signed : 0,
       cancelled: e.amount_pt < 0,
@@ -554,6 +584,16 @@ export function treasuryView(db: Db, f: TreasuryFilters = {}, now: string = toda
     totals: { inPt: rows.reduce((s, r) => s + r.inPt, 0), outPt: rows.reduce((s, r) => s + r.outPt, 0), count: rows.length },
     parties,
     types: Object.entries(TREASURY_TYPES).map(([key, label]) => ({ key, label })),
+    accounts: books.treasury.byAccount,
+    held: books.treasury.held.map((h) => ({ ...h, party: partyName(h.partyKind, h.partyId), accountName: accName.get(h.account) ?? h.account, typeLabel: TREASURY_TYPES[h.type] ?? h.type })),
+    transfers: (db.prepare("SELECT * FROM treasury_transfers WHERE deleted_at IS NULL ORDER BY date DESC, id DESC LIMIT 50").all() as Record<string, any>[]).map((x) => ({
+      id: x.id as number,
+      date: x.date as string,
+      from: accName.get(x.from_account) ?? x.from_account,
+      to: accName.get(x.to_account) ?? x.to_account,
+      amountPt: x.amount_pt as number,
+      note: x.note as string | null,
+    })),
   };
 }
 

@@ -20,7 +20,8 @@ export type Deletable =
   | "clients"
   | "suppliers"
   | "investors"
-  | "expense_categories";
+  | "expense_categories"
+  | "treasury_transfers";
 
 const MONEY_LABEL: Record<string, string> = {
   client_payments: "دفعة من عميل",
@@ -64,8 +65,18 @@ function contractTargets(db: Db, contractId: number): Target[] {
   return out;
 }
 
+/** الحركة + عمولة التحويل اللي اتسجلت عليها (لو فيه). */
+function withFee(db: Db, table: string, targets: Target[]): Target[] {
+  return targets.flatMap((t) => [t, ...money(db, "expenses", "fee_of = ?", `${table}:${t.id}`)]);
+}
+
 function targetsOf(db: Db, entity: Deletable, id: number): Target[] {
-  if (MONEY_TABLES.includes(entity)) return money(db, entity, "id = ?", id);
+  if (MONEY_TABLES.includes(entity)) return withFee(db, entity, money(db, entity, "id = ?", id));
+  if (entity === "treasury_transfers") {
+    const x = db.prepare(`SELECT id, date, amount_pt FROM treasury_transfers WHERE id = ? AND ${live}`).get(id) as { id: number; date: string; amount_pt: number } | undefined;
+    if (!x) return [];
+    return withFee(db, entity, [{ table: "treasury_transfers", id, date: x.date, label: `تحويل بين حسابات الخزنة ${formatPounds(x.amount_pt)} ج — ${x.date}` }]);
+  }
   switch (entity) {
     case "work_logs": {
       // a company-sheet day takes the owner's copy of it along
@@ -151,7 +162,7 @@ export function deleteEntity(db: Db, entity: Deletable, id: number, reason = "ح
   return batch;
 }
 
-const ALL_TABLES = [...MONEY_TABLES, "treasury_entries", "work_logs", "contracts", "equipment", "clients", "suppliers", "investors", "expense_categories"];
+const ALL_TABLES = [...MONEY_TABLES, "treasury_entries", "treasury_transfers", "work_logs", "contracts", "equipment", "clients", "suppliers", "investors", "expense_categories"];
 
 /** Undo a delete (from the activity log or the undo bar). */
 export function restoreDeleted(db: Db, batch: string) {

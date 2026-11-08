@@ -251,6 +251,34 @@ CREATE TABLE IF NOT EXISTS treasury_entries (
   CHECK (amount_pt <> 0)
 );
 
+-- حسابات الخزنة (انستا باي / محفظة...) وعمولة التحويل من كل واحد:
+-- نسبة (bp) بحد أدنى وأقصى. الدفع العادي (مش تحويل) من غير عمولة.
+CREATE TABLE IF NOT EXISTS treasury_accounts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  key TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  fee_bp INTEGER NOT NULL DEFAULT 0 CHECK (typeof(fee_bp) = 'integer' AND fee_bp BETWEEN 0 AND 10000),
+  ${pt("fee_min_pt")} DEFAULT 0,
+  ${pt("fee_max_pt", true)},
+  sort INTEGER NOT NULL DEFAULT 0,
+  deleted_at TEXT,
+  delete_reason TEXT
+);
+
+-- نقل فلوس من حساب لحساب (كاش ← انستا باي مثلًا)
+CREATE TABLE IF NOT EXISTS treasury_transfers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  from_account TEXT NOT NULL,
+  to_account TEXT NOT NULL,
+  ${pt("amount_pt")},
+  note TEXT,
+  deleted_at TEXT,
+  delete_reason TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  CHECK (amount_pt > 0 AND from_account <> to_account)
+);
+
 -- corrections to a closed month, booked in an open month
 CREATE TABLE IF NOT EXISTS adjustments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -324,6 +352,7 @@ export const FINANCIAL_TABLES = [
   "profit_payouts",
   "tax_payments",
   "treasury_entries",
+  "treasury_transfers",
   "adjustments",
   "invoices",
   "month_closes",
@@ -340,6 +369,7 @@ const DATED_TABLES = [
   "profit_payouts",
   "tax_payments",
   "treasury_entries",
+  "treasury_transfers",
 ];
 
 const REVERSIBLE_TABLES = [
@@ -386,7 +416,7 @@ function installGuards(db: Db) {
   `);
   for (const t of FINANCIAL_TABLES) {
     const changed = columnsOf(db, t)
-      .filter((c) => !["note", "deleted_at", "delete_reason", "gid"].includes(c)) // gid: the sync engine's global row id
+      .filter((c) => !["note", "deleted_at", "delete_reason", "gid", "delivered_at"].includes(c)) // gid: the sync engine's global row id; delivered_at: "الفلوس وصلت الخزنة"
       .map((c) => `NEW.${c} IS NOT OLD.${c}`)
       .join(" OR ");
     db.exec(`
@@ -454,6 +484,14 @@ export const SCHEMA_VERSION = 1;
 export function setupDatabase(db: Db): Db {
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(DDL);
+  // الخزنة متقسمة حسابات: كل حركة من/على أنهي حساب، والفلوس اللي لسه مع حد
+  // (مستلمها ومسلمهاش) مبتدخلش الرصيد لحد ما تتعلّم "وصلت".
+  const te = columnsOf(db, "treasury_entries");
+  if (!te.includes("account")) db.exec("ALTER TABLE treasury_entries ADD COLUMN account TEXT NOT NULL DEFAULT 'instapay'");
+  if (!te.includes("held_by")) db.exec("ALTER TABLE treasury_entries ADD COLUMN held_by TEXT");
+  // عمولة التحويل (مصروف) مربوطة بالحركة اللي اتعملت عليها ("table:id") عشان تتحذف معاها
+  if (!columnsOf(db, "expenses").includes("fee_of")) db.exec("ALTER TABLE expenses ADD COLUMN fee_of TEXT");
+  if (!te.includes("delivered_at")) db.exec("ALTER TABLE treasury_entries ADD COLUMN delivered_at TEXT");
   // صرف من نصيب الإدارة لشريك إدارة معين (فاضي = للإدارة عمومًا).
   // الدفعة "عن شهر كذا" (فاضي = تسدد أقدم شهر لسه عليه حاجة).
   for (const t of ["client_payments", "supplier_payments"])
@@ -468,6 +506,11 @@ export function setupDatabase(db: Db): Db {
   installAudit(db, business);
   const seed = db.prepare("INSERT OR IGNORE INTO rate_settings (key, value_bp, effective_from) VALUES (?, ?, '2000-01-01')");
   for (const [k, v] of Object.entries(DEFAULT_RATES)) seed.run(k, v);
+  // انستا باي: ٠٫١٪ من المبلغ، أقل حاجة ٥٠ قرش وأقصى ٢٠ جنيه (بتتغير من الإعدادات)
+  const acc = db.prepare("INSERT OR IGNORE INTO treasury_accounts (key, name, fee_bp, fee_min_pt, fee_max_pt, sort) VALUES (?, ?, ?, ?, ?, ?)");
+  // خزنة التأجير حسابين: انستا باي (عليه عمولة التحويل) ومحفظة.
+  acc.run("instapay", "انستا باي", 10, 50, 2000, 1);
+  acc.run("wallet", "محفظة", 0, 0, null, 2);
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return db;
 }

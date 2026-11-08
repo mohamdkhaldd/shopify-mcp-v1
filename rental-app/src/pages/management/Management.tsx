@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, appApi, Deletable, ManagementView } from "../../api/client";
+import { api, ApiError, appApi, Deletable, ManagementView, Money as MoneyPick } from "../../api/client";
+import AccountFields, { moneyProblem, useAccounts } from "../../components/AccountFields";
 import { Button, Code, ErrorBox, Kpi, Loading, Money, Note, PageHeader, Panel, Pill } from "../../components/ui";
 import { Labeled, Select, TextInput } from "../../components/Field";
 import { PrintButtons, PrintHeader } from "../../components/Print";
@@ -105,6 +106,8 @@ function ExpenseEntry({ v, onSaved }: { v: ManagementView; onSaved: () => void }
   const [error, setError] = useState<string | null>(null);
   const [confirmCash, setConfirmCash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [money, setMoney] = useState<MoneyPick>({});
+  const accounts = useAccounts();
 
   async function save(confirmNegative = false) {
     setError(null);
@@ -112,9 +115,11 @@ function ExpenseEntry({ v, onSaved }: { v: ManagementView; onSaved: () => void }
     try {
       const amountPt = moneyToPt(amount);
       if (!amountPt || amountPt <= 0) throw new Error("اكتب المبلغ");
+      const problem = moneyProblem(money, accounts, "out");
+      if (problem) throw new Error(problem);
       let categoryId: number | null = category && category !== "new" ? Number(category) : null;
       if (category === "new" && newCategory.trim()) categoryId = await api.createExpenseCategory(newCategory.trim());
-      await api.expense({ kind, contractId: kind === "contract" ? Number(contract) : null, categoryId, date, amountPt, note: note.trim() || undefined, confirmNegative });
+      await api.expense({ kind, contractId: kind === "contract" ? Number(contract) : null, categoryId, date, amountPt, note: note.trim() || undefined, confirmNegative, ...money, account: money.account || accounts[0]?.key });
       setAmount("");
       setNote("");
       setNewCategory("");
@@ -173,6 +178,7 @@ function ExpenseEntry({ v, onSaved }: { v: ManagementView; onSaved: () => void }
         <Labeled label="البيان">
           <TextInput value={note} onChange={(e) => setNote(e.target.value)} className="w-40" />
         </Labeled>
+        <AccountFields direction="out" value={money} onChange={setMoney} amountPt={(() => { try { return moneyToPt(amount); } catch { return null; } })()} />
         <Button primary onClick={() => save()} disabled={busy}>
           حفظ المصروف
         </Button>
@@ -304,6 +310,7 @@ function ManagementPayout({ v, onSaved }: { v: ManagementView; onSaved: () => vo
   const people = v.managers.people.map((p) => p.name);
   return (
     <MoneyEntry
+      direction="out"
       title="صرف من نصيب الإدارة"
       contracts={[]}
       saveLabel="صرف"
@@ -322,7 +329,7 @@ function ManagementPayout({ v, onSaved }: { v: ManagementView; onSaved: () => vo
         )
       }
       onSave={async (x) => {
-        await api.managementPayout({ date: x.date, amountPt: x.amountPt, note: x.note || undefined, managerName: who || null, confirmNegative: x.confirmNegative });
+        await api.managementPayout({ date: x.date, amountPt: x.amountPt, note: x.note || undefined, managerName: who || null, confirmNegative: x.confirmNegative, ...x.money });
         onSaved();
       }}
     />

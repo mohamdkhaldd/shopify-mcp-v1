@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, appApi, Deletable, TaxView } from "../../api/client";
+import { api, appApi, Deletable, Money as MoneyPick, TaxView } from "../../api/client";
+import AccountFields, { moneyProblem, useAccounts } from "../../components/AccountFields";
 import { Button, Code, ErrorBox, Kpi, Loading, Money, PageHeader, Panel } from "../../components/ui";
 import { Labeled, Select, TextInput } from "../../components/Field";
 import { PrintButtons, PrintHeader } from "../../components/Print";
@@ -18,6 +19,8 @@ function TaxPaymentForm({ v, onSaved }: { v: TaxView; onSaved: () => void }) {
   const [amount, setAmount] = useState("");
   const [receipt, setReceipt] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [money, setMoney] = useState<MoneyPick>({});
+  const accounts = useAccounts();
   return (
     <div className="no-print grid gap-2 px-4 py-3 border-b border-line bg-surface-2">
       <div className="flex flex-wrap items-end gap-2.5">
@@ -46,6 +49,7 @@ function TaxPaymentForm({ v, onSaved }: { v: TaxView; onSaved: () => void }) {
         <Labeled label="رقم الإيصال">
           <TextInput value={receipt} onChange={(e) => setReceipt(e.target.value)} className="w-32" />
         </Labeled>
+        <AccountFields direction="out" value={money} onChange={setMoney} amountPt={(() => { try { return moneyToPt(amount); } catch { return null; } })()} />
         <Button
           primary
           onClick={async () => {
@@ -53,7 +57,9 @@ function TaxPaymentForm({ v, onSaved }: { v: TaxView; onSaved: () => void }) {
             try {
               const pt = moneyToPt(amount);
               if (!pt || pt <= 0) throw new Error("اكتب المبلغ");
-              await api.taxPayment({ tax, periodMonth: period || undefined, date, amountPt: pt, receiptNo: receipt.trim() || undefined });
+              const problem = moneyProblem(money, accounts, "out");
+              if (problem) throw new Error(problem);
+              await api.taxPayment({ tax, periodMonth: period || undefined, date, amountPt: pt, receiptNo: receipt.trim() || undefined, ...money, account: money.account || accounts[0]?.key });
               setAmount("");
               setReceipt("");
               onSaved();

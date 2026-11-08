@@ -7,6 +7,7 @@ import { today } from "../core/db";
 import { deleteEntity, deletePreview, restoreDeleted } from "../core/services/deletion";
 import { createClient, createEquipment, createExpenseCategory, createInvestor, createSupplier, setRates, updateInvestor, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier, endContract, reopenContract } from "../core/services/master";
 import { ManagerShare, setContractManagers } from "../core/services/managers";
+import { markDelivered, Money, recordTransfer, saveAccount } from "../core/services/ledger";
 import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, recordTaxPayment, reinvestProfit } from "../core/services/ledger";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
 
@@ -40,9 +41,9 @@ export function makeRegistry(db: Db) {
     endContract: (a: { id: number; endDate: string }) => endContract(db, a.id, a.endDate),
     reopenContract: (a: { id: number }) => reopenContract(db, a.id),
     partySheet: (a: { contractId: number; month: string; side: Side }) => getPartySheet(db, a.contractId, a.month, a.side),
-    supplierPayment: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null; confirmNegative?: boolean }) =>
+    supplierPayment: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null; confirmNegative?: boolean } & Money) =>
       recordSupplierPayment(db, a, { confirmNegative: a.confirmNegative }),
-    supplierDeduction: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean }) =>
+    supplierDeduction: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean } & Money) =>
       recordSupplierDeduction(db, a, { confirmNegative: a.confirmNegative }),
 
     // الشركات والأفراد
@@ -50,15 +51,15 @@ export function makeRegistry(db: Db) {
     createClient: (a: { kind: "company" | "individual"; name: string; phone?: string; taxId?: string; vatApplies?: boolean; tax5Applies?: boolean }) => createClient(db, a),
     updateClient: (a: { id: number; kind: "company" | "individual"; name: string; phone?: string | null; taxId?: string | null }) => updateClient(db, a.id, a),
     setClientTaxes: (a: { id: number; vatApplies: boolean; tax5Applies: boolean }) => setClientTaxes(db, a.id, a.vatApplies, a.tax5Applies),
-    clientPayment: (a: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null }) => recordClientPayment(db, a),
+    clientPayment: (a: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null } & Money) => recordClientPayment(db, a),
 
     // الإدارة
     management: (a: { month?: string }) => managementView(db, a.month),
     createExpenseCategory: (a: { name: string }) => createExpenseCategory(db, a.name),
-    expense: (a: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
+    expense: (a: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean } & Money) =>
       recordExpense(db, a, { confirmNegative: a.confirmNegative }),
-    managementPayout: (a: { date: string; amountPt: number; note?: string; managerName?: string | null; confirmNegative?: boolean }) =>
-      recordPayout(db, { payee: "management", managerName: a.managerName, date: a.date, amountPt: a.amountPt, note: a.note }, { confirmNegative: a.confirmNegative }),
+    managementPayout: (a: { date: string; amountPt: number; note?: string; managerName?: string | null; confirmNegative?: boolean } & Money) =>
+      recordPayout(db, { ...a, payee: "management" }, { confirmNegative: a.confirmNegative }),
     setContractManagers: (a: { contractId: number; managers: ManagerShare[] }) => setContractManagers(db, a.contractId, a.managers),
     closeMonth: (a: { month: string }) => {
       closeMonth(db, a.month, today());
@@ -70,18 +71,29 @@ export function makeRegistry(db: Db) {
     investors: (a: { month?: string }) => investorsView(db, a.month),
     createInvestor: (a: { name: string; phone?: string }) => createInvestor(db, a),
     updateInvestor: (a: { id: number; name: string; phone?: string | null }) => updateInvestor(db, a.id, a),
-    capital: (a: { investorId: number; kind: "deposit" | "withdrawal"; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
+    capital: (a: { investorId: number; kind: "deposit" | "withdrawal"; date: string; amountPt: number; note?: string; confirmNegative?: boolean } & Money) =>
       recordCapital(db, a, { confirmNegative: a.confirmNegative }),
-    investorPayout: (a: { investorId: number; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
-      recordPayout(db, { payee: "investor", investorId: a.investorId, date: a.date, amountPt: a.amountPt, note: a.note }, { confirmNegative: a.confirmNegative }),
+    investorPayout: (a: { investorId: number; date: string; amountPt: number; note?: string; confirmNegative?: boolean } & Money) =>
+      recordPayout(db, { ...a, payee: "investor" }, { confirmNegative: a.confirmNegative }),
     reinvest: (a: { investorId: number; date: string; amountPt: number }) => reinvestProfit(db, a),
 
     // الخزنة
     treasury: (a: TreasuryFilters) => treasuryView(db, a),
+    accounts: () =>
+      db.prepare("SELECT key, name, fee_bp AS feeBp, fee_min_pt AS feeMinPt, fee_max_pt AS feeMaxPt FROM treasury_accounts WHERE deleted_at IS NULL ORDER BY sort, id").all() as {
+        key: string;
+        name: string;
+        feeBp: number;
+        feeMinPt: number;
+        feeMaxPt: number | null;
+      }[],
+    transfer: (a: { date: string; from: string; to: string; amountPt: number; note?: string; transferFee?: boolean }) => recordTransfer(db, a),
+    markDelivered: (a: { id: number; date: string }) => markDelivered(db, a.id, a.date),
+    saveAccount: (a: { key?: string; name: string; feeBp: number; feeMinPt: number; feeMaxPt: number | null }) => saveAccount(db, a),
 
     // الملف الضريبي
     tax: () => taxView(db),
-    taxPayment: (a: { tax: "vat" | "tax5"; periodMonth?: string; date: string; amountPt: number; receiptNo?: string; note?: string }) => recordTaxPayment(db, a),
+    taxPayment: (a: { tax: "vat" | "tax5"; periodMonth?: string; date: string; amountPt: number; receiptNo?: string; note?: string } & Money) => recordTaxPayment(db, a),
 
     // سجل التعديلات + الإعدادات
     activity: (a: { from?: string; to?: string }) => activityView(db, a),
@@ -145,6 +157,12 @@ function labelFor(db: Db, fn: string, a: any): string | null {
       return `بند مصروف جديد: ${a.name}`;
     case "expense":
       return `${a.kind === "general" ? "مصروف عام" : "مصروف عقد"} ${egp(a.amountPt)}${a.note ? ` — ${a.note}` : ""}`;
+    case "transfer":
+      return `تحويل ${egp(a.amountPt)} بين حسابات الخزنة`;
+    case "markDelivered":
+      return "فلوس وصلت الخزنة";
+    case "saveAccount":
+      return `حساب الخزنة: ${a.name}`;
     case "managementPayout":
       return `صرف من نصيب الإدارة ${egp(a.amountPt)}${a.managerName ? ` لـ ${a.managerName}` : ""}`;
     case "setContractManagers": {

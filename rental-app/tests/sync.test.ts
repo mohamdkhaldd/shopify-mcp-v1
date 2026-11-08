@@ -35,7 +35,7 @@ describe("sync between the laptop and the tablet", () => {
 
     const view = (db: Db) => dashboardView(db, "2026-10", "2026-10-31");
     expect(view(tablet).kpis).toEqual(view(laptop).kpis);
-    expect(computeBooks(tablet, "2026-10-31").treasury).toEqual({ balancePt: egp(97_050), taxHeldPt: egp(7_050), profitsDuePt: egp(6_500), availablePt: egp(83_500) });
+    expect(computeBooks(tablet, "2026-10-31").treasury).toMatchObject({ balancePt: egp(97_050), taxHeldPt: egp(7_050), profitsDuePt: egp(6_500), availablePt: egp(83_500) });
     // treasury entries still point at their own payment / party on the tablet
     const t = tablet.prepare("SELECT source_table, source_id, party_kind, party_id FROM treasury_entries WHERE type = 'client_collection'").get();
     expect(tablet.prepare(`SELECT amount_pt FROM ${t.source_table} WHERE id = ?`).get(t.source_id).amount_pt).toBe(egp(51_300));

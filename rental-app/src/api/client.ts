@@ -17,6 +17,21 @@ declare global {
   }
 }
 
+/** الفلوس دخلت/خرجت من أنهي حساب، ولسه مع حد ولا لأ، وتحويل (بعمولة) ولا دفع. */
+export interface Money {
+  account?: string;
+  heldBy?: string | null;
+  transferFee?: boolean;
+}
+
+export interface TreasuryAccount {
+  key: string;
+  name: string;
+  feeBp: number;
+  feeMinPt: number;
+  feeMaxPt: number | null;
+}
+
 export class ApiError extends Error {
   constructor(message: string, readonly code?: string) {
     super(message);
@@ -61,31 +76,35 @@ export const api = {
   endContract: (id: number, endDate: string) => call("endContract", { id, endDate }),
   reopenContract: (id: number) => call("reopenContract", { id }),
   partySheet: (contractId: number, month: string, side: "client" | "supplier") => call<PartySheet>("partySheet", { contractId, month, side }),
-  supplierPayment: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null; confirmNegative?: boolean }) => call<number>("supplierPayment", v),
-  supplierDeduction: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean }) =>
+  supplierPayment: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null; confirmNegative?: boolean } & Money) => call<number>("supplierPayment", v),
+  supplierDeduction: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean } & Money) =>
     call<number>("supplierDeduction", v),
   clients: (clientId?: number) => call<ClientsView>("clients", { clientId }),
   createClient: (v: { kind: "company" | "individual"; name: string; phone?: string; taxId?: string; vatApplies?: boolean; tax5Applies?: boolean }) => call<number>("createClient", v),
   updateClient: (v: { id: number; kind: "company" | "individual"; name: string; phone?: string | null; taxId?: string | null }) => call("updateClient", v),
   setClientTaxes: (id: number, vatApplies: boolean, tax5Applies: boolean) => call("setClientTaxes", { id, vatApplies, tax5Applies }),
-  clientPayment: (v: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null }) => call<number>("clientPayment", v),
+  clientPayment: (v: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null } & Money) => call<number>("clientPayment", v),
   management: (month?: string) => call<ManagementView>("management", { month }),
   createExpenseCategory: (name: string) => call<number>("createExpenseCategory", { name }),
-  expense: (v: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
+  expense: (v: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean } & Money) =>
     call<number>("expense", v),
-  managementPayout: (v: { date: string; amountPt: number; note?: string; managerName?: string | null; confirmNegative?: boolean }) => call<number>("managementPayout", v),
+  managementPayout: (v: { date: string; amountPt: number; note?: string; managerName?: string | null; confirmNegative?: boolean } & Money) => call<number>("managementPayout", v),
   setContractManagers: (v: { contractId: number; managers: { name: string; shareBp: number }[] }) => call("setContractManagers", v),
   closeMonth: (month: string) => call<void>("closeMonth", { month }),
   adjustment: (v: { targetMonth: string; contractId: number; kind: "client_base" | "supplier_cost"; amountPt: number; reason: string }) => call<number>("adjustment", v),
   investors: (month?: string) => call<InvestorsView>("investors", { month }),
   createInvestor: (name: string, phone?: string) => call<number>("createInvestor", { name, phone }),
   updateInvestor: (id: number, name: string, phone?: string | null) => call("updateInvestor", { id, name, phone }),
-  capital: (v: { investorId: number; kind: "deposit" | "withdrawal"; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) => call<number>("capital", v),
-  investorPayout: (v: { investorId: number; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) => call<number>("investorPayout", v),
+  capital: (v: { investorId: number; kind: "deposit" | "withdrawal"; date: string; amountPt: number; note?: string; confirmNegative?: boolean } & Money) => call<number>("capital", v),
+  investorPayout: (v: { investorId: number; date: string; amountPt: number; note?: string; confirmNegative?: boolean } & Money) => call<number>("investorPayout", v),
   reinvest: (v: { investorId: number; date: string; amountPt: number }) => call<number>("reinvest", v),
   treasury: (f: TreasuryFilters) => call<TreasuryView>("treasury", f),
+  accounts: () => call<TreasuryAccount[]>("accounts"),
+  transfer: (v: { date: string; from: string; to: string; amountPt: number; note?: string; transferFee?: boolean }) => call<number>("transfer", v),
+  markDelivered: (id: number, date: string) => call("markDelivered", { id, date }),
+  saveAccount: (v: { key?: string; name: string; feeBp: number; feeMinPt: number; feeMaxPt: number | null }) => call<string>("saveAccount", v),
   tax: () => call<TaxView>("tax"),
-  taxPayment: (v: { tax: "vat" | "tax5"; periodMonth?: string; date: string; amountPt: number; receiptNo?: string; note?: string }) => call<number>("taxPayment", v),
+  taxPayment: (v: { tax: "vat" | "tax5"; periodMonth?: string; date: string; amountPt: number; receiptNo?: string; note?: string } & Money) => call<number>("taxPayment", v),
   activity: (f: { from?: string; to?: string } = {}) => call<ActivityView>("activity", f),
   undo: async (actionId: string) => {
     const r = await call<string>("undo", { actionId });

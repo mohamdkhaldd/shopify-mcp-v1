@@ -1,5 +1,6 @@
 import { ReactNode, useState } from "react";
-import { ApiError } from "../api/client";
+import { ApiError, Money } from "../api/client";
+import AccountFields, { moneyProblem, useAccounts } from "./AccountFields";
 import { Labeled, Select, TextInput } from "./Field";
 import { Button, ErrorBox } from "./ui";
 import { moneyToPt } from "../utils/input";
@@ -12,6 +13,8 @@ export interface MoneyEntryValue {
   contractId: number | null;
   note: string;
   confirmNegative?: boolean;
+  /** الحساب، ولسه مع مين، وتحويل ولا دفع */
+  money: Money;
 }
 
 /**
@@ -26,8 +29,11 @@ export default function MoneyEntry({
   noteRequired,
   extra,
   saveLabel = "حفظ",
+  direction,
   onSave,
 }: {
+  /** داخل الخزنة ولا طالع منها */
+  direction: "in" | "out";
   title: string;
   contracts: { id: number; label: string }[];
   notePlaceholder?: string;
@@ -43,6 +49,8 @@ export default function MoneyEntry({
   const [error, setError] = useState<string | null>(null);
   const [confirmCash, setConfirmCash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [money, setMoney] = useState<Money>({});
+  const accounts = useAccounts();
 
   async function save(confirmNegative = false) {
     setError(null);
@@ -55,11 +63,14 @@ export default function MoneyEntry({
     }
     if (!amountPt || amountPt <= 0) return setError("اكتب المبلغ");
     if (noteRequired && !note.trim()) return setError("اكتب البيان");
+    const problem = moneyProblem(money, accounts, direction);
+    if (problem) return setError(problem);
     setBusy(true);
     try {
-      await onSave({ date, amountPt, contractId: contract ? Number(contract) : null, note: note.trim(), confirmNegative });
+      await onSave({ date, amountPt, contractId: contract ? Number(contract) : null, note: note.trim(), confirmNegative, money: { ...money, account: money.account || accounts[0]?.key } });
       setAmount("");
       setNote("");
+      setMoney((m) => ({ account: m.account }));
       setConfirmCash(null);
     } catch (e) {
       if (e instanceof ApiError && e.code === "cash_negative") setConfirmCash(e.message);
@@ -94,6 +105,7 @@ export default function MoneyEntry({
         <Labeled label={noteRequired ? "البيان" : "ملاحظة"}>
           <TextInput value={note} onChange={(e) => setNote(e.target.value)} placeholder={notePlaceholder} className="w-52" />
         </Labeled>
+        <AccountFields direction={direction} value={money} onChange={setMoney} amountPt={(() => { try { return moneyToPt(amount); } catch { return null; } })()} />
         {extra}
         <Button primary onClick={() => save()} disabled={busy}>
           {saveLabel}

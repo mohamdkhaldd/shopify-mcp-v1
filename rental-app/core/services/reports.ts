@@ -11,6 +11,14 @@ const sum = <T>(rows: T[], f: (r: T) => number) => rows.reduce((s, r) => s + f(r
 export function supplierStatement(db: Db, supplierId: number, asOf: string = today(), books: Books = computeBooks(db, asOf)) {
   const supplier = db.prepare("SELECT id, name, phone FROM suppliers WHERE id = ?").get(supplierId);
   const pays = books.raw.supplierPayments.filter((p) => p.supplier_id === supplierId);
+  // عمولة التحويل (انستا باي) اللي اتخصمت على كل دفعة/خصم
+  const feeOf = new Map(
+    (db.prepare("SELECT fee_of, amount_pt FROM expenses WHERE fee_of IS NOT NULL AND deleted_at IS NULL").all() as { fee_of: string; amount_pt: number }[]).map((r) => [r.fee_of, r.amount_pt]),
+  );
+  const withFee = (table: string, id: number, note: string | null) => {
+    const fee = feeOf.get(`${table}:${id}`);
+    return fee ? `${note ? `${note} — ` : ""}+ عمولة تحويل ${(fee / 100).toLocaleString("en-US")} ج` : note;
+  };
   const deds = books.raw.deductions.filter((d) => d.supplier_id === supplierId);
   const months = books.months.map((m) => m.month);
   let running = 0;
@@ -70,8 +78,8 @@ export function supplierStatement(db: Db, supplierId: number, asOf: string = tod
     rows,
     byMonth,
     totals: { ...totals, remainingPt: totals.fromSarkiPt - totals.deductionsPt - totals.paidPt },
-    payments: pays.map((p) => ({ id: p.id, date: p.date, contractId: p.contract_id, amountPt: p.amount_pt, note: p.note, forMonth: (p.for_month as string | null) ?? null })),
-    deductions: deds.map((d) => ({ id: d.id, date: d.date, contractId: d.contract_id, amountPt: d.amount_pt, note: d.note })),
+    payments: pays.map((p) => ({ id: p.id, date: p.date, contractId: p.contract_id, amountPt: p.amount_pt, note: withFee("supplier_payments", p.id, p.note), forMonth: (p.for_month as string | null) ?? null })),
+    deductions: deds.map((d) => ({ id: d.id, date: d.date, contractId: d.contract_id, amountPt: d.amount_pt, note: withFee("supplier_deductions", d.id, d.note) })),
   };
 }
 

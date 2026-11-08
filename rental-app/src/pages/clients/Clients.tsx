@@ -128,13 +128,14 @@ function ClientPayment({ s, contractChoices, onSaved }: { s: Selected; contractC
   const [forMonth, setForMonth] = useState("");
   return (
     <MoneyEntry
+      direction="in"
       title="دفعة من العميل — اختار عن أنهي شهر، أو سيبها تلقائي تسدد أقدم شهر"
       contracts={contractChoices}
       notePlaceholder="تحويل بنكي / شيك رقم / كاش ..."
       saveLabel="حفظ الدفعة"
       extra={<ForMonthSelect months={s.byMonth.months} value={forMonth} onChange={setForMonth} />}
       onSave={async (x) => {
-        await api.clientPayment({ clientId: s.client.id, contractId: x.contractId, date: x.date, amountPt: x.amountPt, note: x.note || undefined, forMonth: forMonth || null });
+        await api.clientPayment({ clientId: s.client.id, contractId: x.contractId, date: x.date, amountPt: x.amountPt, note: x.note || undefined, forMonth: forMonth || null, ...x.money });
         setForMonth("");
         onSaved();
       }}

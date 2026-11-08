@@ -4,6 +4,135 @@ import { ErrorBox, Kpi, Loading, Money, Note, PageHeader, Panel, Pill, Button } 
 import { Labeled, Select, TextInput } from "../../components/Field";
 import { PrintButtons, PrintHeader } from "../../components/Print";
 import { dateLabel, pounds } from "../../utils/format";
+import { moneyToPt } from "../../utils/input";
+import { today } from "../../../core/db";
+import { feeOf, reloadAccounts } from "../../components/AccountFields";
+import ConfirmDelete from "../../components/ConfirmDelete";
+import { TrashButton } from "../../components/party";
+
+/** نقل فلوس من حساب لحساب (من انستا باي للمحفظة مثلًا) — "تحويل" عليه عمولة الحساب. */
+function TransferForm({ v, onSaved }: { v: TreasuryView; onSaved: () => void }) {
+  const [from, setFrom] = useState(v.accounts[0]?.key ?? "");
+  const [to, setTo] = useState(v.accounts[1]?.key ?? "");
+  const [date, setDate] = useState(today());
+  const [amount, setAmount] = useState("");
+  const [kind, setKind] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const acc = v.accounts.find((a) => a.key === from);
+  const hasFee = !!acc && (acc.feeBp > 0 || acc.feeMinPt > 0);
+  let amountPt = 0;
+  try {
+    amountPt = moneyToPt(amount) ?? 0;
+  } catch {
+    /* typing */
+  }
+  async function save() {
+    setError(null);
+    try {
+      if (!(amountPt > 0)) throw new Error("اكتب المبلغ");
+      if (hasFee && !kind) throw new Error("اختار: تحويل ولا دفع؟");
+      await api.transfer({ date, from, to, amountPt, note: note.trim() || undefined, transferFee: kind === "transfer" });
+      setAmount("");
+      setNote("");
+      setKind("");
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  return (
+    <div className="no-print grid gap-2 px-4 py-3">
+      <div className="flex flex-wrap items-end gap-2.5">
+        <Labeled label="من">
+          <Select value={from} onChange={(e) => setFrom(e.target.value)}>
+            {v.accounts.map((a) => (
+              <option key={a.key} value={a.key}>
+                {a.name}
+              </option>
+            ))}
+          </Select>
+        </Labeled>
+        <Labeled label="إلى">
+          <Select value={to} onChange={(e) => setTo(e.target.value)}>
+            {v.accounts.map((a) => (
+              <option key={a.key} value={a.key}>
+                {a.name}
+              </option>
+            ))}
+          </Select>
+        </Labeled>
+        <Labeled label="التاريخ">
+          <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-36" />
+        </Labeled>
+        <Labeled label="المبلغ">
+          <TextInput value={amount} onChange={(e) => setAmount(e.target.value)} className="w-28" inputMode="decimal" />
+        </Labeled>
+        {hasFee && (
+          <Labeled label="تحويل ولا دفع؟">
+            <Select value={kind} onChange={(e) => setKind(e.target.value)}>
+              <option value="">— اختار —</option>
+              <option value="transfer">تحويل (عليه عمولة{feeOf(acc, amountPt) ? ` ${pounds(feeOf(acc, amountPt))}` : ""})</option>
+              <option value="pay">من غير عمولة</option>
+            </Select>
+          </Labeled>
+        )}
+        <Labeled label="ملاحظة">
+          <TextInput value={note} onChange={(e) => setNote(e.target.value)} className="w-40" />
+        </Labeled>
+        <Button primary onClick={save}>
+          حوّل
+        </Button>
+      </div>
+      {error && <ErrorBox message={error} />}
+    </div>
+  );
+}
+
+/** نسبة عمولة التحويل لكل حساب (انستا باي: ٠٫١٪، أقل حاجة ٠٫٥ ج، أقصى ٢٠ ج). */
+function FeeSettings({ v, onSaved }: { v: TreasuryView; onSaved: () => void }) {
+  const [rows, setRows] = useState(v.accounts.map((a) => ({ key: a.key, name: a.name, pct: String(a.feeBp / 100), min: String(a.feeMinPt / 100), max: a.feeMaxPt == null ? "" : String(a.feeMaxPt / 100) })));
+  const [msg, setMsg] = useState<string | null>(null);
+  const set = (i: number, patch: Partial<(typeof rows)[number]>) => setRows((r) => r.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  async function save() {
+    setMsg(null);
+    try {
+      for (const r of rows)
+        await api.saveAccount({ key: r.key, name: r.name, feeBp: Math.round(Number(r.pct || 0) * 100), feeMinPt: moneyToPt(r.min) ?? 0, feeMaxPt: r.max.trim() ? moneyToPt(r.max) : null });
+      await reloadAccounts();
+      setMsg("اتحفظ");
+      onSaved();
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  }
+  return (
+    <div className="no-print px-4 py-3 grid gap-2">
+      {rows.map((r, i) => (
+        <div key={r.key} className="flex flex-wrap items-end gap-2.5">
+          <Labeled label="اسم الحساب">
+            <TextInput value={r.name} onChange={(e) => set(i, { name: e.target.value })} className="w-36" />
+          </Labeled>
+          <Labeled label="عمولة التحويل ٪">
+            <TextInput value={r.pct} onChange={(e) => set(i, { pct: e.target.value })} className="w-20" inputMode="decimal" />
+          </Labeled>
+          <Labeled label="أقل عمولة (ج)">
+            <TextInput value={r.min} onChange={(e) => set(i, { min: e.target.value })} className="w-20" inputMode="decimal" />
+          </Labeled>
+          <Labeled label="أقصى عمولة (ج)">
+            <TextInput value={r.max} onChange={(e) => set(i, { max: e.target.value })} className="w-20" inputMode="decimal" placeholder="من غير حد" />
+          </Labeled>
+        </div>
+      ))}
+      <div className="flex items-center gap-3">
+        <Button primary onClick={save}>
+          حفظ العمولات
+        </Button>
+        {msg && <span className="text-sm font-semibold">{msg}</span>}
+      </div>
+    </div>
+  );
+}
 
 const IN_TYPES = new Set(["investor_deposit", "client_collection"]);
 
@@ -35,6 +164,7 @@ export default function Treasury() {
   const [filters, setFilters] = useState<TreasuryFilters>({});
   const [v, setV] = useState<TreasuryView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
 
   const load = useCallback(() => {
     api.treasury(filters).then(setV, (e) => setError(e.message));
@@ -68,7 +198,7 @@ export default function Treasury() {
   return (
     <div className="grid gap-5">
       <PrintHeader title="حركة الخزنة" subtitle={filters.from || filters.to ? `${filters.from ? dateLabel(filters.from) : ""} — ${filters.to ? dateLabel(filters.to) : ""}` : undefined} />
-      <PageHeader title="الخزنة" subtitle="كل جنيه داخل أو خارج — خزنة واحدة">
+      <PageHeader title="الخزنة" subtitle="كل جنيه داخل أو خارج — متقسمة على حساباتها">
         <PrintButtons pdfName="حركة الخزنة" singlePage={false} />
         <Button onClick={exportExcel}>Excel</Button>
       </PageHeader>
@@ -79,6 +209,103 @@ export default function Treasury() {
         <Kpi tone="tax" label="فلوس ضرايب في الخزنة" value={<Money pt={pounds(s.taxHeldPt)} />} sub="مش بتاعتنا — ممنوع تتدفع منها للموردين" />
         <Kpi label="أرباح مستحقة ومتصرفتش" value={<Money pt={pounds(s.profitsDuePt)} />} sub={`مستثمرين ${pounds(s.investorsDuePt)} · إدارة ${pounds(s.managementDuePt)}`} />
         <Kpi tone={s.availablePt < 0 ? "plain" : "good"} label="المتاح للتشغيل" value={<Money pt={pounds(s.availablePt)} className={s.availablePt < 0 ? "text-out" : ""} />} sub={`${pounds(s.balancePt)} − ${pounds(s.taxHeldPt)} − ${pounds(s.profitsDuePt)}`} />
+      </div>
+
+      <div className="grid gap-3.5 grid-cols-4 max-[1000px]:grid-cols-2">
+        {v.accounts.map((a) => (
+          <button key={a.key} type="button" onClick={() => set({ account: filters.account === a.key ? undefined : a.key })} className="text-start">
+            <Kpi
+              label={`${a.name}${filters.account === a.key ? " ✓" : ""}`}
+              value={<Money pt={pounds(a.balancePt)} className={a.balancePt < 0 ? "text-out" : ""} />}
+              sub={a.feeBp || a.feeMinPt ? `عمولة التحويل ${a.feeBp / 100}٪ — دوس عشان تشوف حركته` : "دوس عشان تشوف حركته"}
+            />
+          </button>
+        ))}
+        <Kpi
+          tone={s.heldPt > 0 ? "tax" : "plain"}
+          label="فلوس لسه مع حد"
+          value={<Money pt={pounds(s.heldPt)} />}
+          sub="استلموها ومسلموهاش — مش محسوبة في الرصيد"
+        />
+      </div>
+
+      {v.held.length > 0 && (
+        <Panel title="فلوس لسه برا الخزنة" hint="أول ما توصل دوس «وصلت» وهتدخل الرصيد">
+          <div className="overflow-x-auto">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>مع مين</th>
+                  <th>من</th>
+                  <th>هتدخل على</th>
+                  <th>البيان</th>
+                  <th className="n">المبلغ</th>
+                  <th className="no-print" />
+                </tr>
+              </thead>
+              <tbody>
+                {v.held.map((h) => (
+                  <tr key={h.id}>
+                    <td>{dateLabel(h.date)}</td>
+                    <td className="font-bold">{h.heldBy}</td>
+                    <td>{h.party || h.typeLabel}</td>
+                    <td>{h.accountName}</td>
+                    <td>{h.note ?? ""}</td>
+                    <td className="n font-bold">{pounds(h.amountPt)}</td>
+                    <td className="no-print text-end">
+                      <Button
+                        primary
+                        onClick={async () => {
+                          const d = window.prompt("وصلت الخزنة يوم كام؟ (YYYY-MM-DD)", today());
+                          if (!d) return;
+                          try {
+                            await api.markDelivered(h.id, d);
+                            load();
+                          } catch (e) {
+                            setError((e as Error).message);
+                          }
+                        }}
+                      >
+                        وصلت
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
+
+      <div className="grid gap-3.5 items-start grid-cols-2 max-[1000px]:grid-cols-1">
+        <Panel title="تحويل بين الحسابات">
+          <TransferForm key={v.accounts.map((a) => a.key).join()} v={v} onSaved={load} />
+          {v.transfers.length > 0 && (
+            <div className="overflow-x-auto border-t border-line">
+              <table className="tbl">
+                <tbody>
+                  {v.transfers.slice(0, 8).map((t) => (
+                    <tr key={t.id}>
+                      <td>{dateLabel(t.date)}</td>
+                      <td>
+                        {t.from} ← {t.to}
+                      </td>
+                      <td>{t.note ?? ""}</td>
+                      <td className="n font-bold">{pounds(t.amountPt)}</td>
+                      <td className="no-print text-end">
+                        <TrashButton title="حذف التحويل" onClick={() => setDeleting(t.id)} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+        <Panel title="عمولة التحويل لكل حساب" hint="بتتخصم لما تختار «تحويل» — «دفع» من غير عمولة">
+          <FeeSettings key={v.accounts.map((a) => `${a.key}${a.feeBp}${a.feeMinPt}${a.feeMaxPt}${a.name}`).join()} v={v} onSaved={load} />
+        </Panel>
       </div>
 
       <div className="grid gap-3.5 items-start grid-cols-2 max-[1000px]:grid-cols-1">
@@ -138,7 +365,17 @@ export default function Treasury() {
               ))}
             </Select>
           </Labeled>
-          {(filters.from || filters.to || filters.type || filters.party) && <Button onClick={() => setFilters({})}>مسح الفلاتر</Button>}
+          <Labeled label="الحساب">
+            <Select value={filters.account ?? ""} onChange={(e) => set({ account: e.target.value || undefined })}>
+              <option value="">كل الحسابات</option>
+              {v.accounts.map((a) => (
+                <option key={a.key} value={a.key}>
+                  {a.name}
+                </option>
+              ))}
+            </Select>
+          </Labeled>
+          {(filters.from || filters.to || filters.type || filters.party || filters.account) && <Button onClick={() => setFilters({})}>مسح الفلاتر</Button>}
         </div>
         <div className="overflow-x-auto">
           <table className="tbl">
@@ -148,6 +385,7 @@ export default function Treasury() {
                 <th>النوع</th>
                 <th>الطرف</th>
                 <th>البيان</th>
+                <th>الحساب</th>
                 <th className="n">داخل</th>
                 <th className="n">خارج</th>
                 <th className="n">الرصيد</th>
@@ -156,7 +394,7 @@ export default function Treasury() {
             <tbody>
               {v.rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center text-muted py-6">
+                  <td colSpan={8} className="text-center text-muted py-6">
                     مفيش حركات.
                   </td>
                 </tr>
@@ -169,6 +407,7 @@ export default function Treasury() {
                   </td>
                   <td>{r.party}</td>
                   <td>{r.note ?? ""}</td>
+                  <td>{r.account}</td>
                   <td className="n text-in font-bold">{r.inPt ? pounds(r.inPt) : ""}</td>
                   <td className="n text-out font-bold">{r.outPt ? pounds(r.outPt) : ""}</td>
                   <td className="n">{pounds(r.balancePt)}</td>
@@ -177,7 +416,7 @@ export default function Treasury() {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={4}>{v.totals.count} حركة</td>
+                <td colSpan={5}>{v.totals.count} حركة</td>
                 <td className="n">{pounds(v.totals.inPt)}</td>
                 <td className="n">{pounds(v.totals.outPt)}</td>
                 <td className="n">{pounds(v.totals.inPt - v.totals.outPt)}</td>
@@ -185,6 +424,7 @@ export default function Treasury() {
             </tfoot>
           </table>
         </div>
+        {deleting != null && <ConfirmDelete entity="treasury_transfers" id={deleting} onClose={() => setDeleting(null)} onDeleted={load} />}
         <Note>الحركات بتتسجل من صفحاتها (دفعة عميل، دفعة لصاحب معدة، مصروف، إيداع مستثمر…) وبتظهر هنا لوحدها. مفيش حركة بتتمسح من الخزنة غير لما تحذفها من مكانها.</Note>
       </Panel>
     </div>

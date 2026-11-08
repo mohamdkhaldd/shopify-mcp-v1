@@ -244,8 +244,25 @@ export function computeBooks(db: Db, asOf: string = today()) {
   const taxHeldPt = vatCollectedPt - vatPaidPt + (tax5AccruedPt - tax5PaidPt);
 
   // ---- treasury ----
-  const treasury = q("SELECT direction, amount_pt FROM treasury_entries WHERE date <= ? AND deleted_at IS NULL", asOf);
+  // الفلوس اللي لسه مع حد (مستلمها ومسلمهاش) مش في الخزنة لحد ما تتعلّم "وصلت".
+  const allEntries = q("SELECT id, date, direction, amount_pt, account, held_by, delivered_at, note, type, party_kind, party_id FROM treasury_entries WHERE date <= ? AND deleted_at IS NULL", asOf);
+  const inHand = (t: Row) => !t.held_by || (t.delivered_at && t.delivered_at <= asOf);
+  const treasury = allEntries.filter(inHand);
   const balancePt = sum(treasury, (t) => (t.direction === "in" ? t.amount_pt : -t.amount_pt));
+  const heldEntries = allEntries.filter((t) => !inHand(t));
+  const transfers = q("SELECT * FROM treasury_transfers WHERE date <= ? AND deleted_at IS NULL", asOf);
+  const accountRows = q("SELECT key, name, fee_bp, fee_min_pt, fee_max_pt FROM treasury_accounts WHERE deleted_at IS NULL ORDER BY sort, id");
+  const byAccount = accountRows.map((a) => ({
+    key: a.key as string,
+    name: a.name as string,
+    feeBp: a.fee_bp as number,
+    feeMinPt: a.fee_min_pt as number,
+    feeMaxPt: a.fee_max_pt as number | null,
+    balancePt:
+      sum(treasury.filter((t) => t.account === a.key), (t) => (t.direction === "in" ? t.amount_pt : -t.amount_pt)) +
+      sum(transfers.filter((x) => x.to_account === a.key), (x) => x.amount_pt) -
+      sum(transfers.filter((x) => x.from_account === a.key), (x) => x.amount_pt),
+  }));
   const profitsDuePt =
     sum(investorRows, (i) => Math.max(0, i.releasablePt - i.paidPt)) + Math.max(0, mgmtReleasablePt - mgmtPaidPt);
   const availablePt = balancePt - taxHeldPt - profitsDuePt;
@@ -261,7 +278,16 @@ export function computeBooks(db: Db, asOf: string = today()) {
     capital: { totalPt: totalCapitalPt, deployedPt, inTreasuryPt: totalCapitalPt - deployedPt },
     management: { accruedPt: mgmtAccruedPt, releasablePt: mgmtReleasablePt, paidPt: mgmtPaidPt },
     tax: { vatInvoicedPt, vatCollectedPt, vatPaidPt, tax5AccruedPt, tax5PaidPt, taxHeldPt },
-    treasury: { balancePt, taxHeldPt, profitsDuePt, availablePt },
+    treasury: {
+      balancePt,
+      taxHeldPt,
+      profitsDuePt,
+      availablePt,
+      byAccount,
+      /** فلوس لسه مع حد ومسلمهاش للخزنة */
+      heldPt: sum(heldEntries, (t) => (t.direction === "in" ? t.amount_pt : -t.amount_pt)),
+      held: heldEntries.map((t) => ({ id: t.id as number, date: t.date as string, amountPt: t.amount_pt as number, heldBy: t.held_by as string, account: t.account as string, note: t.note as string | null, type: t.type as string, partyKind: t.party_kind as string | null, partyId: t.party_id as number | null })),
+    },
     raw: { supplierPayments, deductions, clientPayments, logs, contracts, clients },
   };
 }

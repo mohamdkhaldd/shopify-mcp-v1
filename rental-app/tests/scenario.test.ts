@@ -65,7 +65,7 @@ describe("mockup scenario (3,000 / 2,500)", () => {
   });
 
   it("treasury split", () => {
-    expect(books.treasury).toEqual({ balancePt: egp(97_050), taxHeldPt: egp(7_050), profitsDuePt: egp(6_500), availablePt: egp(83_500) });
+    expect(books.treasury).toMatchObject({ balancePt: egp(97_050), taxHeldPt: egp(7_050), profitsDuePt: egp(6_500), availablePt: egp(83_500) });
     expect(books.capital).toEqual({ totalPt: egp(100_000), deployedPt: egp(9_250), inTreasuryPt: egp(90_750) });
   });
 
