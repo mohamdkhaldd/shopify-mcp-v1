@@ -33,6 +33,8 @@ function fakeServer() {
   const state = {
     codes: new Map<string, { lic?: number; customer: string; name?: string; logoUrl?: string | null; max: number; revoked: boolean; devices: Set<string>; password?: string }>(),
     online: true,
+    /** السيرفر بيستقبل ومبيردش خالص (نت ضعيف) */
+    hang: false,
     logoFetches: 0,
   };
   const sign = (payload: object) => {
@@ -42,6 +44,7 @@ function fakeServer() {
   let clock = IAT;
   const fetch = (async (url: string, init?: { body: string }) => {
     if (!state.online) throw new Error("offline");
+    if (state.hang) return new Promise(() => {});
     if (!init) {
       state.logoFetches++;
       return { ok: true, headers: new Map([["content-type", "image/png"]]), arrayBuffer: async () => new Uint8Array([137, 80, 78, 71]).buffer, url };
@@ -215,6 +218,17 @@ describe("company password and signing out", () => {
     s.state.codes.get("MKTECH-NOUR")!.password = "1234";
     s.state.online = false;
     expect(await other.checkPassword("1234")).toEqual({ ok: false, message: expect.stringContaining("نت") });
+  });
+
+  it("the lock screen never hangs: a password typed here before opens at once even if the server doesn't answer", async () => {
+    const s = fakeServer();
+    s.state.codes.set("MKTECH-NOUR", { customer: "شركة النور", max: 3, revoked: false, devices: new Set(), password: "1234" });
+    const tablet = manager(s, "tablet");
+    expect((await tablet.activate("MKTECH-NOUR", "1234")).ok).toBe(true);
+    s.state.hang = true;
+    const t0 = Date.now();
+    expect(await tablet.checkPassword("1234")).toEqual({ ok: true });
+    expect(Date.now() - t0).toBeLessThan(2000);
   });
 
   it("signing out frees the device's place and leaves it ready for any code", async () => {

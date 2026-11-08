@@ -129,17 +129,34 @@ export function createLicenseManager(o: LicenseOptions) {
   }
 
   /** null = no answer (no internet) */
-  async function call<T extends { ok: boolean }>(body: Record<string, unknown>): Promise<T | null> {
+  /** null = مفيش رد (مفيش نت، أو السيرفر اتأخر أكتر من timeoutMs) — عمره ما بيعلّق للأبد. */
+  async function call<T extends { ok: boolean }>(body: Record<string, unknown>, timeoutMs = 15_000): Promise<T | null> {
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => {
+        ctrl?.abort();
+        resolve(null);
+      }, timeoutMs);
+    });
+    const request = (async () => {
+      try {
+        const res = await doFetch(o.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${o.anonKey}`, apikey: o.anonKey },
+          body: JSON.stringify({ deviceId: o.deviceId, ...body }),
+          ...(ctrl ? { signal: ctrl.signal } : {}),
+        });
+        const answer = (await res.json()) as T;
+        return answer && typeof answer.ok === "boolean" ? answer : null;
+      } catch {
+        return null;
+      }
+    })();
     try {
-      const res = await doFetch(o.url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${o.anonKey}`, apikey: o.anonKey },
-        body: JSON.stringify({ deviceId: o.deviceId, ...body }),
-      });
-      const answer = (await res.json()) as T;
-      return answer && typeof answer.ok === "boolean" ? answer : null;
-    } catch {
-      return null;
+      return await Promise.race([request, timeout]);
+    } finally {
+      clearTimeout(timer);
     }
   }
   const ask = (key: string, password?: string) =>
@@ -253,7 +270,16 @@ export function createLicenseManager(o: LicenseOptions) {
   async function checkPassword(password: string): Promise<PasswordResult> {
     const key = get("license_key");
     if (!key) return { ok: false, message: "البرنامج مش متفعّل" };
-    const a = await call<PlainAnswer>({ action: "checkPassword", key, password });
+    // الباسورد اتكتب صح على الجهاز ده قبل كده: يفتح على طول، والسيرفر
+    // بيتأكد في الخلفية (لو الباسورد اتغير، المرة الجاية لازم الجديد)
+    if (matchesRemembered(password) === true) {
+      call<PlainAnswer>({ action: "checkPassword", key, password }, 8_000).then((a) => {
+        if (a && !a.ok && a.error === "wrong_password") rememberPassword(null);
+        else if (a?.ok) set("license_has_password", a.hasPassword ? "1" : null);
+      });
+      return { ok: true };
+    }
+    const a = await call<PlainAnswer>({ action: "checkPassword", key, password }, 8_000);
     if (a?.ok) {
       set("license_has_password", a.hasPassword ? "1" : null);
       rememberPassword(a.hasPassword ? password : null);
