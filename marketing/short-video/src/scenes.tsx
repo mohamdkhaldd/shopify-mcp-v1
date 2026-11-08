@@ -46,7 +46,7 @@ export const Hook: React.FC = () => {
           </div>
         ))}
       </div>
-      <Bills start={34} />
+      <Bills start={46} />
     </Bg>
   );
 };
@@ -95,9 +95,9 @@ const Bills: React.FC<{ start: number }> = ({ start }) => {
 // ───────────────────────── 2. question: ليك كام؟ عليك كام؟
 export const Question: React.FC = () => {
   const f = useCurrentFrame();
-  const a = usePop(8, 10);
-  const b = usePop(48, 10);
-  const c = usePop(96, 9);
+  const a = usePop(47, 10);
+  const b = usePop(89, 10);
+  const c = usePop(135, 9);
   return (
     <Bg tint={C.purple}>
       <Marks />
@@ -238,13 +238,13 @@ export const Reveal: React.FC = () => {
 export const Sarki: React.FC = () => {
   const f = useCurrentFrame();
   const phoneIn = usePop(0, 14);
-  const scroll = interpolate(f, [30, 90], [0, 470], { ...clamp, easing: Easing.inOut(Easing.cubic) });
-  const card = usePop(100, 13);
+  const scroll = interpolate(f, [12, 48], [0, 470], { ...clamp, easing: Easing.inOut(Easing.cubic) });
+  const card = usePop(52, 13);
   const rows = [
-    { k: "٧ أيام × 4,500", v: 31500, d: 112 },
-    { k: "+ قيمة مضافة ١٤٪", v: 4410, d: 132 },
+    { k: "٧ أيام × 4,500", v: 31500, d: 66 },
+    { k: "+ قيمة مضافة ١٤٪", v: 4410, d: 82 },
   ];
-  const total = usePop(152, 10);
+  const total = usePop(100, 10);
   return (
     <Bg tint={C.blue}>
       <Header delay={2}>صفر أخطاء في الحساب</Header>
@@ -281,11 +281,11 @@ export const Sarki: React.FC = () => {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 22, opacity: total, transform: `scale(${0.85 + total * 0.15})` }}>
           <span style={{ fontSize: 54, fontWeight: 900 }}>الإجمالي</span>
           <span style={{ fontSize: 84, fontWeight: 900, color: C.blue }}>
-            <CountUp to={35910} start={152} dur={26} suffix=" ج" />
+            <CountUp to={35910} start={100} dur={26} suffix=" ج" />
           </span>
         </div>
         <div style={{ textAlign: "center", marginTop: 14, opacity: total }}>
-          <Pill bg="#DCFCE7" color="#166534" size={38} delay={170}>
+          <Pill bg="#DCFCE7" color="#166534" size={38} delay={118}>
             ✓ اتحسبت لوحدها بالقرش
           </Pill>
         </div>
@@ -298,11 +298,11 @@ export const Sarki: React.FC = () => {
 export const Home: React.FC = () => {
   const f = useCurrentFrame();
   const phone = usePop(0, 14);
-  const dim = interpolate(f, [40, 60], [0, 1], clamp);
+  const dim = interpolate(f, [74, 92], [0, 1], clamp);
   const cards = [
-    { label: "كسبت كام", sub: "ربح الشهر", v: 23275, color: C.green, d: 50 },
-    { label: "ليك كام", sub: "عند الشركات", v: 519044, color: C.sky, d: 105 },
-    { label: "عليك كام", sub: "لأصحاب المعدات", v: 393600, color: C.amber, d: 160 },
+    { label: "كسبت كام", sub: "ربح الشهر", v: 23275, color: C.green, d: 92 },
+    { label: "ليك كام", sub: "عند الشركات", v: 519044, color: C.sky, d: 124 },
+    { label: "عليك كام", sub: "لأصحاب المعدات", v: 393600, color: C.amber, d: 162 },
   ];
   return (
     <Bg tint={C.green}>
@@ -310,7 +310,7 @@ export const Home: React.FC = () => {
         كل يوم… <span style={{ color: C.green }}>مش آخر الشهر</span>
       </Header>
       <div style={{ position: "absolute", top: 430, left: 160, transform: `translateY(${(1 - phone) * 800}px)`, opacity: 1 - dim * 0.65, filter: `blur(${dim * 6}px)` }}>
-        <Phone src="shots/10-home-full.png" scroll={interpolate(f, [8, 40], [0, 120], clamp)} />
+        <Phone src="shots/10-home-full.png" scroll={interpolate(f, [8, 70], [0, 160], clamp)} />
       </div>
       <div style={{ position: "absolute", top: 400, left: 80, right: 80, display: "flex", flexDirection: "column", gap: 30 }}>
         {cards.map((c) => {
@@ -341,7 +341,7 @@ export const Home: React.FC = () => {
         })}
       </div>
       <div style={{ position: "absolute", top: 1330, width: "100%", textAlign: "center" }}>
-        <Pill bg={C.green} color={C.white} size={44} delay={205}>
+        <Pill bg={C.green} color={C.white} size={44} delay={196}>
           من غير ما تقفل الشهر
         </Pill>
       </div>

@@ -1,1 +1,44 @@
-{"clips": []}
+{
+  "clips": [
+    {
+      "file": "voice/01.wav",
+      "dur": 3.398
+    },
+    {
+      "file": "voice/02.wav",
+      "dur": 5.846
+    },
+    {
+      "file": "voice/03.wav",
+      "dur": 4.458
+    },
+    {
+      "file": "voice/04.wav",
+      "dur": 4.988
+    },
+    {
+      "file": "voice/05.wav",
+      "dur": 0.872
+    },
+    {
+      "file": "voice/06.wav",
+      "dur": 6.204
+    },
+    {
+      "file": "voice/07.wav",
+      "dur": 6.572
+    },
+    {
+      "file": "voice/08.wav",
+      "dur": 4.123
+    },
+    {
+      "file": "voice/09.wav",
+      "dur": 4.904
+    },
+    {
+      "file": "voice/10.wav",
+      "dur": 3.237
+    }
+  ]
+}
