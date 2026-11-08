@@ -40,7 +40,7 @@ export function makeRegistry(db: Db) {
     endContract: (a: { id: number; endDate: string }) => endContract(db, a.id, a.endDate),
     reopenContract: (a: { id: number }) => reopenContract(db, a.id),
     partySheet: (a: { contractId: number; month: string; side: Side }) => getPartySheet(db, a.contractId, a.month, a.side),
-    supplierPayment: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>
+    supplierPayment: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null; confirmNegative?: boolean }) =>
       recordSupplierPayment(db, a, { confirmNegative: a.confirmNegative }),
     supplierDeduction: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean }) =>
       recordSupplierDeduction(db, a, { confirmNegative: a.confirmNegative }),
@@ -50,7 +50,7 @@ export function makeRegistry(db: Db) {
     createClient: (a: { kind: "company" | "individual"; name: string; phone?: string; taxId?: string; vatApplies?: boolean; tax5Applies?: boolean }) => createClient(db, a),
     updateClient: (a: { id: number; kind: "company" | "individual"; name: string; phone?: string | null; taxId?: string | null }) => updateClient(db, a.id, a),
     setClientTaxes: (a: { id: number; vatApplies: boolean; tax5Applies: boolean }) => setClientTaxes(db, a.id, a.vatApplies, a.tax5Applies),
-    clientPayment: (a: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string }) => recordClientPayment(db, a),
+    clientPayment: (a: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null }) => recordClientPayment(db, a),
 
     // الإدارة
     management: (a: { month?: string }) => managementView(db, a.month),

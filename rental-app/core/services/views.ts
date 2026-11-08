@@ -222,6 +222,7 @@ export function suppliersView(db: Db, supplierId?: number, now: string = today()
         working: active.has(e.id),
       })),
       rows: st.rows,
+      byMonth: st.byMonth,
       byEquipment: st.byEquipment,
       totals: st.totals,
       payments: st.payments,
@@ -284,6 +285,7 @@ export function clientsView(db: Db, clientId?: number, now: string = today()) {
         status: i.totalPt < 0 ? ("credit" as const) : i.openPt <= 0 ? ("paid" as const) : i.collectedPt + i.creditedPt > 0 ? ("partial" as const) : ("unpaid" as const),
       })),
       payments: st.payments,
+      byMonth: st.byMonth,
       contracts,
     },
   };

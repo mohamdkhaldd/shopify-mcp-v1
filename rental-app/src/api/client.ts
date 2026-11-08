@@ -61,14 +61,14 @@ export const api = {
   endContract: (id: number, endDate: string) => call("endContract", { id, endDate }),
   reopenContract: (id: number) => call("reopenContract", { id }),
   partySheet: (contractId: number, month: string, side: "client" | "supplier") => call<PartySheet>("partySheet", { contractId, month, side }),
-  supplierPayment: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) => call<number>("supplierPayment", v),
+  supplierPayment: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null; confirmNegative?: boolean }) => call<number>("supplierPayment", v),
   supplierDeduction: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean }) =>
     call<number>("supplierDeduction", v),
   clients: (clientId?: number) => call<ClientsView>("clients", { clientId }),
   createClient: (v: { kind: "company" | "individual"; name: string; phone?: string; taxId?: string; vatApplies?: boolean; tax5Applies?: boolean }) => call<number>("createClient", v),
   updateClient: (v: { id: number; kind: "company" | "individual"; name: string; phone?: string | null; taxId?: string | null }) => call("updateClient", v),
   setClientTaxes: (id: number, vatApplies: boolean, tax5Applies: boolean) => call("setClientTaxes", { id, vatApplies, tax5Applies }),
-  clientPayment: (v: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string }) => call<number>("clientPayment", v),
+  clientPayment: (v: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null }) => call<number>("clientPayment", v),
   management: (month?: string) => call<ManagementView>("management", { month }),
   createExpenseCategory: (name: string) => call<number>("createExpenseCategory", { name }),
   expense: (v: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean }) =>

@@ -6,6 +6,7 @@ import { PrintButtons, PrintHeader, PrintSignoff } from "../../components/Print"
 import ConfirmDelete from "../../components/ConfirmDelete";
 import Modal from "../../components/Modal";
 import MoneyEntry from "../../components/MoneyEntry";
+import MonthCoverage, { ForMonthSelect } from "../../components/MonthCoverage";
 import { Fact, MoneyTable, PartySheetTab } from "../../components/party";
 import Icon from "../../components/Icon";
 import { dateLabel, monthLabel, pounds } from "../../utils/format";
@@ -116,6 +117,28 @@ function Invoices({ s }: { s: Selected }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** ملاحظة الدفعة + "عن شهر كذا" لو اتحدد */
+const withMonth = <T extends { note: string | null; forMonth: string | null }>(rows: T[]) =>
+  rows.map((r) => ({ ...r, note: r.forMonth ? `${r.note ? `${r.note} — ` : ""}عن ${monthLabel(r.forMonth)}` : r.note }));
+
+function ClientPayment({ s, contractChoices, onSaved }: { s: Selected; contractChoices: { id: number; label: string }[]; onSaved: () => void }) {
+  const [forMonth, setForMonth] = useState("");
+  return (
+    <MoneyEntry
+      title="دفعة من العميل — اختار عن أنهي شهر، أو سيبها تلقائي تسدد أقدم شهر"
+      contracts={contractChoices}
+      notePlaceholder="تحويل بنكي / شيك رقم / كاش ..."
+      saveLabel="حفظ الدفعة"
+      extra={<ForMonthSelect months={s.byMonth.months} value={forMonth} onChange={setForMonth} />}
+      onSave={async (x) => {
+        await api.clientPayment({ clientId: s.client.id, contractId: x.contractId, date: x.date, amountPt: x.amountPt, note: x.note || undefined, forMonth: forMonth || null });
+        setForMonth("");
+        onSaved();
+      }}
+    />
   );
 }
 
@@ -354,6 +377,7 @@ export default function Clients() {
             {tab === "statement" && (
               <>
                 <Statement s={s} />
+                <MonthCoverage months={s.byMonth.months} advancePt={s.byMonth.advancePt} dueLabel="الفواتير" paidLabel="اتدفع منها" />
                 <PrintSignoff others={["توقيع العميل"]} />
                 <div className="no-print text-xs text-muted px-4 py-2.5 border-t border-line">ده اللي بيتطبع للعميل — مفيهوش أي حاجة عن أصحاب المعدات أو ربحنا.</div>
               </>
@@ -362,18 +386,9 @@ export default function Clients() {
             {tab === "sheet" && <PartySheetTab key={c.id} contracts={s.contracts} side="client" partyName={c.name} />}
             {tab === "payments" && (
               <>
-                <MoneyEntry
-                  key={`p-${c.id}`}
-                  title="دفعة من العميل (بتتوزع على أقدم فاتورة مفتوحة)"
-                  contracts={contractChoices}
-                  notePlaceholder="تحويل بنكي / شيك رقم / كاش ..."
-                  saveLabel="حفظ الدفعة"
-                  onSave={async (x) => {
-                    await api.clientPayment({ clientId: c.id, contractId: x.contractId, date: x.date, amountPt: x.amountPt, note: x.note || undefined });
-                    load();
-                  }}
-                />
-                <MoneyTable rows={s.payments} noteHeader="ملاحظة" contracts={s.contracts} onDelete={(id) => setDeleting({ entity: "client_payments", id })} />
+                <ClientPayment key={`p-${c.id}`} s={s} contractChoices={contractChoices} onSaved={load} />
+                <MonthCoverage months={s.byMonth.months} advancePt={s.byMonth.advancePt} dueLabel="الفواتير" paidLabel="اتدفع منها" />
+                <MoneyTable rows={withMonth(s.payments)} noteHeader="ملاحظة" contracts={s.contracts} onDelete={(id) => setDeleting({ entity: "client_payments", id })} />
               </>
             )}
           </Panel>

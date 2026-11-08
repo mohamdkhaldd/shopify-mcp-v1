@@ -1,5 +1,6 @@
 import { Db, monthOf, today } from "../db";
 import { Books, computeBooks } from "./books";
+import { allocateByMonth } from "../calc/collections";
 
 // Page-shaped views on top of computeBooks. Party statements (supplier /
 // client) only ever contain that party's own numbers.
@@ -49,6 +50,15 @@ export function supplierStatement(db: Db, supplierId: number, asOf: string = tod
       return { equipmentId: e.id as number | null, name: e.name, fromSarkiPt, deductionsPt, paidPt, remainingPt: fromSarkiPt - deductionsPt - paidPt };
     }),
   ];
+  // شهر بشهر: اللي له في كل شهر، والدفعة "عن شهر كذا" بتروح للشهر ده، والباقي
+  // بيسدد الأقدم الأول. الخصم (سولار…) بيتحسب على شهره.
+  const byMonth = allocateByMonth(
+    rows.map((r) => ({ month: r.month, amountPt: r.fromSarkiPt })),
+    [
+      ...pays.map((p) => ({ date: p.date as string, amountPt: p.amount_pt as number, forMonth: (p.for_month as string | null) ?? null })),
+      ...deds.map((d) => ({ date: d.date as string, amountPt: d.amount_pt as number, forMonth: (d.date as string).slice(0, 7) })),
+    ],
+  );
   const unlinkedDed = sum(deds.filter((d) => d.contract_id == null), (d) => d.amount_pt);
   const unlinkedPaid = sum(pays.filter((p) => p.contract_id == null), (p) => p.amount_pt);
   if (unlinkedDed || unlinkedPaid)
@@ -58,8 +68,9 @@ export function supplierStatement(db: Db, supplierId: number, asOf: string = tod
     equipment,
     byEquipment,
     rows,
+    byMonth,
     totals: { ...totals, remainingPt: totals.fromSarkiPt - totals.deductionsPt - totals.paidPt },
-    payments: pays.map((p) => ({ id: p.id, date: p.date, contractId: p.contract_id, amountPt: p.amount_pt, note: p.note })),
+    payments: pays.map((p) => ({ id: p.id, date: p.date, contractId: p.contract_id, amountPt: p.amount_pt, note: p.note, forMonth: (p.for_month as string | null) ?? null })),
     deductions: deds.map((d) => ({ id: d.id, date: d.date, contractId: d.contract_id, amountPt: d.amount_pt, note: d.note })),
   };
 }
@@ -82,13 +93,28 @@ export function clientStatement(db: Db, clientId: number, asOf: string = today()
     }));
   const payments = books.raw.clientPayments
     .filter((p) => p.client_id === clientId)
-    .map((p) => ({ id: p.id, date: p.date, contractId: p.contract_id, amountPt: p.amount_pt, note: p.note }));
+    .map((p) => ({ id: p.id, date: p.date, contractId: p.contract_id, amountPt: p.amount_pt, note: p.note, forMonth: (p.for_month as string | null) ?? null }));
   const invoicedPt = sum(invoices, (i) => i.totalPt);
+  // شهر بشهر: فواتير كل شهر، واتدفع منها كام ومن أنهي دفعة، وناقص كام
+  const monthKeys = [...new Set(invoices.map((i) => i.month))].sort();
+  const covers = books.invoices.filter((i) => i.clientId === clientId);
+  const byMonth = {
+    months: monthKeys.map((month) => {
+      const of = invoices.filter((i) => i.month === month);
+      const duePt = sum(of, (i) => i.totalPt);
+      const paidPt = sum(of, (i) => i.collectedPt + i.creditedPt);
+      const covered = covers.filter((i) => i.month === month).flatMap((i) => i.covered);
+      const merged = [...covered.reduce((m, c) => m.set(c.date, (m.get(c.date) ?? 0) + c.amountPt), new Map<string, number>())].map(([date, amountPt]) => ({ date, amountPt }));
+      return { month, duePt, paidPt, openPt: duePt - paidPt, covered: merged };
+    }),
+    advancePt: books.creditByClient.get(clientId) ?? 0,
+  };
   const paidPt = sum(payments, (p) => p.amountPt);
   return {
     client,
     invoices,
     payments,
+    byMonth,
     totals: {
       basePt: sum(invoices, (i) => i.basePt),
       vatPt: sum(invoices, (i) => i.vatPt),

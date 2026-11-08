@@ -7,6 +7,7 @@ import ConfirmDelete from "../../components/ConfirmDelete";
 import { Fact, MoneyTable, PartySheetTab, TrashButton } from "../../components/party";
 import Modal from "../../components/Modal";
 import MoneyEntry from "../../components/MoneyEntry";
+import MonthCoverage, { ForMonthSelect } from "../../components/MonthCoverage";
 import Icon from "../../components/Icon";
 import { dateLabel, monthLabel, pounds } from "../../utils/format";
 
@@ -97,6 +98,36 @@ function Statement({ s }: { s: Selected }) {
         </>
       )}
     </div>
+  );
+}
+
+/** ملاحظة الدفعة + "عن شهر كذا" لو اتحدد */
+const withMonth = <T extends { note: string | null; forMonth: string | null }>(rows: T[]) =>
+  rows.map((r) => ({ ...r, note: r.forMonth ? `${r.note ? `${r.note} — ` : ""}عن ${monthLabel(r.forMonth)}` : r.note }));
+
+function SupplierPayment({ s, contractChoices, onSaved }: { s: Selected; contractChoices: { id: number; label: string }[]; onSaved: () => void }) {
+  const [forMonth, setForMonth] = useState("");
+  return (
+    <MoneyEntry
+      title="دفعة لصاحب المعدة — اختار عن أنهي شهر، أو سيبها تلقائي تسدد أقدم شهر"
+      contracts={contractChoices}
+      notePlaceholder="كاش / تحويل / شيك رقم ..."
+      saveLabel="حفظ الدفعة"
+      extra={<ForMonthSelect months={s.byMonth.months} value={forMonth} onChange={setForMonth} />}
+      onSave={async (x) => {
+        await api.supplierPayment({
+          supplierId: s.supplier.id,
+          contractId: x.contractId,
+          date: x.date,
+          amountPt: x.amountPt,
+          note: x.note || undefined,
+          forMonth: forMonth || null,
+          confirmNegative: x.confirmNegative,
+        });
+        setForMonth("");
+        onSaved();
+      }}
+    />
   );
 }
 
@@ -318,6 +349,7 @@ export default function Suppliers() {
             {tab === "statement" && (
               <>
                 <Statement s={s} />
+                <MonthCoverage months={s.byMonth.months} advancePt={s.byMonth.advancePt} dueLabel="له من السركي" paidLabel="خد منها" />
                 <PrintSignoff others={["توقيع صاحب المعدة"]} />
                 <div className="no-print text-xs text-muted px-4 py-2.5 border-t border-line">ده اللي بيتطبع لصاحب المعدة — مفيهوش أي حاجة عن الشركة أو ربحنا.</div>
               </>
@@ -387,18 +419,9 @@ export default function Suppliers() {
 
             {tab === "payments" && (
               <>
-                <MoneyEntry
-                  key={`p-${s.supplier.id}`}
-                  title="دفعة جديدة لصاحب المعدة"
-                  contracts={contractChoices}
-                  notePlaceholder="كاش / تحويل / شيك رقم ..."
-                  saveLabel="حفظ الدفعة"
-                  onSave={async (x) => {
-                    await api.supplierPayment({ supplierId: s.supplier.id, contractId: x.contractId, date: x.date, amountPt: x.amountPt, note: x.note || undefined, confirmNegative: x.confirmNegative });
-                    load();
-                  }}
-                />
-                <MoneyTable rows={s.payments} noteHeader="ملاحظة" contracts={s.contracts} onDelete={(id) => setDeleting({ entity: "supplier_payments", id })} />
+                <SupplierPayment key={`p-${s.supplier.id}`} s={s} contractChoices={contractChoices} onSaved={load} />
+                <MonthCoverage months={s.byMonth.months} advancePt={s.byMonth.advancePt} dueLabel="له من السركي" paidLabel="خد منها" />
+                <MoneyTable rows={withMonth(s.payments)} noteHeader="ملاحظة" contracts={s.contracts} onDelete={(id) => setDeleting({ entity: "supplier_payments", id })} />
               </>
             )}
           </Panel>

@@ -69,23 +69,37 @@ export function recordCapital(db: Db, v: { investorId: number; kind: "deposit" |
   })();
 }
 
-export function recordClientPayment(db: Db, v: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string }) {
+const monthOrNull = (m?: string | null) => {
+  if (!m) return null;
+  if (!/^\d{4}-\d{2}$/.test(m)) throw new UserError("الشهر مش صحيح");
+  return m;
+};
+
+export function recordClientPayment(db: Db, v: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null }) {
   positive(v.amountPt);
   return db.transaction(() => {
     const id = insertId(
-      db.prepare("INSERT INTO client_payments (client_id, contract_id, date, amount_pt, note) VALUES (?, ?, ?, ?, ?)").run(v.clientId, v.contractId ?? null, v.date, v.amountPt, v.note ?? null),
+      db
+        .prepare("INSERT INTO client_payments (client_id, contract_id, date, amount_pt, note, for_month) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(v.clientId, v.contractId ?? null, v.date, v.amountPt, v.note ?? null, monthOrNull(v.forMonth)),
     );
     treasury(db, { date: v.date, direction: "in", amountPt: v.amountPt, type: "client_collection", table: "client_payments", id, partyKind: "client", partyId: v.clientId, note: v.note });
     return id;
   })();
 }
 
-export function recordSupplierPayment(db: Db, v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string }, opts: Opts = {}) {
+export function recordSupplierPayment(
+  db: Db,
+  v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null },
+  opts: Opts = {},
+) {
   positive(v.amountPt);
   return db.transaction(() => {
     guardCash(db, v.date, v.amountPt, opts);
     const id = insertId(
-      db.prepare("INSERT INTO supplier_payments (supplier_id, contract_id, date, amount_pt, note) VALUES (?, ?, ?, ?, ?)").run(v.supplierId, v.contractId ?? null, v.date, v.amountPt, v.note ?? null),
+      db
+        .prepare("INSERT INTO supplier_payments (supplier_id, contract_id, date, amount_pt, note, for_month) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(v.supplierId, v.contractId ?? null, v.date, v.amountPt, v.note ?? null, monthOrNull(v.forMonth)),
     );
     treasury(db, { date: v.date, direction: "out", amountPt: v.amountPt, type: "supplier_payment", table: "supplier_payments", id, partyKind: "supplier", partyId: v.supplierId, note: v.note });
     return id;
@@ -174,8 +188,8 @@ export function recordPayout(
 }
 
 const REVERSIBLE: Record<string, string[]> = {
-  client_payments: ["client_id", "contract_id"],
-  supplier_payments: ["supplier_id", "contract_id"],
+  client_payments: ["client_id", "contract_id", "for_month"],
+  supplier_payments: ["supplier_id", "contract_id", "for_month"],
   supplier_deductions: ["supplier_id", "contract_id", "paid_from_treasury"],
   expenses: ["kind", "contract_id", "category_id"],
   capital_movements: ["investor_id", "kind"],

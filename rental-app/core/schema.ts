@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS client_payments (
   contract_id INTEGER REFERENCES contracts(id),
   date TEXT NOT NULL,
   ${pt("amount_pt")},
+  for_month TEXT,
   note TEXT,
   reversal_of INTEGER,
   deleted_at TEXT,
@@ -127,6 +128,7 @@ CREATE TABLE IF NOT EXISTS supplier_payments (
   contract_id INTEGER REFERENCES contracts(id),
   date TEXT NOT NULL,
   ${pt("amount_pt")},
+  for_month TEXT,
   note TEXT,
   reversal_of INTEGER,
   deleted_at TEXT,
@@ -453,6 +455,9 @@ export function setupDatabase(db: Db): Db {
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(DDL);
   // صرف من نصيب الإدارة لشريك إدارة معين (فاضي = للإدارة عمومًا).
+  // الدفعة "عن شهر كذا" (فاضي = تسدد أقدم شهر لسه عليه حاجة).
+  for (const t of ["client_payments", "supplier_payments"])
+    if (!columnsOf(db, t).includes("for_month")) db.exec(`ALTER TABLE ${t} ADD COLUMN for_month TEXT`);
   if (!columnsOf(db, "profit_payouts").includes("manager_name")) db.exec("ALTER TABLE profit_payouts ADD COLUMN manager_name TEXT");
   const business = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'sync_%' AND name NOT IN ('audit_log', 'app_settings', 'actions', 'activity_log')")

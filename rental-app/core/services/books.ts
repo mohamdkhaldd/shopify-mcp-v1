@@ -170,12 +170,12 @@ export function computeBooks(db: Db, asOf: string = today()) {
   const creditNotes = lines.filter((l) => l.totalPt < 0);
   const allocation = allocatePayments(
     lines.filter((l) => l.totalPt > 0),
-    clientPayments.map((p) => ({ clientId: p.client_id, contractId: p.contract_id, date: p.date, amountPt: p.amount_pt })),
+    clientPayments.map((p) => ({ clientId: p.client_id, contractId: p.contract_id, date: p.date, amountPt: p.amount_pt, forMonth: p.for_month ?? null })),
     creditNotes.map((l) => ({ clientId: l.clientId, contractId: l.contractId, month: l.month, amountPt: -l.totalPt })),
   );
   const invoices = [
     ...allocation.invoices,
-    ...creditNotes.map((l) => ({ ...l, collectedPt: 0, creditedPt: l.totalPt, collectedBasePt: 0, collectedVatPt: 0 })),
+    ...creditNotes.map((l) => ({ ...l, collectedPt: 0, creditedPt: l.totalPt, collectedBasePt: 0, collectedVatPt: 0, covered: [] })),
   ]
     .sort((a, b) => a.month.localeCompare(b.month) || a.contractId - b.contractId)
     .map((i) => ({ ...i, serial: issued.get(`${i.contractId}|${i.month}`)?.serial ?? null }));
