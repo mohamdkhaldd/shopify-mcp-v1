@@ -339,3 +339,22 @@ export function saveAccount(db: Db, v: { key?: string; name: string; feeBp: numb
   db.prepare("INSERT INTO treasury_accounts (key, name, fee_bp, fee_min_pt, fee_max_pt, sort) VALUES (?, ?, ?, ?, ?, ?)").run(key, v.name.trim(), v.feeBp, v.feeMinPt, v.feeMaxPt, sort);
   return key;
 }
+
+/** فلوس من الخزنة بقت مع حد (شريك…) — بتطلع من الرصيد لحد ما ترجع. */
+export function recordHold(db: Db, v: { date: string; account?: string; amountPt: number; heldBy: string; note?: string }) {
+  positive(v.amountPt);
+  if (!v.heldBy?.trim()) throw new UserError("اكتب الفلوس مع مين");
+  const acc = accountOf(db, v.account);
+  return insertId(
+    db.prepare("INSERT INTO treasury_holds (date, account, amount_pt, held_by, note) VALUES (?, ?, ?, ?, ?)").run(v.date, acc.key, v.amountPt, v.heldBy.trim(), v.note ?? null),
+  );
+}
+
+/** الفلوس اللي كانت مع حد رجعت الخزنة. */
+export function returnHold(db: Db, id: number, date: string) {
+  const r = db.prepare("SELECT returned_at, date FROM treasury_holds WHERE id = ? AND deleted_at IS NULL").get(id) as { returned_at: string | null; date: string } | undefined;
+  if (!r) throw new UserError("الحركة دي مش موجودة");
+  if (r.returned_at) throw new UserError("الفلوس دي اتعلّمت إنها رجعت قبل كده");
+  if (date < r.date) throw new UserError("تاريخ الرجوع قبل تاريخ ما خرجت");
+  db.prepare("UPDATE treasury_holds SET returned_at = ? WHERE id = ?").run(date, id);
+}

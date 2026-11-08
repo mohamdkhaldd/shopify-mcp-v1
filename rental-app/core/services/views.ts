@@ -544,7 +544,17 @@ export function treasuryView(db: Db, f: TreasuryFilters = {}, now: string = toda
         }),
       )
     : [];
-  const all = [...entries.filter((e) => !f.account || e.account === f.account), ...transfers].sort((a, b) => a.date.localeCompare(b.date) || Math.abs(a.id) - Math.abs(b.id));
+  // فلوس طلعت مع حد: طالعة يوم ما خرجت، وداخلة تاني يوم ما رجعت
+  const holdRows = (db.prepare("SELECT * FROM treasury_holds WHERE deleted_at IS NULL").all() as Record<string, any>[])
+    .filter((h) => !f.account || h.account === f.account)
+    .flatMap((h): Ev[] => {
+      const base = { type: "hold", party_kind: null, party_id: null, account: h.account as string, held_by: null, amount_pt: h.amount_pt as number };
+      const out: Ev[] = [{ ...base, id: -1_000_000 - h.id, date: h.date, direction: "out", note: `مع ${h.held_by}${h.note ? ` — ${h.note}` : ""}` }];
+      if (h.returned_at) out.push({ ...base, id: -2_000_000 - h.id, date: h.returned_at, direction: "in", note: `رجعت من ${h.held_by}` });
+      return out;
+    })
+    .filter((e) => e.date <= now);
+  const all = [...entries.filter((e) => !f.account || e.account === f.account), ...transfers, ...holdRows].sort((a, b) => a.date.localeCompare(b.date) || Math.abs(a.id) - Math.abs(b.id));
   let running = 0;
   const withBalance = all.map((e) => {
     const signed = e.direction === "in" ? e.amount_pt : -e.amount_pt;
@@ -553,7 +563,7 @@ export function treasuryView(db: Db, f: TreasuryFilters = {}, now: string = toda
       id: e.id,
       date: e.date,
       type: e.type,
-      typeLabel: e.type === "transfer" ? "تحويل بين الحسابات" : TREASURY_TYPES[e.type] ?? e.type,
+      typeLabel: e.type === "transfer" ? "تحويل بين الحسابات" : e.type === "hold" ? "فلوس مع حد" : TREASURY_TYPES[e.type] ?? e.type,
       party: partyName(e.party_kind, e.party_id),
       partyKey: e.party_kind === "management" ? "management" : e.party_kind ? `${e.party_kind}:${e.party_id}` : "",
       note: e.held_by ? [e.note, `استلمها ${e.held_by}`].filter(Boolean).join(" — ") : e.note,
@@ -584,7 +594,12 @@ export function treasuryView(db: Db, f: TreasuryFilters = {}, now: string = toda
     parties,
     types: Object.entries(TREASURY_TYPES).map(([key, label]) => ({ key, label })),
     accounts: books.treasury.byAccount,
-    held: books.treasury.held.map((h) => ({ ...h, party: partyName(h.partyKind, h.partyId), accountName: accName.get(h.account) ?? h.account, typeLabel: TREASURY_TYPES[h.type] ?? h.type })),
+    held: books.treasury.held.map((h) => ({
+      ...h,
+      party: h.source === "hold" ? "من الخزنة" : partyName(h.partyKind, h.partyId),
+      accountName: accName.get(h.account) ?? h.account,
+      typeLabel: h.source === "hold" ? "فلوس مع حد" : TREASURY_TYPES[h.type] ?? h.type,
+    })),
     transfers: (db.prepare("SELECT * FROM treasury_transfers WHERE deleted_at IS NULL ORDER BY date DESC, id DESC LIMIT 50").all() as Record<string, any>[]).map((x) => ({
       id: x.id as number,
       date: x.date as string,

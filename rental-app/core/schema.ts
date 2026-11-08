@@ -265,6 +265,22 @@ CREATE TABLE IF NOT EXISTS treasury_accounts (
   delete_reason TEXT
 );
 
+-- فلوس طلعت من الخزنة ومع حد (شريك / مندوب) لحد ما ترجع — مش مصروف،
+-- بس مش في إيدنا: بتتشال من الرصيد لحد ما تتعلّم "رجعت" (returned_at).
+CREATE TABLE IF NOT EXISTS treasury_holds (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  account TEXT NOT NULL,
+  ${pt("amount_pt")},
+  held_by TEXT NOT NULL,
+  note TEXT,
+  returned_at TEXT,
+  deleted_at TEXT,
+  delete_reason TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  CHECK (amount_pt > 0)
+);
+
 -- نقل فلوس من حساب لحساب (كاش ← انستا باي مثلًا)
 CREATE TABLE IF NOT EXISTS treasury_transfers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

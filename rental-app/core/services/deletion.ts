@@ -21,7 +21,8 @@ export type Deletable =
   | "suppliers"
   | "investors"
   | "expense_categories"
-  | "treasury_transfers";
+  | "treasury_transfers"
+  | "treasury_holds";
 
 const MONEY_LABEL: Record<string, string> = {
   client_payments: "دفعة من عميل",
@@ -72,6 +73,10 @@ function withFee(db: Db, table: string, targets: Target[]): Target[] {
 
 function targetsOf(db: Db, entity: Deletable, id: number): Target[] {
   if (MONEY_TABLES.includes(entity)) return withFee(db, entity, money(db, entity, "id = ?", id));
+  if (entity === "treasury_holds") {
+    const h = db.prepare(`SELECT id, date, amount_pt, held_by FROM treasury_holds WHERE id = ? AND ${live}`).get(id) as { id: number; date: string; amount_pt: number; held_by: string } | undefined;
+    return h ? [{ table: "treasury_holds", id, date: h.date, label: `فلوس مع ${h.held_by} ${formatPounds(h.amount_pt)} ج — ${h.date}` }] : [];
+  }
   if (entity === "treasury_transfers") {
     const x = db.prepare(`SELECT id, date, amount_pt FROM treasury_transfers WHERE id = ? AND ${live}`).get(id) as { id: number; date: string; amount_pt: number } | undefined;
     if (!x) return [];
@@ -162,7 +167,7 @@ export function deleteEntity(db: Db, entity: Deletable, id: number, reason = "ح
   return batch;
 }
 
-const ALL_TABLES = [...MONEY_TABLES, "treasury_entries", "treasury_transfers", "work_logs", "contracts", "equipment", "clients", "suppliers", "investors", "expense_categories"];
+const ALL_TABLES = [...MONEY_TABLES, "treasury_entries", "treasury_transfers", "treasury_holds", "work_logs", "contracts", "equipment", "clients", "suppliers", "investors", "expense_categories"];
 
 /** Undo a delete (from the activity log or the undo bar). */
 export function restoreDeleted(db: Db, batch: string) {

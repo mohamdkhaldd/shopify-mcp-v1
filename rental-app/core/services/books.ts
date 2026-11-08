@@ -250,6 +250,9 @@ export function computeBooks(db: Db, asOf: string = today()) {
   const treasury = allEntries.filter(inHand);
   const balancePt = sum(treasury, (t) => (t.direction === "in" ? t.amount_pt : -t.amount_pt));
   const heldEntries = allEntries.filter((t) => !inHand(t));
+  // فلوس طلعت من الخزنة ومع حد ولسه مرجعتش
+  const holds = q("SELECT * FROM treasury_holds WHERE date <= ? AND deleted_at IS NULL AND (returned_at IS NULL OR returned_at > ?)", asOf, asOf);
+  const holdsPt = sum(holds, (h) => h.amount_pt);
   const transfers = q("SELECT * FROM treasury_transfers WHERE date <= ? AND deleted_at IS NULL", asOf);
   const accountRows = q("SELECT key, name, fee_bp, fee_min_pt, fee_max_pt FROM treasury_accounts WHERE deleted_at IS NULL ORDER BY sort, id");
   const byAccount = accountRows.map((a) => ({
@@ -261,11 +264,12 @@ export function computeBooks(db: Db, asOf: string = today()) {
     balancePt:
       sum(treasury.filter((t) => t.account === a.key), (t) => (t.direction === "in" ? t.amount_pt : -t.amount_pt)) +
       sum(transfers.filter((x) => x.to_account === a.key), (x) => x.amount_pt) -
-      sum(transfers.filter((x) => x.from_account === a.key), (x) => x.amount_pt),
+      sum(transfers.filter((x) => x.from_account === a.key), (x) => x.amount_pt) -
+      sum(holds.filter((h) => h.account === a.key), (h) => h.amount_pt),
   }));
   const profitsDuePt =
     sum(investorRows, (i) => Math.max(0, i.releasablePt - i.paidPt)) + Math.max(0, mgmtReleasablePt - mgmtPaidPt);
-  const availablePt = balancePt - taxHeldPt - profitsDuePt;
+  const availablePt = balancePt - holdsPt - taxHeldPt - profitsDuePt;
 
   return {
     asOf,
@@ -279,14 +283,18 @@ export function computeBooks(db: Db, asOf: string = today()) {
     management: { accruedPt: mgmtAccruedPt, releasablePt: mgmtReleasablePt, paidPt: mgmtPaidPt },
     tax: { vatInvoicedPt, vatCollectedPt, vatPaidPt, tax5AccruedPt, tax5PaidPt, taxHeldPt },
     treasury: {
-      balancePt,
+      /** اللي في إيدنا فعلًا (من غير الفلوس اللي مع حد) */
+      balancePt: balancePt - holdsPt,
       taxHeldPt,
       profitsDuePt,
       availablePt,
       byAccount,
       /** فلوس لسه مع حد ومسلمهاش للخزنة */
-      heldPt: sum(heldEntries, (t) => (t.direction === "in" ? t.amount_pt : -t.amount_pt)),
-      held: heldEntries.map((t) => ({ id: t.id as number, date: t.date as string, amountPt: t.amount_pt as number, heldBy: t.held_by as string, account: t.account as string, note: t.note as string | null, type: t.type as string, partyKind: t.party_kind as string | null, partyId: t.party_id as number | null })),
+      heldPt: sum(heldEntries, (t) => (t.direction === "in" ? t.amount_pt : -t.amount_pt)) + holdsPt,
+      held: [
+        ...holds.map((h) => ({ source: "hold" as const, id: h.id as number, date: h.date as string, amountPt: h.amount_pt as number, heldBy: h.held_by as string, account: h.account as string, note: (h.note as string | null) ?? "طلعت من الخزنة", type: "hold", partyKind: null as string | null, partyId: null as number | null })),
+        ...heldEntries.map((t) => ({ source: "entry" as const, id: t.id as number, date: t.date as string, amountPt: t.amount_pt as number, heldBy: t.held_by as string, account: t.account as string, note: t.note as string | null, type: t.type as string, partyKind: t.party_kind as string | null, partyId: t.party_id as number | null })),
+      ],
     },
     raw: { supplierPayments, deductions, clientPayments, logs, contracts, clients },
   };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { freshDb, egp } from "./helpers";
 import { createClient, createInvestor, createSupplier } from "../core/services/master";
-import { markDelivered, recordCapital, recordClientPayment, recordSupplierPayment, recordTransfer, transferFee } from "../core/services/ledger";
+import { markDelivered, recordHold, returnHold, recordCapital, recordClientPayment, recordSupplierPayment, recordTransfer, transferFee } from "../core/services/ledger";
 import { computeBooks } from "../core/services/books";
 import { treasuryView, suppliersView } from "../core/services/views";
 import { deleteEntity } from "../core/services/deletion";
@@ -52,5 +52,25 @@ describe("rental treasury accounts", () => {
     // فلتر الحساب بيطلع رصيد الحساب ده بالتحويلات
     const w = treasuryView(db, { account: "wallet" }, "2026-10-31");
     expect(w.rows[w.rows.length - 1].balancePt).toBe(egp(40_000));
+  });
+
+  it("money already in the treasury that a partner holds leaves the balance until it comes back", () => {
+    const db = freshDb();
+    const inv = createInvestor(db, { name: "م" });
+    recordCapital(db, { investorId: inv, kind: "deposit", date: "2026-10-01", amountPt: egp(100_000), account: "instapay" });
+    const h = recordHold(db, { date: "2026-10-10", account: "instapay", amountPt: egp(30_000), heldBy: "م. كريم" });
+    let t = computeBooks(db, "2026-10-31").treasury;
+    expect(t.balancePt).toBe(egp(70_000));
+    expect(t.byAccount.find((a) => a.key === "instapay")!.balancePt).toBe(egp(70_000));
+    expect(t.heldPt).toBe(egp(30_000));
+    expect(treasuryView(db, {}, "2026-10-31").held[0]).toMatchObject({ source: "hold", heldBy: "م. كريم" });
+    returnHold(db, h, "2026-10-20");
+    t = computeBooks(db, "2026-10-31").treasury;
+    expect(t.balancePt).toBe(egp(100_000));
+    expect(t.heldPt).toBe(0);
+    // قبل ما ترجع (يوم ١٥) كانت لسه برا
+    expect(computeBooks(db, "2026-10-15").treasury.balancePt).toBe(egp(70_000));
+    const rows = treasuryView(db, { account: "instapay" }, "2026-10-31").rows;
+    expect(rows[rows.length - 1].balancePt).toBe(egp(100_000));
   });
 });

@@ -7,7 +7,7 @@ import { today } from "../core/db";
 import { deleteEntity, deletePreview, restoreDeleted } from "../core/services/deletion";
 import { createClient, createEquipment, createExpenseCategory, createInvestor, createSupplier, setRates, updateInvestor, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier, endContract, reopenContract } from "../core/services/master";
 import { ManagerShare, setContractManagers } from "../core/services/managers";
-import { markDelivered, Money, recordTransfer, saveAccount } from "../core/services/ledger";
+import { markDelivered, Money, recordHold, recordTransfer, returnHold, saveAccount } from "../core/services/ledger";
 import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, recordTaxPayment, reinvestProfit } from "../core/services/ledger";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
 
@@ -89,6 +89,8 @@ export function makeRegistry(db: Db) {
       }[],
     transfer: (a: { date: string; from: string; to: string; amountPt: number; note?: string; transferFee?: boolean }) => recordTransfer(db, a),
     markDelivered: (a: { id: number; date: string }) => markDelivered(db, a.id, a.date),
+    hold: (a: { date: string; account?: string; amountPt: number; heldBy: string; note?: string }) => recordHold(db, a),
+    returnHold: (a: { id: number; date: string }) => returnHold(db, a.id, a.date),
     saveAccount: (a: { key?: string; name: string; feeBp: number; feeMinPt: number; feeMaxPt: number | null }) => saveAccount(db, a),
 
     // الملف الضريبي
@@ -161,6 +163,10 @@ function labelFor(db: Db, fn: string, a: any): string | null {
       return `تحويل ${egp(a.amountPt)} بين حسابات الخزنة`;
     case "markDelivered":
       return "فلوس وصلت الخزنة";
+    case "hold":
+      return `فلوس من الخزنة مع ${a.heldBy} ${egp(a.amountPt)}`;
+    case "returnHold":
+      return "فلوس رجعت الخزنة";
     case "saveAccount":
       return `حساب الخزنة: ${a.name}`;
     case "managementPayout":

@@ -89,6 +89,63 @@ function TransferForm({ v, onSaved }: { v: TreasuryView; onSaved: () => void }) 
   );
 }
 
+/** فلوس موجودة في الخزنة بس مش في إيدك (مع شريك…) — بتطلع من الرصيد لحد ما ترجع. */
+function HoldForm({ v, onSaved }: { v: TreasuryView; onSaved: () => void }) {
+  const [account, setAccount] = useState(v.accounts[0]?.key ?? "");
+  const [date, setDate] = useState(today());
+  const [amount, setAmount] = useState("");
+  const [who, setWho] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  async function save() {
+    setError(null);
+    try {
+      const amountPt = moneyToPt(amount);
+      if (!amountPt || amountPt <= 0) throw new Error("اكتب المبلغ");
+      if (!who.trim()) throw new Error("اكتب الفلوس مع مين");
+      await api.hold({ date, account, amountPt, heldBy: who.trim(), note: note.trim() || undefined });
+      setAmount("");
+      setWho("");
+      setNote("");
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  return (
+    <div className="no-print grid gap-2 px-4 py-3 border-b border-line bg-surface-2">
+      <div className="flex flex-wrap items-end gap-2.5">
+        <b className="w-full text-xs text-muted">فلوس من الخزنة بس مش معاك دلوقتي (مع شريك / مندوب) — بتطلع من الرصيد لحد ما ترجع</b>
+        <Labeled label="من حساب">
+          <Select value={account} onChange={(e) => setAccount(e.target.value)}>
+            {v.accounts.map((a) => (
+              <option key={a.key} value={a.key}>
+                {a.name}
+              </option>
+            ))}
+          </Select>
+        </Labeled>
+        <Labeled label="المبلغ">
+          <TextInput value={amount} onChange={(e) => setAmount(e.target.value)} className="w-28" inputMode="decimal" />
+        </Labeled>
+        <Labeled label="مع مين؟">
+          <TextInput value={who} onChange={(e) => setWho(e.target.value)} className="w-40" placeholder="م. كريم" />
+        </Labeled>
+        <Labeled label="من يوم">
+          <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-36" />
+        </Labeled>
+        <Labeled label="ملاحظة">
+          <TextInput value={note} onChange={(e) => setNote(e.target.value)} className="w-40" />
+        </Labeled>
+        <Button primary onClick={save}>
+          سجّل
+        </Button>
+      </div>
+      {error && <ErrorBox message={error} />}
+    </div>
+  );
+}
+
 /** نسبة عمولة التحويل لكل حساب (انستا باي: ٠٫١٪، أقل حاجة ٠٫٥ ج، أقصى ٢٠ ج). */
 function FeeSettings({ v, onSaved }: { v: TreasuryView; onSaved: () => void }) {
   const [rows, setRows] = useState(v.accounts.map((a) => ({ key: a.key, name: a.name, pct: String(a.feeBp / 100), min: String(a.feeMinPt / 100), max: a.feeMaxPt == null ? "" : String(a.feeMaxPt / 100) })));
@@ -165,6 +222,7 @@ export default function Treasury() {
   const [v, setV] = useState<TreasuryView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [deletingHold, setDeletingHold] = useState<number | null>(null);
 
   const load = useCallback(() => {
     api.treasury(filters).then(setV, (e) => setError(e.message));
@@ -225,12 +283,13 @@ export default function Treasury() {
           tone={s.heldPt > 0 ? "tax" : "plain"}
           label="فلوس لسه مع حد"
           value={<Money pt={pounds(s.heldPt)} />}
-          sub="استلموها ومسلموهاش — مش محسوبة في الرصيد"
+          sub="مع شريك أو حد تاني — مش محسوبة في الرصيد"
         />
       </div>
 
-      {v.held.length > 0 && (
-        <Panel title="فلوس لسه برا الخزنة" hint="أول ما توصل دوس «وصلت» وهتدخل الرصيد">
+      <Panel title="فلوس لسه برا الخزنة" hint="أول ما توصل دوس «وصلت» وهتدخل الرصيد">
+          <HoldForm key={v.accounts.map((a) => a.key).join()} v={v} onSaved={load} />
+          {v.held.length > 0 && (
           <div className="overflow-x-auto">
             <table className="tbl">
               <thead>
@@ -246,7 +305,7 @@ export default function Treasury() {
               </thead>
               <tbody>
                 {v.held.map((h) => (
-                  <tr key={h.id}>
+                  <tr key={`${h.source}-${h.id}`}>
                     <td>{dateLabel(h.date)}</td>
                     <td className="font-bold">{h.heldBy}</td>
                     <td>{h.party || h.typeLabel}</td>
@@ -260,7 +319,8 @@ export default function Treasury() {
                           const d = window.prompt("وصلت الخزنة يوم كام؟ (YYYY-MM-DD)", today());
                           if (!d) return;
                           try {
-                            await api.markDelivered(h.id, d);
+                            if (h.source === "hold") await api.returnHold(h.id, d);
+                            else await api.markDelivered(h.id, d);
                             load();
                           } catch (e) {
                             setError((e as Error).message);
@@ -269,14 +329,15 @@ export default function Treasury() {
                       >
                         وصلت
                       </Button>
+                      {h.source === "hold" && <TrashButton title="حذف" onClick={() => setDeletingHold(h.id)} />}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </Panel>
-      )}
+          )}
+      </Panel>
 
       <div className="grid gap-3.5 items-start grid-cols-2 max-[1000px]:grid-cols-1">
         <Panel title="تحويل بين الحسابات">
@@ -425,6 +486,7 @@ export default function Treasury() {
           </table>
         </div>
         {deleting != null && <ConfirmDelete entity="treasury_transfers" id={deleting} onClose={() => setDeleting(null)} onDeleted={load} />}
+        {deletingHold != null && <ConfirmDelete entity="treasury_holds" id={deletingHold} onClose={() => setDeletingHold(null)} onDeleted={load} />}
         <Note>الحركات بتتسجل من صفحاتها (دفعة عميل، دفعة لصاحب معدة، مصروف، إيداع مستثمر…) وبتظهر هنا لوحدها. مفيش حركة بتتمسح من الخزنة غير لما تحذفها من مكانها.</Note>
       </Panel>
     </div>
