@@ -56,3 +56,29 @@ describe("a payment for a chosen month", () => {
     expect(s.totals.remainingPt).toBe(egp(10_000));
   });
 });
+
+describe("statement rows follow the 'for month', not the payment date", () => {
+  it("a payment made in November for September shows under September", () => {
+    const db = freshDb();
+    const id = newContract(db, {
+      client: { kind: "individual", name: "م" },
+      equipment: { name: "بوكيت", supplier: { name: "ص" } },
+      unit: "day",
+      clientRatePt: egp(3000),
+      supplierRatePt: egp(2000),
+      startDate: "2026-09-01",
+    }) as number;
+    fillRange(db, id, "client", "2026-09-01", "2026-09-10", {});
+    fillRange(db, id, "client", "2026-10-01", "2026-10-10", {});
+    const clientId = (db.prepare("SELECT id FROM clients").get() as { id: number }).id;
+    const supplierId = (db.prepare("SELECT id FROM suppliers").get() as { id: number }).id;
+    recordCapital(db, { investorId: db.prepare("INSERT INTO investors (name) VALUES ('م')").run().lastInsertRowid as number, kind: "deposit", date: "2026-09-01", amountPt: egp(500_000) });
+    recordClientPayment(db, { clientId, date: "2026-11-02", amountPt: egp(30_000), forMonth: "2026-10" });
+    recordSupplierPayment(db, { supplierId, date: "2026-11-03", amountPt: egp(20_000), forMonth: "2026-10" });
+    const c = clientsView(db, clientId, "2026-11-05").selected!;
+    expect(c.rows.map((r) => [r.month, r.paidPt / 100])).toEqual([["2026-09", 0], ["2026-10", 30000]]);
+    const s = suppliersView(db, supplierId, "2026-11-05").selected!;
+    expect(s.rows.map((r) => [r.month, r.paidPt / 100])).toEqual([["2026-09", 0], ["2026-10", 20000]]);
+    expect(s.totals.paidPt).toBe(egp(20_000));
+  });
+});

@@ -32,7 +32,7 @@ function Statement({ s }: { s: Selected }) {
             <tr>
               <th>الشهر</th>
               <th className="n">الفواتير (بالضريبة)</th>
-              <th className="n">دفع</th>
+              <th className="n">اتدفع عن الشهر ده</th>
               <th className="n">الباقي عليه لحد آخر الشهر</th>
             </tr>
           </thead>

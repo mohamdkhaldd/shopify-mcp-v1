@@ -32,7 +32,7 @@ function Statement({ s }: { s: Selected }) {
               <th>الشهر</th>
               <th className="n">من السركي</th>
               <th className="n">دفعنا عنه</th>
-              <th className="n">اتصرف له</th>
+              <th className="n">اتصرف له عن الشهر ده</th>
               <th className="n">باقي الشهر</th>
               <th className="n">الباقي لحد آخر الشهر</th>
             </tr>

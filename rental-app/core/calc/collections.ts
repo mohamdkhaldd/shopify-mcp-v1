@@ -30,6 +30,8 @@ export interface PaymentLine {
 export interface Covered {
   date: string;
   amountPt: Piasters;
+  /** نوع اللي سدد (دفعة / خصم) — لو الطرف عنده أكتر من نوع */
+  kind?: string;
 }
 
 export interface CreditLine {
@@ -109,19 +111,19 @@ export function releasable(sharePt: Piasters, collectedBasePt: Piasters, invoice
  */
 export function allocateByMonth(
   dues: { month: string; amountPt: Piasters }[],
-  pays: { date: string; amountPt: Piasters; forMonth?: string | null }[],
+  pays: { date: string; amountPt: Piasters; forMonth?: string | null; kind?: string }[],
 ) {
   const rows = [...dues]
     .filter((d) => d.amountPt !== 0)
     .sort((a, b) => a.month.localeCompare(b.month))
     .map((d) => ({ month: d.month, duePt: d.amountPt, paidPt: 0, covered: [] as Covered[] }));
-  const apply = (target: typeof rows, amount: number, date: string) => {
+  const apply = (target: typeof rows, amount: number, date: string, kind?: string) => {
     for (const r of target) {
       if (amount <= 0) break;
       const take = Math.min(amount, Math.max(0, r.duePt - r.paidPt));
       if (take <= 0) continue;
       r.paidPt += take;
-      r.covered.push({ date, amountPt: take });
+      r.covered.push(kind ? { date, amountPt: take, kind } : { date, amountPt: take });
       amount -= take;
     }
     return amount;
@@ -129,8 +131,8 @@ export function allocateByMonth(
   let advancePt = 0;
   for (const p of [...pays].sort((a, b) => a.date.localeCompare(b.date))) {
     let left = p.amountPt;
-    if (p.forMonth) left = apply(rows.filter((r) => r.month === p.forMonth), left, p.date);
-    left = apply(rows, left, p.date);
+    if (p.forMonth) left = apply(rows.filter((r) => r.month === p.forMonth), left, p.date, p.kind);
+    left = apply(rows, left, p.date, p.kind);
     advancePt += left;
   }
   return { months: rows.map((r) => ({ ...r, openPt: r.duePt - r.paidPt })), advancePt };

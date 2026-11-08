@@ -262,14 +262,13 @@ export function clientsView(db: Db, clientId?: number, now: string = today()) {
   ).map((c) => ({ ...c, months: monthsOfContract(c, now) }));
   const code = new Map(contracts.map((c) => [c.id, c.code]));
   const equipment = new Map(contracts.map((c) => [c.id, c.equipment]));
-  // monthly statement: what was invoiced (with VAT) and what was paid, month by month
-  const months = [...new Set([...st.invoices.map((i) => i.month), ...st.payments.map((p) => p.date.slice(0, 7))])].sort();
+  // monthly statement: what was invoiced (with VAT) and what was paid FOR that
+  // month — a payment counts for the month it was marked "for" (or the oldest
+  // open one), not the month of its date (that's just when it came in).
   let running = 0;
-  const rows = months.map((month) => {
-    const invoicedPt = st.invoices.filter((i) => i.month === month).reduce((s, i) => s + i.totalPt, 0);
-    const paidPt = st.payments.filter((p) => p.date.startsWith(month)).reduce((s, p) => s + p.amountPt, 0);
-    running += invoicedPt - paidPt;
-    return { month, invoicedPt, paidPt, runningPt: running };
+  const rows = st.byMonth.months.map((m) => {
+    running += m.duePt - m.paidPt;
+    return { month: m.month, invoicedPt: m.duePt, paidPt: m.paidPt, runningPt: running };
   });
   return {
     list,

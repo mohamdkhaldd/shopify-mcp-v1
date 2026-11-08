@@ -21,24 +21,33 @@ export function supplierStatement(db: Db, supplierId: number, asOf: string = tod
   };
   const deds = books.raw.deductions.filter((d) => d.supplier_id === supplierId);
   const months = books.months.map((m) => m.month);
+  const dueOf = (month: string) =>
+    sum(
+      books.months.find((m) => m.month === month)!.contracts.filter((c) => c.supplierId === supplierId),
+      (c) => c.supplierCostPt,
+    );
+  // شهر بشهر: الدفعة بتتحسب للشهر اللي اخترت إنها "عنه" (مش شهر تاريخها —
+  // التاريخ ده يوم ما اتدفعت بس)، والباقي بيسدد الأقدم الأول. الخصم (سولار…)
+  // بيتحسب على شهره.
+  const byMonth = allocateByMonth(
+    months.map((m) => ({ month: m, amountPt: dueOf(m) })),
+    [
+      ...pays.map((p) => ({ date: p.date as string, amountPt: p.amount_pt as number, forMonth: (p.for_month as string | null) ?? null, kind: "payment" })),
+      ...deds.map((d) => ({ date: d.date as string, amountPt: d.amount_pt as number, forMonth: (d.date as string).slice(0, 7), kind: "deduction" })),
+    ],
+  );
   let running = 0;
-  const rows = months
-    .map((month) => {
-      const fromSarkiPt = sum(
-        books.months.find((m) => m.month === month)!.contracts.filter((c) => c.supplierId === supplierId),
-        (c) => c.supplierCostPt,
-      );
-      const deductionsPt = sum(deds.filter((d) => d.date.startsWith(month)), (d) => d.amount_pt);
-      const paidPt = sum(pays.filter((p) => p.date.startsWith(month)), (p) => p.amount_pt);
-      const monthBalancePt = fromSarkiPt - deductionsPt - paidPt;
-      running += monthBalancePt;
-      return { month, fromSarkiPt, deductionsPt, paidPt, monthBalancePt, runningBalancePt: running };
-    })
-    .filter((r) => r.fromSarkiPt || r.deductionsPt || r.paidPt);
+  const rows = byMonth.months.map((m) => {
+    const deductionsPt = sum(m.covered.filter((c) => c.kind === "deduction"), (c) => c.amountPt);
+    const paidPt = sum(m.covered.filter((c) => c.kind !== "deduction"), (c) => c.amountPt);
+    const monthBalancePt = m.duePt - deductionsPt - paidPt;
+    running += monthBalancePt;
+    return { month: m.month, fromSarkiPt: m.duePt, deductionsPt, paidPt, monthBalancePt, runningBalancePt: running };
+  });
   const totals = {
     fromSarkiPt: sum(rows, (r) => r.fromSarkiPt),
-    deductionsPt: sum(rows, (r) => r.deductionsPt),
-    paidPt: sum(rows, (r) => r.paidPt),
+    deductionsPt: sum(deds, (d) => d.amount_pt),
+    paidPt: sum(pays, (p) => p.amount_pt),
   };
   const equipment = db.prepare("SELECT id, name, site_name, supplier_rate_pt FROM equipment WHERE supplier_id = ? AND deleted_at IS NULL ORDER BY id").all(supplierId) as {
     id: number;
@@ -58,15 +67,6 @@ export function supplierStatement(db: Db, supplierId: number, asOf: string = tod
       return { equipmentId: e.id as number | null, name: e.name, fromSarkiPt, deductionsPt, paidPt, remainingPt: fromSarkiPt - deductionsPt - paidPt };
     }),
   ];
-  // شهر بشهر: اللي له في كل شهر، والدفعة "عن شهر كذا" بتروح للشهر ده، والباقي
-  // بيسدد الأقدم الأول. الخصم (سولار…) بيتحسب على شهره.
-  const byMonth = allocateByMonth(
-    rows.map((r) => ({ month: r.month, amountPt: r.fromSarkiPt })),
-    [
-      ...pays.map((p) => ({ date: p.date as string, amountPt: p.amount_pt as number, forMonth: (p.for_month as string | null) ?? null })),
-      ...deds.map((d) => ({ date: d.date as string, amountPt: d.amount_pt as number, forMonth: (d.date as string).slice(0, 7) })),
-    ],
-  );
   const unlinkedDed = sum(deds.filter((d) => d.contract_id == null), (d) => d.amount_pt);
   const unlinkedPaid = sum(pays.filter((p) => p.contract_id == null), (p) => p.amount_pt);
   if (unlinkedDed || unlinkedPaid)
