@@ -147,7 +147,7 @@ export const Pain: React.FC = () => {
   return (
     <Bg tint={C.red}>
       <Header color="#FECACA" delay={2}>الغلطة بتتدفع من جيبك</Header>
-      <div style={{ position: "absolute", top: 470, left: 90, right: 90, display: "flex", flexDirection: "column", gap: 40 }}>
+      <div style={{ position: "absolute", top: 430, left: 70, right: 70, display: "flex", flexDirection: "column", gap: 34 }}>
         {items.map((it) => {
           const p = usePop(it.d, 12);
           const jitter = f > it.d + 10 ? Math.sin((f + it.d) / 3) * 3 : 0;
@@ -157,24 +157,24 @@ export const Pain: React.FC = () => {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 36,
+                gap: 26,
                 background: "rgba(255,255,255,.07)",
                 border: "3px solid rgba(255,255,255,.12)",
                 borderRadius: 34,
-                padding: "30px 44px",
+                padding: "28px 36px",
                 transform: `translateX(${(1 - p) * -900}px) rotate(${jitter / 3}deg)`,
                 opacity: p,
               }}
             >
-              <span style={{ fontSize: 96 }}>{it.icon}</span>
-              <span style={{ fontSize: 58, fontWeight: 900 }}>{it.label}</span>
+              <span style={{ fontSize: 84 }}>{it.icon}</span>
+              <span style={{ fontSize: 50, fontWeight: 900, whiteSpace: "nowrap" }}>{it.label}</span>
               <span style={{ marginRight: "auto", fontSize: 70, color: C.red, fontWeight: 900 }}>✗</span>
             </div>
           );
         })}
       </div>
-      <div style={{ position: "absolute", top: 1180, width: "100%", textAlign: "center", transform: `scale(${loss})` }}>
-        <div style={{ fontSize: 48, fontWeight: 700, color: "#FCA5A5" }}>خسارة من غير ما تحس</div>
+      <div style={{ position: "absolute", top: 1230, width: "100%", textAlign: "center", transform: `scale(${loss})` }}>
+        <div style={{ fontSize: 48, fontWeight: 700, marginBottom: -20, color: "#FCA5A5" }}>خسارة من غير ما تحس</div>
         <div style={{ fontSize: 150, fontWeight: 900, color: C.red, textShadow: "0 10px 70px #EF444488" }}>
           <CountUp from={0} to={-18500} start={100} dur={36} suffix=" ج" />
         </div>
