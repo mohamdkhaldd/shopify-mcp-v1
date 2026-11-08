@@ -14,3 +14,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </ThemeProvider>
   </React.StrictMode>
 );
+
+// خانات الأرقام: المتصفح من غير step بيقبل أرقام صحيحة بس (١٫٥٠ يطلع "قيمة مش صالحة").
+// أي خانة رقم في البرنامج بتقبل كسور (قروش) — بنحط step="any" على كل واحدة تظهر.
+if (typeof document !== "undefined") {
+  const allowDecimals = (root: ParentNode) =>
+    root.querySelectorAll?.("input[type=number]:not([step])").forEach((el) => el.setAttribute("step", "any"));
+  allowDecimals(document);
+  new MutationObserver(() => allowDecimals(document)).observe(document.documentElement, { childList: true, subtree: true });
+}
+
