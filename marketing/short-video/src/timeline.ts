@@ -22,7 +22,7 @@ export const scenes: SceneSpec[] = [
   { id: "question", dur: 4.6, say: "طب لو سألتك دلوقتي: ليك كام عند الشركات؟ وعليك كام لأصحاب المعدات؟… تعرف ترد؟" },
   { id: "pain", dur: 4.6, say: "السركي في كشكول، والحساب على الآلة الحاسبة، ودفعات أصحاب المعدات في ورق." },
   { id: "monthEnd", dur: 4.2, say: "وآخر الشهر تقعد تجمّع وتطرح… عشان تعرف كسبت ولا لأ." },
-  { id: "reveal", dur: 3.4, say: "خلاص. MK-Tech." },
+  { id: "reveal", dur: 2.2, say: "عشان كده عملنالك MK-Tech… سيستم بيحسبلك كل ده لوحده." },
   { id: "sarki", dur: 7, say: "تسجّل السركي… والفاتورة تطلع لوحدها. بالقرش، من غير آلة حاسبة." },
   { id: "home", dur: 8.2, say: "افتح الرئيسية في أي يوم: كسبت كام… ليك كام عند الشركات… وعليك كام لأصحاب المعدات." },
   { id: "tax", dur: 6.2, say: "والضريبة محسوبة لوحدها، ومحجوزة في الخزنة… عشان متصرفهاش وتتفاجئ." },
@@ -36,9 +36,11 @@ export const OVERLAP = 8;
 export const frames = (s: number) => Math.round(s * FPS);
 
 /** voice clips cut from the recording (scripts/sync.py): one per scene, in seconds */
-const clips: { file: string; dur: number }[] = (voice as { clips: { file: string; dur: number }[] }).clips;
+const clips: ({ file: string; dur: number } | null)[] = (voice as { clips: ({ file: string; dur: number } | null)[] }).clips;
+/** subtitles only for lines that have a voice (once any voice exists) */
+export const hasVoice = clips.length > 0;
 /** breath after each spoken line before the next scene starts */
-const BREATH = 0.35;
+const BREATH = 0.12;
 
 export function layout() {
   let at = 0;

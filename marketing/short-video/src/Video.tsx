@@ -1,6 +1,6 @@
 import React from "react";
 import { AbsoluteFill, Audio, Sequence, interpolate, staticFile, useCurrentFrame } from "remotion";
-import { layout, OVERLAP, SceneId, totalFrames } from "./timeline";
+import { layout, OVERLAP, SceneId, totalFrames, hasVoice } from "./timeline";
 import music from "./music.json";
 import { cues } from "./sfx";
 import { fontFaces, Subtitle, clamp } from "./ui";
@@ -42,7 +42,7 @@ export const ShortAd: React.FC<{ subtitles: boolean }> = ({ subtitles }) => (
           <Enter first={i === 0}>
             <S />
           </Enter>
-          {subtitles && <Subtitle text={s.say} len={s.len} />}
+          {subtitles && (s.clip || !hasVoice) && <Subtitle text={s.say} len={s.len} />}
           {cues[s.id].map(([at, file, vol], k) => (
             <Sequence key={k} from={at} durationInFrames={75} name={`sfx ${file}`}>
               <Audio src={staticFile(`sfx/${file}.mp3`)} volume={vol} />

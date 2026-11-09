@@ -46,7 +46,7 @@ export const Hook: React.FC = () => {
           </div>
         ))}
       </div>
-      <Bills start={46} />
+      <Bills start={44} />
     </Bg>
   );
 };
@@ -95,9 +95,9 @@ const Bills: React.FC<{ start: number }> = ({ start }) => {
 // ───────────────────────── 2. question: ليك كام؟ عليك كام؟
 export const Question: React.FC = () => {
   const f = useCurrentFrame();
-  const a = usePop(47, 10);
-  const b = usePop(89, 10);
-  const c = usePop(135, 9);
+  const a = usePop(42, 10);
+  const b = usePop(76, 10);
+  const c = usePop(119, 9);
   return (
     <Bg tint={C.purple}>
       <Marks />
@@ -186,9 +186,9 @@ export const Pain: React.FC = () => {
 // ───────────────────────── 4. month end: the calendar runs to the 30th
 export const MonthEnd: React.FC = () => {
   const f = useCurrentFrame();
-  const day = Math.round(interpolate(f, [10, 70], [1, 30], { ...clamp, easing: Easing.in(Easing.quad) }));
+  const day = Math.round(interpolate(f, [10, 56], [1, 30], { ...clamp, easing: Easing.in(Easing.quad) }));
   const flip = (f % 3) / 3;
-  const end = usePop(74, 9);
+  const end = usePop(60, 9);
   return (
     <Bg tint={C.amber}>
       <Header delay={2}>مستني آخر الشهر؟</Header>
@@ -211,8 +211,8 @@ export const Reveal: React.FC = () => {
   const f = useCurrentFrame();
   const flash = interpolate(f, [0, 4, 14], [0, 1, 0], clamp);
   const logo = usePop(6, 8);
-  const name = usePop(18, 12);
-  const tag = usePop(34, 12);
+  const name = usePop(14, 12);
+  const tag = usePop(26, 12);
   const ring = interpolate(f, [6, 40], [0, 1], clamp);
   return (
     <Bg tint={C.blue}>
@@ -226,7 +226,7 @@ export const Reveal: React.FC = () => {
         MK-Tech
       </div>
       <div style={{ position: "absolute", top: 1230, width: "100%", textAlign: "center", opacity: tag, transform: `translateY(${(1 - tag) * 40}px)` }}>
-        <Pill bg={C.blue} color={C.white} size={52}>برنامج مخصوص لشركات تأجير المعدات</Pill>
+        <Pill bg={C.blue} color={C.white} size={52}>سيستم بيحسبلك كل ده لوحده</Pill>
         <div style={{ marginTop: 34, fontSize: 44, fontWeight: 700, color: "#BFDBFE" }}>لابتوب · تابلت · موبايل</div>
       </div>
       <AbsoluteFill style={{ background: C.white, opacity: flash }} />
@@ -241,10 +241,10 @@ export const Sarki: React.FC = () => {
   const scroll = interpolate(f, [12, 48], [0, 470], { ...clamp, easing: Easing.inOut(Easing.cubic) });
   const card = usePop(52, 13);
   const rows = [
-    { k: "٧ أيام × 4,500", v: 31500, d: 66 },
-    { k: "+ قيمة مضافة ١٤٪", v: 4410, d: 82 },
+    { k: "٧ أيام × 4,500", v: 31500, d: 62 },
+    { k: "+ قيمة مضافة ١٤٪", v: 4410, d: 76 },
   ];
-  const total = usePop(100, 10);
+  const total = usePop(90, 10);
   return (
     <Bg tint={C.blue}>
       <Header delay={2}>صفر أخطاء في الحساب</Header>
@@ -281,11 +281,11 @@ export const Sarki: React.FC = () => {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 22, opacity: total, transform: `scale(${0.85 + total * 0.15})` }}>
           <span style={{ fontSize: 54, fontWeight: 900 }}>الإجمالي</span>
           <span style={{ fontSize: 84, fontWeight: 900, color: C.blue }}>
-            <CountUp to={35910} start={100} dur={26} suffix=" ج" />
+            <CountUp to={35910} start={90} dur={22} suffix=" ج" />
           </span>
         </div>
         <div style={{ textAlign: "center", marginTop: 14, opacity: total }}>
-          <Pill bg="#DCFCE7" color="#166534" size={38} delay={118}>
+          <Pill bg="#DCFCE7" color="#166534" size={38} delay={106}>
             ✓ اتحسبت لوحدها بالقرش
           </Pill>
         </div>
@@ -298,11 +298,11 @@ export const Sarki: React.FC = () => {
 export const Home: React.FC = () => {
   const f = useCurrentFrame();
   const phone = usePop(0, 14);
-  const dim = interpolate(f, [74, 92], [0, 1], clamp);
+  const dim = interpolate(f, [68, 84], [0, 1], clamp);
   const cards = [
-    { label: "كسبت كام", sub: "ربح الشهر", v: 23275, color: C.green, d: 92 },
-    { label: "ليك كام", sub: "عند الشركات", v: 519044, color: C.sky, d: 124 },
-    { label: "عليك كام", sub: "لأصحاب المعدات", v: 393600, color: C.amber, d: 162 },
+    { label: "كسبت كام", sub: "ربح الشهر", v: 23275, color: C.green, d: 83 },
+    { label: "ليك كام", sub: "عند الشركات", v: 519044, color: C.sky, d: 105 },
+    { label: "عليك كام", sub: "لأصحاب المعدات", v: 393600, color: C.amber, d: 140 },
   ];
   return (
     <Bg tint={C.green}>
@@ -334,14 +334,14 @@ export const Home: React.FC = () => {
                 <span style={{ fontSize: 38, fontWeight: 700, color: "#64748B" }}>{c.sub}</span>
               </div>
               <div style={{ fontSize: 92, lineHeight: 1.2, fontWeight: 900, color: c.color === C.amber ? "#B45309" : c.color === C.sky ? "#0369A1" : "#15803D", marginTop: 4 }}>
-                <CountUp to={c.v} start={c.d + 4} dur={34} suffix=" ج" />
+                <CountUp to={c.v} start={c.d + 4} dur={28} suffix=" ج" />
               </div>
             </div>
           );
         })}
       </div>
       <div style={{ position: "absolute", top: 1330, width: "100%", textAlign: "center" }}>
-        <Pill bg={C.green} color={C.white} size={44} delay={196}>
+        <Pill bg={C.green} color={C.white} size={44} delay={164}>
           من غير ما تقفل الشهر
         </Pill>
       </div>
@@ -353,9 +353,9 @@ export const Home: React.FC = () => {
 export const Tax: React.FC = () => {
   const f = useCurrentFrame();
   const card = usePop(6, 12);
-  const lock = usePop(70, 8);
-  const chip1 = usePop(26, 12);
-  const chip2 = usePop(44, 12);
+  const lock = usePop(50, 8);
+  const chip1 = usePop(16, 12);
+  const chip2 = usePop(30, 12);
   return (
     <Bg tint={C.purple}>
       <Header delay={2}>الضريبة محسوبة لوحدها</Header>
@@ -407,7 +407,7 @@ export const Tax: React.FC = () => {
           🔒
         </div>
       </div>
-      <div style={{ position: "absolute", top: 1290, width: "100%", textAlign: "center", opacity: interpolate(f, [90, 110], [0, 1], clamp) }}>
+      <div style={{ position: "absolute", top: 1290, width: "100%", textAlign: "center", opacity: interpolate(f, [78, 92], [0, 1], clamp) }}>
         <div style={{ fontSize: 56, fontWeight: 900 }}>محجوزة لوحدها في الخزنة</div>
         <div style={{ fontSize: 46, fontWeight: 700, color: "#DDD6FE", marginTop: 10 }}>عشان متصرفهاش وتتفاجئ</div>
       </div>

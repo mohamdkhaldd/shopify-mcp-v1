@@ -9,6 +9,8 @@ dur = lambda f: float(run("ffprobe", "-v", "error", "-show_entries", "format=dur
 chain = ("highpass=f=80,afftdn=nf=-28,"
          "silenceremove=start_periods=1:start_threshold=-42dB:start_silence=0.06,"
          "areverse,silenceremove=start_periods=1:start_threshold=-42dB:start_silence=0.12,areverse,"
+         # shorten every pause inside a line to ~0.15s so the ad moves faster
+         "silenceremove=stop_periods=-1:stop_duration=0.18:stop_threshold=-44dB,"
          "acompressor=threshold=-20dB:ratio=3:attack=5:release=90")
 tmp = []
 for i, src in enumerate(sys.argv[1:], 1):

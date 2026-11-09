@@ -2,43 +2,40 @@
   "clips": [
     {
       "file": "voice/01.wav",
-      "dur": 3.398
+      "dur": 3.227
     },
     {
       "file": "voice/02.wav",
-      "dur": 5.846
+      "dur": 4.615
     },
     {
       "file": "voice/03.wav",
-      "dur": 4.458
+      "dur": 4.732
     },
     {
       "file": "voice/04.wav",
-      "dur": 4.988
+      "dur": 3.681
     },
-    {
-      "file": "voice/05.wav",
-      "dur": 0.872
-    },
+    null,
     {
       "file": "voice/06.wav",
-      "dur": 6.204
+      "dur": 4.443
     },
     {
       "file": "voice/07.wav",
-      "dur": 6.572
+      "dur": 5.782
     },
     {
       "file": "voice/08.wav",
-      "dur": 4.123
+      "dur": 3.846
     },
     {
       "file": "voice/09.wav",
-      "dur": 4.904
+      "dur": 4.891
     },
     {
       "file": "voice/10.wav",
-      "dur": 3.237
+      "dur": 2.99
     }
   ]
 }
