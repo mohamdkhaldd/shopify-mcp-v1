@@ -196,13 +196,10 @@
   };
   const MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
   const monthName = (m) => (m ? `${MONTHS[Number(m.slice(5, 7)) - 1]} ${ar(Number(m.slice(0, 4))).replace(/٬|,/g, "")}` : "—");
-  const addMonth = (m, n) => { const d = new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n, 1)); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`; };
   /** رسالة جاهزة حسب حالة العميل */
   function waText(c) {
     const name = c.displayName || c.customer;
     const left = daysLeft(c.expiresAt);
-    if (c.active && c.billing?.late)
-      return `أهلاً ${name}، فاضل اشتراك برنامج MK-Tech عن ${c.billing.unpaid.map(monthName).join(" و")} — المطلوب ${ar(c.billing.owed)} جنيه. ممكن تحوّل في أي وقت، وشكراً.`;
     if (c.active && left != null && left <= 7)
       return `أهلاً ${name}، اشتراكك في برنامج MK-Tech ${left < 0 ? "خلص" : left === 0 ? "بيخلص النهارده" : `هيخلص بعد ${left} يوم`}. تحب نجدده؟`;
     if (c.active && c.activity && c.activity.status !== "active")
@@ -231,7 +228,6 @@
           <div class="row"><b class="grow">${esc(c.displayName || c.customer)}</b>${statusPill(c)}</div>
           <div class="muted">${c.planLabel ? `${esc(c.planLabel)} · ${ar(c.price)} ج/شهر` : "من غير باقة"} · ${ar(c.equipment)}${c.maxEquipment ? `/${ar(c.maxEquipment)}` : ""} معدة · ${ar(c.devices)} جهاز</div>
           <div class="muted">ينتهي: ${c.expiresAt ? day(c.expiresAt) : "مفتوح"}${c.renews === false ? " · مش هيتجدد" : ""}</div>
-          ${c.active && c.billing?.late ? `<div style="margin-top:4px"><span class="pill bad">متأخر ${ar(c.billing.owed)} ج</span></div>` : ""}
           ${c.active && c.activity ? `<div class="row" style="gap:6px;margin-top:4px">${activityPill(c)}<span class="muted">فتح ${ago(c.activity.lastSeen)} · سجّل ${ago(c.activity.lastEntry)}</span></div>` : ""}
         </div>
       </div>`;
@@ -240,8 +236,7 @@
       .map((c) => {
         const left = daysLeft(c.expiresAt);
         const why =
-          c.billing?.late ? `متأخر في الاشتراك — عليه ${ar(c.billing.owed)} ج (${c.billing.unpaid.map(monthName).join("، ")})`
-          : left != null && left <= 3 ? (left < 0 ? `اشتراكه خلص من ${ar(-left)} يوم` : left === 0 ? "اشتراكه بيخلص النهارده" : `اشتراكه باقي عليه ${ar(left)} يوم`)
+          left != null && left <= 3 ? (left < 0 ? `اشتراكه خلص من ${ar(-left)} يوم` : left === 0 ? "اشتراكه بيخلص النهارده" : `اشتراكه باقي عليه ${ar(left)} يوم`)
           : c.activity?.status === "idle" ? `واقف — آخر حاجة ${ago(c.activity.lastEntry || c.activity.lastSeen)}`
           : c.activity?.status === "viewing" ? `بيفتح بس — مسجّلش حاجة ${ago(c.activity.lastEntry)}`
           : null;
@@ -251,8 +246,6 @@
     const week = Date.now() - 7 * 86400000;
     const fresh = cs.filter((c) => new Date(c.since).getTime() > week).length;
     const idleN = active.filter((c) => c.activity?.status === "idle").length;
-    const owedAll = active.reduce((s, c) => s + (c.billing?.late ? c.billing.owed : 0), 0);
-    const lateN = active.filter((c) => c.billing?.late).length;
     shell("العملاء", `
       ${attention.length ? `<div class="card" style="border-color:var(--amber)">
         <h2>محتاج انتباهك</h2>
@@ -272,7 +265,7 @@
       </div>
       <div class="stats" style="grid-template-columns:repeat(2,1fr)">
         <div class="stat"><b style="color:var(--green)">${ar(d.income?.thisMonth || 0)}</b><span>اتحصّل الشهر ده (ج)</span></div>
-        <div class="stat"><b style="color:${owedAll ? "var(--red)" : "inherit"}">${ar(owedAll)}</b><span>متأخرات${lateN ? ` على ${ar(lateN)} عميل` : ""} (ج)</span></div>
+        <div class="stat"><b>${ar(d.income?.lastMonth || 0)}</b><span>اتحصّل الشهر اللي فات (ج)</span></div>
       </div>
       <div class="row" id="filters" style="margin-bottom:12px;gap:6px">
         <button class="btn soft" data-f="">الكل (${ar(cs.length)})</button>
@@ -346,27 +339,34 @@
       </div>
 
       <div class="card">
-        <div class="row"><h2 class="grow" style="margin:0">الاشتراك والدفع</h2>${c.billing?.late ? `<span class="pill bad">متأخر</span>` : c.price ? `<span class="pill ok">مدفوع</span>` : ""}</div>
-        <dl class="kv sub">
-          <dt>الاشتراك</dt><dd>${c.price ? `${ar(c.price)} ج في الشهر` : "من غير باقة"}</dd>
-          <dt>مدفوع لحد</dt><dd>${c.billing?.paidThrough ? monthName(c.billing.paidThrough) : "لسه مدفعش"}</dd>
-          <dt>عليه</dt><dd>${c.billing?.owed ? `<b style="color:var(--red)">${ar(c.billing.owed)} ج</b> — ${c.billing.unpaid.map(monthName).join("، ")}` : "ولا حاجة"}</dd>
-        </dl>
+        <h2>التجديد والدفع</h2>
+        <div class="muted">${c.expiresAt ? `الاشتراك لحد <b style="color:var(--ink)">${day(c.expiresAt)}</b>${left != null ? (left >= 0 ? ` — باقي ${ar(left)} يوم` : ` — خلص من ${ar(-left)} يوم`) : ""}` : "مفتوح من غير ميعاد"}${c.price ? ` · ${ar(c.price)} ج في الشهر` : ""}</div>
         <form id="payF" class="sub">
+          <div class="row" style="gap:6px">
+            <button type="button" class="btn soft" data-renew="1">شهر</button>
+            <button type="button" class="btn soft" data-renew="3">٣ شهور</button>
+            <button type="button" class="btn soft" data-renew="6">٦ شهور</button>
+            <button type="button" class="btn soft" data-renew="12">سنة</button>
+          </div>
           <div class="row" style="gap:8px">
-            <div class="grow"><label>المبلغ (ج)</label><input name="amount" inputmode="decimal" value="${c.price || ""}"></div>
             <div class="grow"><label>عدد الشهور</label><input name="months" inputmode="numeric" value="1"></div>
+            <div class="grow"><label>دفع كام (ج)</label><input name="amount" inputmode="decimal" value="${c.price || 0}"></div>
           </div>
           <div class="row" style="gap:8px">
-            <div class="grow"><label>عن شهر</label><input name="forMonth" type="month" value="${c.billing?.unpaid?.[0] || (c.billing?.paidThrough ? addMonth(c.billing.paidThrough, 1) : c.billing?.current || "")}"></div>
-            <div class="grow"><label>اتدفع يوم</label><input name="paidAt" type="date" value="${isoDay(new Date())}"></div>
+            <div class="grow"><label>اتدفع إزاي</label><select name="method"><option>كاش</option><option>انستا باي</option><option>محفظة</option><option>تحويل بنكي</option></select></div>
+            <div class="grow"><label>يوم</label><input name="paidAt" type="date" value="${isoDay(new Date())}"></div>
           </div>
-          <label>اتدفع إزاي</label>
-          <select name="method"><option>كاش</option><option>انستا باي</option><option>محفظة</option><option>تحويل بنكي</option></select>
           <label>ملاحظة</label><input name="note">
-          <button class="btn full" id="payGo" style="margin-top:10px">سجّل الدفعة</button>
+          <button class="btn full" id="payGo" style="margin-top:10px">جدّد وسجّل الدفعة</button>
+          <div class="muted" style="font-size:12px;margin-top:4px">الاشتراك بيتمد من آخر ميعاد (أو من النهارده لو كان خلص). لو المبلغ صفر = تجديد من غير فلوس.</div>
         </form>
         <div id="pays" class="sub muted">بيحمّل الدفعات…</div>
+        <details class="sub"><summary class="muted">تعديل الميعاد بالإيد</summary>
+          <label>اختار تاريخ</label>
+          <div class="row"><input type="date" id="exp" class="grow" value="${c.expiresAt ? isoDay(c.expiresAt) : ""}"><button type="button" class="btn soft" id="setExp">احفظ</button></div>
+          <div class="row" style="margin-top:8px"><button type="button" class="btn ghost" id="openEnded">من غير ميعاد انتهاء</button></div>
+          <label class="check"><input type="checkbox" id="renews" ${c.renews === false ? "" : "checked"}> العميل بيجدد (لو شلتها: مش هيتجدد)</label>
+        </details>
       </div>
 
       <div class="card">
@@ -380,18 +380,6 @@
         <div id="act" class="sub muted">بيحمّل التفاصيل…</div>
       </div>
 
-      <div class="card">
-        <h2>التجديد</h2>
-        <div class="row">
-          <button class="btn" data-renew="1">+ شهر</button>
-          <button class="btn" data-renew="3">+ ٣ شهور</button>
-          <button class="btn" data-renew="12">+ سنة</button>
-        </div>
-        <label>أو اختار تاريخ</label>
-        <div class="row"><input type="date" id="exp" class="grow" value="${c.expiresAt ? isoDay(c.expiresAt) : ""}"><button class="btn soft" id="setExp">احفظ</button></div>
-        <div class="row" style="margin-top:8px"><button class="btn ghost" id="openEnded">من غير ميعاد انتهاء</button></div>
-        <label class="check"><input type="checkbox" id="renews" ${c.renews === false ? "" : "checked"}> العميل بيجدد (لو شلتها: مش هيتجدد)</label>
-      </div>
 
       <div class="card">
         <h2>الباقة</h2>
@@ -449,12 +437,12 @@
     const update = (fields, codeId) => call("license.update", codeId ? { codeId, fields } : { id: c.id, fields });
     const done = async (t) => { toast(t || "اتحفظ ✓"); await load(true); customerView(id); };
 
-    app.querySelectorAll("[data-renew]").forEach((b) => (b.onclick = () => busy(b, async () => {
-      const base = c.expiresAt && new Date(c.expiresAt) > new Date() ? new Date(c.expiresAt) : new Date();
-      base.setMonth(base.getMonth() + Number(b.dataset.renew));
-      await update({ expiresAt: isoDay(base), revoked: false, renews: true });
-      await done(`اتجدد لحد ${day(base)} ✓`);
-    })));
+    // أزرار المدة: بتملى عدد الشهور والمبلغ (سعر الباقة × الشهور)
+    app.querySelectorAll("[data-renew]").forEach((b) => (b.onclick = () => {
+      const f = $("#payF");
+      f.months.value = b.dataset.renew;
+      f.amount.value = (c.price || 0) * Number(b.dataset.renew);
+    }));
     $("#setExp").onclick = (e) => busy(e.target, async () => {
       if (!$("#exp").value) return toast("اختار تاريخ");
       await update({ expiresAt: $("#exp").value });
@@ -493,11 +481,10 @@
       const f = e.target;
       const amount = Number(String(f.amount.value).replace(/[٠-٩]/g, (x) => "٠١٢٣٤٥٦٧٨٩".indexOf(x)).replace("٫", "."));
       const months = parseInt(String(f.months.value).replace(/[٠-٩]/g, (x) => "٠١٢٣٤٥٦٧٨٩".indexOf(x)), 10) || 1;
-      if (!(amount > 0)) return toast("اكتب المبلغ");
-      if (!f.forMonth.value) return toast("اختار الشهر");
+      if (!(amount >= 0)) return toast("اكتب المبلغ");
       busy($("#payGo"), async () => {
-        await call("payment.add", { id: c.id, amount, months, forMonth: f.forMonth.value, paidAt: f.paidAt.value, method: f.method.value, note: f.note.value });
-        await done(`اتسجلت ${ar(amount)} ج عن ${monthName(f.forMonth.value)}${months > 1 ? ` و${ar(months - 1)} شهر بعده` : ""} ✓`);
+        const r = await call("payment.add", { id: c.id, amount, months, paidAt: f.paidAt.value, method: f.method.value, note: f.note.value });
+        await done(`اتجدد لحد ${day(r.until)}${amount > 0 ? ` واتسجل ${ar(amount)} ج` : ""} ✓`);
       });
     };
     $("#saveInfo").onclick = (e) => busy(e.target, async () => {
@@ -540,9 +527,9 @@
     box.classList.remove("muted");
     box.innerHTML = `<h3>الدفعات (${ar(r.payments.length)} — ${ar(total)} ج)</h3>` + r.payments.map((p) => `
       <div class="dev">
-        <div class="grow"><b>${ar(p.amount)} ج</b> عن ${monthName(p.for_month)}${p.months > 1 ? ` (+${ar(p.months - 1)} شهر)` : ""}
+        <div class="grow"><b>${ar(p.amount)} ج</b> — ${p.months === 12 ? "سنة" : `${ar(p.months)} ${p.months === 1 ? "شهر" : "شهور"}`}
           <div class="muted">${day(p.paid_at)}${p.method ? ` · ${esc(p.method)}` : ""}${p.note ? ` · ${esc(p.note)}` : ""}</div></div>
-        <button class="btn ghost" data-delpay="${p.id}" title="امسح الدفعة دي">✕</button>
+        <button class="btn ghost" data-delpay="${p.id}" title="امسح الدفعة دي (الميعاد مش بيرجع لوحده — عدّله بالإيد لو لازم)">✕</button>
       </div>`).join("");
     box.querySelectorAll("[data-delpay]").forEach((b) => (b.onclick = () => {
       if (!confirm("تمسح الدفعة دي؟")) return;
