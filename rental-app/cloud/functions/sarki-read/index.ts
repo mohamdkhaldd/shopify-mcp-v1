@@ -75,11 +75,16 @@ async function listGeminiModels(key: string) {
   const names = list.filter((m) => m.supportedGenerationMethods?.includes("generateContent")).map((m) => m.name.replace(/^models\//, ""));
   const ver = (n: string) => Number(/gemini-(\d+(?:\.\d+)?)/.exec(n)?.[1] ?? 0);
   const byVer = (a: string, b: string) => ver(b) - ver(a);
-  const flash = names.filter((n) => /^gemini-[\d.]+-flash$/.test(n)).sort(byVer);
-  const lite = names.filter((n) => /^gemini-[\d.]+-flash-lite$/.test(n)).sort(byVer);
+  // الأقدم الثابت الأول (2.5): الجديدة على المجاني بتبقى زحمة (503) أو بطيئة
+  const oldest = (a: string, b: string) => -byVer(a, b);
+  const flash = names.filter((n) => /^gemini-[\d.]+-flash$/.test(n) && ver(n) >= 2.5).sort(oldest);
+  const lite = names.filter((n) => /^gemini-[\d.]+-flash-lite$/.test(n) && ver(n) >= 2.5).sort(oldest);
   const pinned = Deno.env.get("GEMINI_MODEL");
-  const all = [...(pinned ? [pinned] : []), ...flash, ...lite];
-  geminiModels = [...new Set(all.length ? all : ["gemini-2.5-flash"])].slice(0, 4);
+  // بالتبادل: flash قديم، lite قديم، flash بعده، lite بعده...
+  const mixed: string[] = [];
+  for (let i = 0; i < Math.max(flash.length, lite.length); i++) mixed.push(...(flash[i] ? [flash[i]] : []), ...(lite[i] ? [lite[i]] : []));
+  const all = [...(pinned ? [pinned] : []), ...mixed];
+  geminiModels = [...new Set(all.length ? all : ["gemini-2.5-flash", "gemini-2.5-flash-lite"])].slice(0, 5);
   return geminiModels;
 }
 class GeminiError extends Error {
@@ -106,7 +111,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function readWithGemini(key: string, image: string, mediaType: string, text: string) {
   const started = Date.now();
-  const left = () => 125_000 - (Date.now() - started);
+  const left = () => 130_000 - (Date.now() - started);
   const models = await listGeminiModels(key);
   let last = 503;
   for (const model of models) {
@@ -123,7 +128,7 @@ async function readWithGemini(key: string, image: string, mediaType: string, tex
             contents: [{ role: "user", parts: [{ inline_data: { mime_type: mediaType, data: image } }, { text }] }],
             generationConfig: { responseMimeType: "application/json", temperature: 0, ...(full ? { responseSchema: geminiSchema(SCHEMA), ...lightThinking(model) } : {}) },
           }),
-          signal: AbortSignal.timeout(Math.min(60_000, left() - 3_000)),
+          signal: AbortSignal.timeout(Math.min(40_000, left() - 3_000)),
         });
       } catch (e) {
         if ((e as Error)?.name !== "TimeoutError") throw e;
