@@ -337,7 +337,7 @@ export default function Clients() {
             actions={
               <>
                 <TaxSwitch label="عليه ١٤٪ قيمة مضافة" checked={!!c.vat_applies} onChange={(x) => setTaxes(x, !!c.tax5_applies)} />
-                <TaxSwitch label="عليه ٥٪ هامش / ٣٪ استقطاع" checked={!!c.tax5_applies} onChange={(x) => setTaxes(!!c.vat_applies, x)} />
+                <TaxSwitch label="بيخصم ٣٪ استقطاع" checked={!!c.tax5_applies} onChange={(x) => setTaxes(!!c.vat_applies, x)} />
                 <PrintButtons pdfName={`كشف حساب ${c.name}`} singlePage={false} />
                 <Button onClick={exportStatement}>Excel</Button>
                 <Button onClick={() => setForm("edit")}>تعديل</Button>

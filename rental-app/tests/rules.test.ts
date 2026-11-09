@@ -334,8 +334,6 @@ describe("printed sheets show one party only", () => {
 describe("a correction that lowers a closed month (credit note)", () => {
   it("lowers what the company owes and the VAT owed, but is not cash", () => {
     const { db, contract, client } = setup();
-    // الاختبار ده على النظام القديم (من غير استقطاع ٣٪)
-    db.prepare("UPDATE withholding_rates SET effective_from = '2099-01-01'").run();
     recordClientPayment(db, { clientId: client, date: "2026-10-20", amountPt: egp(8_550) }); // half of 17,100
     closeMonth(db, "2026-10", "2026-11-02");
     const before = computeBooks(db, "2026-11-30");

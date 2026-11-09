@@ -28,7 +28,7 @@ function TaxPaymentForm({ v, onSaved }: { v: TaxView; onSaved: () => void }) {
         <Labeled label="الضريبة">
           <Select value={tax} onChange={(e) => setTax(e.target.value as "vat" | "tax5")}>
             <option value="vat">القيمة المضافة ١٤٪</option>
-            <option value="tax5">٥٪ من الهامش</option>
+            {(v.totals.tax5.accruedPt !== 0 || v.totals.tax5.paidPt !== 0) && <option value="tax5">٥٪ من الهامش</option>}
           </Select>
         </Labeled>
         <Labeled label="عن شهر">
@@ -100,6 +100,8 @@ export default function Tax() {
   if (!v) return error ? <ErrorBox message={error} /> : <Loading />;
   const t = v.totals;
   const vatWithClients = t.vat.invoicedPt - t.vat.collectedPt;
+  // الـ ٥٪ على الهامش اتلغت (الضريبة ٣٪ استقطاع) — بتظهر بس لو فيه حاجة قديمة متسجلة
+  const old5 = t.tax5.accruedPt !== 0 || t.tax5.paidPt !== 0;
 
   function exportExcel() {
     if (!v) return;
@@ -169,14 +171,14 @@ export default function Tax() {
     ["client", "١٤٪ لكل عميل"],
     ["equipment", "١٤٪ لكل معدة"],
     ["month", "١٤٪ لكل شهر"],
-    ["tax5", "٥٪ لكل عقد / شهر"],
+    ...(old5 ? ([["tax5", "٥٪ لكل عقد / شهر"]] as [Tab, string][]) : []),
     ["paid", "المدفوع للضرايب"],
   ];
 
   return (
     <div className="grid gap-5">
       <PrintHeader title="الملف الضريبي" subtitle={dateLabel(new Date().toLocaleDateString("en-CA"))} />
-      <PageHeader title="الملف الضريبي" subtitle="ضريبة القيمة المضافة ١٤٪ و ٥٪ من الهامش">
+      <PageHeader title="الملف الضريبي" subtitle="ضريبة القيمة المضافة ١٤٪ — والـ ٣٪ استقطاع بتخصمها الشركات وتدفعها عننا">
         <Button primary onClick={() => setTab("paid")}>
           + دفع للضرايب
         </Button>
@@ -186,9 +188,9 @@ export default function Tax() {
       {error && <ErrorBox message={error} />}
 
       <div className="grid gap-3.5 grid-cols-4 max-[1000px]:grid-cols-2">
-        <Kpi tone="tax" label="إجمالي الضرايب اللي علينا" value={<Money pt={pounds(t.owedPt)} />} sub={`١٤٪ ${pounds(t.vat.owedPt)} + ٥٪ ${pounds(t.tax5.owedPt)}`} />
+        <Kpi tone="tax" label="إجمالي الضرايب اللي علينا" value={<Money pt={pounds(t.owedPt)} />} sub={old5 ? `١٤٪ ${pounds(t.vat.owedPt)} + ٥٪ ${pounds(t.tax5.owedPt)}` : "١٤٪ قيمة مضافة"} />
         <Kpi label="اتدفع للضرايب" value={<Money pt={pounds(t.vat.paidPt + t.tax5.paidPt)} />} />
-        <Kpi label="منها قاعد في الخزنة" value={<Money pt={pounds(t.heldInTreasuryPt)} />} sub={`١٤٪ اتحصّلت ${pounds(t.vat.heldPt)} + ٥٪ ${pounds(t.tax5.owedPt)}`} />
+        <Kpi label="منها قاعد في الخزنة" value={<Money pt={pounds(t.heldInTreasuryPt)} />} sub={old5 ? `١٤٪ اتحصّلت ${pounds(t.vat.heldPt)} + ٥٪ ${pounds(t.tax5.owedPt)}` : "١٤٪ اتحصّلت ولسه متدفعتش"} />
         <Kpi label="١٤٪ لسه عند العملاء" value={<Money pt={pounds(vatWithClients)} />} sub="بتتحجز أول ما تتحصّل" />
       </div>
       {v.whtPt !== 0 && (
@@ -201,8 +203,12 @@ export default function Tax() {
         <div className="px-4 py-3.5 leading-[2]">
           العملاء دفعوا لنا لحد النهارده، وجوه اللي دفعوه <b className="text-tax">{pounds(t.vat.collectedPt)}</b> ضريبة ١٤٪. دي فلوس الحكومة، وإحنا شايلينها لحد ما ندفعها.
           <br />
-          وكمان <b className="text-tax">{pounds(t.tax5.accruedPt)}</b> ضريبة الـ ٥٪ على الهامش لازم نشيلها على جنب.
-          <br />
+          {old5 && (
+            <>
+              وكمان <b className="text-tax">{pounds(t.tax5.accruedPt)}</b> ضريبة الـ ٥٪ على الهامش لازم نشيلها على جنب.
+              <br />
+            </>
+          )}
           اللي اتدفع للضرايب لحد دلوقتي <b>{pounds(t.vat.paidPt + t.tax5.paidPt)}</b>، يبقى قاعد في الخزنة <b className="text-tax">{pounds(t.heldInTreasuryPt)}</b> <b>مش بتاعتنا</b>، والبرنامج مش هيخليك تصرف منهم للموردين.
           <br />
           {vatWithClients > 0 && (
@@ -233,13 +239,13 @@ export default function Tax() {
                 <td className="n">{pounds(t.vat.paidPt)}</td>
                 <td className="n text-tax font-bold">{pounds(t.vat.owedPt)}</td>
               </tr>
-              <tr>
+              {old5 && <tr>
                 <td className="font-bold">٥٪ من الهامش</td>
                 <td className="n">{pounds(t.tax5.accruedPt)}</td>
                 <td className="n">—</td>
                 <td className="n">{pounds(t.tax5.paidPt)}</td>
                 <td className="n text-tax font-bold">{pounds(t.tax5.owedPt)}</td>
-              </tr>
+              </tr>}
             </tbody>
             <tfoot>
               <tr>

@@ -77,7 +77,7 @@ function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki;
       actions={
         <>
           {c.vatApplies || c.tax5Applies ? (
-            <Pill tone="tax">عليه {[c.vatApplies && "١٤٪", c.tax5Applies && "٥٪"].filter(Boolean).join(" و ")}</Pill>
+            <Pill tone="tax">عليه {[c.vatApplies && "١٤٪", c.tax5Applies && "٣٪ استقطاع"].filter(Boolean).join(" و ")}</Pill>
           ) : (
             <Pill>من غير ضرايب</Pill>
           )}

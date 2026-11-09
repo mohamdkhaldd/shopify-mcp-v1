@@ -18,9 +18,9 @@ describe("الاستقطاع ٣٪ بدل الـ ٥٪ على الهامش", () =>
     expect(contractMonth({ clientBasePt: egp(1000), supplierCostPt: egp(800), contractExpensesPt: 0, vatApplies: false, tax5Applies: false, vatBp: 1400, tax5Bp: 500, whtBp: 300 })).toMatchObject({ whtPt: 0, invoiceTotalPt: egp(1000) });
   });
 
-  it("من نوفمبر ٢٠٢٦ في الحسابات: الفاتورة والتحصيل والضرايب", () => {
-    const db = freshDb();
-    expect(withholdingAt(db, "2026-10-31")).toBeNull();
+  it("في الحسابات من الأول: الفاتورة والتحصيل والضرايب (مفيش ٥٪ خالص)", () => {
+    const db = freshDb({ withholding: true });
+    expect(withholdingAt(db, "2020-01-01")).toBe(300);
     expect(withholdingAt(db, "2026-11-01")).toBe(300);
     const supplier = createSupplier(db, { name: "صاحب المعدة" });
     const eq = createEquipment(db, { name: "لودر", supplierId: supplier, siteName: "الموقع" });
@@ -30,23 +30,23 @@ describe("الاستقطاع ٣٪ بدل الـ ٥٪ على الهامش", () =>
       fillRange(db, contract, "client", a, b, {});
       fillRange(db, contract, "supplier", a, b, {});
     }
-    recordClientPayment(db, { clientId: client, date: "2026-11-20", amountPt: egp(11_400 + 5_550) }); // أكتوبر كامل + نص نوفمبر
+    recordClientPayment(db, { clientId: client, date: "2026-11-20", amountPt: egp(11_100 + 5_550) }); // أكتوبر كامل + نص نوفمبر
     const books = computeBooks(db, "2026-11-30");
     const oct = books.months.find((m) => m.month === "2026-10")!.contracts[0];
     const nov = books.months.find((m) => m.month === "2026-11")!.contracts[0];
-    expect([oct.tax5Pt, oct.whtPt, oct.invoiceTotalPt]).toEqual([egp(100), 0, egp(11_400)]);
+    expect([oct.tax5Pt, oct.whtPt, oct.invoiceTotalPt]).toEqual([0, egp(300), egp(11_100)]);
     expect([nov.tax5Pt, nov.whtPt, nov.invoiceTotalPt, nov.netPt]).toEqual([0, egp(300), egp(11_100), egp(1_700)]);
     const novInv = books.invoices.find((i) => i.month === "2026-11")!;
     expect(novInv.collectedPt).toBe(egp(5_550));
     expect(novInv.collectedVatPt).toBe(egp(700)); // نص الـ ١٤٪
-    expect(books.tax.tax5AccruedPt).toBe(egp(100)); // الـ ٥٪ بتاعة أكتوبر بس
+    expect(books.tax.tax5AccruedPt).toBe(0); // مفيش ٥٪ على الهامش
     expect(books.tax.vatInvoicedPt).toBe(egp(2_800));
     const st = clientStatement(db, client, "2026-11-30", books);
-    expect(st.totals).toMatchObject({ basePt: egp(20_000), vatPt: egp(2_800), whtPt: egp(300), invoicedPt: egp(22_500), remainingPt: egp(5_550) });
+    expect(st.totals).toMatchObject({ basePt: egp(20_000), vatPt: egp(2_800), whtPt: egp(600), invoicedPt: egp(22_200), remainingPt: egp(5_550) });
   });
 
   it("النسبة والتاريخ بيتغيروا من الإعدادات", () => {
-    const db = freshDb();
+    const db = freshDb({ withholding: true });
     setWithholding(db, "2027-01-01", 100);
     expect(withholdingAt(db, "2026-12-15")).toBe(300);
     expect(withholdingAt(db, "2027-01-02")).toBe(100);

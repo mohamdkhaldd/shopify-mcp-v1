@@ -534,8 +534,8 @@ export function setupDatabase(db: Db): Db {
   installAudit(db, business);
   const seed = db.prepare("INSERT OR IGNORE INTO rate_settings (key, value_bp, effective_from) VALUES (?, ?, '2000-01-01')");
   for (const [k, v] of Object.entries(DEFAULT_RATES)) seed.run(k, v);
-  // ٣٪ استقطاع بدل الـ ٥٪ على الهامش، من نوفمبر ٢٠٢٦ (بيتغير من الإعدادات)
-  db.prepare("INSERT OR IGNORE INTO withholding_rates (value_bp, effective_from) VALUES (300, '2026-11-01')").run();
+  // الضريبة على ربحنا = ٣٪ استقطاع من اليومية من الأول (مفيش ٥٪ على الهامش)
+  db.prepare("INSERT OR IGNORE INTO withholding_rates (value_bp, effective_from) VALUES (300, '2000-01-01')").run();
   // انستا باي: ٠٫١٪ من المبلغ، أقل حاجة ٥٠ قرش وأقصى ٢٠ جنيه (بتتغير من الإعدادات)
   const acc = db.prepare("INSERT OR IGNORE INTO treasury_accounts (key, name, fee_bp, fee_min_pt, fee_max_pt, sort) VALUES (?, ?, ?, ?, ?, ?)");
   // خزنة التأجير حسابين: انستا باي (عليه عمولة التحويل) ومحفظة.

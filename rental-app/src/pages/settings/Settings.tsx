@@ -18,17 +18,19 @@ function nextMonthStart() {
 
 /** الاستقطاع من المنبع: الشركة بتخصم النسبة من اليومية قبل الـ ١٤٪ (بدل الـ ٥٪ على الهامش). */
 function Withholding({ v, onSaved }: { v: SettingsView; onSaved: () => void }) {
-  const [from, setFrom] = useState(v.withholding[0]?.effectiveFrom ?? nextMonthStart());
+  const [from, setFrom] = useState(nextMonthStart());
   const [pct, setPct] = useState(String((v.current.wht ?? 300) / 100));
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
   return (
-    <Panel title="الاستقطاع من المنبع (٣٪)" hint="الشركة بتخصمه من اليومية قبل ما تزود الـ ١٤٪ — من تاريخه الـ ٥٪ على الهامش بتتشال">
+    <Panel title="الاستقطاع من المنبع (٣٪)" hint="الشركة بتخصمه من اليومية قبل ما تزود الـ ١٤٪ وبتدفعه للضرايب عننا">
       <div className="px-4 py-3 text-sm leading-[1.9] border-b border-line">
         مثال: يومية ١٠٠٠ ← الشركة تخصم ٣٪ (٣٠) وتزود ١٤٪ (١٤٠) وتدفع <b>١١١٠</b>. الـ ٣٠ بتطلع من ربحنا، وصاحب المعدة بياخد يوميته كاملة.
         <br />
-        دلوقتي: <b>{v.current.wht != null ? `${percentFromBp(v.current.wht)} استقطاع` : "لسه ٥٪ على الهامش"}</b>
-        {v.withholding.length > 0 && <span className="text-muted"> — {v.withholding.map((w) => `${percentFromBp(w.bp)} من ${w.effectiveFrom}`).join("، ")}</span>}
+        دلوقتي: <b>{percentFromBp(v.current.wht ?? 0)} استقطاع</b>
+        {v.withholding.filter((w) => w.effectiveFrom > "2000-01-01").length > 0 && (
+          <span className="text-muted"> — {v.withholding.map((w) => `${percentFromBp(w.bp)} ${w.effectiveFrom === "2000-01-01" ? "من الأول" : `من ${w.effectiveFrom}`}`).join("، ")}</span>
+        )}
       </div>
       <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 bg-surface-2">
         <Labeled label="يبتدي من يوم">
@@ -63,7 +65,7 @@ function Withholding({ v, onSaved }: { v: SettingsView; onSaved: () => void }) {
 function Rates({ v, onSaved }: { v: SettingsView; onSaved: () => void }) {
   const [from, setFrom] = useState(nextMonthStart());
   const [vat, setVat] = useState(String(v.current.vat / 100));
-  const [tax5, setTax5] = useState(String(v.current.tax5 / 100));
+  const tax5 = String(v.current.tax5 / 100); // الـ ٥٪ اتلغت — بتتبعت زي ما هي
   const [mgmt, setMgmt] = useState(String(v.current.management / 100));
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
@@ -75,10 +77,9 @@ function Rates({ v, onSaved }: { v: SettingsView; onSaved: () => void }) {
   }
   return (
     <Panel title="النسب" hint="كل تغيير ليه تاريخ سريان — الشهور اللي قبله متتغيرش">
-      <div className="grid grid-cols-4 max-[800px]:grid-cols-2 border-b border-line">
+      <div className="grid grid-cols-3 max-[800px]:grid-cols-2 border-b border-line">
         {[
           ["ضريبة القيمة المضافة", v.current.vat],
-          ["ضريبة الهامش", v.current.tax5],
           ["نصيب الإدارة", v.current.management],
           ["نصيب المستثمرين", v.current.investors],
         ].map(([l, bp]) => (
@@ -96,9 +97,6 @@ function Rates({ v, onSaved }: { v: SettingsView; onSaved: () => void }) {
           </Labeled>
           <Labeled label="القيمة المضافة ٪">
             <TextInput value={vat} onChange={(e) => setVat(e.target.value)} className="w-20" inputMode="decimal" />
-          </Labeled>
-          <Labeled label="ضريبة الهامش ٪">
-            <TextInput value={tax5} onChange={(e) => setTax5(e.target.value)} className="w-20" inputMode="decimal" />
           </Labeled>
           <Labeled label="نصيب الإدارة ٪">
             <TextInput value={mgmt} onChange={(e) => setMgmt(e.target.value)} className="w-20" inputMode="decimal" />
@@ -130,7 +128,6 @@ function Rates({ v, onSaved }: { v: SettingsView; onSaved: () => void }) {
             <tr>
               <th>من يوم</th>
               <th className="n">القيمة المضافة</th>
-              <th className="n">ضريبة الهامش</th>
               <th className="n">الإدارة</th>
               <th className="n">المستثمرين</th>
             </tr>
@@ -140,7 +137,6 @@ function Rates({ v, onSaved }: { v: SettingsView; onSaved: () => void }) {
               <tr key={h.effectiveFrom}>
                 <td>{h.effectiveFrom === "2000-01-01" ? "من الأول" : h.effectiveFrom}</td>
                 <td className="n">{h.vat != null ? percentFromBp(h.vat) : "—"}</td>
-                <td className="n">{h.tax5 != null ? percentFromBp(h.tax5) : "—"}</td>
                 <td className="n">{h.management_share != null ? percentFromBp(h.management_share) : "—"}</td>
                 <td className="n">{h.investors_share != null ? percentFromBp(h.investors_share) : "—"}</td>
               </tr>
