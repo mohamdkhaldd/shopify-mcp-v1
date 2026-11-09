@@ -16,7 +16,10 @@
       "file": "voice/04.wav",
       "dur": 3.681
     },
-    null,
+    {
+      "file": "voice/05.wav",
+      "dur": 2.991
+    },
     {
       "file": "voice/06.wav",
       "dur": 4.443

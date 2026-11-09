@@ -3,6 +3,7 @@ import { AbsoluteFill, Audio, Sequence, interpolate, staticFile, useCurrentFrame
 import { layout, OVERLAP, SceneId, totalFrames, hasVoice } from "./timeline";
 import music from "./music.json";
 import { cues } from "./sfx";
+import onsets from "./sfx-onsets.json";
 import { fontFaces, Subtitle, clamp } from "./ui";
 import { Hook, Question, Pain, MonthEnd, Reveal, Sarki, Home, Tax, Secure, Cta } from "./scenes";
 
@@ -43,11 +44,22 @@ export const ShortAd: React.FC<{ subtitles: boolean }> = ({ subtitles }) => (
             <S />
           </Enter>
           {subtitles && (s.clip || !hasVoice) && <Subtitle text={s.say} len={s.len} />}
-          {cues[s.id].map(([at, file, vol], k) => (
-            <Sequence key={k} from={at} durationInFrames={75} name={`sfx ${file}`}>
-              <Audio src={staticFile(`sfx/${file}.mp3`)} volume={vol} />
-            </Sequence>
-          ))}
+          {cues[s.id].map(([at, file, vol, max], k) => {
+            // line the sound's attack up with the animation moment
+            const lead = Math.round(((onsets as Record<string, number>)[file] ?? 0) * 30);
+            const from = Math.max(0, at - lead);
+            const trim = Math.max(0, lead - at);
+            const len = max ?? 75;
+            return (
+              <Sequence key={k} from={from} durationInFrames={len} name={`sfx ${file}`}>
+                <Audio
+                  src={staticFile(`sfx-lib/${file}.mp3`)}
+                  trimBefore={trim}
+                  volume={(f) => vol * interpolate(f, [len - 8, len], [1, 0], clamp)}
+                />
+              </Sequence>
+            );
+          })}
           {s.clip && (
             <Sequence from={i === 0 ? 0 : OVERLAP}>
               <Audio src={staticFile(s.clip)} />

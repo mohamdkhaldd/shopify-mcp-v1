@@ -211,8 +211,8 @@ export const Reveal: React.FC = () => {
   const f = useCurrentFrame();
   const flash = interpolate(f, [0, 4, 14], [0, 1, 0], clamp);
   const logo = usePop(6, 8);
-  const name = usePop(14, 12);
-  const tag = usePop(26, 12);
+  const name = usePop(30, 12);
+  const tag = usePop(50, 12);
   const ring = interpolate(f, [6, 40], [0, 1], clamp);
   return (
     <Bg tint={C.blue}>
