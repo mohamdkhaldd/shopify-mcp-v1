@@ -62,23 +62,25 @@ const SYSTEM = `انت بتقرا صورة "سركي" — ورقة شغل شهر
 لو يوم مش مكتوب خالص على الورقة متطلعهوش. لو رقم مش واضح علّم unclear true واكتب تنبيه في warnings.`;
 
 // ---- Gemini (الخطة المجانية) ----
-// بنختار أحدث موديل "flash" ثابت متاح للمفتاح (أو GEMINI_MODEL لو اتحدد)،
-// عشان أسماء الموديلات بتتغير.
+// الموديلات بتتغير أسماؤها، فبنجيب الموجود للمفتاح: موديلات "flash" الثابتة
+// من الأحدث للأقدم، وبعدها "flash-lite". لو موديل مشغول (503/429) أو اتأخر،
+// بنجرب اللي بعده. GEMINI_MODEL (اختياري) = موديل بعينه يتجرب الأول.
 const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
-let geminiModel: string | null = Deno.env.get("GEMINI_MODEL") ?? null;
-async function pickGeminiModel(key: string) {
-  if (geminiModel) return geminiModel;
-  const res = await fetch(`${GEMINI}/models?pageSize=200`, { headers: { "x-goog-api-key": key } });
+let geminiModels: string[] | null = null;
+async function listGeminiModels(key: string) {
+  if (geminiModels) return geminiModels;
+  const res = await fetch(`${GEMINI}/models?pageSize=200`, { headers: { "x-goog-api-key": key }, signal: AbortSignal.timeout(15_000) });
   if (!res.ok) throw new GeminiError(res.status);
   const list = ((await res.json()).models ?? []) as { name: string; supportedGenerationMethods?: string[] }[];
+  const names = list.filter((m) => m.supportedGenerationMethods?.includes("generateContent")).map((m) => m.name.replace(/^models\//, ""));
   const ver = (n: string) => Number(/gemini-(\d+(?:\.\d+)?)/.exec(n)?.[1] ?? 0);
-  const ok = list
-    .map((m) => m.name.replace(/^models\//, ""))
-    .filter((n, i) => list[i].supportedGenerationMethods?.includes("generateContent"))
-    .filter((n) => /^gemini-[\d.]+-flash$/.test(n));
-  ok.sort((a, b) => ver(b) - ver(a));
-  geminiModel = ok[0] ?? "gemini-2.5-flash";
-  return geminiModel;
+  const byVer = (a: string, b: string) => ver(b) - ver(a);
+  const flash = names.filter((n) => /^gemini-[\d.]+-flash$/.test(n)).sort(byVer);
+  const lite = names.filter((n) => /^gemini-[\d.]+-flash-lite$/.test(n)).sort(byVer);
+  const pinned = Deno.env.get("GEMINI_MODEL");
+  const all = [...(pinned ? [pinned] : []), ...flash, ...lite];
+  geminiModels = [...new Set(all.length ? all : ["gemini-2.5-flash"])].slice(0, 4);
+  return geminiModels;
 }
 class GeminiError extends Error {
   constructor(public status: number) {
@@ -97,34 +99,59 @@ function geminiSchema(x: any): any {
   for (const [k, v] of Object.entries(x)) if (k !== "additionalProperties") out[k] = geminiSchema(v);
   return out;
 }
+// تفكير قليل = رد أسرع (القراية مش محتاجة تفكير طويل)
+const lightThinking = (model: string) =>
+  /^gemini-2\.5-flash/.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : /^gemini-(\d+)/.exec(model) && Number(/^gemini-(\d+)/.exec(model)![1]) >= 3 ? { thinkingConfig: { thinkingLevel: "low" } } : {};
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function readWithGemini(key: string, image: string, mediaType: string, text: string) {
-  const model = await pickGeminiModel(key);
-  const body = (schema: boolean) => ({
-    systemInstruction: { parts: [{ text: SYSTEM }] },
-    contents: [{ role: "user", parts: [{ inline_data: { mime_type: mediaType, data: image } }, { text }] }],
-    generationConfig: { responseMimeType: "application/json", temperature: 0, ...(schema ? { responseSchema: geminiSchema(SCHEMA) } : {}) },
-  });
-  const send = (schema: boolean) =>
-    fetch(`${GEMINI}/models/${model}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify(body(schema)),
-      signal: AbortSignal.timeout(110_000),
-    });
-  let res = await send(true);
-  if (res.status === 400) res = await send(false); // موديل مش بيقبل الشكل ← الشكل في الكلام بس
-  if (!res.ok) {
-    if (res.status === 404) geminiModel = null;
-    throw new GeminiError(res.status);
+  const started = Date.now();
+  const left = () => 125_000 - (Date.now() - started);
+  const models = await listGeminiModels(key);
+  let last = 503;
+  for (const model of models) {
+    // كامل (الشكل + تفكير قليل) ← لو اترفض (400): من غيرهم، والشكل في الكلام بس
+    for (const full of [true, false]) {
+      if (left() < 8_000) throw new GeminiError(last);
+      let res: Response;
+      try {
+        res = await fetch(`${GEMINI}/models/${model}:generateContent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: SYSTEM }] },
+            contents: [{ role: "user", parts: [{ inline_data: { mime_type: mediaType, data: image } }, { text }] }],
+            generationConfig: { responseMimeType: "application/json", temperature: 0, ...(full ? { responseSchema: geminiSchema(SCHEMA), ...lightThinking(model) } : {}) },
+          }),
+          signal: AbortSignal.timeout(Math.min(60_000, left() - 3_000)),
+        });
+      } catch (e) {
+        if ((e as Error)?.name !== "TimeoutError") throw e;
+        console.warn(`gemini ${model}: timeout`);
+        last = 504;
+        break; // الموديل ده بطيء ← اللي بعده
+      }
+      if (res.ok) {
+        const j = await res.json();
+        const parts = j.candidates?.[0]?.content?.parts ?? [];
+        return {
+          model,
+          text: parts.map((p: { text?: string }) => (p as { thought?: boolean }).thought ? "" : p.text ?? "").join(""),
+          blocked: !parts.length,
+          inTokens: j.usageMetadata?.promptTokenCount ?? null,
+          outTokens: j.usageMetadata?.candidatesTokenCount ?? null,
+        };
+      }
+      last = res.status;
+      console.warn(`gemini ${model}: ${res.status} ${(await res.text()).slice(0, 300)}`);
+      if (res.status === 400 && full) continue;
+      if (res.status === 401 || res.status === 403) throw new GeminiError(res.status);
+      if (res.status === 404) geminiModels = null;
+      await wait(1_500); // مشغول (503/429) أو مش موجود ← استنى شوية وجرب الموديل اللي بعده
+      break;
+    }
   }
-  const j = await res.json();
-  const parts = j.candidates?.[0]?.content?.parts ?? [];
-  return {
-    text: parts.map((p: { text?: string }) => p.text ?? "").join(""),
-    blocked: !parts.length,
-    inTokens: j.usageMetadata?.promptTokenCount ?? null,
-    outTokens: j.usageMetadata?.candidatesTokenCount ?? null,
-  };
+  throw new GeminiError(last);
 }
 
 Deno.serve(async (req) => {
@@ -161,7 +188,7 @@ Deno.serve(async (req) => {
     if (geminiKey) {
       const g = await readWithGemini(geminiKey, image, mediaType, `${ask}\nرجّع JSON بس بالشكل ده: ${JSON.stringify(SCHEMA)}`);
       await sql`insert into licensing.ai_usage (license_id, device_id, kind, input_tokens, output_tokens, ok)
-                values (${lic.id}, ${b.deviceId ?? null}, 'sarki-gemini', ${g.inTokens}, ${g.outTokens}, ${!g.blocked})`;
+                values (${lic.id}, ${b.deviceId ?? null}, ${"gemini:" + g.model}, ${g.inTokens}, ${g.outTokens}, ${!g.blocked})`;
       if (g.blocked) return fail("refused");
       text = g.text;
     } else if (apiKey) {
@@ -190,7 +217,7 @@ Deno.serve(async (req) => {
     return json({ ok: true, sheet: out });
   } catch (e) {
     console.error(e);
-    if (e instanceof GeminiError) return fail(e.status === 429 || e.status >= 500 ? "busy" : "ai_error", 502);
+    if (e instanceof GeminiError) return fail(e.status === 401 || e.status === 403 ? "bad_key" : e.status === 429 || e.status >= 500 ? "busy" : "ai_error", 502);
     if (e instanceof Anthropic.APIError) return fail(e.status === 429 || (e.status ?? 0) >= 500 ? "busy" : "ai_error", 502);
     if ((e as Error)?.name === "TimeoutError") return fail("busy", 502);
     return fail("server", 500);
