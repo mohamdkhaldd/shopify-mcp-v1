@@ -353,7 +353,7 @@
     all.onclick = () => {
       const stop = !!$("#stopAll");
       if (stop && !confirm(`توقف ${c.displayName || c.customer} خالص؟`)) return;
-      busy(all, async () => { await update({ revoked: !stop }); await done(stop ? "اتوقف" : "رجع ✓"); });
+      busy(all, async () => { await update({ revoked: stop }); await done(stop ? "اتوقف ✓" : "رجع ✓"); });
     };
   }
 
