@@ -132,7 +132,9 @@
     return data;
   }
 
-  const logoBox = (c) => (/^https:/.test(c.logoUrl || "") ? `<img class="logo" src="${esc(c.logoUrl)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'logo',textContent:'${esc((c.displayName || c.customer || "?").trim().slice(0, 1))}'}))">` : `<div class="logo">${esc((c.displayName || c.customer || "?").trim().slice(0, 1))}</div>`);
+  // "bundled:…" = اللوجو اللي جوه البرنامج نفسه (البنيان): نفس الصورة على الموقع
+  const logoSrc = (u) => (/^bundled:/.test(u || "") ? "../logo.png" : /^https:/.test(u || "") ? u : null);
+  const logoBox = (c) => (logoSrc(c.logoUrl) ? `<img class="logo" src="${esc(logoSrc(c.logoUrl))}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'logo',textContent:'${esc((c.displayName || c.customer || "?").trim().slice(0, 1))}'}))">` : `<div class="logo">${esc((c.displayName || c.customer || "?").trim().slice(0, 1))}</div>`);
   function statusPill(c) {
     if (!c.active) return `<span class="pill bad">موقوف</span>`;
     const d = daysLeft(c.expiresAt);
