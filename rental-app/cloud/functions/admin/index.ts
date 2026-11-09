@@ -4,7 +4,10 @@
 // كل الكلام مع قاعدة البيانات من هنا (SUPABASE_DB_URL)؛ الصفحة نفسها
 // (admin-web) مفيهاش أي مفتاح سري. ٨ محاولات غلط في ربع ساعة = قفل مؤقت.
 // Deployed with the Supabase MCP tool (verify_jwt off: الحماية بالتوكن ده).
+// التنبيهات على الآيفون (Web Push): مفاتيح VAPID في licensing.secrets، والاشتراكات
+// في licensing.admin_push؛ pg_cron بينادي action "cron" كل يوم بمفتاح cron_key.
 import postgres from "npm:postgres@3.4.5";
+import webpush from "npm:web-push@3.6.7";
 
 const sql = postgres(Deno.env.get("SUPABASE_DB_URL")!, { prepare: false, max: 2 });
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -88,7 +91,7 @@ function activityStatus(lastSeen: string | null, lastEntry: string | null) {
 async function customers() {
   const lic = await sql`
     select l.id, l.key, l.customer, l.display_name, l.logo_url, l.products, l.max_devices, l.expires_at, l.revoked, l.renews,
-           l.plan, l.max_equipment, l.note, l.created_at, l.data_from, (l.password_hash is not null) as has_password,
+           l.plan, l.max_equipment, l.note, l.created_at, l.data_from, (l.password_hash is not null) as has_password, l.phone,
            (select count(*) from public.license_devices d where d.license_id = l.id and not d.revoked)::int as devices
     from public.licenses l
     -- عملاء التجربة مش بيظهروا (to_jsonb: يشتغل حتى قبل ما العمود يتعمل)
@@ -119,6 +122,7 @@ async function customers() {
       customer: head.customer,
       displayName: head.display_name,
       logoUrl: head.logo_url,
+      phone: g.codes.find((c: any) => c.phone)?.phone ?? null,
       since: g.codes.reduce((m: string, c: any) => (String(c.created_at) < m ? String(c.created_at) : m), String(main.created_at)),
       plan: head.plan,
       planLabel: head.plan ? PLANS[head.plan]?.label ?? head.plan : null,
@@ -146,6 +150,72 @@ async function customers() {
   return out;
 }
 
+// ---- التنبيهات على الآيفون ----
+let vapidReady = false;
+async function vapid() {
+  if (vapidReady) return;
+  const rows = await sql`select k, v from licensing.secrets where k in ('vapid_public', 'vapid_private')`;
+  const m = Object.fromEntries(rows.map((r: any) => [r.k, r.v]));
+  webpush.setVapidDetails("mailto:admin@mk-tech.app", m.vapid_public, m.vapid_private);
+  vapidReady = true;
+}
+/** يبعت تنبيه لكل الآيفونات المشتركة؛ اللي اشتراكها انتهى بتتشال */
+async function pushAll(title: string, body: string, url = "./") {
+  await vapid();
+  const subs = await sql`select endpoint, keys from licensing.admin_push`;
+  let sent = 0;
+  for (const s of subs) {
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify({ title, body, url }), { TTL: 86400 });
+      sent++;
+    } catch (e) {
+      const code = (e as { statusCode?: number }).statusCode;
+      if (code === 404 || code === 410) await sql`delete from licensing.admin_push where endpoint = ${s.endpoint}`;
+      else console.error("push", code, e);
+    }
+  }
+  return sent;
+}
+const sentRecently = async (kind: string, owner: number | null, days: number) =>
+  (await sql`select 1 from licensing.alert_log where kind = ${kind} and owner_id is not distinct from ${owner} and sent_at > now() - make_interval(days => ${days})`).length > 0;
+const arNum = (n: number) => n.toLocaleString("ar-EG");
+
+/** كل يوم: مين وقف، مين اشتراكه قرّب يخلص، والملخص الأسبوعي (يوم الحد) */
+async function dailyAlerts() {
+  // مفيش آيفون مشترك = مفيش حد يوصله، ومنسجلش إن التنبيه اتبعت
+  const [{ n: subs }] = await sql`select count(*)::int as n from licensing.admin_push`;
+  if (!subs) return 0;
+  const cs = await customers();
+  const live = cs.filter((c) => c.active);
+  let n = 0;
+  for (const c of live) {
+    const name = c.displayName || c.customer;
+    if (c.activity.status === "idle" && !(await sentRecently("idle", c.id, 7))) {
+      const last = c.activity.lastEntry || c.activity.lastSeen;
+      const days = last ? Math.floor((Date.now() - new Date(last).getTime()) / DAY) : null;
+      n += await pushAll(`${name} واقف`, days != null ? `مش شغال على البرنامج من ${arNum(days)} يوم — كلّمه` : "لسه مشتغلش على البرنامج خالص — كلّمه", `./#c/${c.id}`);
+      await sql`insert into licensing.alert_log (kind, owner_id) values ('idle', ${c.id})`;
+    }
+    if (c.expiresAt) {
+      const left = Math.ceil((new Date(c.expiresAt).getTime() - Date.now()) / DAY);
+      if (left >= 0 && left <= 3 && !(await sentRecently("expire", c.id, 3))) {
+        n += await pushAll(`اشتراك ${name} قرّب يخلص`, left === 0 ? "بيخلص النهارده" : `باقي ${arNum(left)} يوم`, `./#c/${c.id}`);
+        await sql`insert into licensing.alert_log (kind, owner_id) values ('expire', ${c.id})`;
+      }
+    }
+  }
+  const cairoDay = new Date(Date.now() + 2 * 3600_000).getUTCDay(); // ٠ = الحد
+  if (cairoDay === 0 && !(await sentRecently("weekly", null, 6))) {
+    const working = live.filter((c) => c.activity.status === "active").length;
+    const idle = live.filter((c) => c.activity.status === "idle").length;
+    const fresh = cs.filter((c) => Date.now() - new Date(c.since).getTime() < 7 * DAY).length;
+    const monthly = live.reduce((s, c) => s + (c.price || 0), 0);
+    n += await pushAll("ملخص الأسبوع", `${arNum(working)} شغال · ${arNum(idle)} واقف · ${arNum(fresh)} جديد · ${arNum(monthly)} ج في الشهر`);
+    await sql`insert into licensing.alert_log (kind) values ('weekly')`;
+  }
+  return n;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return fail("method", 405);
@@ -166,12 +236,29 @@ Deno.serve(async (req) => {
       await sql`insert into licensing.admin_attempts (ok) values (${ok})`;
       return ok ? json({ ok: true, token: await makeToken() }) : fail("wrong");
     }
+    if (b.action === "cron") {
+      const [k] = await sql`select v from licensing.secrets where k = 'cron_key'`;
+      if (!k || String(b.cronKey ?? "") !== k.v) return fail("auth", 401);
+      return json({ ok: true, sent: await dailyAlerts() });
+    }
     if (!(await validToken(b.token))) return fail("auth", 401);
 
     switch (b.action) {
       case "dashboard": {
         const [c] = await sql`select data from licensing.mk_company where id = 1`;
-        return json({ ok: true, company: c?.data ?? {}, customers: await customers(), plans: PLANS });
+        const [p] = await sql`select count(*)::int as n from licensing.admin_push`;
+        const [v] = await sql`select v from licensing.secrets where k = 'vapid_public'`;
+        return json({ ok: true, company: c?.data ?? {}, customers: await customers(), plans: PLANS, push: { devices: p.n, key: v?.v ?? null } });
+      }
+      case "push.subscribe": {
+        const sub = b.subscription ?? {};
+        if (!sub.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) return fail("bad_request", 400);
+        await sql`insert into licensing.admin_push (endpoint, keys, device) values (${sub.endpoint}, ${sql.json(sub.keys)}, ${b.device ?? null})
+                  on conflict (endpoint) do update set keys = excluded.keys`;
+        return json({ ok: true });
+      }
+      case "push.test": {
+        return json({ ok: true, sent: await pushAll("تنبيهات MK شغالة ✓", "هيوصلك هنا لما عميل يقف أو اشتراكه يقرّب يخلص، وملخص كل أسبوع") });
       }
       case "company.save": {
         const data = { ...(b.data ?? {}) };
@@ -186,10 +273,10 @@ Deno.serve(async (req) => {
         const plan = b.plan && PLANS[b.plan] ? b.plan : null;
         const logo = (await uploadLogo(b.logo)) ?? null;
         const [l] = await sql`
-          insert into public.licenses (customer, display_name, logo_url, products, max_devices, expires_at, plan, max_equipment, renews, password_hash, note)
+          insert into public.licenses (customer, display_name, logo_url, products, max_devices, expires_at, plan, max_equipment, renews, password_hash, note, phone)
           values (${String(b.customer).trim()}, ${String(b.displayName ?? "").trim() || null}, ${logo}, ${products}, ${Math.max(1, Number(b.maxDevices) || 2)},
                   ${b.expiresAt || null}, ${plan}, ${plan ? PLANS[plan].max : null}, ${b.renews !== false},
-                  ${b.password ? sql`extensions.crypt(${String(b.password)}, extensions.gen_salt('bf'))` : null}, ${b.note || null})
+                  ${b.password ? sql`extensions.crypt(${String(b.password)}, extensions.gen_salt('bf'))` : null}, ${b.note || null}, ${String(b.phone ?? "").trim() || null})
           returning id, key`;
         return json({ ok: true, id: l.id, key: l.key });
       }
@@ -212,6 +299,7 @@ Deno.serve(async (req) => {
             await sql`update public.licenses set plan = ${p}, max_equipment = ${p ? PLANS[p].max : null} where id = ${id}`;
           }
           if (f.revoked !== undefined) await sql`update public.licenses set revoked = ${!!f.revoked} where id = ${id}`;
+          if (f.phone !== undefined) await sql`update public.licenses set phone = ${String(f.phone ?? "").trim() || null} where id = ${id}`;
           if (f.password !== undefined)
             await sql`update public.licenses set password_hash = ${f.password ? sql`extensions.crypt(${String(f.password)}, extensions.gen_salt('bf'))` : null} where id = ${id}`;
         }
@@ -231,26 +319,18 @@ Deno.serve(async (req) => {
         return json({ ok: true, id: l.id, key: l.key });
       }
       case "activity": {
-        // تفاصيل النشاط: كل يوم في آخر ٣٠ يوم، بيسجلوا إيه، مين بيسجل، وآخر الحاجات
+        // تفاصيل النشاط: كل يوم في آخر ٣٠ يوم، ومين بيسجل
         const owner = Number(b.id);
         const t = [owner, -owner];
         const days = await sql`
           select to_char((at at time zone 'Africa/Cairo')::date, 'YYYY-MM-DD') as day, count(*)::int as n
           from public.sync_log where tenant_id = any(${t}) and tbl <> all(${SYSTEM_TABLES}) and at > now() - interval '30 days'
           group by 1 order by 1`;
-        const kinds = await sql`
-          select tbl, (tenant_id < 0) as ops, count(*)::int as n, max(at) as last
-          from public.sync_log where tenant_id = any(${t}) and tbl <> all(${SYSTEM_TABLES}) and at > now() - interval '30 days'
-          group by 1, 2 order by 3 desc limit 12`;
         const people = await sql`
           select coalesce(nullif(device_name, ''), 'جهاز') as device, count(*)::int as n, max(at) as last
           from public.sync_log where tenant_id = any(${t}) and tbl <> all(${SYSTEM_TABLES}) and at > now() - interval '30 days'
           group by 1 order by 3 desc limit 10`;
-        const recent = await sql`
-          select tbl, op, (tenant_id < 0) as ops, coalesce(nullif(device_name, ''), 'جهاز') as device, at
-          from public.sync_log where tenant_id = any(${t}) and tbl <> all(${SYSTEM_TABLES})
-          order by at desc limit 15`;
-        return json({ ok: true, days, kinds, people, recent });
+        return json({ ok: true, days, people });
       }
       case "devices": {
         const rows = await sql`

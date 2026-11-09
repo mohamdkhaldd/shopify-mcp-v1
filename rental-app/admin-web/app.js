@@ -186,6 +186,28 @@
   };
   const tableName = (t, ops) => (TABLES[t] || t) + (ops ? " (تشغيل)" : "");
 
+  // ---- واتساب ----
+  /** 010... ← 2010... (مصر) */
+  const waNumber = (p) => {
+    let d = String(p || "").replace(/[٠-٩]/g, (x) => "٠١٢٣٤٥٦٧٨٩".indexOf(x)).replace(/\D/g, "");
+    if (d.startsWith("00")) d = d.slice(2);
+    if (d.startsWith("0")) d = "2" + d;
+    return d.length >= 10 ? d : null;
+  };
+  /** رسالة جاهزة حسب حالة العميل */
+  function waText(c) {
+    const name = c.displayName || c.customer;
+    const left = daysLeft(c.expiresAt);
+    if (c.active && left != null && left <= 7)
+      return `أهلاً ${name}، اشتراكك في برنامج MK-Tech ${left < 0 ? "خلص" : left === 0 ? "بيخلص النهارده" : `هيخلص بعد ${left} يوم`}. تحب نجدده؟`;
+    if (c.active && c.activity && c.activity.status !== "active")
+      return `أهلاً ${name}، لاحظنا إنك مش شغال على برنامج MK-Tech الفترة دي. محتاج أي مساعدة أو شرح؟ إحنا موجودين.`;
+    return `أهلاً ${name}، معاك MK-Tech.`;
+  }
+  const waLink = (c) => (waNumber(c.phone) ? `https://wa.me/${waNumber(c.phone)}?text=${encodeURIComponent(waText(c))}` : null);
+  const waButton = (c, label = "واتساب") =>
+    waLink(c) ? `<a class="btn green" href="${esc(waLink(c))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">💬 ${label}</a>` : "";
+
   // ---- العملاء ----
   async function listView() {
     shell("العملاء", `<div class="muted">بيحمّل…</div>`);
@@ -207,7 +229,33 @@
           ${c.active && c.activity ? `<div class="row" style="gap:6px;margin-top:4px">${activityPill(c)}<span class="muted">فتح ${ago(c.activity.lastSeen)} · سجّل ${ago(c.activity.lastEntry)}</span></div>` : ""}
         </div>
       </div>`;
+    // محتاج انتباهك: واقف، بيفتح بس، أو اشتراكه قرّب يخلص
+    const attention = active
+      .map((c) => {
+        const left = daysLeft(c.expiresAt);
+        const why =
+          left != null && left <= 3 ? (left < 0 ? `اشتراكه خلص من ${ar(-left)} يوم` : left === 0 ? "اشتراكه بيخلص النهارده" : `اشتراكه باقي عليه ${ar(left)} يوم`)
+          : c.activity?.status === "idle" ? `واقف — آخر حاجة ${ago(c.activity.lastEntry || c.activity.lastSeen)}`
+          : c.activity?.status === "viewing" ? `بيفتح بس — مسجّلش حاجة ${ago(c.activity.lastEntry)}`
+          : null;
+        return why ? { c, why } : null;
+      })
+      .filter(Boolean);
+    const week = Date.now() - 7 * 86400000;
+    const fresh = cs.filter((c) => new Date(c.since).getTime() > week).length;
+    const idleN = active.filter((c) => c.activity?.status === "idle").length;
     shell("العملاء", `
+      ${attention.length ? `<div class="card" style="border-color:var(--amber)">
+        <h2>محتاج انتباهك</h2>
+        ${attention.map(({ c, why }) => `<div class="row sub" style="margin-top:0;padding-top:8px">
+          <a class="grow" href="#c/${c.id}" style="color:inherit;text-decoration:none"><b>${esc(c.displayName || c.customer)}</b><div class="muted">${esc(why)}</div></a>
+          ${waButton(c) || `<a class="btn ghost" href="#c/${c.id}">ضيف رقمه</a>`}
+        </div>`).join("")}
+      </div>` : ""}
+      <div class="card">
+        <h2 style="margin-bottom:6px">آخر ٧ أيام</h2>
+        <div class="muted">${ar(working)} شغال · ${ar(idleN)} واقف · ${ar(fresh)} عميل جديد · ${ar(monthly)} ج اشتراكات في الشهر</div>
+      </div>
       <div class="stats">
         <div class="stat"><b>${ar(active.length)}</b><span>عميل شغال</span></div>
         <div class="stat"><b>${ar(monthly)}</b><span>جنيه في الشهر</span></div>
@@ -279,7 +327,9 @@
           <dt>الأجهزة</dt><dd>${ar(c.devices)}</dd>
           <dt>ينتهي</dt><dd>${c.expiresAt ? `${day(c.expiresAt)}${left != null ? ` (${left >= 0 ? `باقي ${ar(left)} يوم` : `عدّى ${ar(-left)} يوم`})` : ""}` : "مفتوح من غير ميعاد"}</dd>
           <dt>تجديد</dt><dd>${c.renews === false ? "مش هيتجدد" : "بيتجدد"}</dd>
+          <dt>التليفون</dt><dd>${c.phone ? `<a href="tel:${esc(c.phone)}" dir="ltr">${esc(c.phone)}</a>` : `<span class="muted">مش متسجل — ضيفه من «البيانات» تحت</span>`}</dd>
         </dl>
+        ${c.phone ? `<div class="row sub">${waButton(c, "ابعت واتساب")}<span class="muted grow" style="font-size:12px">${esc(waText(c))}</span></div>` : ""}
       </div>
 
       <div class="card">
@@ -344,6 +394,7 @@
         <h2>البيانات</h2>
         <label>اسم العميل (عندك)</label><input id="eName" value="${esc(c.customer)}">
         <label>الاسم اللي بيظهر في البرنامج</label><input id="eDisp" value="${esc(c.displayName || "")}">
+        <label>تليفون العميل (واتساب)</label><input id="ePhone" value="${esc(c.phone || "")}" dir="ltr" inputmode="tel" placeholder="01xxxxxxxxx">
         <label>لوجو جديد</label><input id="eLogo" type="file" accept="image/*">
         <label>باسورد الشركة (بيتطلب أول مرة على أي جهاز) — سيبه فاضي لو مش هتغيره</label><input id="ePw" type="text" dir="ltr" autocomplete="off">
         <label class="check"><input type="checkbox" id="ePwOff"> شيل الباسورد خالص</label>
@@ -403,6 +454,7 @@
       const fields = {};
       if ($("#eName").value.trim() !== c.customer) fields.customer = $("#eName").value;
       if ($("#eDisp").value.trim() !== (c.displayName || "")) fields.displayName = $("#eDisp").value;
+      if ($("#ePhone").value.trim() !== (c.phone || "")) fields.phone = $("#ePhone").value;
       const logo = await readLogo($("#eLogo").files[0]);
       if (logo) fields.logo = logo;
       if ($("#ePwOff").checked) fields.password = null;
@@ -448,12 +500,8 @@
       <div class="muted" style="margin-bottom:4px">كل يوم في آخر ٣٠ يوم</div>
       <div style="display:flex;gap:2px;align-items:flex-end">${bars}</div>
       <div class="row muted" style="justify-content:space-between;font-size:11px"><span>${days[0].label}</span><span>النهارده</span></div>
-      <h3>بيسجلوا إيه (آخر ٣٠ يوم)</h3>
-      ${list(r.kinds, (k) => `<div class="row"><span class="grow">${esc(tableName(k.tbl, k.ops))}</span><b>${ar(k.n)}</b><span class="muted">${ago(k.last)}</span></div>`)}
       <h3>مين بيسجل</h3>
-      ${list(r.people, (p) => `<div class="row"><span class="grow">${esc(p.device)}</span><b>${ar(p.n)}</b><span class="muted">${ago(p.last)}</span></div>`)}
-      <h3>آخر حاجات اتسجلت</h3>
-      ${list(r.recent, (x) => `<div class="row" style="font-size:13px"><span class="grow">${x.op === "delete" ? "مسح" : x.op === "insert" ? "إضافة" : "تعديل"} في ${esc(tableName(x.tbl, x.ops))}</span><span class="muted">${esc(x.device)} · ${ago(x.at)}</span></div>`)}`;
+      ${list(r.people, (p) => `<div class="row"><span class="grow">${esc(p.device)}</span><b>${ar(p.n)}</b><span class="muted">${ago(p.last)}</span></div>`)}`;
   }
 
   async function devicesInto(box, c) {
@@ -489,6 +537,7 @@
       <form class="card" id="f">
         <label>اسم العميل (عندك)</label><input name="customer" required>
         <label>الاسم اللي بيظهر في البرنامج</label><input name="displayName" placeholder="لو فاضي: اسم العميل">
+        <label>تليفون العميل (واتساب)</label><input name="phone" dir="ltr" inputmode="tel" placeholder="01xxxxxxxxx">
         <label>اللوجو</label><input name="logo" type="file" accept="image/*">
         <label>البرنامج</label>
         <select name="products"><option value="rental">التأجير</option><option value="operations">التشغيل</option><option value="rental,operations">الاتنين</option></select>
@@ -504,7 +553,7 @@
       const f = e.target;
       busy($("#go"), async () => {
         const r = await call("customer.create", {
-          customer: f.customer.value, displayName: f.displayName.value, products: f.products.value.split(","),
+          customer: f.customer.value, displayName: f.displayName.value, phone: f.phone.value, products: f.products.value.split(","),
           plan: f.plan.value || null, maxDevices: Number(f.maxDevices.value) || 2, expiresAt: f.expiresAt.value || null,
           password: f.password.value.trim() || null, note: f.note.value, logo: await readLogo(f.logo.files[0]),
         });
@@ -609,6 +658,16 @@
         <h2>على الآيفون</h2>
         <div class="muted">من Safari: زرار المشاركة ← "إضافة إلى الشاشة الرئيسية" — هتبقى أيقونة زي أي أبلكيشن.</div>
       </div>
+      <div class="card">
+        <h2>التنبيهات</h2>
+        <div class="muted">بيوصلك إشعار لما عميل يقف أسبوعين، أو اشتراكه يقرّب يخلص (٣ أيام)، وملخص كل يوم حد الصبح.
+          ${data?.push?.devices ? `<br>متفعّلة على ${ar(data.push.devices)} جهاز.` : ""}</div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" id="pushOn">🔔 فعّل التنبيهات على الجهاز ده</button>
+          <button class="btn soft" id="pushTest">ابعت تنبيه تجربة</button>
+        </div>
+        <div class="muted" id="pushNote" style="margin-top:6px;font-size:12px"></div>
+      </div>
       <button class="btn red full" id="out">تسجيل خروج</button>`);
     $("#f").onsubmit = (e) => {
       e.preventDefault();
@@ -621,6 +680,33 @@
       });
     };
     $("#out").onclick = logout;
+    $("#pushOn").onclick = (e) => busy(e.target, enablePush);
+    $("#pushTest").onclick = (e) => busy(e.target, async () => {
+      const r = await call("push.test");
+      toast(r.sent ? `اتبعت لـ ${ar(r.sent)} جهاز ✓` : "مفيش جهاز متفعّل عليه التنبيهات لسه");
+    });
+  }
+
+  const b64ToBytes = (b) => Uint8Array.from(atob(b.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((b.length + 3) % 4)), (c) => c.charCodeAt(0));
+  async function enablePush() {
+    const note = $("#pushNote");
+    const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      note.textContent = /iPhone|iPad/.test(navigator.userAgent) && !standalone
+        ? "على الآيفون: ضيف اللوحة للشاشة الرئيسية الأول (مشاركة ← إضافة إلى الشاشة الرئيسية)، وافتحها من الأيقونة، وبعدين دوس هنا."
+        : "الجهاز ده مش بيدعم التنبيهات.";
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") { note.textContent = "لازم توافق على الإشعارات (من إعدادات الآيفون ← الإشعارات ← إدارة MK)."; return; }
+    const d = await load();
+    if (!d.push?.key) throw new Error("server");
+    const reg = await navigator.serviceWorker.register("sw.js", { scope: "./" });
+    await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(d.push.key) }));
+    await call("push.subscribe", { subscription: sub.toJSON(), device: /iPhone/.test(navigator.userAgent) ? "آيفون" : "جهاز" });
+    await load(true);
+    note.textContent = "اتفعّلت ✓ — دوس «ابعت تنبيه تجربة» عشان تتأكد.";
   }
 
   function render() {
