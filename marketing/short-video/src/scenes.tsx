@@ -101,13 +101,13 @@ export const Question: React.FC = () => {
   return (
     <Bg tint={C.purple}>
       <Marks />
-      <div style={{ position: "absolute", top: 520, width: "100%", textAlign: "center" }}>
+      <div style={{ position: "absolute", top: 330, width: "100%", textAlign: "center" }}>
         <div style={{ fontSize: 150, fontWeight: 900, color: C.green, transform: `scale(${a})`, textShadow: "0 10px 60px #22C55E66" }}>ليك كام؟</div>
         <div style={{ fontSize: 46, fontWeight: 700, opacity: a, marginTop: -10, color: "#CBD5E1" }}>عند الشركات</div>
-        <div style={{ height: 110 }} />
+        <div style={{ height: 70 }} />
         <div style={{ fontSize: 150, fontWeight: 900, color: C.red, transform: `scale(${b})`, textShadow: "0 10px 60px #EF444466" }}>عليك كام؟</div>
         <div style={{ fontSize: 46, fontWeight: 700, opacity: b, marginTop: -10, color: "#CBD5E1" }}>لأصحاب المعدات</div>
-        <div style={{ height: 120 }} />
+        <div style={{ height: 90 }} />
         <div style={{ transform: `scale(${c}) rotate(${Math.sin(f / 6) * 2}deg)` }}>
           <Pill bg={C.white} size={64}>تعرف ترد؟</Pill>
         </div>
