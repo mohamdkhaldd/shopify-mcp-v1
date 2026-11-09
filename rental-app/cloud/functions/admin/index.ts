@@ -88,6 +88,31 @@ function activityStatus(lastSeen: string | null, lastEntry: string | null) {
   return "idle"; // واقف
 }
 
+// ---- دفعات الاشتراك ----
+const cairoNow = () => new Date(Date.now() + 2 * 3600_000);
+const monthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+const addMonths = (m: string, n: number) => {
+  const [y, mo] = m.split("-").map(Number);
+  const d = new Date(Date.UTC(y, mo - 1 + n, 1));
+  return monthKey(d);
+};
+/** الشهور اللي عليه من أول شهر لحد الشهر ده، واللي اتدفع منها */
+function billing(since: string, price: number | null, active: boolean, pays: { for_month: string; months: number }[]) {
+  const now = cairoNow();
+  const current = monthKey(now);
+  const covered = new Set<string>();
+  for (const p of pays) for (let i = 0; i < p.months; i++) covered.add(addMonths(p.for_month, i));
+  const paidThrough = [...covered].sort().pop() ?? null;
+  if (!price || !active) return { current, paidThrough, unpaid: [] as string[], owed: 0, late: false };
+  const start = monthKey(new Date(new Date(since).getTime() + 2 * 3600_000));
+  const unpaid: string[] = [];
+  for (let m = start; m <= current; m = addMonths(m, 1)) if (!covered.has(m)) unpaid.push(m);
+  // متأخر: شهر قديم مدفعش، أو الشهر ده وعدّى ٥ أيام (من أول الشهر أو من يوم ما بقى عميل)
+  const dueFrom = Math.max(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1), new Date(since).getTime() + 2 * 3600_000);
+  const late = unpaid.some((m) => m < current) || (unpaid.includes(current) && now.getTime() - dueFrom > 5 * 86_400_000);
+  return { current, paidThrough, unpaid, owed: unpaid.length * price, late };
+}
+
 async function customers() {
   const lic = await sql`
     select l.id, l.key, l.customer, l.display_name, l.logo_url, l.products, l.max_devices, l.expires_at, l.revoked, l.renews,
@@ -103,6 +128,7 @@ async function customers() {
     if (!owners.has(owner)) owners.set(owner, { id: owner, codes: [] as any[] });
     owners.get(owner).codes.push(l);
   }
+  const allPays = await sql`select owner_id, for_month, months from licensing.subscription_payments`;
   const out = [];
   for (const g of owners.values()) {
     const main = g.codes.find((c: any) => c.id === g.id) ?? g.codes[0];
@@ -133,6 +159,12 @@ async function customers() {
       renews: head.renews,
       active: live.length > 0,
       devices: live.reduce((s: number, c: any) => s + c.devices, 0),
+      billing: billing(
+        g.codes.reduce((m: string, c: any) => (String(c.created_at) < m ? String(c.created_at) : m), String(main.created_at)),
+        head.plan ? PLANS[head.plan]?.price ?? null : null,
+        live.length > 0,
+        allPays.filter((p: any) => Number(p.owner_id) === g.id) as unknown as { for_month: string; months: number }[],
+      ),
       activity: {
         lastSeen: act.last_seen,
         lastEntry: act.last_entry,
@@ -196,6 +228,10 @@ async function dailyAlerts() {
       n += await pushAll(`${name} واقف`, days != null ? `مش شغال على البرنامج من ${arNum(days)} يوم — كلّمه` : "لسه مشتغلش على البرنامج خالص — كلّمه", `./#c/${c.id}`);
       await sql`insert into licensing.alert_log (kind, owner_id) values ('idle', ${c.id})`;
     }
+    if (c.billing.late && !(await sentRecently("late", c.id, 7))) {
+      n += await pushAll(`${name} متأخر في الاشتراك`, `عليه ${arNum(c.billing.owed)} ج (${arNum(c.billing.unpaid.length)} شهر)`, `./#c/${c.id}`);
+      await sql`insert into licensing.alert_log (kind, owner_id) values ('late', ${c.id})`;
+    }
     if (c.expiresAt) {
       const left = Math.ceil((new Date(c.expiresAt).getTime() - Date.now()) / DAY);
       if (left >= 0 && left <= 3 && !(await sentRecently("expire", c.id, 3))) {
@@ -210,7 +246,8 @@ async function dailyAlerts() {
     const idle = live.filter((c) => c.activity.status === "idle").length;
     const fresh = cs.filter((c) => Date.now() - new Date(c.since).getTime() < 7 * DAY).length;
     const monthly = live.reduce((s, c) => s + (c.price || 0), 0);
-    n += await pushAll("ملخص الأسبوع", `${arNum(working)} شغال · ${arNum(idle)} واقف · ${arNum(fresh)} جديد · ${arNum(monthly)} ج في الشهر`);
+    const owed = live.reduce((s, c) => s + c.billing.owed, 0);
+    n += await pushAll("ملخص الأسبوع", `${arNum(working)} شغال · ${arNum(idle)} واقف · ${arNum(fresh)} جديد · ${arNum(monthly)} ج في الشهر · متأخرات ${arNum(owed)} ج`);
     await sql`insert into licensing.alert_log (kind) values ('weekly')`;
   }
   return n;
@@ -248,7 +285,30 @@ Deno.serve(async (req) => {
         const [c] = await sql`select data from licensing.mk_company where id = 1`;
         const [p] = await sql`select count(*)::int as n from licensing.admin_push`;
         const [v] = await sql`select v from licensing.secrets where k = 'vapid_public'`;
-        return json({ ok: true, company: c?.data ?? {}, customers: await customers(), plans: PLANS, push: { devices: p.n, key: v?.v ?? null } });
+        const [inc] = await sql`
+          select coalesce(sum(amount) filter (where to_char(paid_at, 'YYYY-MM') = to_char((now() at time zone 'Africa/Cairo')::date, 'YYYY-MM')), 0)::float as this_month,
+                 coalesce(sum(amount) filter (where to_char(paid_at, 'YYYY-MM') = to_char(((now() at time zone 'Africa/Cairo')::date - interval '1 month'), 'YYYY-MM')), 0)::float as last_month
+          from licensing.subscription_payments`;
+        return json({ ok: true, company: c?.data ?? {}, customers: await customers(), plans: PLANS, push: { devices: p.n, key: v?.v ?? null }, income: { thisMonth: inc.this_month, lastMonth: inc.last_month } });
+      }
+      case "payments": {
+        const rows = await sql`select id, amount::float as amount, to_char(paid_at, 'YYYY-MM-DD') as paid_at, for_month, months, method, note
+                               from licensing.subscription_payments where owner_id = ${Number(b.id)} order by paid_at desc, id desc`;
+        return json({ ok: true, payments: rows });
+      }
+      case "payment.add": {
+        const amount = Number(b.amount);
+        if (!(amount > 0)) return fail("amount");
+        if (!/^\d{4}-\d{2}$/.test(String(b.forMonth ?? ""))) return fail("month");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.paidAt ?? ""))) return fail("date");
+        const months = Math.min(24, Math.max(1, Math.trunc(Number(b.months) || 1)));
+        await sql`insert into licensing.subscription_payments (owner_id, amount, paid_at, for_month, months, method, note)
+                  values (${Number(b.id)}, ${amount}, ${b.paidAt}, ${b.forMonth}, ${months}, ${b.method || null}, ${String(b.note ?? "").trim() || null})`;
+        return json({ ok: true });
+      }
+      case "payment.delete": {
+        await sql`delete from licensing.subscription_payments where id = ${Number(b.paymentId)}`;
+        return json({ ok: true });
       }
       case "push.subscribe": {
         const sub = b.subscription ?? {};
