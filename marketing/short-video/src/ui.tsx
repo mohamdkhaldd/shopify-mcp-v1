@@ -215,15 +215,12 @@ export const Logo: React.FC<{ size: number; style?: React.CSSProperties }> = ({ 
     style={{
       width: size,
       height: size,
-      borderRadius: size * 0.24,
-      background: "#020617",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      boxShadow: `0 0 ${size * 0.6}px ${C.blue}88, inset 0 0 0 3px #1E3A8A`,
+      borderRadius: size * 0.164,
+      boxShadow: `0 0 ${size * 0.5}px ${C.blue}77, 0 0 0 3px #1E3A8A`,
       ...style,
     }}
   >
-    <Img src={staticFile("mk-icon.png")} style={{ width: size * 0.8, height: size * 0.8, objectFit: "contain" }} />
+    {/* the company's vector icon (brand/mk-icon.svg): sharp at any size */}
+    <Img src={staticFile("mk-icon.svg")} style={{ width: size, height: size, display: "block" }} />
   </div>
 );
