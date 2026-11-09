@@ -5,6 +5,77 @@ import Icon from "../../components/Icon";
 import { formatEGP } from "../../utils/format";
 import { useUndo } from "../../context/UndoContext";
 
+const errorText = (err: unknown) => String((err as Error)?.message ?? err).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
+
+function NameCell({ partner, onSaved }: { partner: Partner; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(partner.name);
+  const [error, setError] = useState("");
+
+  async function save() {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === partner.name) {
+      setValue(partner.name);
+      setError("");
+      setEditing(false);
+      return;
+    }
+    try {
+      await partnersApi.rename(partner.id, trimmed);
+      setError("");
+      setEditing(false);
+      onSaved();
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+
+  function cancel() {
+    setValue(partner.name);
+    setError("");
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div>
+        <div className="flex items-center gap-2">
+          <input
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") save();
+              if (e.key === "Escape") cancel();
+            }}
+            className="w-44 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+            autoFocus
+          />
+          <button onClick={save} className="text-xs font-semibold text-primary hover:text-primary-dark">
+            حفظ
+          </button>
+          <button onClick={cancel} className="text-xs font-semibold text-slate-400 hover:text-slate-600">
+            إلغاء
+          </button>
+        </div>
+        {error && <div className="mt-1 text-[11px] text-rose-600">{error}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => {
+        setValue(partner.name);
+        setEditing(true);
+      }}
+      className="text-sm font-semibold text-slate-700 hover:text-primary underline decoration-dashed decoration-slate-300 underline-offset-4 hover:decoration-primary"
+      title="دوس تعدّل اسم الشريك"
+    >
+      {partner.name}
+    </button>
+  );
+}
+
 function OpeningBalanceCell({ partner, onSaved }: { partner: Partner; onSaved: () => void }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(String(partner.opening_balance));
@@ -105,7 +176,7 @@ export default function PartnersTab() {
     <div className="bg-white rounded-card shadow-card p-5">
       <h2 className="font-bold text-slate-800 mb-1">الشركاء</h2>
       <p className="text-xs text-slate-400 mb-4">
-        الرصيد الافتتاحي هو الفلوس المستحقة له من شهور سابقة لسه ما اتسجلتش — بتتضاف على المستحق له، وبتتخصم أول ما يتاخد له دفعة.
+        دوس على اسم الشريك عشان تعدّله. الرصيد الافتتاحي هو الفلوس المستحقة له من شهور سابقة لسه ما اتسجلتش — بتتضاف على المستحق له، وبتتخصم أول ما يتاخد له دفعة.
       </p>
 
       <form onSubmit={handleAdd} className="flex flex-wrap gap-2 mb-5">
@@ -143,7 +214,7 @@ export default function PartnersTab() {
                 <div className="w-8 h-8 rounded-lg bg-primary-light text-primary flex items-center justify-center">
                   <Icon name="partners" className="w-4 h-4" />
                 </div>
-                <span className="text-sm font-semibold text-slate-700">{item.name}</span>
+                <NameCell partner={item} onSaved={refresh} />
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-end">

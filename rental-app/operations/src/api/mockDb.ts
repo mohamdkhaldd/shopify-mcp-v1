@@ -1547,6 +1547,16 @@ export async function mockInvoke(channel: string, payload?: any): Promise<any> {
     return { ...eq, allTimeProfit, roiPercent };
   }
 
+  if (channel === "partners:rename") {
+    const trimmed = String(payload.name ?? "").trim();
+    if (!trimmed) throw new Error("لازم تكتب اسم الشريك");
+    if (state.partners.some((p) => p.name === trimmed && p.id !== payload.id)) throw new Error("فيه شريك تاني بنفس الاسم ده");
+    const partner = state.partners.find((p) => p.id === payload.id)!;
+    partner.name = trimmed;
+    saveState(state);
+    return partner;
+  }
+
   if (channel === "partners:updateOpeningBalance") {
     const partner = state.partners.find((p) => p.id === payload.id)!;
     partner.opening_balance = payload.opening_balance;

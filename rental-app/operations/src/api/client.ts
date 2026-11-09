@@ -310,6 +310,7 @@ export const partnersApi = {
   create: (name: string, opening_balance = 0): Promise<Partner> =>
     invoke("partners:create", { name, opening_balance }),
   remove: (id: number): Promise<void> => invoke("partners:delete", { id }),
+  rename: (id: number, name: string): Promise<Partner> => invoke("partners:rename", { id, name }),
   updateOpeningBalance: (id: number, opening_balance: number): Promise<Partner> =>
     invoke("partners:updateOpeningBalance", { id, opening_balance }),
 };
