@@ -13,6 +13,18 @@ export function rateAt(db: Db, key: RateKey, date: string): number {
 }
 
 /** Management + investors shares always add up to 100%, so they change together. */
+/** نسبة الاستقطاع من اليومية في التاريخ ده — null = قبل نظام الاستقطاع (يعني ٥٪ على الهامش) */
+export function withholdingAt(db: Db, date: string): number | null {
+  const row = db.prepare("SELECT value_bp FROM withholding_rates WHERE effective_from <= ? ORDER BY effective_from DESC LIMIT 1").get(date) as { value_bp: number } | undefined;
+  return row ? row.value_bp : null;
+}
+
+export function setWithholding(db: Db, effectiveFrom: string, bp: number) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) throw new UserError("اختار تاريخ");
+  if (!Number.isInteger(bp) || bp < 0 || bp > 10_000) throw new UserError("نسبة مش صحيحة");
+  db.prepare("INSERT INTO withholding_rates (value_bp, effective_from) VALUES (?, ?) ON CONFLICT(effective_from) DO UPDATE SET value_bp = excluded.value_bp").run(bp, effectiveFrom);
+}
+
 export function setRates(db: Db, effectiveFrom: string, rates: Partial<Record<RateKey, number>>) {
   const mgmt = rates.management_share;
   const inv = rates.investors_share;

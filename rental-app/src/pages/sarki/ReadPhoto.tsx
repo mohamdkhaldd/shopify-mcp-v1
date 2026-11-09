@@ -13,7 +13,7 @@ const toRow = (d: ReadDay): Row => ({
   hours: d.hours == null ? "" : String(d.hours),
   overtime: d.overtime == null ? "" : String(d.overtime),
   site: d.site ?? "",
-  note: d.note ?? "",
+  note: "", // البيان مش بيتملى من الصورة (بيتكتب بالإيد)
   unclear: d.unclear,
 });
 const dateOf = (month: string, day: number) => `${month}-${String(day).padStart(2, "0")}`;

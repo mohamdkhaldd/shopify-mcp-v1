@@ -10,6 +10,7 @@ import { milliToHours } from "../../utils/input";
 import { ClientSheet, SupplierSheet } from "./Sheets";
 import { ClientBulk, SupplierBulk } from "./BulkTools";
 import { ReadPhoto } from "./ReadPhoto";
+import { SarkiSummary } from "./SarkiSummary";
 import NewContract from "./NewContract";
 import Modal from "../../components/Modal";
 import { Labeled, TextInput } from "../../components/Field";
@@ -165,6 +166,7 @@ function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki;
           <div className="overflow-x-auto">
             <ClientSheet v={v} onSaved={reload} onError={onError} onDeleteDay={(id) => onDelete({ entity: "work_logs", id })} />
           </div>
+          <SarkiSummary days={v.client.days} />
         </>
       ) : (
         <>
@@ -172,6 +174,7 @@ function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki;
           <div className="overflow-x-auto">
             <SupplierSheet v={v} onSaved={reload} onError={onError} />
           </div>
+          <SarkiSummary days={v.supplier.days} />
         </>
       )}
       <PrintSignoff others={[tab === "client" ? "توقيع مندوب الشركة" : "توقيع صاحب المعدة"]} />

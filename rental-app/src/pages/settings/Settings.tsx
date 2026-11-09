@@ -16,6 +16,50 @@ function nextMonthStart() {
   return new Date(d.getFullYear(), d.getMonth() + 1, 1).toLocaleDateString("en-CA");
 }
 
+/** الاستقطاع من المنبع: الشركة بتخصم النسبة من اليومية قبل الـ ١٤٪ (بدل الـ ٥٪ على الهامش). */
+function Withholding({ v, onSaved }: { v: SettingsView; onSaved: () => void }) {
+  const [from, setFrom] = useState(v.withholding[0]?.effectiveFrom ?? nextMonthStart());
+  const [pct, setPct] = useState(String((v.current.wht ?? 300) / 100));
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+  return (
+    <Panel title="الاستقطاع من المنبع (٣٪)" hint="الشركة بتخصمه من اليومية قبل ما تزود الـ ١٤٪ — من تاريخه الـ ٥٪ على الهامش بتتشال">
+      <div className="px-4 py-3 text-sm leading-[1.9] border-b border-line">
+        مثال: يومية ١٠٠٠ ← الشركة تخصم ٣٪ (٣٠) وتزود ١٤٪ (١٤٠) وتدفع <b>١١١٠</b>. الـ ٣٠ بتطلع من ربحنا، وصاحب المعدة بياخد يوميته كاملة.
+        <br />
+        دلوقتي: <b>{v.current.wht != null ? `${percentFromBp(v.current.wht)} استقطاع` : "لسه ٥٪ على الهامش"}</b>
+        {v.withholding.length > 0 && <span className="text-muted"> — {v.withholding.map((w) => `${percentFromBp(w.bp)} من ${w.effectiveFrom}`).join("، ")}</span>}
+      </div>
+      <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 bg-surface-2">
+        <Labeled label="يبتدي من يوم">
+          <TextInput type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-36" />
+        </Labeled>
+        <Labeled label="النسبة ٪">
+          <TextInput value={pct} onChange={(e) => setPct(e.target.value)} className="w-20" inputMode="decimal" />
+        </Labeled>
+        <Button
+          primary
+          onClick={async () => {
+            setError(null);
+            setOk(false);
+            try {
+              await api.setWithholding(from, toBp(pct));
+              setOk(true);
+              onSaved();
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
+        >
+          حفظ
+        </Button>
+      </div>
+      {error && <ErrorBox message={error} />}
+      {ok && <div className="rounded-card border border-in bg-in-soft mx-4 my-2 px-4 py-2 font-semibold text-sm">اتسجل — الشهور اللي من التاريخ ده اتحسبت تاني.</div>}
+    </Panel>
+  );
+}
+
 function Rates({ v, onSaved }: { v: SettingsView; onSaved: () => void }) {
   const [from, setFrom] = useState(nextMonthStart());
   const [vat, setVat] = useState(String(v.current.vat / 100));
@@ -384,6 +428,7 @@ export default function Settings() {
     <div className="grid gap-5">
       <PageHeader title="الإعدادات" />
       <Rates v={v} onSaved={load} />
+      <Withholding v={v} onSaved={load} />
       <div className="grid gap-3.5 items-start grid-cols-2 max-[1000px]:grid-cols-1">
         <Backups />
         <Updates />

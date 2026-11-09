@@ -1,3 +1,4 @@
+import { withholdingAt } from "./master";
 import { contractManagers, managersReport } from "./managers";
 import { planUsage, PLANS } from "./plan";
 import { Db, monthOf, today } from "../db";
@@ -86,7 +87,9 @@ export function dashboardView(db: Db, month: string = monthOf(today()), now: str
       vatPt: sum((r) => r.vatPt),
       supplierCostPt: sum((r) => r.supplierCostPt),
       marginPt: sum((r) => r.marginPt),
-      tax5Pt: sum((r) => r.tax5Pt),
+      // ضريبتنا: ٥٪ على الهامش (الشهور القديمة) أو الاستقطاع من اليومية (٣٪)
+      tax5Pt: sum((r) => r.tax5Pt + (r.whtPt ?? 0)),
+      taxLabel: taxLabelOf(m?.rates),
       expensesPt: sum((r) => r.expensesPt) + generalExpensesPt,
       netPt: m?.monthNetPt ?? 0,
       carryInPt: m?.carryInPt ?? 0,
@@ -311,6 +314,12 @@ export type ClientsView = ReturnType<typeof clientsView>;
 
 // ---------------- الإدارة ----------------
 
+/** اسم الضريبة على ربحنا في الشهر ده */
+export function taxLabelOf(rates: { tax5: number; wht?: number | null } | undefined | null) {
+  if (rates?.wht != null) return `${(rates.wht / 100).toLocaleString("ar-EG")}٪ استقطاع من اليومية`;
+  return `${((rates?.tax5 ?? 500) / 100).toLocaleString("ar-EG")}٪ من الهامش`;
+}
+
 export function managementView(db: Db, month?: string, now: string = today()) {
   const books = computeBooks(db, now);
   const months = books.months.map((m) => m.month);
@@ -328,6 +337,8 @@ export function managementView(db: Db, month?: string, now: string = today()) {
 
   const rows = (m?.contracts ?? []).map((r) => ({
     ...r,
+    // الضريبة على ربحنا: ٥٪ هامش أو ٣٪ استقطاع (حسب الشهر)
+    tax5Pt: r.tax5Pt + (r.whtPt ?? 0),
     client: clients.get(r.clientId) ?? "",
     supplier: suppliers.get(r.supplierId) ?? "",
     equipment: equipment.get(r.equipmentId) ?? "",
@@ -382,6 +393,7 @@ export function managementView(db: Db, month?: string, now: string = today()) {
     months: books.months.map((x) => ({ month: x.month, closed: x.closed })),
     closed: !!m?.closed,
     rates: m?.rates ?? null,
+    taxLabel: taxLabelOf(m?.rates),
     rows,
     byEquipment,
     totals: {
@@ -653,6 +665,7 @@ export function taxView(db: Db, now: string = today()) {
   );
   return {
     totals: tf.totals,
+    whtPt: tf.whtPt,
     vatByClient: tf.vatByClient.map((g) => ({ ...g, name: clients.get(g.key)?.name ?? "", taxId: clients.get(g.key)?.tax_id ?? null })),
     vatByEquipment: tf.vatByEquipment.map((g) => ({ ...g, name: equipment.get(g.key)?.name ?? "", supplier: equipment.get(g.key)?.supplier ?? "" })),
     vatByMonth: tf.vatByMonth.map((g) => ({ ...g, month: g.key, paidPt: paidByMonth("vat", g.key) })),
@@ -680,7 +693,8 @@ export function settingsView(db: Db, now: string = today()) {
   const closed = (db.prepare("SELECT month FROM month_closes ORDER BY month DESC LIMIT 1").get() as { month: string } | undefined)?.month ?? null;
   return {
     plan: { key: usage.plan?.key ?? null, label: usage.plan?.label ?? null, limit: usage.limit, used: usage.used, prices: PLANS.map((p) => ({ label: p.label, pricePerMonth: p.pricePerMonth })) },
-    current: { vat: at("vat", now), tax5: at("tax5", now), management: at("management_share", now), investors: at("investors_share", now) },
+    current: { vat: at("vat", now), tax5: at("tax5", now), management: at("management_share", now), investors: at("investors_share", now), wht: withholdingAt(db, now) },
+    withholding: db.prepare("SELECT value_bp AS bp, effective_from AS effectiveFrom FROM withholding_rates ORDER BY effective_from DESC").all() as { bp: number; effectiveFrom: string }[],
     history: [...byDate.entries()].map(([effectiveFrom, v]) => ({
       effectiveFrom,
       vat: v.vat as number | undefined,

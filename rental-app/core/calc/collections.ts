@@ -15,6 +15,8 @@ export interface InvoiceLine {
   basePt: Piasters;
   vatPt: Piasters;
   totalPt: Piasters;
+  /** الاستقطاع اللي العميل خصمه (total = base − wht + vat) */
+  whtPt?: Piasters;
 }
 
 export interface PaymentLine {
@@ -92,7 +94,9 @@ export function allocatePayments(invoices: InvoiceLine[], payments: PaymentLine[
   return {
     invoices: inv.map((i) => {
       const collectedBasePt = i.totalPt === 0 ? 0 : portion(i.collectedPt, i.basePt, i.totalPt);
-      return { ...i, collectedBasePt, collectedVatPt: i.collectedPt - collectedBasePt };
+      // مع الاستقطاع: الدفعة بتغطي الأساس والـ ١٤٪ بنفس النسبة (والـ ٣٪ دفعها العميل للضرايب)
+      const collectedVatPt = !i.whtPt ? i.collectedPt - collectedBasePt : i.totalPt === 0 ? 0 : portion(i.collectedPt, i.vatPt, i.totalPt);
+      return { ...i, collectedBasePt, collectedVatPt };
     }),
     creditByClient: credit,
   };

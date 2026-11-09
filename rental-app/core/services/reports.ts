@@ -94,6 +94,8 @@ export function clientStatement(db: Db, clientId: number, asOf: string = today()
       contractId: i.contractId,
       basePt: i.basePt,
       vatPt: i.vatPt,
+      /** الاستقطاع اللي الشركة خصمته (٣٪ من اليومية) */
+      whtPt: i.basePt + i.vatPt - i.totalPt,
       totalPt: i.totalPt,
       collectedPt: i.collectedPt,
       creditedPt: i.creditedPt,
@@ -126,6 +128,7 @@ export function clientStatement(db: Db, clientId: number, asOf: string = today()
     totals: {
       basePt: sum(invoices, (i) => i.basePt),
       vatPt: sum(invoices, (i) => i.vatPt),
+      whtPt: sum(invoices, (i) => i.whtPt),
       invoicedPt,
       paidPt,
       remainingPt: invoicedPt - paidPt,
@@ -159,6 +162,8 @@ export function taxFile(db: Db, asOf: string = today(), books: Books = computeBo
       m.contracts.filter((r) => r.tax5Pt !== 0).map((r) => ({ contractId: r.contractId, code: r.code, month: m.month, marginPt: r.marginPt, tax5Pt: r.tax5Pt })),
     ),
     payments,
+    /** الاستقطاع اللي الشركات خصمته ودفعته للضرايب عننا */
+    whtPt: sum(books.invoices, (i) => i.basePt + i.vatPt - i.totalPt),
     totals: {
       vat: { invoicedPt: t.vatInvoicedPt, collectedPt: t.vatCollectedPt, paidPt: t.vatPaidPt, owedPt: t.vatInvoicedPt - t.vatPaidPt, heldPt: t.vatCollectedPt - t.vatPaidPt },
       tax5: { accruedPt: t.tax5AccruedPt, paidPt: t.tax5PaidPt, owedPt: t.tax5AccruedPt - t.tax5PaidPt },

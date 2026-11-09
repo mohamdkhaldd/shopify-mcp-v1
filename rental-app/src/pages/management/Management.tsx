@@ -29,7 +29,7 @@ function ContractsTable({ v }: { v: ManagementView }) {
               <th className="n">للشركة</th>
               <th className="n">لصاحب المعدة</th>
               <th className="n">الهامش</th>
-              <th className="n">٥٪</th>
+              <th className="n">الضريبة</th>
               <th className="n">مصروفات</th>
               <th className="n">الصافي</th>
             </tr>
@@ -365,7 +365,7 @@ export default function Management() {
           { header: "للشركة", key: "clientBasePt", money: true },
           { header: "لصاحب المعدة", key: "supplierCostPt", money: true },
           { header: "الهامش", key: "marginPt", money: true },
-          { header: "٥٪", key: "tax5Pt", money: true },
+          { header: v.taxLabel, key: "tax5Pt", money: true },
           { header: "مصروفات", key: "expensesPt", money: true },
           { header: "الصافي", key: "netPt", money: true },
         ],
@@ -417,7 +417,7 @@ export default function Management() {
 
       <div className="grid gap-3.5 grid-cols-4 max-[1000px]:grid-cols-2">
         <Kpi label="إجمالي الهامش" value={<Money pt={pounds(t.marginPt)} />} />
-        <Kpi tone="tax" label="٥٪ من الهامش" value={<Money pt={pounds(t.tax5Pt)} />} />
+        <Kpi tone="tax" label={v.taxLabel} value={<Money pt={pounds(t.tax5Pt)} />} />
         <Kpi label="مصروفات (عقود + عامة)" value={<Money pt={pounds(t.contractExpensesPt + t.generalExpensesPt)} />} sub={`عقود ${pounds(t.contractExpensesPt)} · عامة ${pounds(t.generalExpensesPt)}`} />
         <Kpi tone="hero" label={`نصيب الإدارة ${v.rates ? percentFromBp(v.rates.management) : ""}`} value={<Money pt={pounds(t.managementPt)} />} sub={<>المحصّل منه {pounds(t.releasableManagementPt)}</>} />
       </div>
@@ -436,7 +436,7 @@ export default function Management() {
                   <th>صاحبها</th>
                   <th>شغالة عند</th>
                   <th className="n">الهامش</th>
-                  <th className="n">٥٪</th>
+                  <th className="n">الضريبة</th>
                   <th className="n">مصروفات</th>
                   <th className="n">الصافي</th>
                 </tr>

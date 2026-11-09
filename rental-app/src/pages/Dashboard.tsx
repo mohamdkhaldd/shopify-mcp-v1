@@ -33,7 +33,7 @@ function Ladder({ v }: { v: DashboardView }) {
           <Rung label="المستحق من العملاء" valuePt={s} fromPt={0} scalePt={s} color="rgb(var(--fg) / 0.85)" />
           <Rung label="− المستحق للموردين" valuePt={l.supplierCostPt} fromPt={s - l.supplierCostPt} scalePt={s} color="rgb(var(--out))" tone="text-out" />
           <Rung label="= الهامش" valuePt={l.marginPt} fromPt={0} scalePt={s} color="rgb(var(--amber))" />
-          <Rung label="− ٥٪ من الهامش" valuePt={l.tax5Pt} fromPt={afterTax5} scalePt={s} color="rgb(var(--tax))" tone="text-tax" />
+          <Rung label={`− ${l.taxLabel}`} valuePt={l.tax5Pt} fromPt={afterTax5} scalePt={s} color="rgb(var(--tax))" tone="text-tax" />
           <Rung label="− المصروفات" valuePt={l.expensesPt} fromPt={afterTax5 - l.expensesPt} scalePt={s} color="rgb(var(--out))" tone="text-out" />
           {l.carryInPt > 0 && <Rung label="− خسارة متراحلة" valuePt={l.carryInPt} fromPt={l.netPt - l.carryInPt} scalePt={s} color="rgb(var(--out))" tone="text-out" />}
           <Rung label="= صافي الربح" valuePt={l.netPt - l.carryInPt} fromPt={0} scalePt={s} color="rgb(var(--in))" tone="text-in" total />

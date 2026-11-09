@@ -191,6 +191,11 @@ export default function Tax() {
         <Kpi label="منها قاعد في الخزنة" value={<Money pt={pounds(t.heldInTreasuryPt)} />} sub={`١٤٪ اتحصّلت ${pounds(t.vat.heldPt)} + ٥٪ ${pounds(t.tax5.owedPt)}`} />
         <Kpi label="١٤٪ لسه عند العملاء" value={<Money pt={pounds(vatWithClients)} />} sub="بتتحجز أول ما تتحصّل" />
       </div>
+      {v.whtPt !== 0 && (
+        <div className="rounded-card border border-line bg-surface px-4 py-3 text-sm leading-[1.9]">
+          الشركات خصمت <b className="text-tax">{pounds(v.whtPt)}</b> استقطاع (٣٪ من اليومية) ودفعتها للضرايب عننا — مش علينا ندفعها، وطالعة من ربحنا في تقرير الإدارة.
+        </div>
+      )}
 
       <Panel title='يعني إيه "فلوس ضرايب في الخزنة"؟'>
         <div className="px-4 py-3.5 leading-[2]">

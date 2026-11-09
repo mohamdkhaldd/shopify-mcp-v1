@@ -70,6 +70,7 @@ function Statement({ s }: { s: Selected }) {
 const STATUS = { paid: ["مدفوعة", "in"], partial: ["جزء", "amber"], unpaid: ["متدفعتش", "out"], credit: ["خصم (تسوية)", "tax"] } as const;
 
 function Invoices({ s }: { s: Selected }) {
+  const hasWht = s.invoices.some((i) => i.whtPt);
   return (
     <div className="overflow-x-auto">
       <table className="tbl">
@@ -79,6 +80,7 @@ function Invoices({ s }: { s: Selected }) {
             <th>الشهر</th>
             <th>العقد</th>
             <th className="n">قيمة الشغل</th>
+            {hasWht && <th className="n">خصم ٣٪</th>}
             <th className="n">ضريبة ١٤٪</th>
             <th className="n">الإجمالي</th>
             <th className="n">اتحصّل</th>
@@ -89,7 +91,7 @@ function Invoices({ s }: { s: Selected }) {
         <tbody>
           {s.invoices.length === 0 && (
             <tr>
-              <td colSpan={9} className="text-center text-muted py-6">
+              <td colSpan={hasWht ? 10 : 9} className="text-center text-muted py-6">
                 لسه مفيش فواتير — الفاتورة بتطلع من سركي الشهر.
               </td>
             </tr>
@@ -104,6 +106,7 @@ function Invoices({ s }: { s: Selected }) {
                   <Code>{i.code}</Code>
                 </td>
                 <td className="n">{pounds(i.basePt)}</td>
+                {hasWht && <td className="n text-out">{i.whtPt ? `− ${pounds(i.whtPt)}` : "—"}</td>}
                 <td className="n text-tax font-bold">{pounds(i.vatPt)}</td>
                 <td className="n font-bold">{pounds(i.totalPt)}</td>
                 <td className="n">{pounds(i.collectedPt)}</td>
@@ -322,7 +325,7 @@ export default function Clients() {
                 <b>{x.name}</b>
                 <small className="text-muted flex items-center gap-1.5">
                   <Pill>{x.kind === "company" ? "شركة" : "فرد"}</Pill>
-                  {x.vat_applies || x.tax5_applies ? [x.vat_applies && "١٤٪", x.tax5_applies && "٥٪"].filter(Boolean).join(" + ") : "من غير ضرايب"}
+                  {x.vat_applies || x.tax5_applies ? [x.vat_applies && "١٤٪", x.tax5_applies && "استقطاع ٣٪"].filter(Boolean).join(" + ") : "من غير ضرايب"}
                 </small>
                 <span className={`font-extrabold num ${x.remainingPt > 0 ? "text-out" : ""}`}>باقي عليه {pounds(x.remainingPt)}</span>
               </button>
@@ -334,7 +337,7 @@ export default function Clients() {
             actions={
               <>
                 <TaxSwitch label="عليه ١٤٪ قيمة مضافة" checked={!!c.vat_applies} onChange={(x) => setTaxes(x, !!c.tax5_applies)} />
-                <TaxSwitch label="عليه ٥٪ من الهامش" checked={!!c.tax5_applies} onChange={(x) => setTaxes(!!c.vat_applies, x)} />
+                <TaxSwitch label="عليه ٥٪ هامش / ٣٪ استقطاع" checked={!!c.tax5_applies} onChange={(x) => setTaxes(!!c.vat_applies, x)} />
                 <PrintButtons pdfName={`كشف حساب ${c.name}`} singlePage={false} />
                 <Button onClick={exportStatement}>Excel</Button>
                 <Button onClick={() => setForm("edit")}>تعديل</Button>
@@ -347,6 +350,11 @@ export default function Clients() {
             <PrintHeader title={`كشف حساب — ${c.name}`} subtitle={dateLabel(new Date().toLocaleDateString("en-CA"))} />
             <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] border-b border-line">
               <Fact label="قيمة الشغل">{pounds(s.totals.basePt)}</Fact>
+              {s.totals.whtPt !== 0 && (
+                <Fact label="خصم ٣٪ (الشركة دفعته للضرايب)" tone="text-out">
+                  − {pounds(s.totals.whtPt)}
+                </Fact>
+              )}
               <Fact label="ضريبة ١٤٪" tone="text-tax">
                 {pounds(s.totals.vatPt)}
               </Fact>

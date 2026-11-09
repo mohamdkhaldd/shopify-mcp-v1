@@ -88,7 +88,7 @@ describe("mockup scenario (3,000 / 2,500)", () => {
 
   it("client statement (no supplier data)", () => {
     const st = clientStatement(db, ids.amal, "2026-10-31", books);
-    expect(st.totals).toEqual({ basePt: egp(90_000), vatPt: egp(12_600), invoicedPt: egp(102_600), paidPt: egp(51_300), remainingPt: egp(51_300), creditPt: 0 });
+    expect(st.totals).toEqual({ basePt: egp(90_000), vatPt: egp(12_600), invoicedPt: egp(102_600), paidPt: egp(51_300), remainingPt: egp(51_300), creditPt: 0, whtPt: 0 });
     expect(JSON.stringify(st)).not.toContain("سيد");
   });
 

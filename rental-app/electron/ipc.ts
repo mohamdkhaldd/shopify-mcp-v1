@@ -5,7 +5,7 @@ import { formatPounds } from "../core/calc/money";
 import { closeMonth, recordAdjustment } from "../core/services/close";
 import { today } from "../core/db";
 import { deleteEntity, deletePreview, restoreDeleted } from "../core/services/deletion";
-import { createClient, createEquipment, createExpenseCategory, createInvestor, createSupplier, setRates, updateInvestor, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier, endContract, reopenContract, renameContract } from "../core/services/master";
+import { createClient, createEquipment, createExpenseCategory, createInvestor, createSupplier, setRates, setWithholding, updateInvestor, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier, endContract, reopenContract, renameContract } from "../core/services/master";
 import { ManagerShare, setContractManagers } from "../core/services/managers";
 import { markDelivered, Money, recordHold, recordTransfer, returnHold, saveAccount } from "../core/services/ledger";
 import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, recordTaxPayment, reinvestProfit } from "../core/services/ledger";
@@ -102,6 +102,7 @@ export function makeRegistry(db: Db) {
     activity: (a: { from?: string; to?: string }) => activityView(db, a),
     undo: (a: { actionId: string }) => undoAction(db, a.actionId).actionId,
     settings: () => settingsView(db),
+    setWithholding: (a: { effectiveFrom: string; bp: number }) => setWithholding(db, a.effectiveFrom, a.bp),
     setRates: (a: { effectiveFrom: string; vat: number; tax5: number; management: number }) =>
       setRates(db, a.effectiveFrom, { vat: a.vat, tax5: a.tax5, management_share: a.management, investors_share: 10_000 - a.management }),
 
@@ -196,6 +197,8 @@ function labelFor(db: Db, fn: string, a: any): string | null {
       return `دفع ضرايب ${a.tax === "vat" ? "١٤٪" : "٥٪"} ${egp(a.amountPt)}`;
     case "setRates":
       return `تغيير النسب من ${a.effectiveFrom}`;
+    case "setWithholding":
+      return `الاستقطاع ${a.bp / 100}٪ من ${a.effectiveFrom}`;
     case "delete": {
       try {
         return `حذف: ${deletePreview(db, a.entity, a.id).items[0] ?? ""}`;
@@ -218,7 +221,7 @@ export function callCore(db: Db, registry: Registry, fn: string, args: unknown) 
     if (!label) return { ok: true, value: f(args ?? {}) };
     const r = runAction(db, label, () => f(args ?? {}));
     // closing a month, corrections and rate changes stay in the log but can't be undone
-    return { ok: true, value: r.value, actionId: r.actionId, label, undoable: !["closeMonth", "adjustment", "setRates"].includes(fn) };
+    return { ok: true, value: r.value, actionId: r.actionId, label, undoable: !["closeMonth", "adjustment", "setRates", "setWithholding"].includes(fn) };
   } catch (err) {
     if (err instanceof UserError) return { ok: false, message: err.message, code: err.code };
     // SQLite RAISE(ABORT, '...') messages from the guard triggers are Arabic and meant for the user

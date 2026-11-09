@@ -21,6 +21,16 @@ CREATE TABLE IF NOT EXISTS rate_settings (
   UNIQUE (key, effective_from)
 );
 
+-- استقطاع من المنبع: الشركة (العميل) بتخصم النسبة دي من اليومية قبل الـ ١٤٪
+-- وبتدفعها للضرايب عننا. من تاريخ أول سطر هنا، ضريبة الـ ٥٪ على الهامش
+-- بتتشال وبيتحسب الاستقطاع بدلها (الشهور اللي قبله زي ما هي).
+CREATE TABLE IF NOT EXISTS withholding_rates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  value_bp INTEGER NOT NULL CHECK (typeof(value_bp) = 'integer' AND value_bp BETWEEN 0 AND 10000),
+  effective_from TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS investors (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -524,6 +534,8 @@ export function setupDatabase(db: Db): Db {
   installAudit(db, business);
   const seed = db.prepare("INSERT OR IGNORE INTO rate_settings (key, value_bp, effective_from) VALUES (?, ?, '2000-01-01')");
   for (const [k, v] of Object.entries(DEFAULT_RATES)) seed.run(k, v);
+  // ٣٪ استقطاع بدل الـ ٥٪ على الهامش، من نوفمبر ٢٠٢٦ (بيتغير من الإعدادات)
+  db.prepare("INSERT OR IGNORE INTO withholding_rates (value_bp, effective_from) VALUES (300, '2026-11-01')").run();
   // انستا باي: ٠٫١٪ من المبلغ، أقل حاجة ٥٠ قرش وأقصى ٢٠ جنيه (بتتغير من الإعدادات)
   const acc = db.prepare("INSERT OR IGNORE INTO treasury_accounts (key, name, fee_bp, fee_min_pt, fee_max_pt, sort) VALUES (?, ?, ?, ?, ?, ?)");
   // خزنة التأجير حسابين: انستا باي (عليه عمولة التحويل) ومحفظة.

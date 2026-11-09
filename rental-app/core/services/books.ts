@@ -5,7 +5,7 @@ import { capitalWeight, CapitalMovement, daysPresent } from "../calc/timeWeight"
 import { allocatePayments, InvoiceCollection, releasable } from "../calc/collections";
 import { sheetTotals } from "../calc/sarki";
 import { portion, Piasters } from "../calc/money";
-import { rateAt } from "./master";
+import { rateAt, withholdingAt } from "./master";
 import { toSarkiDay, WorkLogRow } from "./sarki";
 
 // Everything on every page is derived here from the raw rows, so there is a
@@ -26,7 +26,7 @@ export interface ContractMonthRow extends ContractMonthResult {
 export interface MonthResult {
   month: string;
   closed: boolean;
-  rates: { vat: number; tax5: number; investors: number; management: number };
+  rates: { vat: number; tax5: number; investors: number; management: number; wht?: number | null };
   contracts: ContractMonthRow[];
   generalExpensesPt: Piasters;
   monthNetPt: Piasters;
@@ -104,6 +104,7 @@ export function computeBooks(db: Db, asOf: string = today()) {
       tax5: rateAt(db, "tax5", start),
       investors: rateAt(db, "investors_share", start),
       management: rateAt(db, "management_share", start),
+      wht: withholdingAt(db, start),
     };
     const rows: ContractMonthRow[] = [];
     for (const c of contracts) {
@@ -122,6 +123,7 @@ export function computeBooks(db: Db, asOf: string = today()) {
         tax5Applies: !!client.tax5_applies,
         vatBp: rates.vat,
         tax5Bp: rates.tax5,
+        whtBp: rates.wht,
       });
       rows.push({
         ...r,
@@ -164,7 +166,7 @@ export function computeBooks(db: Db, asOf: string = today()) {
   // ---- invoices + collections ----
   const issued = new Map(q("SELECT * FROM invoices").map((i) => [`${i.contract_id}|${i.month}`, i]));
   const lines = monthResults.flatMap((m) =>
-    m.contracts.map((r) => ({ clientId: r.clientId, contractId: r.contractId, month: m.month, basePt: r.clientBasePt, vatPt: r.vatPt, totalPt: r.invoiceTotalPt })),
+    m.contracts.map((r) => ({ clientId: r.clientId, contractId: r.contractId, month: m.month, basePt: r.clientBasePt, vatPt: r.vatPt, totalPt: r.invoiceTotalPt, whtPt: r.whtPt ?? 0 })),
   );
   // a negative month (a correction lowering a closed month) is a credit note
   const creditNotes = lines.filter((l) => l.totalPt < 0);

@@ -117,6 +117,8 @@ export const api = {
   },
   settings: () => call<SettingsView>("settings"),
   setRates: (v: { effectiveFrom: string; vat: number; tax5: number; management: number }) => call("setRates", v),
+  /** الاستقطاع من اليومية (٣٪) بدل الـ ٥٪ على الهامش، من تاريخ */
+  setWithholding: (effectiveFrom: string, bp: number) => call("setWithholding", { effectiveFrom, bp }),
   setSupplierRate: (contractId: number, from: string, to: string, v: { dayRatePt?: number | null; overtimeRatePt?: number | null }) =>
     call("setSupplierRate", { contractId, from, to, ...v }),
   deletePreview: (entity: Deletable, id: number) => call<DeletePreview>("deletePreview", { entity, id }),
