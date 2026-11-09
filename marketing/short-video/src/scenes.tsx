@@ -1,6 +1,7 @@
 import React from "react";
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame, random } from "remotion";
 import { Bg, C, CountUp, Header, Logo, Phone, Pill, clamp, usePop, fmt } from "./ui";
+import { Burst, Flash, Shine } from "./fx";
 
 // ───────────────────────── 1. hook: a wrong day in the sarki = money flying out
 export const Hook: React.FC = () => {
@@ -47,6 +48,8 @@ export const Hook: React.FC = () => {
         ))}
       </div>
       <Bills start={44} />
+      <Burst at={44} x={540} y={800} glyphs={["💸","💵","💸"]} count={10} spread={600} size={40} seed="h" />
+      <Flash at={28} strength={0.25} />
     </Bg>
   );
 };
@@ -101,6 +104,24 @@ export const Question: React.FC = () => {
   return (
     <Bg tint={C.purple}>
       <Marks />
+      {/* opening beat while "طب لو سألتك دلوقتي" is said */}
+      <div
+        style={{
+          position: "absolute",
+          top: 560,
+          width: "100%",
+          textAlign: "center",
+          fontSize: 520,
+          fontWeight: 900,
+          color: C.amber,
+          lineHeight: 1,
+          textShadow: "0 20px 90px #F59E0B88",
+          opacity: interpolate(f, [0, 6, 34, 44], [0, 1, 1, 0], clamp),
+          transform: `scale(${interpolate(f, [0, 8, 34, 44], [0.3, 1, 1.08 + Math.sin(f / 3) * 0.04, 2.2], clamp)}) rotate(${Math.sin(f / 5) * 6}deg)`,
+        }}
+      >
+        ؟
+      </div>
       <div style={{ position: "absolute", top: 330, width: "100%", textAlign: "center" }}>
         <div style={{ fontSize: 150, fontWeight: 900, color: C.green, transform: `scale(${a})`, textShadow: "0 10px 60px #22C55E66" }}>ليك كام؟</div>
         <div style={{ fontSize: 46, fontWeight: 700, opacity: a, marginTop: -10, color: "#CBD5E1" }}>عند الشركات</div>
@@ -112,6 +133,9 @@ export const Question: React.FC = () => {
           <Pill bg={C.white} size={64}>تعرف ترد؟</Pill>
         </div>
       </div>
+      <Burst at={42} x={540} y={430} colors={["#22C55E","#BBF7D0","#FFFFFF"]} seed="q1" />
+      <Burst at={76} x={540} y={720} colors={["#EF4444","#FECACA","#FFFFFF"]} seed="q2" />
+      <Burst at={119} x={540} y={990} count={24} seed="q3" />
     </Bg>
   );
 };
@@ -179,6 +203,8 @@ export const Pain: React.FC = () => {
           <CountUp from={0} to={-18500} start={100} dur={36} suffix=" ج" />
         </div>
       </div>
+      <Burst at={100} x={540} y={1380} glyphs={["💸","🔻","💸"]} count={9} spread={480} size={36} seed="p" />
+      <Flash at={96} strength={0.3} />
     </Bg>
   );
 };
@@ -202,6 +228,7 @@ export const MonthEnd: React.FC = () => {
         <div style={{ fontSize: 64, fontWeight: 900 }}>تجمّع… وتطرح… وتعيد 😩</div>
         <div style={{ fontSize: 52, fontWeight: 700, color: "#FCD34D", marginTop: 16 }}>عشان تعرف كسبت ولا لأ</div>
       </div>
+      <Burst at={60} x={540} y={820} colors={["#EF4444","#FCD34D","#FFFFFF"]} count={22} seed="m" />
     </Bg>
   );
 };
@@ -230,6 +257,8 @@ export const Reveal: React.FC = () => {
         <div style={{ marginTop: 34, fontSize: 44, fontWeight: 700, color: "#BFDBFE" }}>لابتوب · تابلت · موبايل</div>
       </div>
       <AbsoluteFill style={{ background: C.white, opacity: flash }} />
+      <Burst at={8} x={540} y={730} count={36} spread={760} size={26} colors={["#0B5FFF","#38BDF8","#FFFFFF"]} seed="r1" />
+      <Burst at={50} x={540} y={1290} count={16} seed="r2" />
     </Bg>
   );
 };
@@ -289,7 +318,9 @@ export const Sarki: React.FC = () => {
             ✓ اتحسبت لوحدها بالقرش
           </Pill>
         </div>
+        <Shine at={104} />
       </div>
+      <Burst at={100} x={540} y={1210} colors={["#22C55E","#BBF7D0","#FACC15"]} count={26} seed="s" />
     </Bg>
   );
 };
@@ -324,6 +355,8 @@ export const Home: React.FC = () => {
                 borderRadius: 40,
                 padding: "24px 46px",
                 borderRight: `22px solid ${c.color}`,
+                position: "relative",
+                overflow: "hidden",
                 boxShadow: "0 40px 90px rgba(0,0,0,.5)",
                 transform: `translateX(${(1 - p) * 1100}px)`,
                 opacity: p,
@@ -336,6 +369,7 @@ export const Home: React.FC = () => {
               <div style={{ fontSize: 92, lineHeight: 1.2, fontWeight: 900, color: c.color === C.amber ? "#B45309" : c.color === C.sky ? "#0369A1" : "#15803D", marginTop: 4 }}>
                 <CountUp to={c.v} start={c.d + 4} dur={28} suffix=" ج" />
               </div>
+              <Shine at={c.d + 12} />
             </div>
           );
         })}
@@ -345,6 +379,9 @@ export const Home: React.FC = () => {
           من غير ما تقفل الشهر
         </Pill>
       </div>
+      <Burst at={89} x={540} y={520} colors={["#22C55E","#BBF7D0","#FFFFFF"]} seed="h1" />
+      <Burst at={111} x={540} y={800} colors={["#38BDF8","#BAE6FD","#FFFFFF"]} seed="h2" />
+      <Burst at={146} x={540} y={1080} colors={["#F59E0B","#FDE68A","#FFFFFF"]} seed="h3" />
     </Bg>
   );
 };
@@ -387,6 +424,7 @@ export const Tax: React.FC = () => {
           <CountUp to={37051.77} start={14} dur={40} dec={2} suffix=" ج" />
         </div>
         <div style={{ fontSize: 44, fontWeight: 700, color: "#64748B" }}>مش بتاعتنا — ممنوع تتصرف</div>
+        <Shine at={34} />
         <div
           style={{
             position: "absolute",
@@ -411,6 +449,7 @@ export const Tax: React.FC = () => {
         <div style={{ fontSize: 56, fontWeight: 900 }}>محجوزة لوحدها في الخزنة</div>
         <div style={{ fontSize: 46, fontWeight: 700, color: "#DDD6FE", marginTop: 10 }}>عشان متصرفهاش وتتفاجئ</div>
       </div>
+      <Burst at={52} x={190} y={620} colors={["#7C3AED","#DDD6FE","#FFFFFF"]} count={22} seed="t" />
     </Bg>
   );
 };
@@ -430,6 +469,8 @@ export const Secure: React.FC = () => {
       <div style={{ position: "absolute", top: 1420, width: "100%", textAlign: "center", transform: `scale(${glow})` }}>
         <Pill bg={C.white} color={C.ink} size={46}>🔐 باسورد لصاحب الشركة · ومحدش غيرك يشوف</Pill>
       </div>
+      <Burst at={64} x={540} y={980} colors={["#38BDF8","#FFFFFF","#22C55E"]} count={26} seed="sc" />
+      <Flash at={62} strength={0.35} />
     </Bg>
   );
 };
@@ -460,9 +501,13 @@ export const Cta: React.FC = () => {
             fontWeight: 900,
             transform: `scale(${btn * pulse})`,
             boxShadow: "0 30px 80px #22C55E66",
+            position: "relative",
+            overflow: "hidden",
           }}
         >
           اطلب كود التجربة
+          <Shine at={50} />
+          <Shine at={110} />
         </div>
       </div>
       <div style={{ position: "absolute", top: 1180, width: "100%", textAlign: "center", opacity: btn }}>
@@ -470,6 +515,7 @@ export const Cta: React.FC = () => {
         <div style={{ fontSize: 92, fontWeight: 900, direction: "ltr", letterSpacing: 2 }}>+20 100 227 8559</div>
         <div style={{ fontSize: 50, fontWeight: 900, marginTop: 20, direction: "ltr", color: "#BFDBFE" }}>MK-Tech</div>
       </div>
+      <Burst at={36} x={540} y={1060} count={44} spread={700} colors={["#22C55E","#FACC15","#38BDF8","#FFFFFF","#EF4444"]} seed="c" />
     </Bg>
   );
 };

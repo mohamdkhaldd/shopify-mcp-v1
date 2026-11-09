@@ -34,3 +34,12 @@ No music: only sound design (whooshes, hits, clicks, paper, coins, locks).
 | typing-smartphone.mp3 | 1393 | Smartphone typing | 4.55 |
 | success-correct-tone.mp3 | 2870 | Correct answer tone | 2.01 |
 | success-confirmation.mp3 | 2867 | Confirmation tone | 1.33 |
+| sparkle-whoosh.mp3 | 2350 | Magic sparkle whoosh | 3.53 |
+| camera-shutter.mp3 | 1133 | Camera shutter click | 0.39 |
+| glitch-small.mp3 | 2595 | Small electric glitch | 1.07 |
+| glitch-quick.mp3 | 2946 | Virtual quick glitch | 2.09 |
+| zoom-impact.mp3 | 772 | Quick zoom impact | 1.25 |
+| sweep-fast.mp3 | 174 | Fast sweep transition | 1.04 |
+| whoosh-arrow.mp3 | 1491 | Arrow whoosh | 1.15 |
+| whoosh-air.mp3 | 1489 | Air woosh | 2.35 |
+| glitch-intro-text.mp3 | 2950 | Intro text glitch | 4.62 |
