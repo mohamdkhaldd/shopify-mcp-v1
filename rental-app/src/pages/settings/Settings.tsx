@@ -311,6 +311,34 @@ function CompanyPassword() {
   );
 }
 
+/** كروت الباقات بأسعارها في الشهر — الباقة اللي العميل عليها خضرا وفيها باقي كام يوم. */
+function PlanCards({ current, prices, expiresAt }: { current: string | null; prices: SettingsView["plan"]["prices"]; expiresAt: string | null }) {
+  const left = expiresAt ? Math.ceil((new Date(`${expiresAt.slice(0, 10)}T23:59:59`).getTime() - Date.now()) / 86400000) : null;
+  return (
+    <div className="pt-2">
+      <div className="text-sm font-semibold mb-2">الباقات (الاشتراك بالشهر)</div>
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        {prices.map((p) => {
+          const on = p.key === current;
+          return (
+            <div key={p.key} className={`rounded-xl border-2 p-3 text-center ${on ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-slate-200"}`}>
+              {on && <div className="text-xs font-bold text-emerald-700 mb-1">✓ باقتك</div>}
+              <div className="text-sm font-semibold">{p.label.replace(/^باقة /, "")}</div>
+              <div className="text-xl font-bold num mt-1">{p.pricePerMonth.toLocaleString("en-US")} ج</div>
+              <div className="text-xs text-muted">في الشهر</div>
+              {on && (
+                <div className={`text-xs font-semibold mt-1.5 ${left != null && left <= 3 ? "text-out" : "text-emerald-700"}`}>
+                  {left == null ? "من غير ميعاد انتهاء" : left > 0 ? `باقي ${left} يوم` : "الاشتراك خلص"}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function License({ plan }: { plan: SettingsView["plan"] }) {
   const [s, setS] = useState<LicenseStatus | null>(null);
   useEffect(() => {
@@ -342,10 +370,9 @@ function License({ plan }: { plan: SettingsView["plan"] }) {
           </div>
         )}
         {plan.limit != null && plan.used >= plan.limit && (
-          <div className="text-sm text-out font-semibold">
-            الباقة خلصت — عشان تضيف معدة لازم ترقّي. الأسعار في الشهر: {plan.prices.map((p) => `${p.label} ${p.pricePerMonth.toLocaleString("en-US")} ج`).join(" · ")}
-          </div>
+          <div className="text-sm text-out font-semibold">الباقة خلصت — عشان تضيف معدة لازم ترقّي لباقة أكبر. كلّم MK-Tech.</div>
         )}
+        <PlanCards current={plan.key ?? s.plan ?? null} prices={plan.prices} expiresAt={s.expiresAt} />
         <div className="text-xs text-muted">البرنامج بيتأكد من الترخيص لوحده كل ما يكون فيه نت، ويقدر يشتغل من غير نت لحد ١٤ يوم.</div>
       </div>
     </Panel>

@@ -692,7 +692,7 @@ export function settingsView(db: Db, now: string = today()) {
   const at = (key: string, date: string) => rows.find((r) => r.key === key && r.effective_from <= date)?.value_bp ?? 0;
   const closed = (db.prepare("SELECT month FROM month_closes ORDER BY month DESC LIMIT 1").get() as { month: string } | undefined)?.month ?? null;
   return {
-    plan: { key: usage.plan?.key ?? null, label: usage.plan?.label ?? null, limit: usage.limit, used: usage.used, prices: PLANS.map((p) => ({ label: p.label, pricePerMonth: p.pricePerMonth })) },
+    plan: { key: usage.plan?.key ?? null, label: usage.plan?.label ?? null, limit: usage.limit, used: usage.used, prices: PLANS.map((p) => ({ key: p.key as string, label: p.label as string, max: p.max as number | null, pricePerMonth: p.pricePerMonth as number })) },
     current: { vat: at("vat", now), tax5: at("tax5", now), management: at("management_share", now), investors: at("investors_share", now), wht: withholdingAt(db, now) },
     withholding: db.prepare("SELECT value_bp AS bp, effective_from AS effectiveFrom FROM withholding_rates ORDER BY effective_from DESC").all() as { bp: number; effectiveFrom: string }[],
     history: [...byDate.entries()].map(([effectiveFrom, v]) => ({
