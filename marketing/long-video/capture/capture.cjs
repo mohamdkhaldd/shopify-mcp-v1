@@ -103,6 +103,11 @@ let n = 0;
 
   await step("password", async () => {
     await click(nav("الإعدادات"), "الإعدادات");
+    for (const t of ["النسب", "النسخ الاحتياطي", "المزامنة بين الأجهزة", "الترخيص", "التحديثات"]) {
+      const sec = p.locator("section", { has: p.locator("h2", { hasText: t }) }).first();
+      await sec.scrollIntoViewIfNeeded();
+      await shot("view", sec, t);
+    }
     const panel = p.locator("section", { hasText: "باسورد الشركة" });
     await panel.scrollIntoViewIfNeeded();
     await shot("view", panel);
