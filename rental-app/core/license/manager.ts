@@ -1,3 +1,4 @@
+import { cleanSheet, READ_ERRORS, ReadRequest, ReadResult } from "../ai/sarkiRead";
 import type { Db } from "../db";
 import { pbkdf2 } from "@noble/hashes/pbkdf2";
 import { sha256 } from "@noble/hashes/sha256";
@@ -135,7 +136,7 @@ export function createLicenseManager(o: LicenseOptions) {
 
   /** null = no answer (no internet) */
   /** null = مفيش رد (مفيش نت، أو السيرفر اتأخر أكتر من timeoutMs) — عمره ما بيعلّق للأبد. */
-  async function call<T extends { ok: boolean }>(body: Record<string, unknown>, timeoutMs = 15_000): Promise<T | null> {
+  async function call<T extends { ok: boolean }>(body: Record<string, unknown>, timeoutMs = 15_000, url = o.url): Promise<T | null> {
     const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<null>((resolve) => {
@@ -146,7 +147,7 @@ export function createLicenseManager(o: LicenseOptions) {
     });
     const request = (async () => {
       try {
-        const res = await doFetch(o.url, {
+        const res = await doFetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${o.anonKey}`, apikey: o.anonKey },
           body: JSON.stringify({ deviceId: o.deviceId, ...body }),
@@ -327,7 +328,22 @@ export function createLicenseManager(o: LicenseOptions) {
     return status();
   }
 
-  return { status, activate, refresh, credentials, setPassword, checkPassword, signOut, savedKey: () => get("license_key") };
+  /** صورة السركي الورقي ← Claude يقراها (على السيرفر). مش بيسجل حاجة. */
+  async function readSarki(r: ReadRequest): Promise<ReadResult> {
+    const key = get("license_key");
+    if (!key) return { ok: false, message: "البرنامج مش متفعّل" };
+    const a = await call<{ ok: true; sheet: unknown } | { ok: false; error: string }>(
+      { key, image: r.image, mediaType: r.mediaType, month: r.month, hint: r.hint },
+      150_000,
+      o.url.replace(/\/license$/, "/sarki-read"),
+    );
+    if (!a) return { ok: false, message: OFFLINE };
+    if (!a.ok) return { ok: false, message: READ_ERRORS[a.error] ?? READ_ERRORS.server };
+    const days = r.month ? new Date(Date.UTC(+r.month.slice(0, 4), +r.month.slice(5, 7), 0)).getUTCDate() : 31;
+    return { ok: true, sheet: cleanSheet(a.sheet, days) };
+  }
+
+  return { status, activate, refresh, credentials, setPassword, checkPassword, signOut, readSarki, savedKey: () => get("license_key") };
 }
 
 export type LicenseManager = ReturnType<typeof createLicenseManager>;

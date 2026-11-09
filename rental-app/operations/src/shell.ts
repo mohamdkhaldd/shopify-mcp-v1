@@ -3,7 +3,15 @@
 export type ShellInfo = { product: string | null; products: string[]; locked?: boolean; hasPassword?: boolean };
 type ShellResult = { ok: true } | { ok: false; message?: string };
 
+/** What Claude read off a paper sarki photo (same shape as core/ai/sarkiRead.ts in the rental code). */
+export interface ReadDay { day: number; worked: boolean; hours: number | null; overtime: number | null; site: string | null; note: string | null; unclear: boolean }
+export interface ReadSheet { month: string | null; equipment: string | null; person: string | null; site: string | null; days: ReadDay[]; warnings: string[] }
+export type ReadResult = { ok: true; sheet: ReadSheet } | { ok: false; message: string };
+
 export const shell = {
+  /** صورة السركي الورقي (data URL أو base64) ← Claude يقراها على السيرفر. مش بيسجل حاجة. */
+  readSarki: (r: { image: string; mediaType: string; month?: string; hint?: string }): Promise<ReadResult> =>
+    window.api ? window.api.invoke("shell:readSarki", r) : Promise.resolve({ ok: false, message: "قراية الصور شغالة في البرنامج نفسه بس" }),
   info: (): Promise<ShellInfo | null> => window.api?.invoke("shell:info") ?? Promise.resolve(null),
   /** "قفل": the lock screen until the company password is typed */
   lock: () => window.api?.invoke("shell:lock"),

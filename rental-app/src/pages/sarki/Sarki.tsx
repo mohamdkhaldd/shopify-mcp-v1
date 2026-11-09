@@ -9,6 +9,7 @@ import { dateLabel, monthLabel, pounds, unitLabel } from "../../utils/format";
 import { milliToHours } from "../../utils/input";
 import { ClientSheet, SupplierSheet } from "./Sheets";
 import { ClientBulk, SupplierBulk } from "./BulkTools";
+import { ReadPhoto } from "./ReadPhoto";
 import NewContract from "./NewContract";
 import Modal from "../../components/Modal";
 import { Labeled, TextInput } from "../../components/Field";
@@ -159,6 +160,7 @@ function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki;
       </div>
       {tab === "client" ? (
         <>
+          {!v.closed && <ReadPhoto key={`read-${c.id}-${v.month}`} v={v} onDone={onDone} onError={onError} />}
           {!v.closed && <ClientBulk key={`${c.id}-${v.month}`} v={v} onDone={onDone} onError={onError} />}
           <div className="overflow-x-auto">
             <ClientSheet v={v} onSaved={reload} onError={onError} onDeleteDay={(id) => onDelete({ entity: "work_logs", id })} />

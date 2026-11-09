@@ -13,6 +13,7 @@ import { startDeviceSync } from "./sync";
 import { deviceIdentity } from "./device";
 import { createLicenseManager, LicenseManager, LicenseStatus, Product } from "../core/license/manager";
 import { licenseServer } from "../core/license/config";
+import type { ReadRequest } from "../core/ai/sarkiRead";
 import { OperationsBackend, operationsDbPath, startOperations } from "./operations";
 import { unsyncedChanges } from "../core/shell/unsynced";
 import { createPass } from "../core/shell/lock";
@@ -175,6 +176,8 @@ app.whenReady().then(async () => {
     if (r.ok) unlocked = true;
     return r;
   });
+  // صورة السركي الورقي ← Claude يقراها (التأجير والتشغيل الاتنين)
+  ipcMain.handle("shell:readSarki", (_e, r: ReadRequest) => (unlocked ? license.readSarki(r) : { ok: false, message: "ادخل الأول" }));
   ipcMain.handle("shell:setPassword", (_e, { current, next }: { current: string; next: string }) =>
     unlocked ? license.setPassword(current, next) : { ok: false, message: "ادخل الأول" },
   );

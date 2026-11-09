@@ -1,3 +1,4 @@
+import type { ReadRequest } from "../core/ai/sarkiRead";
 import initSqlJs from "sql.js";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import { createClient } from "@supabase/supabase-js";
@@ -152,6 +153,8 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
       flush();
       return r;
     },
+    // صورة السركي الورقي ← Claude يقراها (التأجير والتشغيل الاتنين)
+    "shell:readSarki": (r: ReadRequest) => (unlocked ? license.readSarki(r) : { ok: false, message: "ادخل الأول" }),
     "shell:setPassword": async ({ current, next }: { current: string; next: string }) => {
       if (!unlocked) return { ok: false, message: "ادخل الأول" };
       const r = await license.setPassword(current, next);
