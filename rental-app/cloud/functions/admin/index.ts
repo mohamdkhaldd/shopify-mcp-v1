@@ -2,7 +2,7 @@
 // الدخول بكود + باسورد (متخزنين hash في licensing.secrets)، والرد توكن جلسة
 // موقّع HMAC بمفتاح في licensing.secrets (admin_session_key) — صالح ٣٠ يوم.
 // كل الكلام مع قاعدة البيانات من هنا (SUPABASE_DB_URL)؛ الصفحة نفسها
-// (public/admin) مفيهاش أي مفتاح سري. ٨ محاولات غلط في ربع ساعة = قفل مؤقت.
+// (admin-web) مفيهاش أي مفتاح سري. ٨ محاولات غلط في ربع ساعة = قفل مؤقت.
 // Deployed with the Supabase MCP tool (verify_jwt off: الحماية بالتوكن ده).
 import postgres from "npm:postgres@3.4.5";
 
@@ -76,7 +76,10 @@ async function customers() {
     select l.id, l.key, l.customer, l.display_name, l.logo_url, l.products, l.max_devices, l.expires_at, l.revoked, l.renews,
            l.plan, l.max_equipment, l.note, l.created_at, l.data_from, (l.password_hash is not null) as has_password,
            (select count(*) from public.license_devices d where d.license_id = l.id and not d.revoked)::int as devices
-    from public.licenses l order by l.id`;
+    from public.licenses l
+    -- عملاء التجربة مش بيظهروا (to_jsonb: يشتغل حتى قبل ما العمود يتعمل)
+    where not coalesce((to_jsonb(l) ->> 'is_test')::boolean, false)
+    order by l.id`;
   const owners = new Map<number, any>();
   for (const l of lic) {
     const owner = l.data_from ?? l.id;
@@ -141,7 +144,10 @@ Deno.serve(async (req) => {
         return json({ ok: true, company: c?.data ?? {}, customers: await customers(), plans: PLANS });
       }
       case "company.save": {
-        await sql`update licensing.mk_company set data = ${sql.json(b.data ?? {})}, updated_at = now() where id = 1`;
+        const data = { ...(b.data ?? {}) };
+        const logo = await uploadLogo(b.logo);
+        if (logo) data.logoUrl = logo;
+        await sql`update licensing.mk_company set data = ${sql.json(data)}, updated_at = now() where id = 1`;
         return json({ ok: true });
       }
       case "customer.create": {

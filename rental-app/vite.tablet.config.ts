@@ -42,10 +42,21 @@ const offlineCopy = (): Plugin => ({
   },
 });
 
+// لوحة إدارة MK (admin-web/): صفحة لوحدها على الموقع بس (/admin/)، مش جوه
+// شاشات البرنامج ولا من نسخته اللي بتشتغل من غير نت (ملهاش أي مفتاح سري)
+const adminPage = (): Plugin => ({
+  name: "admin-page",
+  apply: "build",
+  writeBundle(opts) {
+    if (process.env.PREVIEW) return;
+    fs.cpSync(path.resolve(__dirname, "admin-web"), path.join(opts.dir!, "admin"), { recursive: true });
+  },
+});
+
 export default defineConfig({
   root: path.resolve(__dirname, "tablet"),
   publicDir: path.resolve(__dirname, "public"),
-  plugins: [operationsShims(), react(), offlineCopy()],
+  plugins: [operationsShims(), react(), offlineCopy(), adminPage()],
   base: "./",
   define: {
     __APP_VERSION__: JSON.stringify(process.env.APP_VERSION ?? "0.0.0"),
