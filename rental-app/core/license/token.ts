@@ -20,6 +20,9 @@ export interface LicensePayload {
   /** the programs this code opens (older tokens: none, meaning rental only) */
   products?: Product[];
   device: string;
+  /** باقة التأجير (p5…p20plus) وأقصى عدد معدات — null = من غير حد */
+  plan?: string | null;
+  maxEquipment?: number | null;
   /** last day of the subscription (yyyy-mm-dd), null = open-ended */
   expiresAt: string | null;
   iat: number;

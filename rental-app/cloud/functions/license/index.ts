@@ -66,6 +66,8 @@ Deno.serve(async (req) => {
       exp?: number;
       maxDevices?: number;
       products?: string[];
+      plan?: string | null;
+      maxEquipment?: number | null;
       hasPassword?: boolean;
       sync?: { email: string; password: string };
       syncByProduct?: Record<string, { email: string; password: string }>;
@@ -75,10 +77,10 @@ Deno.serve(async (req) => {
       const [s] = await sql`select v from licensing.secrets where k = 'signing_key'`;
       privateKey = ed.etc.hexToBytes(s.v);
     }
-    const payload = { v: 1, lic: r.licenseId, customer: r.customer, name: r.name, products: r.products ?? ["rental"], device: body.deviceId, expiresAt: r.expiresAt ?? null, iat: r.iat, exp: r.exp };
+    const payload = { v: 1, lic: r.licenseId, customer: r.customer, name: r.name, products: r.products ?? ["rental"], device: body.deviceId, expiresAt: r.expiresAt ?? null, plan: r.plan ?? null, maxEquipment: r.maxEquipment ?? null, iat: r.iat, exp: r.exp };
     const bytes = new TextEncoder().encode(JSON.stringify(payload));
     const token = `${b64url(bytes)}.${b64url(ed.sign(bytes, privateKey))}`;
-    return json({ ok: true, token, customer: r.customer, name: r.name, logoUrl: r.logoUrl ?? null, expiresAt: r.expiresAt ?? null, products: r.products, hasPassword: !!r.hasPassword, sync: r.sync, syncByProduct: r.syncByProduct });
+    return json({ ok: true, token, customer: r.customer, name: r.name, logoUrl: r.logoUrl ?? null, expiresAt: r.expiresAt ?? null, products: r.products, plan: r.plan ?? null, maxEquipment: r.maxEquipment ?? null, hasPassword: !!r.hasPassword, sync: r.sync, syncByProduct: r.syncByProduct });
   } catch (e) {
     console.error(e);
     return json({ ok: false, error: "server" }, 500);

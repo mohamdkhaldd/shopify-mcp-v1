@@ -1,4 +1,5 @@
 import { contractManagers, managersReport } from "./managers";
+import { planUsage, PLANS } from "./plan";
 import { Db, monthOf, today } from "../db";
 import { computeBooks } from "./books";
 import { clientStatement, dashboard, supplierStatement, taxFile } from "./reports";
@@ -119,7 +120,7 @@ function monthsOfContract(c: { start_date: string; end_date: string | null }, no
 export function sarkiView(db: Db, contractId?: number, month?: string, now: string = today()) {
   const contracts = db
     .prepare(
-      `SELECT c.id, c.code,
+      `SELECT c.id, CASE WHEN c.name IS NOT NULL AND c.name <> '' THEN c.name || ' (' || c.code || ')' ELSE c.code END AS code,
               CASE WHEN c.status = 'active' AND c.end_date IS NOT NULL AND c.end_date < ? THEN 'ended' ELSE c.status END AS status,
               e.name AS equipment, cl.name AS client FROM contracts c
        JOIN equipment e ON e.id = c.equipment_id JOIN clients cl ON cl.id = c.client_id
@@ -145,6 +146,7 @@ export function sarkiView(db: Db, contractId?: number, month?: string, now: stri
     contract: {
       id: c.id as number,
       code: c.code as string,
+      name: (c.name as string | null) ?? null,
       unit: c.unit as "day" | "month",
       client: c.client as string,
       clientKind: c.client_kind as "company" | "individual",
@@ -223,7 +225,7 @@ export function suppliersView(db: Db, supplierId?: number, now: string = today()
   const contracts = (
     db
       .prepare(
-        `SELECT c.id, c.code, c.start_date, c.end_date, e.name AS equipment FROM contracts c JOIN equipment e ON e.id = c.equipment_id
+        `SELECT c.id, CASE WHEN c.name IS NOT NULL AND c.name <> '' THEN c.name || ' (' || c.code || ')' ELSE c.code END AS code, c.start_date, c.end_date, e.name AS equipment FROM contracts c JOIN equipment e ON e.id = c.equipment_id
          WHERE c.supplier_id = ? AND c.deleted_at IS NULL ORDER BY c.id DESC`,
       )
       .all(id) as { id: number; code: string; start_date: string; end_date: string | null; equipment: string }[]
@@ -270,7 +272,7 @@ export function clientsView(db: Db, clientId?: number, now: string = today()) {
   const contracts = (
     db
       .prepare(
-        `SELECT c.id, c.code, c.start_date, c.end_date, e.name AS equipment FROM contracts c JOIN equipment e ON e.id = c.equipment_id
+        `SELECT c.id, CASE WHEN c.name IS NOT NULL AND c.name <> '' THEN c.name || ' (' || c.code || ')' ELSE c.code END AS code, c.start_date, c.end_date, e.name AS equipment FROM contracts c JOIN equipment e ON e.id = c.equipment_id
          WHERE c.client_id = ? AND c.deleted_at IS NULL ORDER BY c.id DESC`,
       )
       .all(id) as { id: number; code: string; start_date: string; end_date: string | null; equipment: string }[]
@@ -317,7 +319,7 @@ export function managementView(db: Db, month?: string, now: string = today()) {
   const clients = names("clients");
   const suppliers = names("suppliers");
   const equipment = names("equipment");
-  const contracts = db.prepare("SELECT id, code, equipment_id, status FROM contracts WHERE deleted_at IS NULL ORDER BY id DESC").all() as {
+  const contracts = db.prepare(`SELECT c.id, CASE WHEN c.name IS NOT NULL AND c.name <> '' THEN c.name || ' (' || c.code || ')' ELSE c.code END AS code, c.equipment_id, c.status FROM contracts c WHERE c.deleted_at IS NULL ORDER BY c.id DESC`).all() as {
     id: number;
     code: string;
     equipment_id: number;
@@ -670,12 +672,14 @@ export type TaxView = ReturnType<typeof taxView>;
 // ---------------- الإعدادات ----------------
 
 export function settingsView(db: Db, now: string = today()) {
+  const usage = planUsage(db);
   const rows = db.prepare("SELECT key, value_bp, effective_from FROM rate_settings ORDER BY effective_from DESC, key").all() as { key: string; value_bp: number; effective_from: string }[];
   const byDate = new Map<string, Record<string, number>>();
   for (const r of rows) byDate.set(r.effective_from, { ...(byDate.get(r.effective_from) ?? {}), [r.key]: r.value_bp });
   const at = (key: string, date: string) => rows.find((r) => r.key === key && r.effective_from <= date)?.value_bp ?? 0;
   const closed = (db.prepare("SELECT month FROM month_closes ORDER BY month DESC LIMIT 1").get() as { month: string } | undefined)?.month ?? null;
   return {
+    plan: { key: usage.plan?.key ?? null, label: usage.plan?.label ?? null, limit: usage.limit, used: usage.used, prices: PLANS.map((p) => ({ label: p.label, pricePerMonth: p.pricePerMonth })) },
     current: { vat: at("vat", now), tax5: at("tax5", now), management: at("management_share", now), investors: at("investors_share", now) },
     history: [...byDate.entries()].map(([effectiveFrom, v]) => ({
       effectiveFrom,

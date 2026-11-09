@@ -69,7 +69,7 @@ function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki;
     <Panel
       title={
         <>
-          عقد <Code>{c.code}</Code> — {c.equipment}
+          {c.name ? <>{c.name} · </> : null}عقد <Code>{c.code}</Code> — {c.equipment}
         </>
       }
       actions={
@@ -79,6 +79,20 @@ function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki;
           ) : (
             <Pill>من غير ضرايب</Pill>
           )}
+          <Button
+            onClick={async () => {
+              const name = window.prompt("اسم العقد (اكتب أي اسم تعرفه بيه — فاضي = يتشال)", c.name ?? "");
+              if (name === null) return;
+              try {
+                await api.renameContract(c.id, name);
+                onDone(name.trim() ? `اسم العقد بقى: ${name.trim()}` : "اتشال اسم العقد");
+              } catch (e) {
+                onError((e as Error).message);
+              }
+            }}
+          >
+            ✏️ {c.name ? "تعديل الاسم" : "سمّي العقد"}
+          </Button>
           {c.status === "active" ? (
             <Button onClick={() => setEnding(true)} title="العقد خلص">
               ⏹ العقد خلص

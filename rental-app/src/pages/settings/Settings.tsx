@@ -271,7 +271,7 @@ function CompanyPassword() {
   );
 }
 
-function License() {
+function License({ plan }: { plan: SettingsView["plan"] }) {
   const [s, setS] = useState<LicenseStatus | null>(null);
   useEffect(() => {
     licenseApi.status().then(setS);
@@ -292,6 +292,20 @@ function License() {
           </div>
         )}
         <div>الاشتراك: {s.expiresAt ? <b className="num">لحد يوم {s.expiresAt}</b> : <b>مفتوح</b>}</div>
+        {(plan.label || plan.limit != null) && (
+          <div>
+            الباقة: <b>{plan.label ?? "—"}</b> — المعدات:{" "}
+            <b className={plan.limit != null && plan.used >= plan.limit ? "text-out" : ""}>
+              {plan.used}
+              {plan.limit != null ? ` من ${plan.limit}` : " (من غير حد)"}
+            </b>
+          </div>
+        )}
+        {plan.limit != null && plan.used >= plan.limit && (
+          <div className="text-sm text-out font-semibold">
+            الباقة خلصت — عشان تضيف معدة لازم ترقّي. الأسعار في الشهر: {plan.prices.map((p) => `${p.label} ${p.pricePerMonth.toLocaleString("en-US")} ج`).join(" · ")}
+          </div>
+        )}
         <div className="text-xs text-muted">البرنامج بيتأكد من الترخيص لوحده كل ما يكون فيه نت، ويقدر يشتغل من غير نت لحد ١٤ يوم.</div>
       </div>
     </Panel>
@@ -374,7 +388,7 @@ export default function Settings() {
         <Backups />
         <Updates />
         <SyncPanel />
-        <License />
+        <License plan={v.plan} />
         <CompanyPassword />
       </div>
     </div>

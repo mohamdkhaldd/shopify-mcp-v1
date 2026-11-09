@@ -123,12 +123,11 @@ export default function Tax() {
         title: "١٤٪ لكل عميل",
         columns: [
           { header: "العميل", key: "name", width: 26 },
-          { header: "الرقم الضريبي", key: "taxId", width: 16 },
           { header: "قيمة الشغل", key: "basePt", money: true },
           { header: "الضريبة", key: "vatPt", money: true },
           { header: "اتحصّل منها", key: "collectedVatPt", money: true },
         ],
-        rows: v.vatByClient.map((g) => ({ name: g.name, taxId: g.taxId ?? "", basePt: g.basePt, vatPt: g.vatPt, collectedVatPt: g.collectedVatPt })),
+        rows: v.vatByClient.map((g) => ({ name: g.name, basePt: g.basePt, vatPt: g.vatPt, collectedVatPt: g.collectedVatPt })),
       },
       {
         title: "١٤٪ لكل شهر",
@@ -264,18 +263,16 @@ export default function Tax() {
               <thead>
                 <tr>
                   <th>العميل</th>
-                  <th>الرقم الضريبي</th>
                   <th className="n">قيمة الشغل</th>
                   <th className="n">الضريبة</th>
                   <th className="n">اتحصّل منها</th>
                 </tr>
               </thead>
               <tbody>
-                {v.vatByClient.length === 0 && <Empty cols={5} />}
+                {v.vatByClient.length === 0 && <Empty cols={4} />}
                 {v.vatByClient.map((g) => (
                   <tr key={g.key}>
                     <td>{g.name}</td>
-                    <td>{g.taxId ?? "—"}</td>
                     <td className="n">{pounds(g.basePt)}</td>
                     <td className="n text-tax font-bold">{pounds(g.vatPt)}</td>
                     <td className="n">{pounds(g.collectedVatPt)}</td>

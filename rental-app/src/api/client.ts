@@ -75,6 +75,7 @@ export const api = {
   updateEquipment: (v: { id: number; name: string; siteName?: string | null; supplierRatePt?: number | null }) => call("updateEquipment", v),
   endContract: (id: number, endDate: string) => call("endContract", { id, endDate }),
   reopenContract: (id: number) => call("reopenContract", { id }),
+  renameContract: (id: number, name: string) => call("renameContract", { id, name }),
   partySheet: (contractId: number, month: string, side: "client" | "supplier") => call<PartySheet>("partySheet", { contractId, month, side }),
   supplierPayment: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null; confirmNegative?: boolean } & Money) => call<number>("supplierPayment", v),
   supplierDeduction: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean } & Money) =>
@@ -178,7 +179,7 @@ export interface SyncStatus {
 const noSync: SyncStatus = { deviceId: "", deviceName: "", pending: 0, deferred: 0, online: false, needsLogin: false, lastError: null, lastSyncAt: null, disabled: true };
 
 export type LicenseStatus =
-  | { state: "active"; licenseId: number; customer: string; name: string; logo: string | null; expiresAt: string | null; checkBy: string; products: ("rental" | "operations")[] }
+  | { state: "active"; licenseId: number; customer: string; name: string; logo: string | null; expiresAt: string | null; checkBy: string; products: ("rental" | "operations")[]; plan?: string | null; maxEquipment?: number | null }
   | { state: "needed"; message: string | null };
 
 export const licenseApi = {

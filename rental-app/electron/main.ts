@@ -105,6 +105,8 @@ app.whenReady().then(async () => {
     checkBy: "",
     products: ["rental", "operations"],
     hasPassword: false,
+    plan: null,
+    maxEquipment: null,
   };
   const licenseStatus = () => (demo ? demoStatus : license.status());
 

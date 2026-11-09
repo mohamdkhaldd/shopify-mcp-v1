@@ -278,11 +278,6 @@ export default function Suppliers() {
     <div className="grid gap-5">
       <PageHeader title="أصحاب المعدات" subtitle="اللي بنأجر منهم المعدات — من غير ضريبة">
         <Button onClick={() => setForm("newSupplier")}>+ صاحب معدة</Button>
-        {s && (
-          <Button primary onClick={() => setTab("payments")}>
-            + دفعة لصاحب معدة
-          </Button>
-        )}
       </PageHeader>
       {error && <ErrorBox message={error} />}
 

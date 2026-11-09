@@ -505,6 +505,8 @@ export function setupDatabase(db: Db): Db {
   const te = columnsOf(db, "treasury_entries");
   if (!te.includes("account")) db.exec("ALTER TABLE treasury_entries ADD COLUMN account TEXT NOT NULL DEFAULT 'instapay'");
   if (!te.includes("held_by")) db.exec("ALTER TABLE treasury_entries ADD COLUMN held_by TEXT");
+  // اسم حر للعقد يعرفه بيه صاحب الشركة (زي "مان لفت التجمع")
+  if (!columnsOf(db, "contracts").includes("name")) db.exec("ALTER TABLE contracts ADD COLUMN name TEXT");
   // عمولة التحويل (مصروف) مربوطة بالحركة اللي اتعملت عليها ("table:id") عشان تتحذف معاها
   if (!columnsOf(db, "expenses").includes("fee_of")) db.exec("ALTER TABLE expenses ADD COLUMN fee_of TEXT");
   if (!te.includes("delivered_at")) db.exec("ALTER TABLE treasury_entries ADD COLUMN delivered_at TEXT");

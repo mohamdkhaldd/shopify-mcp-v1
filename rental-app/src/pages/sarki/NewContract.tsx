@@ -19,7 +19,6 @@ export default function NewContract({ onClose, onCreated }: { onClose: () => voi
   const [clientKind, setClientKind] = useState<"company" | "individual">("company");
   const [vat, setVat] = useState(true);
   const [tax5, setTax5] = useState(true);
-  const [taxId, setTaxId] = useState("");
 
   const [eqSel, setEqSel] = useState<string>(NEW);
   const [eqName, setEqName] = useState("");
@@ -31,6 +30,7 @@ export default function NewContract({ onClose, onCreated }: { onClose: () => voi
   const [clientRate, setClientRate] = useState("");
   const [supplierRate, setSupplierRate] = useState("");
   const [site, setSite] = useState("");
+  const [contractName, setContractName] = useState("");
   const [start, setStart] = useState(today());
   const [end, setEnd] = useState("");
 
@@ -65,7 +65,7 @@ export default function NewContract({ onClose, onCreated }: { onClose: () => voi
       const sr = moneyToPt(supplierRate);
       if (!cr || !sr) throw new Error("اكتب سعر الشركة وسعر صاحب المعدة");
       const input: NewContractInput = {
-        client: clientSel === NEW ? { kind: clientKind, name: clientName.trim(), taxId: taxId.trim() || undefined, vatApplies: vat, tax5Applies: tax5 } : { id: Number(clientSel) },
+        client: clientSel === NEW ? { kind: clientKind, name: clientName.trim(), vatApplies: vat, tax5Applies: tax5 } : { id: Number(clientSel) },
         equipment:
           eqSel === NEW
             ? { name: eqName.trim(), siteName: site.trim() || undefined, supplier: supSel === NEW ? { name: supName.trim(), phone: supPhone.trim() || undefined } : { id: Number(supSel) } }
@@ -76,6 +76,7 @@ export default function NewContract({ onClose, onCreated }: { onClose: () => voi
         startDate: start,
         endDate: end || undefined,
         siteName: site.trim() || undefined,
+        name: contractName.trim() || undefined,
       };
       if (clientSel === NEW && !clientName.trim()) throw new Error("اكتب اسم الشركة أو الفرد");
       if (eqSel === NEW && !eqName.trim()) throw new Error("اكتب اسم المعدة");
@@ -126,9 +127,6 @@ export default function NewContract({ onClose, onCreated }: { onClose: () => voi
                     <option value="company">شركة</option>
                     <option value="individual">فرد</option>
                   </Select>
-                </Labeled>
-                <Labeled label="الرقم الضريبي (اختياري)">
-                  <TextInput value={taxId} onChange={(e) => setTaxId(e.target.value)} className="w-36" />
                 </Labeled>
                 <label className="flex items-center gap-1.5 text-sm font-semibold">
                   <input type="checkbox" checked={vat} onChange={(e) => setVat(e.target.checked)} /> عليه ١٤٪
@@ -181,6 +179,9 @@ export default function NewContract({ onClose, onCreated }: { onClose: () => voi
 
           <fieldset className="flex flex-wrap gap-2.5 items-end border border-line rounded-card p-3">
             <legend className="px-1 text-xs font-bold text-muted">الاتفاق</legend>
+            <Labeled label="اسم العقد (اختياري)">
+              <TextInput value={contractName} onChange={(e) => setContractName(e.target.value)} className="w-52" placeholder="مثلًا: مان لفت التجمع" />
+            </Labeled>
             <Labeled label="المحاسبة">
               <Select value={unit} onChange={(e) => setUnit(e.target.value as "day" | "month")}>
                 <option value="day">باليوم</option>

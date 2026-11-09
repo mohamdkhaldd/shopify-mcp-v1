@@ -34,6 +34,9 @@ export type LicenseStatus =
       products: Product[];
       /** the company set a password: asked on the lock screen and on new devices */
       hasPassword: boolean;
+      /** باقة التأجير وأقصى عدد معدات (null = من غير حد) */
+      plan: string | null;
+      maxEquipment: number | null;
     }
   | { state: "needed"; message: string | null };
 
@@ -124,6 +127,8 @@ export function createLicenseManager(o: LicenseOptions) {
         checkBy: new Date(c.payload.exp * 1000).toISOString(),
         products: c.payload.products?.length ? c.payload.products : ["rental"],
         hasPassword: get("license_has_password") === "1",
+        plan: c.payload.plan ?? null,
+        maxEquipment: c.payload.maxEquipment ?? null,
       };
     return { state: "needed", message: c.reason === "expired" ? CHECK_IN : lastMessage };
   }
@@ -212,6 +217,9 @@ export function createLicenseManager(o: LicenseOptions) {
     set("license_lic", String(c.payload.lic));
     set("license_key", key);
     set("license_token", a.token);
+    // الباقة (من التوكن الموقّع): الحد بيتشيك عليه وانت بتضيف معدة
+    set("plan_key", c.payload.plan ?? null);
+    set("plan_max_equipment", c.payload.maxEquipment != null ? String(c.payload.maxEquipment) : null);
     set("license_has_password", a.hasPassword ? "1" : null);
     if (!a.hasPassword) rememberPassword(null);
     const byProduct: Partial<Record<Product, SyncCredentials>> = a.syncByProduct ?? (a.sync ? { rental: a.sync } : {});

@@ -147,16 +147,15 @@ function ClientForm({ initial, onClose, onSaved }: { initial?: Selected["client"
   const [kind, setKind] = useState<"company" | "individual">(initial?.kind ?? "company");
   const [name, setName] = useState(initial?.name ?? "");
   const [phone, setPhone] = useState(initial?.phone ?? "");
-  const [taxId, setTaxId] = useState(initial?.tax_id ?? "");
   const [vat, setVat] = useState(true);
   const [tax5, setTax5] = useState(true);
   const [error, setError] = useState<string | null>(null);
   async function save() {
     try {
       if (initial) {
-        await api.updateClient({ id: initial.id, kind, name, phone: phone.trim() || null, taxId: taxId.trim() || null });
+        await api.updateClient({ id: initial.id, kind, name, phone: phone.trim() || null, taxId: initial.tax_id ?? null });
         onSaved(initial.id);
-      } else onSaved(await api.createClient({ kind, name, phone: phone.trim() || undefined, taxId: taxId.trim() || undefined, vatApplies: vat, tax5Applies: tax5 }));
+      } else onSaved(await api.createClient({ kind, name, phone: phone.trim() || undefined, vatApplies: vat, tax5Applies: tax5 }));
       onClose();
     } catch (e) {
       setError((e as Error).message);
@@ -195,9 +194,6 @@ function ClientForm({ initial, onClose, onSaved }: { initial?: Selected["client"
         </Labeled>
         <Labeled label="التليفون">
           <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} className="w-36" />
-        </Labeled>
-        <Labeled label="الرقم الضريبي (اختياري)">
-          <TextInput value={taxId} onChange={(e) => setTaxId(e.target.value)} className="w-36" />
         </Labeled>
         {!initial && (
           <>
@@ -302,11 +298,6 @@ export default function Clients() {
     <div className="grid gap-5">
       <PageHeader title="الشركات والأفراد" subtitle="العملاء اللي واخدين المعدات">
         <Button onClick={() => setForm("new")}>+ عميل</Button>
-        {s && (
-          <Button primary onClick={() => setTab("payments")}>
-            + دفعة من عميل
-          </Button>
-        )}
       </PageHeader>
       {error && <ErrorBox message={error} />}
 
@@ -353,7 +344,7 @@ export default function Clients() {
               </>
             }
           >
-            <PrintHeader title={`كشف حساب — ${c.name}${c.tax_id ? ` · رقم ضريبي ${c.tax_id}` : ""}`} subtitle={dateLabel(new Date().toLocaleDateString("en-CA"))} />
+            <PrintHeader title={`كشف حساب — ${c.name}`} subtitle={dateLabel(new Date().toLocaleDateString("en-CA"))} />
             <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] border-b border-line">
               <Fact label="قيمة الشغل">{pounds(s.totals.basePt)}</Fact>
               <Fact label="ضريبة ١٤٪" tone="text-tax">

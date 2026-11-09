@@ -1,4 +1,5 @@
 import { Db, UserError } from "../db";
+import { assertCanAddEquipment } from "./plan";
 
 export type RateKey = "vat" | "tax5" | "management_share" | "investors_share";
 
@@ -56,6 +57,7 @@ export function setClientTaxes(db: Db, clientId: number, vatApplies: boolean, ta
 }
 
 export function createEquipment(db: Db, v: { name: string; supplierId: number; siteName?: string; supplierRatePt?: number }) {
+  assertCanAddEquipment(db);
   return id(
     db
       .prepare("INSERT INTO equipment (name, supplier_id, site_name, supplier_rate_pt) VALUES (?, ?, ?, ?)")
@@ -73,6 +75,8 @@ export interface ContractInput {
   endDate?: string;
   siteName?: string;
   notes?: string;
+  /** اسم حر يعرف بيه العقد */
+  name?: string;
 }
 
 export function createContract(db: Db, v: ContractInput) {
@@ -84,10 +88,10 @@ export function createContract(db: Db, v: ContractInput) {
   return id(
     db
       .prepare(
-        `INSERT INTO contracts (code, client_id, equipment_id, supplier_id, unit, client_rate_pt, supplier_rate_pt, site_name, start_date, end_date, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO contracts (code, client_id, equipment_id, supplier_id, unit, client_rate_pt, supplier_rate_pt, site_name, start_date, end_date, notes, name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(code, v.clientId, v.equipmentId, eq.supplier_id, v.unit, v.clientRatePt, v.supplierRatePt, v.siteName ?? eq.site_name ?? null, v.startDate, v.endDate ?? null, v.notes ?? null),
+      .run(code, v.clientId, v.equipmentId, eq.supplier_id, v.unit, v.clientRatePt, v.supplierRatePt, v.siteName ?? eq.site_name ?? null, v.startDate, v.endDate ?? null, v.notes ?? null, v.name?.trim() || null),
   );
 }
 
@@ -127,6 +131,7 @@ export interface NewContractInput {
   startDate: string;
   endDate?: string;
   siteName?: string;
+  name?: string;
 }
 
 export function newContract(db: Db, v: NewContractInput) {
@@ -150,6 +155,7 @@ export function newContract(db: Db, v: NewContractInput) {
       startDate: v.startDate,
       endDate: v.endDate,
       siteName: v.siteName,
+      name: v.name,
     });
   })();
 }
@@ -186,4 +192,9 @@ export function endContract(db: Db, id: number, endDate: string) {
 /** رجّع العقد شغال (لو اتقفل بالغلط) — من غير تاريخ نهاية. */
 export function reopenContract(db: Db, id: number) {
   db.prepare("UPDATE contracts SET end_date = NULL, status = 'active' WHERE id = ? AND deleted_at IS NULL").run(id);
+}
+
+/** اسم العقد (فاضي = يرجع يظهر برقمه بس). */
+export function renameContract(db: Db, id: number, name: string) {
+  db.prepare("UPDATE contracts SET name = ? WHERE id = ? AND deleted_at IS NULL").run(name.trim() || null, id);
 }
