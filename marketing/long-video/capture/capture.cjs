@@ -10,7 +10,7 @@ const JSON_OUT = path.join(__dirname, "..", "src", "story.json");
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 
-const W = 1600, H = 900, DSF = 2;
+const W = 1280, H = 720, DSF = 3;
 const frames = [];
 let chapter = "";
 let n = 0;
