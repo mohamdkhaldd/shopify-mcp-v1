@@ -146,6 +146,46 @@
     return `<span class="pill ok">شغال</span>`;
   }
 
+  // ---- النشاط: مين شغال فعلاً ومين قافل ----
+  const ACT = {
+    active: ["شغال", "ok"],
+    viewing: ["بيفتح بس", "warn"],
+    slow: ["قليل", "warn"],
+    idle: ["واقف", "bad"],
+  };
+  /** "من ٣ ساعات" / "من يومين" / "من ١٢ يوم" */
+  function ago(t) {
+    if (!t) return "ولا مرة";
+    const m = (Date.now() - new Date(t).getTime()) / 60000;
+    if (m < 2) return "دلوقتي";
+    if (m < 60) return `من ${ar(Math.round(m))} دقيقة`;
+    const h = m / 60;
+    if (h < 24) return `من ${ar(Math.round(h))} ساعة`;
+    const dd = Math.round(h / 24);
+    return dd === 1 ? "امبارح" : dd === 2 ? "من يومين" : `من ${ar(dd)} يوم`;
+  }
+  function activityPill(c) {
+    const a = c.activity;
+    if (!a || !c.active) return "";
+    const [label, tone] = ACT[a.status] || ACT.idle;
+    const since = a.status === "idle" ? ` ${ago(a.lastEntry || a.lastSeen)}` : "";
+    return `<span class="pill ${tone}">● ${label}${since}</span>`;
+  }
+  // جداول البرنامج بالعربي (التأجير / التشغيل)
+  const TABLES = {
+    work_logs: "السركي", daily_logs: "شيت المعدات", contracts: "العقود", equipment: "المعدات", clients: "الشركات", suppliers: "أصحاب المعدات",
+    client_payments: "دفعات الشركات", supplier_payments: "دفعات أصحاب المعدات", expenses: "مصروفات", treasury_entries: "الخزنة",
+    treasury_transfers: "تحويلات الخزنة", treasury_holds: "فلوس مع حد", capital_movements: "رأس المال", profit_payouts: "صرف أرباح",
+    investors: "المستثمرين", contract_managers: "شركاء الإدارة", adjustments: "تسويات", invoices: "فواتير", month_closes: "قفل شهر",
+    monthly_expenses: "مصروفات شهرية", employee_advances: "سلف", salary_payments: "مرتبات", employees: "السواقين", contractors: "المقاولين",
+    contractor_payments: "دفعات المقاولين", partner_payments: "دفعات الشركا", custody_entries: "العهد", custodies: "العهد",
+    hassan_ledger: "حساب صاحب الكوميشن", hassan_treasury_expenses: "مصاريف الكوميشن", obligations: "مواعيد الدفع", car_fuel: "العربية",
+    equipment_paper_sheets: "صور السركي", expense_categories: "أنواع المصروفات", hassan_installments: "الأقساط", hassan_installment_payments: "دفع الأقساط",
+    treasury_adjustments: "تعديلات الخزنة", employee_bonuses: "حوافز", employee_deductions: "خصومات", supplier_purchases: "مشتريات", expense_payments: "دفع مصروفات",
+    hassan_workers: "العمال", hassan_worker_entries: "حساب العمال", hassan_worker_attendance: "حضور العمال", other_income: "دخل تاني", partners: "الشركا", transfer_fees: "عمولات التحويل",
+  };
+  const tableName = (t, ops) => (TABLES[t] || t) + (ops ? " (تشغيل)" : "");
+
   // ---- العملاء ----
   async function listView() {
     shell("العملاء", `<div class="muted">بيحمّل…</div>`);
@@ -155,13 +195,16 @@
     const active = cs.filter((c) => c.active);
     const monthly = active.reduce((s, c) => s + (c.price || 0), 0);
     const soon = active.filter((c) => { const x = daysLeft(c.expiresAt); return x != null && x <= 7; }).length;
+    const working = active.filter((c) => c.activity?.status === "active").length;
+    const quiet = active.filter((c) => c.activity && c.activity.status !== "active").length;
     const card = (c) => `
-      <div class="card cust" data-id="${c.id}" data-q="${esc((c.customer + " " + (c.displayName || "") + " " + c.codes.map((k) => k.key).join(" ")).toLowerCase())}">
+      <div class="card cust" data-id="${c.id}" data-act="${c.active ? c.activity?.status || "idle" : "off"}" data-q="${esc((c.customer + " " + (c.displayName || "") + " " + c.codes.map((k) => k.key).join(" ")).toLowerCase())}">
         ${logoBox(c)}
         <div class="grow">
           <div class="row"><b class="grow">${esc(c.displayName || c.customer)}</b>${statusPill(c)}</div>
           <div class="muted">${c.planLabel ? `${esc(c.planLabel)} · ${ar(c.price)} ج/شهر` : "من غير باقة"} · ${ar(c.equipment)}${c.maxEquipment ? `/${ar(c.maxEquipment)}` : ""} معدة · ${ar(c.devices)} جهاز</div>
           <div class="muted">ينتهي: ${c.expiresAt ? day(c.expiresAt) : "مفتوح"}${c.renews === false ? " · مش هيتجدد" : ""}</div>
+          ${c.active && c.activity ? `<div class="row" style="gap:6px;margin-top:4px">${activityPill(c)}<span class="muted">فتح ${ago(c.activity.lastSeen)} · سجّل ${ago(c.activity.lastEntry)}</span></div>` : ""}
         </div>
       </div>`;
     shell("العملاء", `
@@ -170,11 +213,29 @@
         <div class="stat"><b>${ar(monthly)}</b><span>جنيه في الشهر</span></div>
         <div class="stat"><b>${ar(soon)}</b><span>قرب ينتهي</span></div>
       </div>
+      <div class="row" id="filters" style="margin-bottom:12px;gap:6px">
+        <button class="btn soft" data-f="">الكل (${ar(cs.length)})</button>
+        <button class="btn ghost" data-f="active">● شغالين (${ar(working)})</button>
+        <button class="btn ghost" data-f="quiet">● مش شغالين (${ar(quiet)})</button>
+      </div>
       ${cs.length > 3 ? `<input class="search" id="q" placeholder="دوّر باسم أو كود…">` : ""}
       <div id="list">${cs.map(card).join("") || `<div class="card muted">لسه مفيش عملاء — اضغط "عميل جديد".</div>`}</div>`);
     app.querySelectorAll(".cust").forEach((el) => (el.onclick = () => (location.hash = `#c/${el.dataset.id}`)));
+    let f = "";
     const q = $("#q");
-    if (q) q.oninput = () => app.querySelectorAll(".cust").forEach((el) => (el.style.display = el.dataset.q.includes(q.value.trim().toLowerCase()) ? "" : "none"));
+    const apply = () =>
+      app.querySelectorAll(".cust").forEach((el) => {
+        const okQ = !q || el.dataset.q.includes(q.value.trim().toLowerCase());
+        const a = el.dataset.act;
+        const okF = !f || (f === "active" ? a === "active" : a !== "active" && a !== "off");
+        el.style.display = okQ && okF ? "" : "none";
+      });
+    if (q) q.oninput = apply;
+    app.querySelectorAll("#filters [data-f]").forEach((b) => (b.onclick = () => {
+      f = b.dataset.f;
+      app.querySelectorAll("#filters [data-f]").forEach((x) => (x.className = `btn ${x === b ? "soft" : "ghost"}`));
+      apply();
+    }));
   }
 
   const planOptions = (plans, cur) =>
@@ -219,6 +280,17 @@
           <dt>ينتهي</dt><dd>${c.expiresAt ? `${day(c.expiresAt)}${left != null ? ` (${left >= 0 ? `باقي ${ar(left)} يوم` : `عدّى ${ar(-left)} يوم`})` : ""}` : "مفتوح من غير ميعاد"}</dd>
           <dt>تجديد</dt><dd>${c.renews === false ? "مش هيتجدد" : "بيتجدد"}</dd>
         </dl>
+      </div>
+
+      <div class="card">
+        <div class="row"><h2 class="grow" style="margin:0">النشاط</h2>${activityPill(c)}</div>
+        <dl class="kv sub">
+          <dt>آخر فتح للبرنامج</dt><dd>${ago(c.activity?.lastSeen)}</dd>
+          <dt>آخر تسجيل</dt><dd>${ago(c.activity?.lastEntry)}</dd>
+          <dt>آخر ٧ أيام</dt><dd>${ar(c.activity?.entries7 ?? 0)} تعديل</dd>
+          <dt>آخر ٣٠ يوم</dt><dd>${ar(c.activity?.entries30 ?? 0)} تعديل في ${ar(c.activity?.days30 ?? 0)} يوم</dd>
+        </dl>
+        <div id="act" class="sub muted">بيحمّل التفاصيل…</div>
       </div>
 
       <div class="card">
@@ -326,6 +398,7 @@
       location.hash = `#sheet/${c.id}/${r.id}`;
     });
     $("#loadDev").onclick = (e) => busy(e.target, () => devicesInto($("#devs"), c));
+    activityInto($("#act"), c).catch((e) => ($("#act").textContent = msg(e)));
     $("#saveInfo").onclick = (e) => busy(e.target, async () => {
       const fields = {};
       if ($("#eName").value.trim() !== c.customer) fields.customer = $("#eName").value;
@@ -355,6 +428,32 @@
       if (stop && !confirm(`توقف ${c.displayName || c.customer} خالص؟`)) return;
       busy(all, async () => { await update({ revoked: stop }); await done(stop ? "اتوقف ✓" : "رجع ✓"); });
     };
+  }
+
+  /** تفاصيل النشاط: كل يوم في آخر ٣٠ يوم، بيسجلوا إيه، مين بيسجل، آخر الحاجات */
+  async function activityInto(box, c) {
+    const r = await call("activity", { id: c.id });
+    const byDay = new Map(r.days.map((x) => [x.day, x.n]));
+    const days = [...Array(30)].map((_, i) => {
+      const t = new Date(Date.now() - (29 - i) * 86400000);
+      const k = isoDay(t);
+      return { k, n: byDay.get(k) || 0, label: t.getDate() };
+    });
+    const max = Math.max(1, ...days.map((x) => x.n));
+    const bars = days
+      .map((x) => `<div title="${x.k}: ${x.n}" style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:64px"><div style="height:${x.n ? Math.max(4, (x.n / max) * 64) : 2}px;background:${x.n ? "var(--blue)" : "var(--line)"};border-radius:3px 3px 0 0"></div></div>`)
+      .join("");
+    const list = (rows, f) => (rows.length ? rows.map(f).join("") : `<div class="muted">مفيش</div>`);
+    box.innerHTML = `
+      <div class="muted" style="margin-bottom:4px">كل يوم في آخر ٣٠ يوم</div>
+      <div style="display:flex;gap:2px;align-items:flex-end">${bars}</div>
+      <div class="row muted" style="justify-content:space-between;font-size:11px"><span>${days[0].label}</span><span>النهارده</span></div>
+      <h3>بيسجلوا إيه (آخر ٣٠ يوم)</h3>
+      ${list(r.kinds, (k) => `<div class="row"><span class="grow">${esc(tableName(k.tbl, k.ops))}</span><b>${ar(k.n)}</b><span class="muted">${ago(k.last)}</span></div>`)}
+      <h3>مين بيسجل</h3>
+      ${list(r.people, (p) => `<div class="row"><span class="grow">${esc(p.device)}</span><b>${ar(p.n)}</b><span class="muted">${ago(p.last)}</span></div>`)}
+      <h3>آخر حاجات اتسجلت</h3>
+      ${list(r.recent, (x) => `<div class="row" style="font-size:13px"><span class="grow">${x.op === "delete" ? "مسح" : x.op === "insert" ? "إضافة" : "تعديل"} في ${esc(tableName(x.tbl, x.ops))}</span><span class="muted">${esc(x.device)} · ${ago(x.at)}</span></div>`)}`;
   }
 
   async function devicesInto(box, c) {

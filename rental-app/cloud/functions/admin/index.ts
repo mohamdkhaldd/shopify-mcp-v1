@@ -71,6 +71,20 @@ async function uploadLogo(logo: { data: string; type: string } | undefined) {
   return `${SUPABASE_URL}/storage/v1/object/public/logos/${name}`;
 }
 
+// جداول بتتكتب لوحدها (إعدادات/بذور) — مش شغل حقيقي من العميل
+const SYSTEM_TABLES = ["rate_settings", "treasury_accounts", "withholding_rates", "app_settings"];
+const DAY = 86_400_000;
+/** حالة العميل من آخر فتح وآخر تسجيل */
+function activityStatus(lastSeen: string | null, lastEntry: string | null) {
+  const now = Date.now();
+  const seen = lastSeen ? (now - new Date(lastSeen).getTime()) / DAY : Infinity;
+  const entry = lastEntry ? (now - new Date(lastEntry).getTime()) / DAY : Infinity;
+  if (entry <= 3) return "active"; // بيسجّل
+  if (seen <= 7 && entry > 7) return "viewing"; // بيفتح بس مش بيسجّل
+  if (Math.min(seen, entry) <= 14) return "slow"; // قليل
+  return "idle"; // واقف
+}
+
 async function customers() {
   const lic = await sql`
     select l.id, l.key, l.customer, l.display_name, l.logo_url, l.products, l.max_devices, l.expires_at, l.revoked, l.renews,
@@ -92,6 +106,14 @@ async function customers() {
     const live = g.codes.filter((c: any) => !c.revoked);
     const head = live[0] ?? main;
     const [eq] = await sql`select count(*)::int as n from public.sync_rows where tenant_id = ${g.id} and tbl = 'equipment' and not deleted and coalesce(data->>'deleted_at', '') = ''`;
+    const ids = g.codes.map((c: any) => Number(c.id));
+    const [act] = await sql`
+      select (select max(last_seen_at) from public.license_devices where license_id = any(${ids}) and not revoked) as last_seen,
+             max(at) as last_entry,
+             count(*) filter (where at > now() - interval '7 days')::int as entries7,
+             count(*) filter (where at > now() - interval '30 days')::int as entries30,
+             count(distinct (at at time zone 'Africa/Cairo')::date) filter (where at > now() - interval '30 days')::int as days30
+      from public.sync_log where tenant_id in (${g.id}, ${-g.id}) and tbl <> all(${SYSTEM_TABLES})`;
     out.push({
       id: g.id,
       customer: head.customer,
@@ -107,6 +129,14 @@ async function customers() {
       renews: head.renews,
       active: live.length > 0,
       devices: live.reduce((s: number, c: any) => s + c.devices, 0),
+      activity: {
+        lastSeen: act.last_seen,
+        lastEntry: act.last_entry,
+        entries7: act.entries7,
+        entries30: act.entries30,
+        days30: act.days30,
+        status: activityStatus(act.last_seen, act.last_entry),
+      },
       codes: g.codes.map((c: any) => ({
         id: c.id, key: c.key, products: c.products, maxDevices: c.max_devices, devices: c.devices, revoked: c.revoked,
         expiresAt: c.expires_at, hasPassword: c.has_password, note: c.note,
@@ -199,6 +229,28 @@ Deno.serve(async (req) => {
                   ${o.renews}, ${o.password_hash}, ${b.note || null}, ${owner})
           returning id, key`;
         return json({ ok: true, id: l.id, key: l.key });
+      }
+      case "activity": {
+        // تفاصيل النشاط: كل يوم في آخر ٣٠ يوم، بيسجلوا إيه، مين بيسجل، وآخر الحاجات
+        const owner = Number(b.id);
+        const t = [owner, -owner];
+        const days = await sql`
+          select to_char((at at time zone 'Africa/Cairo')::date, 'YYYY-MM-DD') as day, count(*)::int as n
+          from public.sync_log where tenant_id = any(${t}) and tbl <> all(${SYSTEM_TABLES}) and at > now() - interval '30 days'
+          group by 1 order by 1`;
+        const kinds = await sql`
+          select tbl, (tenant_id < 0) as ops, count(*)::int as n, max(at) as last
+          from public.sync_log where tenant_id = any(${t}) and tbl <> all(${SYSTEM_TABLES}) and at > now() - interval '30 days'
+          group by 1, 2 order by 3 desc limit 12`;
+        const people = await sql`
+          select coalesce(nullif(device_name, ''), 'جهاز') as device, count(*)::int as n, max(at) as last
+          from public.sync_log where tenant_id = any(${t}) and tbl <> all(${SYSTEM_TABLES}) and at > now() - interval '30 days'
+          group by 1 order by 3 desc limit 10`;
+        const recent = await sql`
+          select tbl, op, (tenant_id < 0) as ops, coalesce(nullif(device_name, ''), 'جهاز') as device, at
+          from public.sync_log where tenant_id = any(${t}) and tbl <> all(${SYSTEM_TABLES})
+          order by at desc limit 15`;
+        return json({ ok: true, days, kinds, people, recent });
       }
       case "devices": {
         const rows = await sql`
