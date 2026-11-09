@@ -213,6 +213,14 @@ function labelFor(db: Db, fn: string, a: any): string | null {
   }
 }
 
+/** الحاجات اللي بتعرض بس (من غير تعديل) — دي بس اللي بتشتغل والاشتراك خالص */
+const READ_CALLS = new Set(["dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
+export const isReadCall = (fn: string) => READ_CALLS.has(fn);
+
+/** التشغيل: أي قناة بتعدّل أو بتضيف (create / delete / update / set …) — بتتقفل والاشتراك خالص */
+export const isOperationsWrite = (channel: string) =>
+  /^sync:undo$/.test(channel) || /:(create|delete|update|upsert|set|pay|done|reopen|replace|rename|reset|movement)/.test(channel);
+
 export function callCore(db: Db, registry: Registry, fn: string, args: unknown) {
   const f = (registry as Record<string, (a: unknown) => unknown>)[fn];
   if (!f) return { ok: false, message: `unknown call ${fn}` };

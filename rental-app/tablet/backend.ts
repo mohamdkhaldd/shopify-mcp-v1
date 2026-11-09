@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { setupDatabase } from "../core/schema";
 import { createSyncEngine } from "../core/sync/syncEngine";
 import { cloud } from "../core/sync/cloudConfig";
-import { callCore, makeRegistry } from "../electron/ipc";
+import { callCore, isReadCall, makeRegistry } from "../electron/ipc";
 import { createDatabase } from "./sqlAdapter";
 import { forget, loadSaved, save } from "./storage";
 import { tabletAppHandlers } from "./appHandlers";
@@ -13,7 +13,7 @@ import { Capacitor } from "@capacitor/core";
 import { Device } from "@capacitor/device";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex } from "@noble/hashes/utils";
-import { createLicenseManager, Product } from "../core/license/manager";
+import { createLicenseManager, EXPIRED_MESSAGE, Product } from "../core/license/manager";
 import { startOperations } from "./operations";
 import { licenseServer } from "../core/license/config";
 import { createPass } from "../core/shell/lock";
@@ -131,6 +131,11 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
   window.addEventListener("pagehide", () => flush());
 
   const licensed = () => license.status().state === "active" && unlocked;
+  /** الاشتراك خلص: بيعرض بس، مفيش تعديل */
+  const readOnly = () => {
+    const s = license.status();
+    return s.state === "active" && !!s.expired;
+  };
   const handlers: Record<string, Handler> = {
     "license:status": () => license.status(),
     "license:activate": ({ key, password }) => license.activate(key, password),
@@ -185,7 +190,7 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
 
   let ops: Awaited<ReturnType<typeof startOperations>> | null = null;
   if (page === "operations") {
-    ops = await startOperations({ SQL, native, licensed, credentials: () => license.credentials("operations"), emit });
+    ops = await startOperations({ SQL, native, licensed, readOnly, credentials: () => license.credentials("operations"), emit });
     opsSync = ops.sync;
     Object.assign(handlers, tabletAppHandlers(emit, ops.exportNow, native), ops.handlers);
   } else {
@@ -211,7 +216,12 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
     }
     const offline = { deviceId: "", deviceName: "", pending: 0, deferred: 0, online: false, needsLogin: false, lastError: null, lastSyncAt: null, disabled: true };
     Object.assign(handlers, {
-      "core:call": ({ fn, args }) => (licensed() ? callCore(db, registry, fn, args) : { ok: false, code: "license", message: "البرنامج محتاج كود تفعيل" }),
+      "core:call": ({ fn, args }) =>
+        !licensed()
+          ? { ok: false, code: "license", message: "البرنامج محتاج كود تفعيل" }
+          : readOnly() && !isReadCall(fn)
+            ? { ok: false, code: "expired", message: EXPIRED_MESSAGE }
+            : callCore(db, registry, fn, args),
       "sync:status": () => rentalSync?.status() ?? offline,
       "sync:now": () => rentalSync?.syncNow() ?? offline,
       "sync:setDeviceName": ({ name }) => rentalSync?.setDeviceName(name) ?? offline,

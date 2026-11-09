@@ -19,6 +19,7 @@ import Car from "./pages/Car";
 import Obligations from "./pages/Obligations";
 import { syncApi } from "./api/client";
 import { SyncLoginBar, TabletUpdatePrompt } from "./components/DeviceBars";
+import ExpiredBar from "./components/ExpiredBar";
 import { navItems, navLabel, SectionId } from "./nav";
 import { loadPerson, usePerson } from "./person";
 import CompanyLogo from "./components/CompanyLogo";
@@ -81,6 +82,7 @@ export default function App() {
               <CompanyLogo />
             </div>
           </div>
+          <ExpiredBar />
           <SyncLoginBar />
           {remote && (
             <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-sky-50 border border-sky-200 px-4 py-2.5 text-sm text-sky-900">

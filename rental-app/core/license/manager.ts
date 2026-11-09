@@ -38,8 +38,13 @@ export type LicenseStatus =
       /** باقة التأجير وأقصى عدد معدات (null = من غير حد) */
       plan: string | null;
       maxEquipment: number | null;
+      /** الاشتراك خلص: البرنامج بيفتح وبيعرض كل حاجة، بس مفيش تعديل ولا إضافة لحد ما يتجدد */
+      expired?: boolean;
     }
   | { state: "needed"; message: string | null };
+
+/** رسالة أي محاولة تعديل والاشتراك خالص */
+export const EXPIRED_MESSAGE = "اشتراكك خلص — تقدر تشوف كل بياناتك، بس عشان تعدّل أو تضيف لازم تجدد الاشتراك. كلّم MK-Tech وهيرجع يشتغل على طول.";
 
 export interface SyncCredentials {
   email: string;
@@ -117,20 +122,26 @@ export function createLicenseManager(o: LicenseOptions) {
     const token = get("license_token");
     if (!token) return { state: "needed", message: lastMessage };
     const c = checkToken(token, o.deviceId, now(), o.publicKey ?? LICENSE_PUBLIC_KEY);
-    if (c.ok)
+    const lapsed = get("license_lapsed") != null;
+    // التوكن خلص مع آخر يوم في الاشتراك (مش بسبب ١٤ يوم من غير نت) ← قراية بس
+    const ended = !c.ok && c.reason === "expired" && !!c.payload && (lapsed || (!!c.payload.expiresAt && c.payload.expiresAt < new Date(now() * 1000).toISOString().slice(0, 10)));
+    if (c.ok || ended) {
+      const payload = c.payload!;
       return {
         state: "active",
-        licenseId: c.payload.lic,
-        customer: c.payload.customer,
-        name: c.payload.name || c.payload.customer,
+        licenseId: payload.lic,
+        customer: payload.customer,
+        name: payload.name || payload.customer,
         logo: get("brand_logo"),
-        expiresAt: c.payload.expiresAt,
-        checkBy: new Date(c.payload.exp * 1000).toISOString(),
-        products: c.payload.products?.length ? c.payload.products : ["rental"],
+        expiresAt: payload.expiresAt,
+        checkBy: new Date(payload.exp * 1000).toISOString(),
+        products: payload.products?.length ? payload.products : ["rental"],
         hasPassword: get("license_has_password") === "1",
-        plan: c.payload.plan ?? null,
-        maxEquipment: c.payload.maxEquipment ?? null,
+        plan: payload.plan ?? null,
+        maxEquipment: payload.maxEquipment ?? null,
+        expired: !c.ok || lapsed,
       };
+    }
     return { state: "needed", message: c.reason === "expired" ? CHECK_IN : lastMessage };
   }
 
@@ -218,6 +229,7 @@ export function createLicenseManager(o: LicenseOptions) {
     set("license_lic", String(c.payload.lic));
     set("license_key", key);
     set("license_token", a.token);
+    set("license_lapsed", null);
     // الباقة (من التوكن الموقّع): الحد بيتشيك عليه وانت بتضيف معدة
     set("plan_key", c.payload.plan ?? null);
     set("plan_max_equipment", c.payload.maxEquipment != null ? String(c.payload.maxEquipment) : null);
@@ -307,7 +319,7 @@ export function createLicenseManager(o: LicenseOptions) {
       const a = await call<PlainAnswer>({ action: "release", key });
       if (!a) return { ok: false, message: "لازم نت عشان تخرج — عشان مكان الجهاز ده على الكود يفضى" };
     }
-    for (const k of ["license_token", "license_key", "license_lic", "license_has_password", "license_password_hash", "brand_logo", "brand_logo_url"]) set(k, null);
+    for (const k of ["license_token", "license_lapsed", "license_key", "license_lic", "license_has_password", "license_password_hash", "brand_logo", "brand_logo_url"]) set(k, null);
     for (const p of PRODUCTS) {
       set(KEYS[p].email, null);
       set(KEYS[p].password, null);
@@ -321,8 +333,12 @@ export function createLicenseManager(o: LicenseOptions) {
     if (!key) return status();
     const a = await ask(key);
     if (a?.ok) await accept(key, a);
-    else if (a && FINAL.has(a.error)) {
+    else if (a && a.error === "expired" && get("license_token")) {
+      // الاشتراك خلص: التوكن بيفضل (عشان البيانات تتعرض) والبرنامج بيبقى قراية بس
+      set("license_lapsed", a.expiresAt ?? "1");
+    } else if (a && FINAL.has(a.error)) {
       set("license_token", null);
+      set("license_lapsed", null);
       lastMessage = MESSAGES[a.error](a);
     }
     return status();

@@ -182,7 +182,7 @@ export interface SyncStatus {
 const noSync: SyncStatus = { deviceId: "", deviceName: "", pending: 0, deferred: 0, online: false, needsLogin: false, lastError: null, lastSyncAt: null, disabled: true };
 
 export type LicenseStatus =
-  | { state: "active"; licenseId: number; customer: string; name: string; logo: string | null; expiresAt: string | null; checkBy: string; products: ("rental" | "operations")[]; plan?: string | null; maxEquipment?: number | null }
+  | { state: "active"; licenseId: number; customer: string; name: string; logo: string | null; expiresAt: string | null; checkBy: string; products: ("rental" | "operations")[]; plan?: string | null; maxEquipment?: number | null; expired?: boolean }
   | { state: "needed"; message: string | null };
 
 export const licenseApi = {

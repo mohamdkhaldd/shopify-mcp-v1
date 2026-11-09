@@ -15,6 +15,7 @@ import Settings from "./pages/settings/Settings";
 import { SectionId } from "./nav";
 import { SyncBars } from "./components/Sync";
 import LicenseGate from "./components/LicenseGate";
+import ExpiredBar from "./components/ExpiredBar";
 import MobileTopBar from "./components/MobileTopBar";
 import { navItems, footerItems } from "./nav";
 
@@ -42,6 +43,7 @@ export default function App() {
           <main className="flex-1 min-w-0 px-6 xl:px-8 pt-[26px] pb-14 max-[1023px]:px-3 max-[1023px]:pt-0">
             <MobileTopBar title={title} onMenu={() => setMenuOpen(true)} />
             <div className="max-w-[1240px] mx-auto">
+              <ExpiredBar />
               <SyncBars />
             </div>
             <div className="max-w-[1240px] mx-auto" key={pageKey}>

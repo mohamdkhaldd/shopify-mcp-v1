@@ -6,12 +6,12 @@ import { dbPath, openDatabase } from "./db";
 import { backupTo, dailyBackup, lastBackup, looksLikeRentalDb } from "./backup";
 import { printPreview, savePdf } from "./print";
 import { setupAutoUpdate } from "./updater";
-import { callCore, makeRegistry } from "./ipc";
+import { callCore, isReadCall, makeRegistry } from "./ipc";
 import { exportExcel, ExcelSheet } from "./excel";
 import { seedDemo } from "../core/demo";
 import { startDeviceSync } from "./sync";
 import { deviceIdentity } from "./device";
-import { createLicenseManager, LicenseManager, LicenseStatus, Product } from "../core/license/manager";
+import { createLicenseManager, EXPIRED_MESSAGE, LicenseManager, LicenseStatus, Product } from "../core/license/manager";
 import { licenseServer } from "../core/license/config";
 import type { ReadRequest } from "../core/ai/sarkiRead";
 import { OperationsBackend, operationsDbPath, startOperations } from "./operations";
@@ -122,6 +122,11 @@ app.whenReady().then(async () => {
   let pass = makePass();
   let unlocked = !hasPassword() || pass.take(arg("pass"));
   const usable = () => licenseStatus().state === "active" && unlocked;
+  /** الاشتراك خلص: بيعرض بس، مفيش تعديل */
+  const readOnly = () => {
+    const s = licenseStatus();
+    return s.state === "active" && !!s.expired;
+  };
   const products = () => {
     const s = licenseStatus();
     return s.state === "active" ? s.products : [];
@@ -225,6 +230,7 @@ app.whenReady().then(async () => {
   if (product === "operations") {
     operations = await startOperations({
       licensed: usable,
+      readOnly,
       credentials: () => license.credentials("operations"),
       onRemoteChanges: notifyRemote,
       withSync: !demo,
@@ -242,7 +248,11 @@ app.whenReady().then(async () => {
     ipcMain.handle("sync:setDeviceName", (_e, { name }: { name: string }) => rentalSync?.setDeviceName(name) ?? offline);
 
     ipcMain.handle("core:call", (_e, { fn, args }) =>
-      usable() ? callCore(db, registry, fn, args) : { ok: false, code: "license", message: "البرنامج محتاج كود تفعيل" },
+      !usable()
+        ? { ok: false, code: "license", message: "البرنامج محتاج كود تفعيل" }
+        : readOnly() && !isReadCall(fn)
+          ? { ok: false, code: "expired", message: EXPIRED_MESSAGE }
+          : callCore(db, registry, fn, args),
     );
     ipcMain.handle("export:excel", (_e, { fileName, sheets }: { fileName: string; sheets: ExcelSheet[] }) => mainWindow && exportExcel(mainWindow, fileName, sheets));
 

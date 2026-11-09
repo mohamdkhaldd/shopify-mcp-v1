@@ -2,7 +2,8 @@ import type { SqlJsStatic } from "sql.js";
 import { createClient } from "@supabase/supabase-js";
 import { createDatabase } from "./sqlAdapter";
 import { loadSaved, save } from "./storage";
-import type { SyncCredentials } from "../core/license/manager";
+import { isOperationsWrite } from "../electron/ipc";
+import { EXPIRED_MESSAGE, type SyncCredentials } from "../core/license/manager";
 import { unsyncedChanges } from "../core/shell/unsynced";
 // التشغيل on the tablet / web: the old app's backend (operations/electron),
 // registered through the small Electron stand-in instead of Electron.
@@ -19,6 +20,7 @@ export async function startOperations(opts: {
   SQL: SqlJsStatic;
   native: boolean;
   licensed: () => boolean;
+  readOnly: () => boolean;
   credentials: () => SyncCredentials | null;
   emit: (channel: string, data: unknown) => void;
 }) {
@@ -68,13 +70,18 @@ export async function startOperations(opts: {
   // every one of its screen functions refuses to run without a valid code
   const handlers: Record<string, Handler> = {};
   for (const [channel, fn] of Object.entries(shimHandlers as Record<string, (e: unknown, p: unknown) => unknown>)) {
-    handlers[channel] = (payload) => (opts.licensed() ? fn(null, payload) : Promise.reject(new Error("البرنامج محتاج كود تفعيل")));
+    handlers[channel] = (payload) =>
+      !opts.licensed()
+        ? Promise.reject(new Error("البرنامج محتاج كود تفعيل"))
+        : opts.readOnly() && isOperationsWrite(channel)
+          ? Promise.reject(new Error(EXPIRED_MESSAGE))
+          : fn(null, payload);
   }
   Object.assign(handlers, {
     "sync:status": () => sync.status(),
     "sync:now": () => sync.syncNow(),
     "sync:login": ({ password }: { password: string }) => sync.login(password),
-    "sync:undo": ({ id }: { id: number }) => sync.undo(id),
+    "sync:undo": ({ id }: { id: number }) => (opts.readOnly() ? Promise.reject(new Error(EXPIRED_MESSAGE)) : sync.undo(id)),
     "sync:setDeviceName": ({ name }: { name: string }) => sync.setDeviceName(name),
     "sync:activity": (filters: unknown) => sync.activity(filters ?? {}),
   } satisfies Record<string, Handler>);

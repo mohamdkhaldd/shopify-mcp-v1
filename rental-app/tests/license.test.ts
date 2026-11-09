@@ -3,6 +3,7 @@ import * as ed from "@noble/ed25519";
 import { freshDb } from "./helpers";
 import { checkToken } from "../core/license/token";
 import { createLicenseManager } from "../core/license/manager";
+import { isOperationsWrite, isReadCall } from "../electron/ipc";
 
 // a real answer from the deployed "license" function (test code, device dev-A)
 const SERVER_TOKEN =
@@ -31,7 +32,7 @@ describe("activation token", () => {
 function fakeServer() {
   const priv = ed.utils.randomPrivateKey();
   const state = {
-    codes: new Map<string, { lic?: number; customer: string; name?: string; logoUrl?: string | null; max: number; revoked: boolean; devices: Set<string>; password?: string }>(),
+    codes: new Map<string, { lic?: number; expiresAt?: string | null; customer: string; name?: string; logoUrl?: string | null; max: number; revoked: boolean; devices: Set<string>; password?: string }>(),
     online: true,
     /** السيرفر بيستقبل ومبيردش خالص (نت ضعيف) */
     hang: false,
@@ -72,12 +73,15 @@ function fakeServer() {
       if (!b.password) return json({ ok: false, error: "password_required" });
       if (b.password !== c.password) return json({ ok: false, error: "wrong_password" });
     }
+    const today = new Date(clock * 1000).toISOString().slice(0, 10);
+    if (c.expiresAt && c.expiresAt < today) return json({ ok: false, error: "expired", expiresAt: c.expiresAt });
     if (!c.devices.has(b.deviceId) && c.devices.size >= c.max) return json({ ok: false, error: "full", maxDevices: c.max });
     c.devices.add(b.deviceId);
     const lic = c.lic ?? 1;
     return json({
       ok: true,
-      token: sign({ v: 1, lic, customer: c.customer, name: c.name, device: b.deviceId, expiresAt: null, iat: clock, exp: clock + 14 * 86400 }),
+      token: sign({ v: 1, lic, customer: c.customer, name: c.name, device: b.deviceId, expiresAt: c.expiresAt ?? null, iat: clock,
+        exp: Math.min(clock + 14 * 86400, c.expiresAt ? Date.parse(`${c.expiresAt}T00:00:00Z`) / 1000 + 86400 : Infinity) }),
       logoUrl: c.logoUrl ?? null,
       hasPassword: !!c.password,
       sync: { email: `tenant-${lic}@x`, password: `pw-${lic}` },
@@ -117,6 +121,42 @@ describe("activation in the app", () => {
     expect((await m.refresh()).state).toBe("active");
     // the same saved state on the same device after a restart
     expect(manager(s, "laptop", db).status().state).toBe("active");
+  });
+
+  it("an ended subscription opens read-only (not locked), and renewing opens it again", async () => {
+    const s = fakeServer();
+    const day = (sec: number) => new Date(sec * 1000).toISOString().slice(0, 10);
+    s.state.codes.set("BNYN-AAAA", { customer: "شركة النور", max: 2, revoked: false, devices: new Set(), expiresAt: day(IAT + 5 * 86400) });
+    const db = freshDb();
+    const m = manager(s, "laptop", db);
+    expect((await m.activate("BNYN-AAAA")).ok).toBe(true);
+    expect(m.status()).toMatchObject({ state: "active", expired: false });
+    // after the last day: online, the server says so
+    s.setClock(IAT + 7 * 86400);
+    expect(await m.refresh()).toMatchObject({ state: "active", expired: true, customer: "شركة النور" });
+    expect(manager(s, "laptop", db).status()).toMatchObject({ state: "active", expired: true });
+    // renewed from the admin page: back to normal at the next check
+    s.state.codes.get("BNYN-AAAA")!.expiresAt = day(IAT + 40 * 86400);
+    expect(await m.refresh()).toMatchObject({ state: "active", expired: false });
+  });
+
+  it("offline after the last day: still read-only from the saved activation", async () => {
+    const s = fakeServer();
+    const day = (sec: number) => new Date(sec * 1000).toISOString().slice(0, 10);
+    s.state.codes.set("BNYN-AAAA", { customer: "شركة النور", max: 2, revoked: false, devices: new Set(), expiresAt: day(IAT + 3 * 86400) });
+    const m = manager(s, "laptop");
+    expect((await m.activate("BNYN-AAAA")).ok).toBe(true);
+    s.state.online = false;
+    s.setClock(IAT + 5 * 86400);
+    expect(await m.refresh()).toMatchObject({ state: "active", expired: true });
+  });
+
+  it("read-only mode lets the screens read and blocks every change", () => {
+    for (const fn of ["dashboard", "sarki", "treasury", "settings", "partySheet"]) expect(isReadCall(fn)).toBe(true);
+    for (const fn of ["upsertDay", "newContract", "clientPayment", "delete", "undo", "setRates", "saveAccount"]) expect(isReadCall(fn)).toBe(false);
+    for (const ch of ["equipment:create", "dailyLogs:upsert", "installments:pay", "fees:set", "obligations:done", "treasury:movementUpdate", "system:resetAll", "sync:undo", "partners:rename"])
+      expect(isOperationsWrite(ch)).toBe(true);
+    for (const ch of ["equipment:list", "dashboard:summary", "reports:monthly", "installments:checkLock", "treasury:summary", "sync:status"]) expect(isOperationsWrite(ch)).toBe(false);
   });
 
   it("a code works on its number of devices only, and stopping it locks at the next check", async () => {

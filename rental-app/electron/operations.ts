@@ -1,7 +1,8 @@
 import path from "node:path";
 import { app, ipcMain } from "electron";
 import Database from "better-sqlite3";
-import type { SyncCredentials } from "../core/license/manager";
+import { isOperationsWrite } from "./ipc";
+import { EXPIRED_MESSAGE, type SyncCredentials } from "../core/license/manager";
 import { migrateLegacyOperations, OPERATIONS_DB, setupOperationsDatabase } from "./operationsDb";
 import { unsyncedChanges } from "../core/shell/unsynced";
 import type { Db } from "../core/db";
@@ -25,6 +26,8 @@ export interface OperationsBackend {
 /** Opens التشغيل: its database, its screens' functions and its sync. */
 export async function startOperations(opts: {
   licensed: () => boolean;
+  /** الاشتراك خلص: التعديل والإضافة مقفولين */
+  readOnly: () => boolean;
   credentials: () => SyncCredentials | null;
   onRemoteChanges: (info: unknown) => void;
   withSync: boolean;
@@ -39,7 +42,13 @@ export async function startOperations(opts: {
   // every one of its screen functions refuses to run without a valid code
   const handle = ipcMain.handle.bind(ipcMain);
   ipcMain.handle = ((channel: string, fn: (...a: unknown[]) => unknown) =>
-    handle(channel, (...a: unknown[]) => (opts.licensed() ? fn(...a) : Promise.reject(new Error("البرنامج محتاج كود تفعيل"))))) as typeof ipcMain.handle;
+    handle(channel, (...a: unknown[]) =>
+      !opts.licensed()
+        ? Promise.reject(new Error("البرنامج محتاج كود تفعيل"))
+        : opts.readOnly() && isOperationsWrite(channel)
+          ? Promise.reject(new Error(EXPIRED_MESSAGE))
+          : fn(...a),
+    )) as typeof ipcMain.handle;
   try {
     registerIpcHandlers(db);
   } finally {
@@ -51,7 +60,7 @@ export async function startOperations(opts: {
   ipcMain.handle("sync:status", () => sync?.status() ?? offline);
   ipcMain.handle("sync:now", () => sync?.syncNow() ?? offline);
   ipcMain.handle("sync:login", (_e, { password }: { password: string }) => sync?.login(password) ?? offline);
-  ipcMain.handle("sync:undo", (_e, { id }: { id: number }) => sync?.undo(id));
+  ipcMain.handle("sync:undo", (_e, { id }: { id: number }) => (opts.readOnly() ? Promise.reject(new Error(EXPIRED_MESSAGE)) : sync?.undo(id)));
   ipcMain.handle("sync:setDeviceName", (_e, { name }: { name: string }) => sync?.setDeviceName(name) ?? offline);
   ipcMain.handle("sync:activity", (_e, filters?: unknown) => sync?.activity(filters ?? {}) ?? { rows: [], pending: 0, devices: [] });
   return {
