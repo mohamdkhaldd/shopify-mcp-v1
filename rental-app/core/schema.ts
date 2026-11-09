@@ -538,9 +538,10 @@ export function setupDatabase(db: Db): Db {
   db.prepare("INSERT OR IGNORE INTO withholding_rates (value_bp, effective_from) VALUES (300, '2000-01-01')").run();
   // انستا باي: ٠٫١٪ من المبلغ، أقل حاجة ٥٠ قرش وأقصى ٢٠ جنيه (بتتغير من الإعدادات)
   const acc = db.prepare("INSERT OR IGNORE INTO treasury_accounts (key, name, fee_bp, fee_min_pt, fee_max_pt, sort) VALUES (?, ?, ?, ?, ?, ?)");
-  // خزنة التأجير حسابين: انستا باي (عليه عمولة التحويل) ومحفظة.
+  // خزنة التأجير: انستا باي (عليه عمولة التحويل)، محفظة، وكاش.
   acc.run("instapay", "انستا باي", 10, 50, 2000, 1);
   acc.run("wallet", "محفظة", 0, 0, null, 2);
+  acc.run("cash", "كاش", 0, 0, null, 3);
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return db;
 }
