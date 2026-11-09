@@ -401,7 +401,7 @@ export const Tax: React.FC = () => {
           <Pill bg="#EDE9FE" color={C.purple} size={48}>١٤٪ قيمة مضافة</Pill>
         </div>
         <div style={{ transform: `scale(${chip2})` }}>
-          <Pill bg="#EDE9FE" color={C.purple} size={48}>+ ٥٪ من الهامش</Pill>
+          <Pill bg="#EDE9FE" color={C.purple} size={48}>+ ضريبة الهامش</Pill>
         </div>
       </div>
       <div
