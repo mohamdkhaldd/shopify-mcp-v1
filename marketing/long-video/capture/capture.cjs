@@ -26,7 +26,7 @@ let n = 0;
       sessionStorage.setItem("shots_init", "1");
     }
     const hide = () =>
-      document.querySelectorAll("div,span,small,p").forEach((e) => {
+      document.querySelectorAll("div,span,small,p,b,strong").forEach((e) => {
         if ((e.textContent || "").length < 60 && /بيدخل على حساب|^الإصدار|متزامن|اتزامن|بيتزامن/.test((e.textContent || "").trim())) e.style.visibility = "hidden";
       });
     new MutationObserver(hide).observe(document, { subtree: true, childList: true, characterData: true });

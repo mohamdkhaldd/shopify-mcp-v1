@@ -4,3 +4,4 @@ capture/shots/
 capture/*.json
 sheet/preview.png
 public/music/take*.mp3
+.cache/

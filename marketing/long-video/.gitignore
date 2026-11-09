@@ -1,2 +1,6 @@
 public/story/
 capture/*.png
+capture/pages.txt
+out/
+node_modules
+.cache/
