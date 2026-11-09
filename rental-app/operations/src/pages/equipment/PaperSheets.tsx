@@ -99,7 +99,7 @@ export default function PaperSheets({ equipmentId, month }: { equipmentId: numbe
                 onClick={() => (setDone(""), setReading(s.image))}
                 className="text-primary hover:text-primary-dark"
                 disabled={busy || !!reading}
-                title="Claude يقرا الأيام والساعات والأوفر من الصورة، وانت تراجع وتكتب السعر"
+                title="البرنامج يقرا الأيام والساعات والأوفر من الصورة، وانت تراجع وتكتب السعر"
               >
                 🤖 اقرا وسجّل في شيت المقاول
               </button>

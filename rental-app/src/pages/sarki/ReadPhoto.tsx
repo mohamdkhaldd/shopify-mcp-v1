@@ -115,7 +115,7 @@ export function ReadPhoto({ v, onDone, onError }: { v: OpenSarki; onDone: (msg: 
       {state === "idle" || state === "reading" ? (
         <div className="flex flex-wrap items-center gap-3">
           <Button primary disabled={state === "reading"} onClick={() => file.current?.click()}>
-            {state === "reading" ? "Claude بيقرا الورقة…" : "📷 اقرا صورة السركي"}
+            {state === "reading" ? "بيقرا الورقة…" : "📷 اقرا صورة السركي"}
           </Button>
           <span className="text-xs text-muted">
             {state === "reading" ? "ممكن ياخد دقيقة — سيب الصفحة مفتوحة" : "صوّر ورقة السركي أو اختار صورتها: الأيام والساعات والأوفر والإجازات بيتقروا لوحدهم، وانت تراجع وتكتب السعر"}

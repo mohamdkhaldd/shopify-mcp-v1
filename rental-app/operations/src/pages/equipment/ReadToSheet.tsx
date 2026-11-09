@@ -128,7 +128,7 @@ export default function ReadToSheet({ equipmentId, month, image, onClose }: { eq
         </button>
       </div>
       {error && <div className="rounded-xl bg-rose-50 text-rose-700 px-4 py-2.5 text-sm font-semibold">{error}</div>}
-      {state === "reading" && !error && <div className="text-sm text-slate-500">Claude بيقرا الورقة… ممكن ياخد دقيقة — سيب الصفحة مفتوحة.</div>}
+      {state === "reading" && !error && <div className="text-sm text-slate-500">بيقرا الورقة… ممكن ياخد دقيقة — سيب الصفحة مفتوحة.</div>}
       {state !== "reading" && sheet && (
         <>
           <p className="text-xs text-slate-500">
