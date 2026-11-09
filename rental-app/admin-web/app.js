@@ -22,6 +22,8 @@
     not_found: "مش لاقي العميل ده",
     server: "حصلت مشكلة في السيرفر — جرب تاني",
     network: "مفيش نت أو السيرفر مش بيرد",
+    stop_first: "وقّف العميل الأول (كل أكواده) وبعدين امسحه",
+    confirm: "الاسم اللي اتكتب مش زي اسم العميل — متمسحش",
   };
 
   const store = {
@@ -279,7 +281,9 @@
       <div class="card">
         ${c.active
           ? `<button class="btn red full" id="stopAll">وقّف العميل ده (كل أكواده)</button><div class="muted" style="margin-top:6px">البرنامج هيقفل عندهم أول ما يتصل بالنت. البيانات مش بتتمسح.</div>`
-          : `<button class="btn green full" id="resumeAll">رجّع العميل ده</button>`}
+          : `<button class="btn green full" id="resumeAll">رجّع العميل ده</button>
+             <button class="btn red full" id="delAll" style="margin-top:10px">امسح العميل ده خالص</button>
+             <div class="muted" style="margin-top:6px">بيمسح أكواده وأجهزته وكل بياناته على السيرفر — مفيش رجوع.</div>`}
       </div>`, { back: true });
 
     const update = (fields, codeId) => call("license.update", codeId ? { codeId, fields } : { id: c.id, fields });
@@ -334,6 +338,17 @@
       await update(fields);
       await done();
     });
+    const del = $("#delAll");
+    if (del) del.onclick = () => {
+      const name = prompt(`المسح نهائي ومفيش رجوع.\nللتأكيد اكتب اسم العميل بالظبط:\n${c.customer}`);
+      if (name == null) return;
+      busy(del, async () => {
+        await call("customer.delete", { id: c.id, confirm: name });
+        toast("اتمسح ✓");
+        await load(true);
+        location.hash = "#";
+      });
+    };
     const all = $("#stopAll") || $("#resumeAll");
     all.onclick = () => {
       const stop = !!$("#stopAll");

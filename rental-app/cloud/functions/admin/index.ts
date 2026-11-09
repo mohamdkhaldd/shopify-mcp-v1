@@ -211,6 +211,29 @@ Deno.serve(async (req) => {
         await sql`update public.license_devices set revoked = ${b.revoked !== false} where id = ${Number(b.deviceId)}`;
         return json({ ok: true });
       }
+      case "customer.delete": {
+        // مسح عميل خالص (كل أكواده + أجهزته + بياناته على السيرفر + حسابات المزامنة).
+        // لازم يكون موقوف الأول، ولازم اسمه يتكتب بالظبط للتأكيد.
+        const owner = Number(b.id);
+        const codes = await sql`select id, customer, revoked from public.licenses where coalesce(data_from, id) = ${owner}`;
+        if (!codes.length) return fail("not_found");
+        if (codes.some((c: any) => !c.revoked)) return fail("stop_first");
+        if (String(b.confirm ?? "").trim() !== String(codes.find((c: any) => c.id === owner)?.customer ?? codes[0].customer).trim()) return fail("confirm");
+        const ids = codes.map((c: any) => c.id);
+        const tenants = [...ids, ...ids.map((i: number) => -i)];
+        await sql.begin(async (t: any) => {
+          await t`delete from public.sync_rows where tenant_id = any(${tenants})`;
+          await t`delete from public.sync_log where tenant_id = any(${tenants})`;
+          await t`delete from public.license_devices where license_id = any(${ids})`;
+          await t`delete from auth.users where email in (select email from licensing.tenant_creds where license_id = any(${ids}) union select email from licensing.ops_creds where license_id = any(${ids}))`;
+          await t`delete from licensing.tenant_creds where license_id = any(${ids})`;
+          await t`delete from licensing.ops_creds where license_id = any(${ids})`;
+          // الأكواد التانية الأول (data_from بيشاور على الكود الأصلي)
+          await t`delete from public.licenses where id = any(${ids}) and id <> ${owner}`;
+          await t`delete from public.licenses where id = ${owner}`;
+        });
+        return json({ ok: true });
+      }
       case "admin.password": {
         const [r] = await sql`select extensions.crypt(${String(b.current ?? "")}, v) = v as ok from licensing.secrets where k = 'admin_password_hash'`;
         if (!r?.ok) return fail("wrong");
