@@ -1,0 +1,222 @@
+// Supabase Edge Function "admin": لوحة إدارة MK-Tech (لصاحب الشركة بس).
+// الدخول بكود + باسورد (متخزنين hash في licensing.secrets)، والرد توكن جلسة
+// موقّع HMAC بمفتاح في licensing.secrets (admin_session_key) — صالح ٣٠ يوم.
+// كل الكلام مع قاعدة البيانات من هنا (SUPABASE_DB_URL)؛ الصفحة نفسها
+// (public/admin) مفيهاش أي مفتاح سري. ٨ محاولات غلط في ربع ساعة = قفل مؤقت.
+// Deployed with the Supabase MCP tool (verify_jwt off: الحماية بالتوكن ده).
+import postgres from "npm:postgres@3.4.5";
+
+const sql = postgres(Deno.env.get("SUPABASE_DB_URL")!, { prepare: false, max: 2 });
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+const fail = (error: string, status = 200) => json({ ok: false, error }, status);
+
+// الباقات (التأجير): الحد بيتبعت موقّع مع التفعيل
+const PLANS: Record<string, { label: string; max: number | null; price: number }> = {
+  p5: { label: "١–٥ معدات", max: 5, price: 500 },
+  p10: { label: "٦–١٠ معدات", max: 10, price: 1000 },
+  p15: { label: "١١–١٥ معدة", max: 15, price: 1500 },
+  p20: { label: "١٦–٢٠ معدة", max: 20, price: 2000 },
+  p20plus: { label: "أكتر من ٢٠ معدة", max: null, price: 3000 },
+};
+
+const enc = new TextEncoder();
+const b64url = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const fromB64url = (s: string) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
+let hmacKey: CryptoKey | null = null;
+async function key() {
+  if (hmacKey) return hmacKey;
+  const [s] = await sql`select v from licensing.secrets where k = 'admin_session_key'`;
+  hmacKey = await crypto.subtle.importKey("raw", enc.encode(s.v), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+  return hmacKey;
+}
+async function makeToken() {
+  const body = enc.encode(JSON.stringify({ a: 1, exp: Math.floor(Date.now() / 1000) + 30 * 86400 }));
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", await key(), body));
+  return `${b64url(body)}.${b64url(sig)}`;
+}
+async function validToken(t: string | undefined) {
+  if (!t) return false;
+  const [b, s] = t.split(".");
+  if (!b || !s) return false;
+  try {
+    if (!(await crypto.subtle.verify("HMAC", await key(), fromB64url(s), fromB64url(b)))) return false;
+    const p = JSON.parse(new TextDecoder().decode(fromB64url(b)));
+    return p.a === 1 && p.exp > Date.now() / 1000;
+  } catch {
+    return false;
+  }
+}
+const normCode = (c: string) => (c ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+async function uploadLogo(logo: { data: string; type: string } | undefined) {
+  if (!logo?.data) return undefined;
+  const type = /^image\/(png|jpeg|webp)$/.test(logo.type) ? logo.type : "image/png";
+  const bytes = Uint8Array.from(atob(logo.data), (c) => c.charCodeAt(0));
+  if (bytes.length > 2_000_000) throw new Error("logo_too_big");
+  const name = `${crypto.randomUUID()}.${type === "image/jpeg" ? "jpg" : type.split("/")[1]}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/logos/${name}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${SERVICE_KEY}`, apikey: SERVICE_KEY, "Content-Type": type, "x-upsert": "false" },
+    body: bytes,
+  });
+  if (!res.ok) throw new Error(`logo_upload_${res.status}`);
+  return `${SUPABASE_URL}/storage/v1/object/public/logos/${name}`;
+}
+
+async function customers() {
+  const lic = await sql`
+    select l.id, l.key, l.customer, l.display_name, l.logo_url, l.products, l.max_devices, l.expires_at, l.revoked, l.renews,
+           l.plan, l.max_equipment, l.note, l.created_at, l.data_from, (l.password_hash is not null) as has_password,
+           (select count(*) from public.license_devices d where d.license_id = l.id and not d.revoked)::int as devices
+    from public.licenses l order by l.id`;
+  const owners = new Map<number, any>();
+  for (const l of lic) {
+    const owner = l.data_from ?? l.id;
+    if (!owners.has(owner)) owners.set(owner, { id: owner, codes: [] as any[] });
+    owners.get(owner).codes.push(l);
+  }
+  const out = [];
+  for (const g of owners.values()) {
+    const main = g.codes.find((c: any) => c.id === g.id) ?? g.codes[0];
+    const live = g.codes.filter((c: any) => !c.revoked);
+    const head = live[0] ?? main;
+    const [eq] = await sql`select count(*)::int as n from public.sync_rows where tenant_id = ${g.id} and tbl = 'equipment' and not deleted and coalesce(data->>'deleted_at', '') = ''`;
+    out.push({
+      id: g.id,
+      customer: head.customer,
+      displayName: head.display_name,
+      logoUrl: head.logo_url,
+      since: g.codes.reduce((m: string, c: any) => (String(c.created_at) < m ? String(c.created_at) : m), String(main.created_at)),
+      plan: head.plan,
+      planLabel: head.plan ? PLANS[head.plan]?.label ?? head.plan : null,
+      price: head.plan ? PLANS[head.plan]?.price ?? null : null,
+      maxEquipment: head.max_equipment,
+      equipment: eq.n,
+      expiresAt: head.expires_at,
+      renews: head.renews,
+      active: live.length > 0,
+      devices: live.reduce((s: number, c: any) => s + c.devices, 0),
+      codes: g.codes.map((c: any) => ({
+        id: c.id, key: c.key, products: c.products, maxDevices: c.max_devices, devices: c.devices, revoked: c.revoked,
+        expiresAt: c.expires_at, hasPassword: c.has_password, note: c.note,
+      })),
+    });
+  }
+  return out;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method !== "POST") return fail("method", 405);
+  let b: Record<string, any>;
+  try {
+    b = await req.json();
+  } catch {
+    return fail("bad_request", 400);
+  }
+  try {
+    if (b.action === "login") {
+      const [{ n }] = await sql`select count(*)::int as n from licensing.admin_attempts where not ok and at > now() - interval '15 minutes'`;
+      if (n >= 8) return fail("locked");
+      const [r] = await sql`
+        select (select extensions.crypt(${normCode(b.code)}, v) = v from licensing.secrets where k = 'admin_code_hash') as code_ok,
+               (select extensions.crypt(${String(b.password ?? "")}, v) = v from licensing.secrets where k = 'admin_password_hash') as pw_ok`;
+      const ok = !!(r.code_ok && r.pw_ok);
+      await sql`insert into licensing.admin_attempts (ok) values (${ok})`;
+      return ok ? json({ ok: true, token: await makeToken() }) : fail("wrong");
+    }
+    if (!(await validToken(b.token))) return fail("auth", 401);
+
+    switch (b.action) {
+      case "dashboard": {
+        const [c] = await sql`select data from licensing.mk_company where id = 1`;
+        return json({ ok: true, company: c?.data ?? {}, customers: await customers(), plans: PLANS });
+      }
+      case "company.save": {
+        await sql`update licensing.mk_company set data = ${sql.json(b.data ?? {})}, updated_at = now() where id = 1`;
+        return json({ ok: true });
+      }
+      case "customer.create": {
+        const products: string[] = Array.isArray(b.products) && b.products.length ? b.products : ["rental"];
+        if (!String(b.customer ?? "").trim()) return fail("name_required");
+        const plan = b.plan && PLANS[b.plan] ? b.plan : null;
+        const logo = (await uploadLogo(b.logo)) ?? null;
+        const [l] = await sql`
+          insert into public.licenses (customer, display_name, logo_url, products, max_devices, expires_at, plan, max_equipment, renews, password_hash, note)
+          values (${String(b.customer).trim()}, ${String(b.displayName ?? "").trim() || null}, ${logo}, ${products}, ${Math.max(1, Number(b.maxDevices) || 2)},
+                  ${b.expiresAt || null}, ${plan}, ${plan ? PLANS[plan].max : null}, ${b.renews !== false},
+                  ${b.password ? sql`extensions.crypt(${String(b.password)}, extensions.gen_salt('bf'))` : null}, ${b.note || null})
+          returning id, key`;
+        return json({ ok: true, id: l.id, key: l.key });
+      }
+      case "license.update": {
+        // تعديل العميل: بيتطبق على كل أكواده (نفس الشركة) إلا لو اتحدد كود واحد
+        const ids: number[] = b.codeId
+          ? [Number(b.codeId)]
+          : (await sql`select id from public.licenses where coalesce(data_from, id) = ${Number(b.id)}`).map((r: any) => r.id);
+        const f = b.fields ?? {};
+        const logo = f.logo ? await uploadLogo(f.logo) : undefined;
+        for (const id of ids) {
+          if (f.customer !== undefined) await sql`update public.licenses set customer = ${String(f.customer).trim()} where id = ${id}`;
+          if (f.displayName !== undefined) await sql`update public.licenses set display_name = ${String(f.displayName).trim() || null} where id = ${id}`;
+          if (logo !== undefined) await sql`update public.licenses set logo_url = ${logo} where id = ${id}`;
+          if (f.expiresAt !== undefined) await sql`update public.licenses set expires_at = ${f.expiresAt || null} where id = ${id}`;
+          if (f.renews !== undefined) await sql`update public.licenses set renews = ${!!f.renews} where id = ${id}`;
+          if (f.maxDevices !== undefined) await sql`update public.licenses set max_devices = ${Math.max(1, Number(f.maxDevices) || 1)} where id = ${id}`;
+          if (f.plan !== undefined) {
+            const p = f.plan && PLANS[f.plan] ? f.plan : null;
+            await sql`update public.licenses set plan = ${p}, max_equipment = ${p ? PLANS[p].max : null} where id = ${id}`;
+          }
+          if (f.revoked !== undefined) await sql`update public.licenses set revoked = ${!!f.revoked} where id = ${id}`;
+          if (f.password !== undefined)
+            await sql`update public.licenses set password_hash = ${f.password ? sql`extensions.crypt(${String(f.password)}, extensions.gen_salt('bf'))` : null} where id = ${id}`;
+        }
+        return json({ ok: true });
+      }
+      case "code.add": {
+        // كود تاني لنفس الشركة (تأجير بس / تشغيل بس / الاتنين) على نفس البيانات
+        const [o] = await sql`select * from public.licenses where id = ${Number(b.id)}`;
+        if (!o) return fail("not_found");
+        const owner = o.data_from ?? o.id;
+        const products: string[] = Array.isArray(b.products) && b.products.length ? b.products : ["rental"];
+        const [l] = await sql`
+          insert into public.licenses (customer, display_name, logo_url, products, max_devices, expires_at, plan, max_equipment, renews, password_hash, note, data_from)
+          values (${o.customer}, ${o.display_name}, ${o.logo_url}, ${products}, ${Math.max(1, Number(b.maxDevices) || 2)}, ${o.expires_at}, ${o.plan}, ${o.max_equipment},
+                  ${o.renews}, ${o.password_hash}, ${b.note || null}, ${owner})
+          returning id, key`;
+        return json({ ok: true, id: l.id, key: l.key });
+      }
+      case "devices": {
+        const rows = await sql`
+          select d.id, d.license_id, l.key, d.device_name, d.platform, d.app_version, d.revoked, d.last_seen_at
+          from public.license_devices d join public.licenses l on l.id = d.license_id
+          where coalesce(l.data_from, l.id) = ${Number(b.id)} order by d.revoked, d.last_seen_at desc nulls last`;
+        return json({ ok: true, devices: rows });
+      }
+      case "device.revoke": {
+        await sql`update public.license_devices set revoked = ${b.revoked !== false} where id = ${Number(b.deviceId)}`;
+        return json({ ok: true });
+      }
+      case "admin.password": {
+        const [r] = await sql`select extensions.crypt(${String(b.current ?? "")}, v) = v as ok from licensing.secrets where k = 'admin_password_hash'`;
+        if (!r?.ok) return fail("wrong");
+        if (String(b.next ?? "").length < 6) return fail("short");
+        await sql`update licensing.secrets set v = extensions.crypt(${String(b.next)}, extensions.gen_salt('bf')) where k = 'admin_password_hash'`;
+        return json({ ok: true });
+      }
+      default:
+        return fail("unknown_action", 400);
+    }
+  } catch (e) {
+    console.error(e);
+    return fail(String((e as Error)?.message ?? "server").startsWith("logo") ? String((e as Error).message) : "server", 500);
+  }
+});
