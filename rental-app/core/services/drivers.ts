@@ -8,8 +8,6 @@ import { Money, recordSupplierDeduction } from "./ledger";
 // الأوفر × سعر ساعة الأوفر. أي فلوس بنديها للسواق بتتسجل خصم من صاحب المعدة
 // (supplier_deductions.driver_id)، فبتتخصم من تصفيته آخر الشهر لوحدها.
 
-/** "owner" = قديم (صاحب المعدة بيقبّضه) — مبقاش بيتسجل */
-export type PaidBy = "us" | "owner";
 export type PayKind = "month" | "day";
 
 export interface DriverInput {
@@ -17,7 +15,6 @@ export interface DriverInput {
   phone?: string | null;
   supplierId: number;
   equipmentId?: number | null;
-  paidBy?: PaidBy;
   payKind: PayKind;
   ratePt?: number | null;
   /** سعر ساعة الأوفر (فاضي = اليومية ÷ ٨، أو المرتب ÷ ٣٠ ÷ ٨) */
@@ -31,7 +28,6 @@ type DriverRow = {
   phone: string | null;
   supplier_id: number;
   equipment_id: number | null;
-  paid_by: PaidBy;
   pay_kind: PayKind;
   rate_pt: number | null;
   overtime_rate_pt: number | null;
@@ -179,9 +175,4 @@ export function driversView(db: Db, month = monthOf(today()), driverId?: number)
     suppliers: db.prepare("SELECT id, name FROM suppliers WHERE deleted_at IS NULL ORDER BY name").all() as { id: number; name: string }[],
     equipment: db.prepare("SELECT id, name, supplier_id AS supplierId FROM equipment WHERE deleted_at IS NULL ORDER BY name").all() as { id: number; name: string; supplierId: number }[],
   };
-}
-
-/** للتصفية بتاعة صاحب المعدة: السواقين اللي على معداته ومرتب الشهر اللي لسه متدفعش. */
-export function driversOfSupplier(db: Db, supplierId: number, month: string) {
-  return driversView(db, month).drivers.filter((d) => d.supplierId === supplierId);
 }

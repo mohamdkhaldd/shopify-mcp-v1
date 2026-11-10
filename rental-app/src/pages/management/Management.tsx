@@ -475,7 +475,6 @@ export default function Management() {
         </Panel>
       )}
 
-      {(
         <Panel title={`الهالك (المصروفات) — ${monthLabel(v.month)}`} hint="التسجيل من صفحة «الهالك»">
           <div className="overflow-x-auto">
             <table className="tbl">
@@ -512,9 +511,7 @@ export default function Management() {
           </div>
           <Note>مصروف العقد بيتخصم من ربح العقد ده. المصروف العام بيتخصم من ربح الشهر كله قبل التوزيع.</Note>
         </Panel>
-      )}
 
-      {(
         <Panel title="نصيب الإدارة كل شهر">
           <div className="overflow-x-auto">
             <table className="tbl">
@@ -559,7 +556,6 @@ export default function Management() {
           <ManagementPayout v={v} onSaved={load} />
           <MoneyTable rows={v.payouts} noteHeader="ملاحظة" contracts={[]} onDelete={(id) => setDeleting({ entity: "profit_payouts", id })} />
         </Panel>
-      )}
 
       {v.closedMonths.length > 0 && (
         <Panel title="التسويات" hint="تصحيح لشهر مقفول، بيتسجل في الشهر المفتوح">
