@@ -30,8 +30,13 @@ export default function MoneyEntry({
   extra,
   saveLabel = "حفظ",
   direction,
+  defaultAmount = "",
+  defaultNote = "",
   onSave,
 }: {
+  /** المبلغ والملاحظة اللي بيبدأ بيهم (زي "ادفعله الباقي") */
+  defaultAmount?: string;
+  defaultNote?: string;
   /** داخل الخزنة ولا طالع منها */
   direction: "in" | "out";
   title: string;
@@ -43,9 +48,9 @@ export default function MoneyEntry({
   onSave: (v: MoneyEntryValue) => Promise<unknown>;
 }) {
   const [date, setDate] = useState(today());
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(defaultAmount);
   const [contract, setContract] = useState<string>(contracts.length === 1 ? String(contracts[0].id) : "");
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(defaultNote);
   const [error, setError] = useState<string | null>(null);
   const [confirmCash, setConfirmCash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

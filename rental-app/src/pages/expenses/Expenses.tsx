@@ -6,6 +6,8 @@ import { PrintButtons, PrintHeader } from "../../components/Print";
 import ConfirmDelete from "../../components/ConfirmDelete";
 import { TrashButton } from "../../components/party";
 import { ExpenseEntry } from "../management/Management";
+import MoneyEntry from "../../components/MoneyEntry";
+import { REFUND_NOTE } from "../../../core/services/managers";
 import { dateLabel, monthLabel, pounds } from "../../utils/format";
 
 // الهالك: كل مصروفات الشركة في الشهر (على عقد أو عامة، من الخزنة أو من جيب
@@ -16,6 +18,7 @@ export default function Expenses() {
   const [v, setV] = useState<ManagementView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ entity: Deletable; id: number } | null>(null);
+  const [paying, setPaying] = useState<string | null>(null);
   const load = useCallback(() => {
     api.management(month).then(setV, (e) => setError((e as Error).message));
   }, [month]);
@@ -25,6 +28,7 @@ export default function Expenses() {
   const total = v.expenses.reduce((s, x) => s + x.amount_pt, 0);
   const onContracts = v.expenses.filter((x) => x.kind === "contract").reduce((s, x) => s + x.amount_pt, 0);
   const pocket = v.expenses.filter((x) => x.paid_by).reduce((s, x) => s + x.amount_pt, 0);
+  const partners = v.managers.people.filter((p) => p.pocketPt > 0);
   const byCategory = [...v.expenses.reduce((m, x) => m.set(x.category ?? "من غير بند", (m.get(x.category ?? "من غير بند") ?? 0) + x.amount_pt), new Map<string, number>())].sort((a, b) => b[1] - a[1]);
 
   return (
@@ -96,6 +100,54 @@ export default function Expenses() {
         </div>
         <Note>مصروف العقد بيتخصم من ربح العقد ده. المصروف العام بيتخصم من ربح الشهر كله قبل التوزيع. «من جيبه» = شريك دفعه من فلوسه، ومبيطلعش من الخزنة.</Note>
       </Panel>
+
+      {partners.length > 0 && (
+        <Panel title="الشركاء — صرفوا من جيبهم" hint="الفلوس بترجعلهم من الخزنة">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>الشريك</th>
+                <th className="n">صرف من جيبه</th>
+                <th className="n">اترجعله</th>
+                <th className="n">لسه ليه</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {partners.map((p) => (
+                <tr key={p.name}>
+                  <td className="font-bold">{p.name}</td>
+                  <td className="n">{pounds(p.pocketPt)}</td>
+                  <td className="n text-in">{pounds(p.refundedPt)}</td>
+                  <td className={`n font-extrabold ${p.pocketLeftPt > 0 ? "text-out" : "text-in"}`}>{pounds(p.pocketLeftPt)}</td>
+                  <td className="text-end">
+                    {p.pocketLeftPt > 0 && (
+                      <button className="no-print rounded-lg bg-amber text-ink font-bold px-3 py-1.5" onClick={() => setPaying(paying === p.name ? null : p.name)}>
+                        ادفعله
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {paying && (
+            <MoneyEntry
+              key={paying}
+              direction="out"
+              title={`ترجّع لـ ${paying} فلوس صرفها من جيبه — من الخزنة`}
+              contracts={[]}
+              defaultAmount={String((partners.find((p) => p.name === paying)?.pocketLeftPt ?? 0) / 100)}
+              saveLabel="ادفع"
+              onSave={async (x) => {
+                await api.managementPayout({ date: x.date, amountPt: x.amountPt, note: x.note ? `${REFUND_NOTE} — ${x.note}` : REFUND_NOTE, managerName: paying, confirmNegative: x.confirmNegative, ...x.money });
+                setPaying(null);
+                load();
+              }}
+            />
+          )}
+        </Panel>
+      )}
 
       {byCategory.length > 1 && (
         <Panel title="حسب البند">

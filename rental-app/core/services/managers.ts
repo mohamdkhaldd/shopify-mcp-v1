@@ -6,6 +6,9 @@ import type { Books, MonthResult } from "./books";
 // الشهر بيتوزع على العقود على قد صافي كل عقد كسبان، ونصيب كل عقد بيتقسم على
 // شركاءه بنسبهم. الشخص بيتعرف باسمه — نفس الاسم في كذا عقد = نفس الشخص.
 
+/** ملاحظة الصرف اللي بيرجّع للشريك فلوس صرفها من جيبه */
+export const REFUND_NOTE = "رد فلوس الهالك";
+
 export interface ManagerShare {
   name: string;
   shareBp: number;
@@ -79,11 +82,11 @@ export function managersReport(db: Db, books: Books, month: string) {
   const managers = contractManagers(db);
   const payouts = db
     .prepare(
-      `SELECT p.manager_name, p.amount_pt FROM profit_payouts p
+      `SELECT p.manager_name, p.amount_pt, p.note FROM profit_payouts p
        WHERE p.payee_kind = 'management' AND p.manager_name IS NOT NULL AND p.deleted_at IS NULL AND p.reversal_of IS NULL
          AND NOT EXISTS (SELECT 1 FROM profit_payouts r WHERE r.reversal_of = p.id AND r.deleted_at IS NULL)`,
     )
-    .all() as { manager_name: string; amount_pt: number }[];
+    .all() as { manager_name: string; amount_pt: number; note: string | null }[];
 
   // مصاريف دفعها الشريك من جيبه (مش من الخزنة) — الشركة عليها له المبلغ ده
   const pocket = db
@@ -94,9 +97,9 @@ export function managersReport(db: Db, books: Books, month: string) {
     )
     .all() as { paid_by: string; amount_pt: number; date: string }[];
 
-  const people = new Map<string, { name: string; monthPt: number; byContract: { contractId: number; code: string; amountPt: number }[]; accruedPt: number; paidPt: number; pocketPt: number; pocketMonthPt: number }>();
+  const people = new Map<string, { name: string; monthPt: number; byContract: { contractId: number; code: string; amountPt: number }[]; accruedPt: number; paidPt: number; pocketPt: number; pocketMonthPt: number; refundedPt: number }>();
   const person = (name: string) => {
-    if (!people.has(name)) people.set(name, { name, monthPt: 0, byContract: [], accruedPt: 0, paidPt: 0, pocketPt: 0, pocketMonthPt: 0 });
+    if (!people.has(name)) people.set(name, { name, monthPt: 0, byContract: [], accruedPt: 0, paidPt: 0, pocketPt: 0, pocketMonthPt: 0, refundedPt: 0 });
     return people.get(name)!;
   };
   for (const list of managers.values()) for (const x of list) person(x.name);
@@ -117,7 +120,12 @@ export function managersReport(db: Db, books: Books, month: string) {
       }
     }
   }
-  for (const p of payouts) person(p.manager_name).paidPt += p.amount_pt;
+  for (const p of payouts) {
+    const x = person(p.manager_name);
+    x.paidPt += p.amount_pt;
+    // "رد فلوس…" = فلوس صرفها من جيبه في الهالك ورجعتله (من صفحة الهالك)
+    if (p.note?.startsWith(REFUND_NOTE)) x.refundedPt += p.amount_pt;
+  }
   for (const e of pocket) {
     const p = person(e.paid_by);
     p.pocketPt += e.amount_pt;
@@ -129,7 +137,7 @@ export function managersReport(db: Db, books: Books, month: string) {
     unassignedPt,
     people: [...people.values()]
       // ليه: نصيبه + اللي صرفه من جيبه − اللي خده
-      .map((p) => ({ ...p, balancePt: p.accruedPt + p.pocketPt - p.paidPt }))
+      .map((p) => ({ ...p, balancePt: p.accruedPt + p.pocketPt - p.paidPt, pocketLeftPt: Math.max(0, p.pocketPt - p.refundedPt) }))
       .sort((a, b) => b.monthPt - a.monthPt || a.name.localeCompare(b.name)),
   };
 }

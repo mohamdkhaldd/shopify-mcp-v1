@@ -6,7 +6,7 @@ import { computeBooks } from "../core/services/books";
 import { recordCapital, recordExpense, recordPayout } from "../core/services/ledger";
 import { supplierStatement } from "../core/services/reports";
 import { createDriver, driversView, recordDriverPayment } from "../core/services/drivers";
-import { managersReport } from "../core/services/managers";
+import { managersReport, REFUND_NOTE } from "../core/services/managers";
 
 function setup() {
   const db = freshDb({ withholding: true });
@@ -70,8 +70,10 @@ describe("شركاء الإدارة بيصرفوا من جيبهم", () => {
     expect(khaled.pocketPt).toBe(egp(1500));
     expect(khaled.balancePt - amr.balancePt).toBe(egp(1500));
     // نرجّعله فلوسه حتى لو نصيب الإدارة لسه متحصّلش
-    recordPayout(db, { payee: "management", managerName: "خالد", date: "2026-10-31", amountPt: egp(1500) }, { confirmNegative: true });
-    expect(managersReport(db, computeBooks(db, "2026-10-31"), "2026-10").people.find((p) => p.name === "خالد")!.paidPt).toBe(egp(1500));
+    expect(khaled.pocketLeftPt).toBe(egp(1500));
+    recordPayout(db, { payee: "management", managerName: "خالد", date: "2026-10-31", amountPt: egp(1500), note: REFUND_NOTE }, { confirmNegative: true });
+    const after = managersReport(db, computeBooks(db, "2026-10-31"), "2026-10").people.find((p) => p.name === "خالد")!;
+    expect([after.paidPt, after.refundedPt, after.pocketLeftPt]).toEqual([egp(1500), egp(1500), 0]);
   });
 });
 

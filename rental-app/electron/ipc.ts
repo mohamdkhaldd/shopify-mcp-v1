@@ -190,7 +190,9 @@ function labelFor(db: Db, fn: string, a: any): string | null {
     case "saveAccount":
       return `حساب الخزنة: ${a.name}`;
     case "managementPayout":
-      return `صرف من نصيب الإدارة ${egp(a.amountPt)}${a.managerName ? ` لـ ${a.managerName}` : ""}`;
+      return a.note?.startsWith("رد فلوس الهالك")
+        ? `رجّعت لـ ${a.managerName} ${egp(a.amountPt)} صرفها من جيبه`
+        : `صرف من نصيب الإدارة ${egp(a.amountPt)}${a.managerName ? ` لـ ${a.managerName}` : ""}`;
     case "setContractManagers": {
       const c = db.prepare("SELECT code FROM contracts WHERE id = ?").get(a.contractId) as { code: string } | undefined;
       return `شركاء الإدارة في العقد ${c?.code ?? ""}`;
