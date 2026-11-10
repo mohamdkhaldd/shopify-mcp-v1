@@ -6,6 +6,7 @@ const PATHS: Record<string, string> = {
   drivers: "M12 3a9 9 0 1 1 0 18a9 9 0 0 1 0-18zM12 10a2 2 0 1 1 0 4a2 2 0 0 1 0-4zM3.5 11h6.5M14 11h6.5M12 14v7",
   clients: "M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16M14 9h5a1 1 0 0 1 1 1v11M8 8h2M8 12h2M8 16h2M3 21h18",
   management: "M4 19V9M10 19V5M16 19v-7M22 19H2",
+  expenses: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3",
   investors: "M9 4.5a3.5 3.5 0 1 1 0 7a3.5 3.5 0 0 1 0-7zM2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6",
   treasury: "M5 6h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM3 10h18M16 14.5h2",
   tax: "M7 3h8l4 4v14H7zM15 3v4h4M10 12l4 4M14 12h.01M10 16h.01",

@@ -364,13 +364,13 @@ export function managementView(db: Db, month?: string, now: string = today()) {
           .prepare(
             `SELECT x.id, x.kind, x.date, x.amount_pt,
                     CASE WHEN x.paid_by IS NOT NULL THEN trim(coalesce(x.note, '') || ' — دفعه ' || x.paid_by || ' من جيبه', ' —') ELSE x.note END AS note,
-                    x.contract_id, c.code, k.name AS category
+                    x.contract_id, c.code, k.name AS category, x.paid_by
              FROM expenses x LEFT JOIN contracts c ON c.id = x.contract_id LEFT JOIN expense_categories k ON k.id = x.category_id
              WHERE substr(x.date, 1, 7) = ? AND x.deleted_at IS NULL AND x.reversal_of IS NULL
                AND NOT EXISTS (SELECT 1 FROM expenses r WHERE r.reversal_of = x.id AND r.deleted_at IS NULL)
              ORDER BY x.date, x.id`,
           )
-          .all(m.month) as { id: number; kind: "contract" | "general"; date: string; amount_pt: number; note: string | null; contract_id: number | null; code: string | null; category: string | null }[]
+          .all(m.month) as { id: number; kind: "contract" | "general"; date: string; amount_pt: number; note: string | null; contract_id: number | null; code: string | null; category: string | null; paid_by: string | null }[]
       )
     : [];
 

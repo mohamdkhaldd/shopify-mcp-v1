@@ -7,7 +7,7 @@ import { PrintButtons, PrintHeader } from "../../components/Print";
 import ConfirmDelete from "../../components/ConfirmDelete";
 import Modal from "../../components/Modal";
 import MoneyEntry from "../../components/MoneyEntry";
-import { MoneyTable, TrashButton } from "../../components/party";
+import { MoneyTable } from "../../components/party";
 import { dateLabel, monthLabel, percentFromBp, pounds } from "../../utils/format";
 import { moneyToPt } from "../../utils/input";
 import { today } from "../../../core/db";
@@ -95,7 +95,7 @@ function Line({ label, pt, bold }: { label: string; pt: number; bold?: boolean }
 }
 
 /** Expenses: on a contract (comes off that contract) or general (comes off the whole month). */
-function ExpenseEntry({ v, onSaved }: { v: ManagementView; onSaved: () => void }) {
+export function ExpenseEntry({ v, onSaved }: { v: ManagementView; onSaved: () => void }) {
   const [kind, setKind] = useState<"contract" | "general">("contract");
   const [contract, setContract] = useState(String(v.contracts.find((c) => c.active)?.id ?? v.contracts[0]?.id ?? ""));
   const [category, setCategory] = useState("");
@@ -356,7 +356,6 @@ export default function Management() {
   const [error, setError] = useState<string | null>(null);
   const [closing, setClosing] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [view, setView] = useState<"expenses" | "contracts" | "partners" | "share">("expenses");
   const [deleting, setDeleting] = useState<{ entity: Deletable; id: number } | null>(null);
 
   const load = useCallback(() => {
@@ -415,7 +414,7 @@ export default function Management() {
   return (
     <div className="grid gap-5">
       <PrintHeader title="تقرير الإدارة" subtitle={monthLabel(v.month)} />
-      <PageHeader title="الإدارة" subtitle={`${monthLabel(v.month)}${v.closed ? " (مقفول)" : ""} — الدخل والمصروفات والربح`}>
+      <PageHeader title="الإدارة" subtitle={`${monthLabel(v.month)}${v.closed ? " (مقفول)" : ""} — كل حاجة في الشهر: الدخل، الهالك، الربح، والشركاء`}>
         <Select aria-label="الشهر" value={v.month} onChange={(e) => setMonth(e.target.value)}>
           {[...v.months].reverse().map((m) => (
             <option key={m.month} value={m.month}>
@@ -433,32 +432,17 @@ export default function Management() {
       <div className="grid gap-3.5 grid-cols-3 max-[1000px]:grid-cols-2">
         <Kpi label="الدخل من الشركات" value={<Money pt={pounds(t.clientBasePt)} />} />
         <Kpi label="لأصحاب المعدات" value={<Money pt={pounds(t.supplierCostPt)} />} />
-        <Kpi label="المصروفات" value={<Money pt={pounds(t.contractExpensesPt + t.generalExpensesPt)} />} />
+        <Kpi label="الهالك (المصروفات)" value={<Money pt={pounds(t.contractExpensesPt + t.generalExpensesPt)} />} />
         <Kpi tone="tax" label={v.taxLabel} value={<Money pt={pounds(t.tax5Pt)} />} />
         <Kpi tone="good" label="صافي ربح الشهر" value={<Money pt={pounds(t.monthNetPt)} />} />
         <Kpi tone="hero" label={`نصيب الإدارة ${v.rates ? percentFromBp(v.rates.management) : ""}`} value={<Money pt={pounds(t.managementPt)} />} sub={<>المحصّل منه {pounds(t.releasableManagementPt)}</>} />
       </div>
 
-      <div className="no-print flex gap-2 flex-wrap">
-        {(
-          [
-            ["expenses", "المصروفات"],
-            ["contracts", "العقود والمعدات"],
-            ["partners", "شركاء الإدارة"],
-            ["share", "نصيب الإدارة وقفل الشهر"],
-          ] as const
-        ).map(([id, label]) => (
-          <button key={id} onClick={() => setView(id)} className={`rounded-full px-4 py-2 font-bold border ${view === id ? "bg-amber text-ink border-amber" : "border-line text-muted bg-surface"}`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <ContractsTable v={v} />
 
-      {view === "contracts" && <ContractsTable v={v} />}
+      <ManagersPanels v={v} onSaved={load} />
 
-      {view === "partners" && <ManagersPanels v={v} onSaved={load} />}
-
-      {view === "contracts" && v.byEquipment.length > 0 && (
+      {v.byEquipment.length > 0 && (
         <Panel title="حسب المعدة">
           <div className="overflow-x-auto">
             <table className="tbl">
@@ -491,9 +475,8 @@ export default function Management() {
         </Panel>
       )}
 
-      {view === "expenses" && (
-        <Panel title={`مصروفات ${monthLabel(v.month)}`}>
-          {!v.closed && <ExpenseEntry key={v.month} v={v} onSaved={load} />}
+      {(
+        <Panel title={`الهالك (المصروفات) — ${monthLabel(v.month)}`} hint="التسجيل من صفحة «الهالك»">
           <div className="overflow-x-auto">
             <table className="tbl">
               <thead>
@@ -521,7 +504,7 @@ export default function Management() {
                     <td>{x.category ?? "—"}</td>
                     <td>{x.note ?? ""}</td>
                     <td className="n font-bold text-out">{pounds(x.amount_pt)}</td>
-                    <td className="text-end">{!v.closed && <TrashButton title="حذف المصروف" onClick={() => setDeleting({ entity: "expenses", id: x.id })} />}</td>
+                    <td />
                   </tr>
                 ))}
               </tbody>
@@ -531,7 +514,7 @@ export default function Management() {
         </Panel>
       )}
 
-      {view === "share" && (
+      {(
         <Panel title="نصيب الإدارة كل شهر">
           <div className="overflow-x-auto">
             <table className="tbl">
@@ -578,7 +561,7 @@ export default function Management() {
         </Panel>
       )}
 
-      {view === "share" && v.closedMonths.length > 0 && (
+      {v.closedMonths.length > 0 && (
         <Panel title="التسويات" hint="تصحيح لشهر مقفول، بيتسجل في الشهر المفتوح">
           <AdjustmentEntry v={v} onSaved={load} />
           <div className="overflow-x-auto">

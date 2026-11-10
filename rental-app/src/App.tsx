@@ -8,6 +8,7 @@ import Suppliers from "./pages/suppliers/Suppliers";
 import Drivers from "./pages/drivers/Drivers";
 import Clients from "./pages/clients/Clients";
 import Management from "./pages/management/Management";
+import Expenses from "./pages/expenses/Expenses";
 import Investors from "./pages/investors/Investors";
 import Treasury from "./pages/treasury/Treasury";
 import Tax from "./pages/tax/Tax";
@@ -60,6 +61,8 @@ export default function App() {
                 <Clients />
               ) : active === "management" ? (
                 <Management />
+              ) : active === "expenses" ? (
+                <Expenses />
               ) : active === "investors" ? (
                 <Investors />
               ) : active === "treasury" ? (
