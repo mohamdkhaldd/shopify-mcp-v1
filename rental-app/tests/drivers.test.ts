@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { freshDb, egp } from "./helpers";
 import { createClient, createContract, createEquipment, createSupplier } from "../core/services/master";
-import { fillRange } from "../core/services/sarki";
+import { fillRange, upsertDay } from "../core/services/sarki";
 import { computeBooks } from "../core/services/books";
 import { recordCapital, recordExpense, recordPayout } from "../core/services/ledger";
 import { supplierStatement } from "../core/services/reports";
@@ -23,7 +23,7 @@ function setup() {
 describe("السواقين", () => {
   it("إحنا بنقبّضه: المرتب − اللي خده = الباقي، وكل اللي خده بيتخصم من صاحب المعدة", () => {
     const { db, owner, eq } = setup();
-    const ahmed = createDriver(db, { name: "أحمد", supplierId: owner, equipmentId: eq, paidBy: "us", payKind: "month", ratePt: egp(6000), startDate: "2026-10-01" });
+    const ahmed = createDriver(db, { name: "أحمد", supplierId: owner, equipmentId: eq, payKind: "month", ratePt: egp(6000), startDate: "2026-10-01" });
     recordDriverPayment(db, { driverId: ahmed, date: "2026-10-10", amountPt: egp(2000), note: "سلفة" });
     const v = driversView(db, "2026-10", ahmed);
     expect(v.selected).toMatchObject({ earnedPt: egp(6000), paidPt: egp(2000), remainingPt: egp(4000), supplierName: "محمد", equipmentName: "لودر ٩٥٠" });
@@ -35,27 +35,24 @@ describe("السواقين", () => {
     expect(driversView(db, "2026-11", ahmed).selected).toMatchObject({ earnedPt: egp(6000), previousPt: egp(4000), paidPt: 0, remainingPt: egp(10_000) });
   });
 
-  it("يومية × أيام شغل المعدة في السركي", () => {
-    const { db, owner, eq } = setup();
-    const d = createDriver(db, { name: "سيد", supplierId: owner, equipmentId: eq, paidBy: "us", payKind: "day", ratePt: egp(250), startDate: "2026-10-01" });
-    expect(driversView(db, "2026-10", d).selected).toMatchObject({ days: 20, earnedPt: egp(5000), remainingPt: egp(5000) });
-  });
-
-  it("صاحب المعدة بيقبّضه: ملوش مرتب عندنا، واللي اديناهوله بيتخصم من صاحب المعدة", () => {
-    const { db, owner, eq } = setup();
-    const d = createDriver(db, { name: "حسن", supplierId: owner, equipmentId: eq, paidBy: "owner", payKind: "month" });
-    recordDriverPayment(db, { driverId: d, date: "2026-10-05", amountPt: egp(500) });
-    expect(driversView(db, "2026-10", d).selected).toMatchObject({ earnedPt: 0, paidPt: egp(500), remainingPt: 0 });
-    expect(supplierStatement(db, owner, "2026-10-31").totals.deductionsPt).toBe(egp(500));
-    // الفلوس طلعت من الخزنة
-    expect(computeBooks(db, "2026-10-31").treasury.balancePt).toBe(egp(100_000 - 500));
+  it("يومية × أيام الشغل (يوم الساعة = يوم كامل) + الأوفر", () => {
+    const { db, owner, eq, contract } = setup();
+    // يوم ٣: اشتغل ساعة بس — يوم ٤: ١١ ساعة (٣ أوفر) — يوم ٥ إجازة
+    upsertDay(db, contract, "2026-10-03", "client", { actualHoursMilli: 1000 });
+    upsertDay(db, contract, "2026-10-04", "client", { actualHoursMilli: 11_000 });
+    upsertDay(db, contract, "2026-10-05", "client", { isDayOff: true });
+    const d = createDriver(db, { name: "سيد", supplierId: owner, equipmentId: eq, payKind: "day", ratePt: egp(240), startDate: "2026-10-01" });
+    expect(driversView(db, "2026-10", d).selected).toMatchObject({ days: 19, overtimeHours: 3, overtimeRatePt: egp(30), basePt: egp(19 * 240), overtimePt: egp(90), earnedPt: egp(19 * 240 + 90) });
+    // سعر ساعة أوفر مكتوب
+    const m = createDriver(db, { name: "رضا", supplierId: owner, equipmentId: eq, payKind: "month", ratePt: egp(6000), overtimeRatePt: egp(40), startDate: "2026-10-01" });
+    expect(driversView(db, "2026-10", m).selected).toMatchObject({ basePt: egp(6000), overtimePt: egp(120), earnedPt: egp(6120) });
   });
 
   it("المعدة لازم تبقى بتاعة صاحب المعدة، والمرتب لازم يتكتب لو إحنا بنقبّضه", () => {
     const { db, owner, eq } = setup();
     const other = createSupplier(db, { name: "تاني" });
-    expect(() => createDriver(db, { name: "x", supplierId: other, equipmentId: eq, paidBy: "owner", payKind: "month" })).toThrow("مش بتاعة");
-    expect(() => createDriver(db, { name: "y", supplierId: owner, paidBy: "us", payKind: "month" })).toThrow("اكتب مرتب");
+    expect(() => createDriver(db, { name: "x", supplierId: other, equipmentId: eq, payKind: "month", ratePt: egp(100) })).toThrow("مش بتاعة");
+    expect(() => createDriver(db, { name: "y", supplierId: owner, payKind: "month" })).toThrow("اكتب مرتب");
   });
 });
 

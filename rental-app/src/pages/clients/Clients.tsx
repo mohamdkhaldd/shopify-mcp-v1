@@ -291,10 +291,10 @@ export default function Clients() {
   }
 
   const tabs: [Tab, string][] = [
-    ["statement", "كشف الحساب"],
-    ["invoices", "الفواتير"],
-    ["sheet", "سركي الشركة"],
+    ["statement", "المستخلص"],
+    ["sheet", "السركي"],
     ["payments", "الدفعات"],
+    ["invoices", "الفواتير"],
   ];
 
   return (
@@ -313,24 +313,26 @@ export default function Clients() {
             </Button>
           </div>
         </Panel>
+      ) : clientId === undefined ? (
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
+          {v.list.map((x) => (
+            <button key={x.id} onClick={() => (setClientId(x.id), setTab("statement"))} className="text-start grid gap-1 rounded-card border border-line bg-surface px-4 py-3.5 hover:border-amber shadow-card">
+              <b className="text-[16px]">{x.name}</b>
+              <small className="text-muted flex items-center gap-1.5">
+                <Pill>{x.kind === "company" ? "شركة" : "مقاول باطن"}</Pill>
+                {x.vat_applies || x.tax5_applies ? [x.vat_applies && "١٤٪", x.tax5_applies && "استقطاع ٣٪"].filter(Boolean).join(" + ") : "من غير ضرايب"}
+              </small>
+              <span className={`font-extrabold num text-lg ${x.remainingPt > 0 ? "text-out" : ""}`}>باقي عليه {pounds(x.remainingPt)}</span>
+            </button>
+          ))}
+        </div>
       ) : (
-        <div className="grid gap-4 items-start grid-cols-[250px_minmax(0,1fr)] max-[900px]:grid-cols-1">
-          <Panel className="no-print grid">
-            {v.list.map((x) => (
-              <button
-                key={x.id}
-                onClick={() => setClientId(x.id)}
-                className={`text-start grid gap-0.5 px-4 py-3 border-b border-line last:border-b-0 ${x.id === c.id ? "bg-amber-soft shadow-[inset_-4px_0_0_rgb(var(--amber))]" : "hover:bg-surface-2"}`}
-              >
-                <b>{x.name}</b>
-                <small className="text-muted flex items-center gap-1.5">
-                  <Pill>{x.kind === "company" ? "شركة" : "مقاول باطن"}</Pill>
-                  {x.vat_applies || x.tax5_applies ? [x.vat_applies && "١٤٪", x.tax5_applies && "استقطاع ٣٪"].filter(Boolean).join(" + ") : "من غير ضرايب"}
-                </small>
-                <span className={`font-extrabold num ${x.remainingPt > 0 ? "text-out" : ""}`}>باقي عليه {pounds(x.remainingPt)}</span>
-              </button>
-            ))}
-          </Panel>
+        <div className="grid gap-3">
+          <div className="no-print">
+            <button className="font-bold text-amber-deep hover:underline" onClick={() => setClientId(undefined)}>
+              ‹ كل الشركات ومقاولين الباطن
+            </button>
+          </div>
 
           <Panel
             title={c.name}

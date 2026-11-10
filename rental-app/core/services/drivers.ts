@@ -2,12 +2,13 @@ import { Db, monthOf, today, UserError } from "../db";
 import { live, monthsBetween } from "./books";
 import { Money, recordSupplierDeduction } from "./ledger";
 
-// السواقين: السواق على معدة صاحب معدة، وحسابه لوحده.
-//  - "إحنا بنقبّضه": ليه مرتب شهري، أو يومية × أيام شغل المعدة في السركي.
-//  - "صاحب المعدة بيقبّضه": ملوش عندنا مرتب، بنسجل بس اللي اديناهوله.
-// في الحالتين أي فلوس بنديها للسواق بتتسجل خصم من صاحب المعدة
+// السواقين اللي إحنا بنقبّضهم (اللي صاحب المعدة بيقبّضه ملناش دعوة بيه).
+// السواق على معدة صاحب معدة، وحسابه لوحده: مرتب شهري أو يومية × أيام شغل
+// المعدة في السركي — أي يوم اشتغل فيه = يوم كامل حتى لو ساعة — وفوقهم ساعات
+// الأوفر × سعر ساعة الأوفر. أي فلوس بنديها للسواق بتتسجل خصم من صاحب المعدة
 // (supplier_deductions.driver_id)، فبتتخصم من تصفيته آخر الشهر لوحدها.
 
+/** "owner" = قديم (صاحب المعدة بيقبّضه) — مبقاش بيتسجل */
 export type PaidBy = "us" | "owner";
 export type PayKind = "month" | "day";
 
@@ -16,9 +17,11 @@ export interface DriverInput {
   phone?: string | null;
   supplierId: number;
   equipmentId?: number | null;
-  paidBy: PaidBy;
+  paidBy?: PaidBy;
   payKind: PayKind;
   ratePt?: number | null;
+  /** سعر ساعة الأوفر (فاضي = اليومية ÷ ٨، أو المرتب ÷ ٣٠ ÷ ٨) */
+  overtimeRatePt?: number | null;
   startDate?: string;
 }
 
@@ -31,6 +34,7 @@ type DriverRow = {
   paid_by: PaidBy;
   pay_kind: PayKind;
   rate_pt: number | null;
+  overtime_rate_pt: number | null;
   start_date: string;
 };
 
@@ -42,25 +46,24 @@ function check(db: Db, v: DriverInput) {
     if (!e) throw new UserError("المعدة دي مش موجودة");
     if (e.supplier_id !== v.supplierId) throw new UserError("المعدة دي مش بتاعة صاحب المعدة ده");
   }
-  if (v.paidBy !== "us" && v.paidBy !== "owner") throw new UserError("اختار مين بيقبّض السواق");
   if (v.payKind !== "month" && v.payKind !== "day") throw new UserError("اختار شهري ولا يومية");
-  if (v.ratePt != null && !(Number.isSafeInteger(v.ratePt) && v.ratePt >= 0)) throw new UserError("المرتب مش صحيح");
-  if (v.paidBy === "us" && !v.ratePt) throw new UserError(v.payKind === "month" ? "اكتب مرتب السواق في الشهر" : "اكتب يومية السواق");
+  if (!v.ratePt || !(Number.isSafeInteger(v.ratePt) && v.ratePt > 0)) throw new UserError(v.payKind === "month" ? "اكتب مرتب السواق في الشهر" : "اكتب يومية السواق");
+  if (v.overtimeRatePt != null && !(Number.isSafeInteger(v.overtimeRatePt) && v.overtimeRatePt >= 0)) throw new UserError("سعر ساعة الأوفر مش صحيح");
 }
 
 export function createDriver(db: Db, v: DriverInput) {
   check(db, v);
   const r = db
-    .prepare("INSERT INTO drivers (name, phone, supplier_id, equipment_id, paid_by, pay_kind, rate_pt, start_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(v.name.trim(), v.phone?.trim() || null, v.supplierId, v.equipmentId ?? null, v.paidBy, v.payKind, v.paidBy === "us" ? v.ratePt ?? null : null, v.startDate || today());
+    .prepare("INSERT INTO drivers (name, phone, supplier_id, equipment_id, paid_by, pay_kind, rate_pt, overtime_rate_pt, start_date) VALUES (?, ?, ?, ?, 'us', ?, ?, ?, ?)")
+    .run(v.name.trim(), v.phone?.trim() || null, v.supplierId, v.equipmentId ?? null, v.payKind, v.ratePt, v.overtimeRatePt ?? null, v.startDate || today());
   return Number(r.lastInsertRowid);
 }
 
 export function updateDriver(db: Db, id: number, v: DriverInput) {
   check(db, v);
   const r = db
-    .prepare("UPDATE drivers SET name = ?, phone = ?, supplier_id = ?, equipment_id = ?, paid_by = ?, pay_kind = ?, rate_pt = ?, start_date = COALESCE(?, start_date) WHERE id = ? AND deleted_at IS NULL")
-    .run(v.name.trim(), v.phone?.trim() || null, v.supplierId, v.equipmentId ?? null, v.paidBy, v.payKind, v.paidBy === "us" ? v.ratePt ?? null : null, v.startDate || null, id);
+    .prepare("UPDATE drivers SET name = ?, phone = ?, supplier_id = ?, equipment_id = ?, paid_by = 'us', pay_kind = ?, rate_pt = ?, overtime_rate_pt = ?, start_date = COALESCE(?, start_date) WHERE id = ? AND deleted_at IS NULL")
+    .run(v.name.trim(), v.phone?.trim() || null, v.supplierId, v.equipmentId ?? null, v.payKind, v.ratePt, v.overtimeRatePt ?? null, v.startDate || null, id);
   if (!r.changes) throw new UserError("السواق ده مش موجود");
 }
 
@@ -87,25 +90,31 @@ export function recordDriverPayment(db: Db, v: { driverId: number; date: string;
   return recordSupplierDeduction(db, { ...v, supplierId: d.supplier_id, contractId: contract?.id ?? null, note, driverId: d.id, paidFromTreasury: true }, opts);
 }
 
-/** أيام شغل المعدة في الشهر (من سركي الشركة: كل يوم مسجل ومش إجازة). */
-function workedDays(db: Db, equipmentId: number | null, month: string) {
-  if (equipmentId == null) return 0;
-  return (
-    db
-      .prepare(
-        `SELECT COUNT(DISTINCT w.date) AS n FROM work_logs w JOIN contracts c ON c.id = w.contract_id
-         WHERE c.equipment_id = ? AND c.deleted_at IS NULL AND w.deleted_at IS NULL AND w.side = 'client' AND w.is_day_off = 0 AND substr(w.date, 1, 7) = ?`,
-      )
-      .get(equipmentId, month) as { n: number }
-  ).n;
+/** شغل المعدة في الشهر (من سركي الشركة): أيام الشغل (أي يوم مش إجازة = يوم كامل)، وساعات الأوفر. */
+function workOf(db: Db, equipmentId: number | null, month: string) {
+  if (equipmentId == null) return { days: 0, overtimeMilli: 0 };
+  const rows = db
+    .prepare(
+      `SELECT w.date, MAX(MAX(0, COALESCE(w.actual_hours_milli, w.base_hours_milli) - w.base_hours_milli)) AS ot
+       FROM work_logs w JOIN contracts c ON c.id = w.contract_id
+       WHERE c.equipment_id = ? AND c.deleted_at IS NULL AND w.deleted_at IS NULL AND w.side = 'client' AND w.is_day_off = 0 AND substr(w.date, 1, 7) = ?
+       GROUP BY w.date`,
+    )
+    .all(equipmentId, month) as { date: string; ot: number }[];
+  return { days: rows.length, overtimeMilli: rows.reduce((s, r) => s + r.ot, 0) };
 }
 
-/** مرتب السواق عن الشهر ده (لو إحنا بنقبّضه). */
+/** سعر ساعة الأوفر: المكتوب، أو اليومية ÷ ٨ (المرتب الشهري ÷ ٣٠ ÷ ٨) */
+const overtimeRate = (d: DriverRow) => d.overtime_rate_pt ?? Math.round((d.rate_pt ?? 0) / (d.pay_kind === "month" ? 240 : 8));
+
+/** مرتب السواق عن الشهر ده: المرتب (أو اليومية × الأيام) + الأوفر. */
 function earnedIn(db: Db, d: DriverRow, month: string) {
-  if (d.paid_by !== "us" || !d.rate_pt || month < monthOf(d.start_date)) return { days: d.pay_kind === "day" ? workedDays(db, d.equipment_id, month) : null, earnedPt: 0 };
-  if (d.pay_kind === "month") return { days: null, earnedPt: d.rate_pt };
-  const days = workedDays(db, d.equipment_id, month);
-  return { days, earnedPt: days * d.rate_pt };
+  const w = workOf(db, d.equipment_id, month);
+  const rate = overtimeRate(d);
+  if (!d.rate_pt || month < monthOf(d.start_date)) return { ...w, overtimeRatePt: rate, basePt: 0, overtimePt: 0, earnedPt: 0 };
+  const basePt = d.pay_kind === "month" ? d.rate_pt : w.days * d.rate_pt;
+  const overtimePt = Math.round((w.overtimeMilli * rate) / 1000);
+  return { ...w, overtimeRatePt: rate, basePt, overtimePt, earnedPt: basePt + overtimePt };
 }
 
 type PayRow = { id: number; driver_id: number; date: string; amount_pt: number; note: string | null; deleted_at: string | null; reversal_of: number | null };
@@ -116,7 +125,7 @@ export function driversView(db: Db, month = monthOf(today()), driverId?: number)
     .prepare(
       `SELECT d.*, s.name AS supplier_name, e.name AS equipment_name FROM drivers d
        JOIN suppliers s ON s.id = d.supplier_id LEFT JOIN equipment e ON e.id = d.equipment_id
-       WHERE d.deleted_at IS NULL ORDER BY d.name`,
+       WHERE d.deleted_at IS NULL AND d.paid_by = 'us' ORDER BY d.name`,
     )
     .all() as (DriverRow & { supplier_name: string; equipment_name: string | null })[];
   const pays = live(db.prepare("SELECT id, driver_id, date, amount_pt, note, deleted_at, reversal_of FROM supplier_deductions WHERE driver_id IS NOT NULL").all() as PayRow[]);
@@ -127,7 +136,7 @@ export function driversView(db: Db, month = monthOf(today()), driverId?: number)
     const now = earnedIn(db, d, month);
     const paidPt = sum(mine.filter((p) => p.date.startsWith(month)));
     // الحساب من أول ما اشتغل لحد الشهر ده: اتستحق كام واتصرفله كام
-    const months = d.paid_by === "us" ? monthsBetween(monthOf(d.start_date), month) : [];
+    const months = monthsBetween(monthOf(d.start_date), month);
     const totalEarnedPt = months.reduce((s, m) => s + earnedIn(db, d, m).earnedPt, 0);
     const totalPaidPt = sum(mine.filter((p) => p.date.slice(0, 7) <= month));
     return {
@@ -138,16 +147,20 @@ export function driversView(db: Db, month = monthOf(today()), driverId?: number)
       supplierName: d.supplier_name,
       equipmentId: d.equipment_id,
       equipmentName: d.equipment_name,
-      paidBy: d.paid_by,
       payKind: d.pay_kind,
-      ratePt: d.rate_pt,
+      ratePt: d.rate_pt ?? 0,
+      overtimeRateSetPt: d.overtime_rate_pt,
+      overtimeRatePt: now.overtimeRatePt,
       startDate: d.start_date,
       days: now.days,
+      overtimeHours: now.overtimeMilli / 1000,
+      basePt: now.basePt,
+      overtimePt: now.overtimePt,
       earnedPt: now.earnedPt,
       paidPt,
-      /** لسه ليه عندنا (إحنا بنقبّضه): كل اللي استحقه − كل اللي خده */
-      remainingPt: d.paid_by === "us" ? totalEarnedPt - totalPaidPt : 0,
-      previousPt: d.paid_by === "us" ? totalEarnedPt - now.earnedPt - (totalPaidPt - paidPt) : 0,
+      /** لسه ليه عندنا: كل اللي استحقه − كل اللي خده */
+      remainingPt: totalEarnedPt - totalPaidPt,
+      previousPt: totalEarnedPt - now.earnedPt - (totalPaidPt - paidPt),
     };
   });
 

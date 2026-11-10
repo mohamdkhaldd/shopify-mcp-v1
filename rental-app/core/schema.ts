@@ -163,10 +163,10 @@ CREATE TABLE IF NOT EXISTS supplier_deductions (
   ${reversalCheck}
 );
 
--- السواقين: كل سواق على معدة صاحب معدة. اللي بيقبضه يا إحنا (مرتب شهري أو
--- يومية × أيام شغل المعدة في السركي) يا صاحب المعدة نفسه (بنسجل بس اللي
--- اديناهوله). أي فلوس بنديها للسواق بتتسجل خصم من صاحب المعدة
--- (supplier_deductions.driver_id) — فبتتخصم من تصفيته آخر الشهر لوحدها.
+-- السواقين اللي إحنا بنقبّضهم: كل سواق على معدة صاحب معدة، ليه مرتب شهري أو
+-- يومية × أيام شغل المعدة في السركي (أي يوم اشتغل = يوم كامل مهما كانت
+-- الساعات)، وفوقهم ساعات الأوفر. أي فلوس بنديها للسواق بتتسجل خصم من صاحب
+-- المعدة (supplier_deductions.driver_id) — فبتتخصم من تصفيته آخر الشهر لوحدها.
 CREATE TABLE IF NOT EXISTS drivers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS drivers (
   paid_by TEXT NOT NULL DEFAULT 'us' CHECK (paid_by IN ('us', 'owner')),
   pay_kind TEXT NOT NULL DEFAULT 'month' CHECK (pay_kind IN ('month', 'day')),
   ${pt("rate_pt", true)},
+  ${pt("overtime_rate_pt", true)},
   start_date TEXT NOT NULL,
   deleted_at TEXT,
   delete_reason TEXT,
@@ -545,6 +546,7 @@ export function setupDatabase(db: Db): Db {
   for (const t of ["client_payments", "supplier_payments"])
     if (!columnsOf(db, t).includes("for_month")) db.exec(`ALTER TABLE ${t} ADD COLUMN for_month TEXT`);
   if (!columnsOf(db, "profit_payouts").includes("manager_name")) db.exec("ALTER TABLE profit_payouts ADD COLUMN manager_name TEXT");
+  if (!columnsOf(db, "drivers").includes("overtime_rate_pt")) db.exec("ALTER TABLE drivers ADD COLUMN overtime_rate_pt INTEGER");
   // فلوس اتدفعت لسواق (بتتخصم من صاحب المعدة)
   if (!columnsOf(db, "supplier_deductions").includes("driver_id")) db.exec("ALTER TABLE supplier_deductions ADD COLUMN driver_id INTEGER REFERENCES drivers(id)");
   // مصروف دفعه شريك إدارة من جيبه (مش من الخزنة) — الشركة عليها له المبلغ ده

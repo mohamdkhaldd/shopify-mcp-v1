@@ -12,7 +12,7 @@ export const navItems: NavItem[] = [
   { id: "suppliers", label: "أصحاب المعدات", icon: "suppliers" },
   { id: "drivers", label: "السواقين", icon: "drivers" },
   { id: "clients", label: "الشركات ومقاولين الباطن", icon: "clients" },
-  { id: "management", label: "الهالك والدخل", icon: "management" },
+  { id: "management", label: "الإدارة", icon: "management" },
   { id: "investors", label: "المستثمرين", icon: "investors" },
   { id: "treasury", label: "الخزنة", icon: "treasury" },
   { id: "tax", label: "الضرايب والإقرارات", icon: "tax" },

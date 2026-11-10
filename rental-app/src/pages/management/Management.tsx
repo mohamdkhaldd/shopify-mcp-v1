@@ -356,6 +356,7 @@ export default function Management() {
   const [error, setError] = useState<string | null>(null);
   const [closing, setClosing] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [view, setView] = useState<"expenses" | "contracts" | "partners" | "share">("expenses");
   const [deleting, setDeleting] = useState<{ entity: Deletable; id: number } | null>(null);
 
   const load = useCallback(() => {
@@ -414,7 +415,7 @@ export default function Management() {
   return (
     <div className="grid gap-5">
       <PrintHeader title="تقرير الإدارة" subtitle={monthLabel(v.month)} />
-      <PageHeader title="الهالك والدخل" subtitle={`الدخل من كل عقد، والهالك (المصروفات)، ونصيب شركاء الإدارة — ${monthLabel(v.month)}${v.closed ? " (مقفول)" : ""}`}>
+      <PageHeader title="الإدارة" subtitle={`${monthLabel(v.month)}${v.closed ? " (مقفول)" : ""} — الدخل والمصروفات والربح`}>
         <Select aria-label="الشهر" value={v.month} onChange={(e) => setMonth(e.target.value)}>
           {[...v.months].reverse().map((m) => (
             <option key={m.month} value={m.month}>
@@ -429,18 +430,35 @@ export default function Management() {
       {notice && <div className="no-print rounded-card border border-in bg-in-soft px-4 py-2.5 font-semibold">{notice}</div>}
       {error && <ErrorBox message={error} />}
 
-      <div className="grid gap-3.5 grid-cols-4 max-[1000px]:grid-cols-2">
-        <Kpi label="إجمالي الهامش" value={<Money pt={pounds(t.marginPt)} />} />
+      <div className="grid gap-3.5 grid-cols-3 max-[1000px]:grid-cols-2">
+        <Kpi label="الدخل من الشركات" value={<Money pt={pounds(t.clientBasePt)} />} />
+        <Kpi label="لأصحاب المعدات" value={<Money pt={pounds(t.supplierCostPt)} />} />
+        <Kpi label="المصروفات" value={<Money pt={pounds(t.contractExpensesPt + t.generalExpensesPt)} />} />
         <Kpi tone="tax" label={v.taxLabel} value={<Money pt={pounds(t.tax5Pt)} />} />
-        <Kpi label="مصروفات (عقود + عامة)" value={<Money pt={pounds(t.contractExpensesPt + t.generalExpensesPt)} />} sub={`عقود ${pounds(t.contractExpensesPt)} · عامة ${pounds(t.generalExpensesPt)}`} />
+        <Kpi tone="good" label="صافي ربح الشهر" value={<Money pt={pounds(t.monthNetPt)} />} />
         <Kpi tone="hero" label={`نصيب الإدارة ${v.rates ? percentFromBp(v.rates.management) : ""}`} value={<Money pt={pounds(t.managementPt)} />} sub={<>المحصّل منه {pounds(t.releasableManagementPt)}</>} />
       </div>
 
-      <ContractsTable v={v} />
+      <div className="no-print flex gap-2 flex-wrap">
+        {(
+          [
+            ["expenses", "المصروفات"],
+            ["contracts", "العقود والمعدات"],
+            ["partners", "شركاء الإدارة"],
+            ["share", "نصيب الإدارة وقفل الشهر"],
+          ] as const
+        ).map(([id, label]) => (
+          <button key={id} onClick={() => setView(id)} className={`rounded-full px-4 py-2 font-bold border ${view === id ? "bg-amber text-ink border-amber" : "border-line text-muted bg-surface"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
 
-      <ManagersPanels v={v} onSaved={load} />
+      {view === "contracts" && <ContractsTable v={v} />}
 
-      {v.byEquipment.length > 0 && (
+      {view === "partners" && <ManagersPanels v={v} onSaved={load} />}
+
+      {view === "contracts" && v.byEquipment.length > 0 && (
         <Panel title="حسب المعدة">
           <div className="overflow-x-auto">
             <table className="tbl">
@@ -473,7 +491,7 @@ export default function Management() {
         </Panel>
       )}
 
-      <div className="grid gap-3.5 items-start grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] max-[1100px]:grid-cols-1">
+      {view === "expenses" && (
         <Panel title={`مصروفات ${monthLabel(v.month)}`}>
           {!v.closed && <ExpenseEntry key={v.month} v={v} onSaved={load} />}
           <div className="overflow-x-auto">
@@ -511,7 +529,9 @@ export default function Management() {
           </div>
           <Note>مصروف العقد بيتخصم من ربح العقد ده. المصروف العام بيتخصم من ربح الشهر كله قبل التوزيع.</Note>
         </Panel>
+      )}
 
+      {view === "share" && (
         <Panel title="نصيب الإدارة كل شهر">
           <div className="overflow-x-auto">
             <table className="tbl">
@@ -556,9 +576,9 @@ export default function Management() {
           <ManagementPayout v={v} onSaved={load} />
           <MoneyTable rows={v.payouts} noteHeader="ملاحظة" contracts={[]} onDelete={(id) => setDeleting({ entity: "profit_payouts", id })} />
         </Panel>
-      </div>
+      )}
 
-      {v.closedMonths.length > 0 && (
+      {view === "share" && v.closedMonths.length > 0 && (
         <Panel title="التسويات" hint="تصحيح لشهر مقفول، بيتسجل في الشهر المفتوح">
           <AdjustmentEntry v={v} onSaved={load} />
           <div className="overflow-x-auto">

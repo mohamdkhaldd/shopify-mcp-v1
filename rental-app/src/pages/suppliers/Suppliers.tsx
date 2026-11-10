@@ -108,7 +108,7 @@ function DriversNote({ supplierId }: { supplierId: number }) {
     api.drivers().then((v) => setList(v.drivers.filter((d) => d.supplierId === supplierId)), () => {});
   }, [supplierId]);
   if (!list.length) return null;
-  const owed = list.filter((d) => d.paidBy === "us" && d.remainingPt > 0);
+  const owed = list.filter((d) => d.remainingPt > 0);
   return (
     <div className="px-4 py-3 border-t border-line text-sm leading-relaxed">
       <b>السواقين على معداته:</b> {list.map((d) => `${d.name}${d.equipmentName ? ` (${d.equipmentName})` : ""}`).join("، ")} — أي فلوس بنديها لسواق منهم بتتخصم من الحساب ده لوحدها.
@@ -287,11 +287,11 @@ export default function Suppliers() {
   }
 
   const tabs: [Tab, string][] = [
-    ["statement", "كشف الحساب"],
-    ["equipment", "معداته"],
-    ["sheet", "سركي صاحب المعدة"],
+    ["statement", "التصفية"],
+    ["sheet", "السركي"],
+    ["payments", "اديله فلوس"],
     ["deductions", "الخصومات"],
-    ["payments", "الدفعات"],
+    ["equipment", "معداته"],
   ];
 
   return (
@@ -310,24 +310,26 @@ export default function Suppliers() {
             </Button>
           </div>
         </Panel>
+      ) : supplierId === undefined ? (
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
+          {v.list.map((x) => (
+            <button key={x.id} onClick={() => (setSupplierId(x.id), setTab("statement"))} className="text-start grid gap-1 rounded-card border border-line bg-surface px-4 py-3.5 hover:border-amber shadow-card">
+              <b className="text-[16px]">{x.name}</b>
+              <small className="text-muted">
+                {x.equipmentCount === 1 ? "معدة واحدة" : `${x.equipmentCount} معدات`}
+                {x.phone ? ` · ${x.phone}` : ""}
+              </small>
+              <span className={`font-extrabold num text-lg ${x.remainingPt > 0 ? "text-out" : "text-in"}`}>باقي له {pounds(x.remainingPt)}</span>
+            </button>
+          ))}
+        </div>
       ) : (
-        <div className="grid gap-4 items-start grid-cols-[250px_minmax(0,1fr)] max-[900px]:grid-cols-1">
-          <Panel className="no-print grid">
-            {v.list.map((x) => (
-              <button
-                key={x.id}
-                onClick={() => setSupplierId(x.id)}
-                className={`text-start grid gap-0.5 px-4 py-3 border-b border-line last:border-b-0 ${x.id === s.supplier.id ? "bg-amber-soft shadow-[inset_-4px_0_0_rgb(var(--amber))]" : "hover:bg-surface-2"}`}
-              >
-                <b>{x.name}</b>
-                <small className="text-muted">
-                  {x.equipmentCount === 1 ? "معدة واحدة" : `${x.equipmentCount} معدات`}
-                  {x.phone ? ` · ${x.phone}` : ""}
-                </small>
-                <span className={`font-extrabold num ${x.remainingPt > 0 ? "text-out" : "text-in"}`}>باقي له {pounds(x.remainingPt)}</span>
-              </button>
-            ))}
-          </Panel>
+        <div className="grid gap-3">
+          <div className="no-print">
+            <button className="font-bold text-amber-deep hover:underline" onClick={() => setSupplierId(undefined)}>
+              ‹ كل أصحاب المعدات
+            </button>
+          </div>
 
           <Panel
             title={s.supplier.name}
