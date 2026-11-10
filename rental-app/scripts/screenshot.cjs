@@ -1,5 +1,5 @@
 // Launches the built app with the demo data and screenshots the dashboard (light, dark, print).
-// Needs: npm run build, npm run rebuild:electron, playwright, a display (xvfb-run on Linux).
+// Needs: npm run build, playwright, a display (xvfb-run on Linux).
 // Usage: SHOT_DIR=/tmp/shots xvfb-run -a node scripts/screenshot.cjs
 const { _electron } = require('playwright');
 const path = require('path');

@@ -13,7 +13,8 @@ function countPdfPages(buffer: Buffer) {
 
 /** Short sheets shrink to one A4 page (old behaviour); long statements may run onto more pages. */
 async function renderPdf(wc: WebContents, singlePage: boolean) {
-  const options = { printBackground: true, pageSize: "A4" as const, margins: { marginType: "default" as const } };
+  // الهوامش الافتراضية بتاعة Chromium (حوالي ١ سم)
+  const options = { printBackground: true, pageSize: "A4" as const };
   let scale = 1;
   let pdf = await wc.printToPDF({ ...options, scale });
   if (!singlePage) return pdf;
@@ -50,7 +51,7 @@ export async function printPreview(source: BrowserWindow, iconPath: string, sing
  *  as-is, no extra margins and no scaling, so no sheet spills onto the next. */
 export async function savePdf(source: BrowserWindow, file: string, pages = false) {
   const pdf = pages
-    ? await source.webContents.printToPDF({ printBackground: true, pageSize: "A4", margins: { marginType: "none" }, preferCSSPageSize: true })
+    ? await source.webContents.printToPDF({ printBackground: true, pageSize: "A4", preferCSSPageSize: true })
     : await renderPdf(source.webContents, false);
   fs.writeFileSync(file, pdf);
   return file;

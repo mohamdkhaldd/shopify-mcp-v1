@@ -45,7 +45,7 @@ npm run build:tablet     # web/Android build into dist-tablet/
 PREVIEW=1 npx vite build --config vite.tablet.config.ts   # isolated preview build
 ```
 
-`better-sqlite3` is compiled for one runtime at a time: `npm run rebuild:electron` before running Electron, `npm run rebuild:node` before Vitest.
+`better-sqlite3` ships ready-made binaries for every platform (Node and Electron alike), so there is nothing to rebuild.
 
 ## Releasing
 
