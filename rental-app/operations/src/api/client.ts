@@ -1,4 +1,3 @@
-import { mockInvoke } from "./mockDb";
 import {
   MonthMovement,
   HassanInstallment,
@@ -241,7 +240,7 @@ const FEE_CHANNELS: Record<string, { method: string; out?: (p: Record<string, un
   "waste:create": { method: "payment_method" },
   "treasury:createTransfer": { method: "from_account" },
 };
-const rawInvoke = (channel: string, payload?: unknown): Promise<any> => (window.api ? window.api.invoke(channel, payload) : mockInvoke(channel, payload));
+const rawInvoke = (channel: string, payload?: unknown): Promise<any> => (window.api ? window.api.invoke(channel, payload) : Promise.reject(new Error("البرنامج لازم يشتغل من نسخة الويندوز أو التابلت")));
 let feeRulesCache: Promise<Record<string, FeeRule>> | null = null;
 export const feeRulesApi = {
   get: (): Promise<Record<string, FeeRule>> => (feeRulesCache ??= rawInvoke("fees:get").catch(() => ({}))),
