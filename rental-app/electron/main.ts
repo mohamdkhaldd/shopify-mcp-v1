@@ -62,6 +62,12 @@ function createWindow(page: Page) {
     webPreferences: { contextIsolation: true, nodeIntegration: false, preload: path.join(__dirname, "preload.cjs") },
   });
   mainWindow = win;
+  // الشاشة بتعرض صفحات البرنامج بس: مفيش نوافذ جديدة ولا انتقال لأي موقع برّه
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  win.webContents.on("will-navigate", (e, url) => {
+    const dev = process.env.VITE_DEV_SERVER_URL;
+    if (!url.startsWith("file://") && !(dev && url.startsWith(dev))) e.preventDefault();
+  });
   win.on("closed", () => {
     if (mainWindow === win) mainWindow = null;
   });

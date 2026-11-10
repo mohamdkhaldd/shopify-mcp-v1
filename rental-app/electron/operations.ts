@@ -62,7 +62,7 @@ export async function startOperations(opts: {
   ipcMain.handle("sync:login", (_e, { password }: { password: string }) => sync?.login(password) ?? offline);
   ipcMain.handle("sync:undo", (_e, { id }: { id: number }) => (opts.readOnly() ? Promise.reject(new Error(EXPIRED_MESSAGE)) : sync?.undo(id)));
   ipcMain.handle("sync:setDeviceName", (_e, { name }: { name: string }) => sync?.setDeviceName(name) ?? offline);
-  ipcMain.handle("sync:activity", (_e, filters?: unknown) => sync?.activity(filters ?? {}) ?? { rows: [], pending: 0, devices: [] });
+  ipcMain.handle("sync:activity", (_e, filters?: unknown) => sync?.activity(filters ?? {}) ?? { rows: [], pending: [], devices: [] });
   return {
     sync,
     pending: () => unsyncedChanges(db as unknown as Db),
