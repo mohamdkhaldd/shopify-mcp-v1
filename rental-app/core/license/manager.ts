@@ -80,6 +80,8 @@ const FINAL = new Set(Object.keys(MESSAGES));
 const OFFLINE = "مقدرناش نوصل للنت — اتأكد إن النت شغال وجرّب تاني";
 const WRONG_PASSWORD = "الباسورد غلط";
 const PASSWORD_ROUNDS = 60_000;
+/** الجهاز عليه بيانات شركة تانية — شاشة التفعيل بتعرض زرار "امسح وابدأ من جديد" لما تشوف الرسالة دي */
+export const OTHER_COMPANY = "الجهاز ده عليه بيانات شركة تانية — الكود ده مينفعش عليه";
 const CHECK_IN = "لازم البرنامج يتصل بالنت مرة عشان يتأكد من الاشتراك";
 
 export interface LicenseOptions {
@@ -117,6 +119,15 @@ export function createLicenseManager(o: LicenseOptions) {
       : o.db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, v);
 
   let lastMessage: string | null = null;
+
+  /** فيه بيانات شغل حقيقية على الجهاز ده؟ */
+  const hasData = () => {
+    try {
+      return !!o.db.prepare("SELECT 1 FROM contracts UNION ALL SELECT 1 FROM suppliers UNION ALL SELECT 1 FROM clients LIMIT 1").get();
+    } catch {
+      return false;
+    }
+  };
 
   function status(): LicenseStatus {
     const token = get("license_token");
@@ -225,7 +236,8 @@ export function createLicenseManager(o: LicenseOptions) {
     if (!c.ok) return "حصلت مشكلة في التفعيل — جرّب تاني";
     // one device holds one company's data: a code of another company would mix the two
     const before = get("license_lic");
-    if (before && Number(before) !== c.payload.lic) return "الجهاز ده عليه بيانات شركة تانية — الكود ده مينفعش عليه";
+    // (لو الجهاز فاضي — مفيش عليه عقود ولا أصحاب معدات ولا عملاء — يقبل عادي)
+    if (before && Number(before) !== c.payload.lic && hasData()) return OTHER_COMPANY;
     set("license_lic", String(c.payload.lic));
     set("license_key", key);
     set("license_token", a.token);

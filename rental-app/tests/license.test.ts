@@ -212,8 +212,18 @@ describe("each customer's own company and cloud space", () => {
     s.state.codes.set("BNYN-B", { lic: 2, customer: "ب", max: 2, revoked: false, devices: new Set() });
     const db = freshDb();
     expect((await manager(s, "laptop", db).activate("BNYN-A")).ok).toBe(true);
+    db.prepare("INSERT INTO suppliers (name) VALUES ('صاحب معدة')").run();
     expect(await manager(s, "laptop", db).activate("BNYN-B")).toEqual({ ok: false, message: "الجهاز ده عليه بيانات شركة تانية — الكود ده مينفعش عليه" });
     expect(manager(s, "laptop", db).status()).toMatchObject({ state: "active", customer: "أ" });
+  });
+
+  it("a device with no data of the old company takes the new code", async () => {
+    const s = fakeServer();
+    s.state.codes.set("BNYN-A", { lic: 1, customer: "أ", max: 2, revoked: false, devices: new Set() });
+    s.state.codes.set("BNYN-B", { lic: 2, customer: "ب", max: 2, revoked: false, devices: new Set() });
+    const db = freshDb();
+    expect((await manager(s, "laptop", db).activate("BNYN-A")).ok).toBe(true);
+    expect(await manager(s, "laptop", db).activate("BNYN-B")).toMatchObject({ ok: true, status: { customer: "ب" } });
   });
 });
 

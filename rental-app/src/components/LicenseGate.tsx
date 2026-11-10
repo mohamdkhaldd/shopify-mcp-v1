@@ -1,6 +1,7 @@
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { licenseApi, LicenseStatus } from "../api/client";
 import { BrandContext, brandFrom } from "../context/BrandContext";
+import { signOutOfDevice } from "./signOut";
 
 /**
  * Nothing of the app shows until this copy is activated. The code also brings
@@ -91,6 +92,14 @@ export function Activate({ message, onDone }: { message: string | null; onDone: 
           {busy ? "بيتأكد من الكود..." : password !== null ? "ادخل" : "فعّل البرنامج"}
         </button>
         {error && <div className="rounded-lg border border-[#EF4444] bg-[#FEF2F2] text-[#B91C1C] text-sm font-semibold px-3 py-2">{error}</div>}
+        {error?.includes("بيانات شركة تانية") && (
+          <div className="grid gap-2 text-sm text-[#334155]">
+            <div>الجهاز ده كان متفعّل قبل كده بكود شركة تانية، وبياناتها لسه عليه. لو مش محتاجها، امسحها وفعّل بالكود الجديد — بيانات الكود الجديد هتنزل من السحابة لوحدها.</div>
+            <button onClick={() => signOutOfDevice()} className="rounded-lg border border-[#B91C1C] text-[#B91C1C] font-bold py-2 hover:bg-[#FEF2F2]">
+              امسح البيانات القديمة من الجهاز ده
+            </button>
+          </div>
+        )}
         <div className="text-xs text-[#64748B]">الكود بيشتغل على عدد أجهزة محدد. أول مرة لازم يكون فيه نت، وبعدها البرنامج بيشتغل من غير نت لحد ١٤ يوم.</div>
       </div>
     </div>
