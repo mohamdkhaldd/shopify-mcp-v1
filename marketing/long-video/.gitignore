@@ -4,3 +4,5 @@ capture/pages.txt
 out/
 node_modules
 .cache/
+capture/v2/
+capture/pages2*.txt
