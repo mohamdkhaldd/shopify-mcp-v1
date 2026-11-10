@@ -9,6 +9,25 @@ import { TrashButton } from "../../components/party";
 import { dateLabel, monthLabel, pounds } from "../../utils/format";
 import { moneyToPt } from "../../utils/input";
 import { today } from "../../../core/db";
+import { VatDeclaration, WhtDeclaration } from "./Declarations";
+
+type Mode = "file" | "vat" | "wht";
+const MODES: [Mode, string][] = [
+  ["file", "الملف الضريبي"],
+  ["vat", "إقرار ١٤٪ الشهري"],
+  ["wht", "إقرار ٣٪ السنوي"],
+];
+function ModeBar({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
+  return (
+    <div className="no-print flex gap-2 flex-wrap">
+      {MODES.map(([id, label]) => (
+        <button key={id} onClick={() => setMode(id)} className={`rounded-full px-4 py-2 font-bold border ${mode === id ? "bg-amber text-ink border-amber" : "border-line text-muted bg-surface"}`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 type Tab = "client" | "equipment" | "month" | "tax5" | "paid";
 
@@ -89,6 +108,7 @@ function Empty({ cols }: { cols: number }) {
 export default function Tax() {
   const [v, setV] = useState<TaxView | null>(null);
   const [tab, setTab] = useState<Tab>("client");
+  const [mode, setMode] = useState<Mode>("file");
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ entity: Deletable; id: number } | null>(null);
 
@@ -98,6 +118,14 @@ export default function Tax() {
   useEffect(load, [load]);
 
   if (!v) return error ? <ErrorBox message={error} /> : <Loading />;
+  if (mode !== "file")
+    return (
+      <div className="grid gap-5">
+        <PageHeader title="الضرايب والإقرارات" subtitle={mode === "vat" ? "ملخص الإقرار الشهري: الفواتير اللي طلعت لكل شركة والـ ١٤٪ اللي عليك" : "كل سنة: اشتغلت بكام مع كل شركة واتخصم منك كام ٣٪"} />
+        <ModeBar mode={mode} setMode={setMode} />
+        {mode === "vat" ? <VatDeclaration v={v} /> : <WhtDeclaration v={v} />}
+      </div>
+    );
   const t = v.totals;
   const vatWithClients = t.vat.invoicedPt - t.vat.collectedPt;
   // الـ ٥٪ على الهامش اتلغت (الضريبة ٣٪ استقطاع) — بتظهر بس لو فيه حاجة قديمة متسجلة
@@ -178,13 +206,14 @@ export default function Tax() {
   return (
     <div className="grid gap-5">
       <PrintHeader title="الملف الضريبي" subtitle={dateLabel(new Date().toLocaleDateString("en-CA"))} />
-      <PageHeader title="الملف الضريبي" subtitle="ضريبة القيمة المضافة ١٤٪ — والـ ٣٪ استقطاع بتخصمها الشركات وتدفعها عننا">
+      <PageHeader title="الضرايب والإقرارات" subtitle="ضريبة القيمة المضافة ١٤٪ — والـ ٣٪ استقطاع بتخصمها الشركات وتدفعها عننا">
         <Button primary onClick={() => setTab("paid")}>
           + دفع للضرايب
         </Button>
         <PrintButtons pdfName="الملف الضريبي" singlePage={false} />
         <Button onClick={exportExcel}>Excel</Button>
       </PageHeader>
+      <ModeBar mode={mode} setMode={setMode} />
       {error && <ErrorBox message={error} />}
 
       <div className="grid gap-3.5 grid-cols-4 max-[1000px]:grid-cols-2">

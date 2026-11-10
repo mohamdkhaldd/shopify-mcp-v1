@@ -18,10 +18,10 @@ describe("rental treasury accounts", () => {
     expect(transferFee(db, "cash", egp(50_000))).toBe(0);
   });
 
-  it("three accounts: instapay, wallet, cash", () => {
+  it("four accounts: instapay, wallet, cash, checks", () => {
     const db = freshDb();
     const keys = (db.prepare("SELECT key, name FROM treasury_accounts WHERE deleted_at IS NULL ORDER BY sort").all() as { key: string; name: string }[]);
-    expect(keys).toEqual([{ key: "instapay", name: "انستا باي" }, { key: "wallet", name: "محفظة" }, { key: "cash", name: "كاش" }]);
+    expect(keys).toEqual([{ key: "instapay", name: "انستا باي" }, { key: "wallet", name: "محفظة" }, { key: "cash", name: "كاش" }, { key: "checks", name: "شيكات" }]);
   });
 
   it("balances per account, held money, transfer fee, and delete takes the fee along", () => {

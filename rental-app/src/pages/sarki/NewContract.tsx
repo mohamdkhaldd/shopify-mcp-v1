@@ -78,7 +78,7 @@ export default function NewContract({ onClose, onCreated }: { onClose: () => voi
         siteName: site.trim() || undefined,
         name: contractName.trim() || undefined,
       };
-      if (clientSel === NEW && !clientName.trim()) throw new Error("اكتب اسم الشركة أو الفرد");
+      if (clientSel === NEW && !clientName.trim()) throw new Error("اكتب اسم الشركة أو مقاول الباطن");
       if (eqSel === NEW && !eqName.trim()) throw new Error("اكتب اسم المعدة");
       if (eqSel === NEW && supSel === NEW && !supName.trim()) throw new Error("اكتب اسم صاحب المعدة");
       onCreated(await api.newContract(input));
@@ -108,11 +108,11 @@ export default function NewContract({ onClose, onCreated }: { onClose: () => voi
       ) : (
         <div className="grid gap-4">
           <fieldset className="grid gap-2 border border-line rounded-card p-3">
-            <legend className="px-1 text-xs font-bold text-muted">الشركة / الفرد (العميل)</legend>
+            <legend className="px-1 text-xs font-bold text-muted">الشركة / مقاول الباطن (العميل)</legend>
             <Select value={clientSel} onChange={(e) => setClientSel(e.target.value)} aria-label="العميل">
               {opts.clients.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} {c.kind === "individual" ? "(فرد)" : ""}
+                  {c.name} {c.kind === "individual" ? "(مقاول باطن)" : ""}
                 </option>
               ))}
               <option value={NEW}>+ عميل جديد</option>
@@ -125,7 +125,7 @@ export default function NewContract({ onClose, onCreated }: { onClose: () => voi
                 <Labeled label="النوع">
                   <Select value={clientKind} onChange={(e) => kindChanged(e.target.value as "company" | "individual")}>
                     <option value="company">شركة</option>
-                    <option value="individual">فرد</option>
+                    <option value="individual">مقاول باطن (من غير ضرايب)</option>
                   </Select>
                 </Labeled>
                 <label className="flex items-center gap-1.5 text-sm font-semibold">

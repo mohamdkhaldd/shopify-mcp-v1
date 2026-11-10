@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, appApi, Deletable, SuppliersView } from "../../api/client";
+import { api, appApi, Deletable, DriversView, SuppliersView } from "../../api/client";
 import { Button, ErrorBox, Loading, PageHeader, Panel, Pill } from "../../components/ui";
 import { Labeled, TextInput } from "../../components/Field";
 import { PrintButtons, PrintHeader, PrintSignoff } from "../../components/Print";
@@ -96,6 +96,26 @@ function Statement({ s }: { s: Selected }) {
             </table>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+/** السواقين اللي على معدات صاحب المعدة ده — ولو حد فيهم لسه ليه مرتب، يتخصم منه قبل ما ندفعله الباقي. */
+function DriversNote({ supplierId }: { supplierId: number }) {
+  const [list, setList] = useState<DriversView["drivers"]>([]);
+  useEffect(() => {
+    api.drivers().then((v) => setList(v.drivers.filter((d) => d.supplierId === supplierId)), () => {});
+  }, [supplierId]);
+  if (!list.length) return null;
+  const owed = list.filter((d) => d.paidBy === "us" && d.remainingPt > 0);
+  return (
+    <div className="px-4 py-3 border-t border-line text-sm leading-relaxed">
+      <b>السواقين على معداته:</b> {list.map((d) => `${d.name}${d.equipmentName ? ` (${d.equipmentName})` : ""}`).join("، ")} — أي فلوس بنديها لسواق منهم بتتخصم من الحساب ده لوحدها.
+      {owed.length > 0 && (
+        <div className="no-print mt-1 text-out font-semibold">
+          لسه لينا ندفع: {owed.map((d) => `${d.name} ${pounds(d.remainingPt)}`).join("، ")} — دي هتتخصم من صاحب المعدة أول ما تدفعها للسواق، فخد بالك قبل ما تدفعله الباقي كله.
+        </div>
       )}
     </div>
   );
@@ -231,7 +251,7 @@ export default function Suppliers() {
 
   function exportStatement() {
     if (!s) return;
-    appApi.exportExcel(`كشف حساب ${s.supplier.name}`, [
+    appApi.exportExcel(`تصفية ${s.supplier.name}`, [
       {
         title: "كشف الحساب",
         columns: [
@@ -313,7 +333,7 @@ export default function Suppliers() {
             title={s.supplier.name}
             actions={
               <>
-                <PrintButtons pdfName={`كشف حساب ${s.supplier.name}`} singlePage={false} />
+                <PrintButtons pdfName={`تصفية ${s.supplier.name}`} singlePage={false} />
                 <Button onClick={exportStatement}>Excel</Button>
                 <Button onClick={() => setForm("editSupplier")}>تعديل</Button>
                 <Button danger title="حذف صاحب المعدة" onClick={() => setDeleting({ entity: "suppliers", id: s.supplier.id })}>
@@ -322,7 +342,7 @@ export default function Suppliers() {
               </>
             }
           >
-            <PrintHeader title={`كشف حساب صاحب المعدة — ${s.supplier.name}`} subtitle={dateLabel(new Date().toLocaleDateString("en-CA"))} />
+            <PrintHeader title={`تصفية صاحب المعدة — ${s.supplier.name}`} subtitle={dateLabel(new Date().toLocaleDateString("en-CA"))} />
             <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] border-b border-line">
               <Fact label="إجمالي المستحق له">{pounds(s.totals.fromSarkiPt)}</Fact>
               <Fact label="خصومات (دفعناها عنه)" tone="text-tax">
@@ -346,6 +366,7 @@ export default function Suppliers() {
             {tab === "statement" && (
               <>
                 <Statement s={s} />
+                <DriversNote supplierId={s.supplier.id} />
                 <MonthCoverage months={s.byMonth.months} advancePt={s.byMonth.advancePt} dueLabel="له من السركي" paidLabel="خد منها" />
                 <PrintSignoff others={["توقيع صاحب المعدة"]} />
                 <div className="no-print text-xs text-muted px-4 py-2.5 border-t border-line">ده اللي بيتطبع لصاحب المعدة — مفيهوش أي حاجة عن الشركة أو ربحنا.</div>

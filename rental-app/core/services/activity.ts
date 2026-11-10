@@ -25,6 +25,7 @@ const SOFT_DELETE_TABLES = new Set([
   "suppliers",
   "investors",
   "expense_categories",
+  "drivers",
 ]);
 
 export function runAction<T>(db: Db, label: string, fn: () => T): { value: T; actionId: string } {

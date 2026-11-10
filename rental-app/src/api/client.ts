@@ -4,6 +4,9 @@ import type { ActivityView } from "../../core/services/activity";
 import type { NewContractInput } from "../../core/services/master";
 import type { DayPatch } from "../../core/services/sarki";
 import type { Deletable } from "../../core/services/deletion";
+import type { DriverInput, driversView } from "../../core/services/drivers";
+
+export type DriversView = ReturnType<typeof driversView>;
 
 // Thin typed wrapper over the single "core:call" IPC channel (see electron/ipc.ts).
 
@@ -81,6 +84,10 @@ export const api = {
   supplierPayment: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null; confirmNegative?: boolean } & Money) => call<number>("supplierPayment", v),
   supplierDeduction: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean } & Money) =>
     call<number>("supplierDeduction", v),
+  drivers: (month?: string, driverId?: number) => call<DriversView>("drivers", { month, driverId }),
+  createDriver: (v: DriverInput) => call<number>("createDriver", v),
+  updateDriver: (v: DriverInput & { id: number }) => call("updateDriver", v),
+  driverPayment: (v: { driverId: number; date: string; amountPt: number; note?: string; confirmNegative?: boolean } & Money) => call<number>("driverPayment", v),
   clients: (clientId?: number) => call<ClientsView>("clients", { clientId }),
   createClient: (v: { kind: "company" | "individual"; name: string; phone?: string; taxId?: string; vatApplies?: boolean; tax5Applies?: boolean }) => call<number>("createClient", v),
   updateClient: (v: { id: number; kind: "company" | "individual"; name: string; phone?: string | null; taxId?: string | null }) => call("updateClient", v),
@@ -88,7 +95,7 @@ export const api = {
   clientPayment: (v: { clientId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null } & Money) => call<number>("clientPayment", v),
   management: (month?: string) => call<ManagementView>("management", { month }),
   createExpenseCategory: (name: string) => call<number>("createExpenseCategory", { name }),
-  expense: (v: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean } & Money) =>
+  expense: (v: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; paidBy?: string | null; confirmNegative?: boolean } & Money) =>
     call<number>("expense", v),
   managementPayout: (v: { date: string; amountPt: number; note?: string; managerName?: string | null; confirmNegative?: boolean } & Money) => call<number>("managementPayout", v),
   setContractManagers: (v: { contractId: number; managers: { name: string; shareBp: number }[] }) => call("setContractManagers", v),

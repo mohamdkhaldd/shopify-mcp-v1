@@ -85,9 +85,18 @@ export function managersReport(db: Db, books: Books, month: string) {
     )
     .all() as { manager_name: string; amount_pt: number }[];
 
-  const people = new Map<string, { name: string; monthPt: number; byContract: { contractId: number; code: string; amountPt: number }[]; accruedPt: number; paidPt: number }>();
+  // مصاريف دفعها الشريك من جيبه (مش من الخزنة) — الشركة عليها له المبلغ ده
+  const pocket = db
+    .prepare(
+      `SELECT e.paid_by, e.amount_pt, e.date FROM expenses e
+       WHERE e.paid_by IS NOT NULL AND e.deleted_at IS NULL AND e.reversal_of IS NULL
+         AND NOT EXISTS (SELECT 1 FROM expenses r WHERE r.reversal_of = e.id AND r.deleted_at IS NULL)`,
+    )
+    .all() as { paid_by: string; amount_pt: number; date: string }[];
+
+  const people = new Map<string, { name: string; monthPt: number; byContract: { contractId: number; code: string; amountPt: number }[]; accruedPt: number; paidPt: number; pocketPt: number; pocketMonthPt: number }>();
   const person = (name: string) => {
-    if (!people.has(name)) people.set(name, { name, monthPt: 0, byContract: [], accruedPt: 0, paidPt: 0 });
+    if (!people.has(name)) people.set(name, { name, monthPt: 0, byContract: [], accruedPt: 0, paidPt: 0, pocketPt: 0, pocketMonthPt: 0 });
     return people.get(name)!;
   };
   for (const list of managers.values()) for (const x of list) person(x.name);
@@ -109,12 +118,18 @@ export function managersReport(db: Db, books: Books, month: string) {
     }
   }
   for (const p of payouts) person(p.manager_name).paidPt += p.amount_pt;
+  for (const e of pocket) {
+    const p = person(e.paid_by);
+    p.pocketPt += e.amount_pt;
+    if (e.date.startsWith(month)) p.pocketMonthPt += e.amount_pt;
+  }
 
   return {
     contracts,
     unassignedPt,
     people: [...people.values()]
-      .map((p) => ({ ...p, balancePt: p.accruedPt - p.paidPt }))
+      // ليه: نصيبه + اللي صرفه من جيبه − اللي خده
+      .map((p) => ({ ...p, balancePt: p.accruedPt + p.pocketPt - p.paidPt }))
       .sort((a, b) => b.monthPt - a.monthPt || a.name.localeCompare(b.name)),
   };
 }

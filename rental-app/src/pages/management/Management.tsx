@@ -107,7 +107,9 @@ function ExpenseEntry({ v, onSaved }: { v: ManagementView; onSaved: () => void }
   const [confirmCash, setConfirmCash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [money, setMoney] = useState<MoneyPick>({});
+  const [paidBy, setPaidBy] = useState("");
   const accounts = useAccounts();
+  const partners = v.managers.people.map((p) => p.name);
 
   async function save(confirmNegative = false) {
     setError(null);
@@ -115,11 +117,11 @@ function ExpenseEntry({ v, onSaved }: { v: ManagementView; onSaved: () => void }
     try {
       const amountPt = moneyToPt(amount);
       if (!amountPt || amountPt <= 0) throw new Error("اكتب المبلغ");
-      const problem = moneyProblem(money, accounts, "out");
+      const problem = paidBy ? null : moneyProblem(money, accounts, "out");
       if (problem) throw new Error(problem);
       let categoryId: number | null = category && category !== "new" ? Number(category) : null;
       if (category === "new" && newCategory.trim()) categoryId = await api.createExpenseCategory(newCategory.trim());
-      await api.expense({ kind, contractId: kind === "contract" ? Number(contract) : null, categoryId, date, amountPt, note: note.trim() || undefined, confirmNegative, ...money, account: money.account || accounts[0]?.key });
+      await api.expense({ kind, contractId: kind === "contract" ? Number(contract) : null, categoryId, date, amountPt, note: note.trim() || undefined, paidBy: paidBy || null, confirmNegative, ...(paidBy ? {} : { ...money, account: money.account || accounts[0]?.key }) });
       setAmount("");
       setNote("");
       setNewCategory("");
@@ -178,7 +180,19 @@ function ExpenseEntry({ v, onSaved }: { v: ManagementView; onSaved: () => void }
         <Labeled label="البيان">
           <TextInput value={note} onChange={(e) => setNote(e.target.value)} className="w-40" />
         </Labeled>
-        <AccountFields direction="out" value={money} onChange={setMoney} amountPt={(() => { try { return moneyToPt(amount); } catch { return null; } })()} />
+        {partners.length > 0 && (
+          <Labeled label="مين دفع">
+            <Select value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
+              <option value="">من الخزنة</option>
+              {partners.map((n) => (
+                <option key={n} value={n}>
+                  {n} من جيبه
+                </option>
+              ))}
+            </Select>
+          </Labeled>
+        )}
+        {!paidBy && <AccountFields direction="out" value={money} onChange={setMoney} amountPt={(() => { try { return moneyToPt(amount); } catch { return null; } })()} />}
         <Button primary onClick={() => save()} disabled={busy}>
           حفظ المصروف
         </Button>
@@ -400,7 +414,7 @@ export default function Management() {
   return (
     <div className="grid gap-5">
       <PrintHeader title="تقرير الإدارة" subtitle={monthLabel(v.month)} />
-      <PageHeader title="الإدارة" subtitle={`ربح كل عقد وكل معدة، والمصروفات، ونصيب الإدارة — ${monthLabel(v.month)}${v.closed ? " (مقفول)" : ""}`}>
+      <PageHeader title="الهالك والدخل" subtitle={`الدخل من كل عقد، والهالك (المصروفات)، ونصيب شركاء الإدارة — ${monthLabel(v.month)}${v.closed ? " (مقفول)" : ""}`}>
         <Select aria-label="الشهر" value={v.month} onChange={(e) => setMonth(e.target.value)}>
           {[...v.months].reverse().map((m) => (
             <option key={m.month} value={m.month}>

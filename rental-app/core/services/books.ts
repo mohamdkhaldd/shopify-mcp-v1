@@ -45,7 +45,7 @@ export interface MonthResult {
 type Row = Record<string, any>;
 
 /** Rows that still count: drops deleted rows, cancelled originals and their reversals. */
-function live<T extends Row>(rows: T[]): T[] {
+export function live<T extends Row>(rows: T[]): T[] {
   const kept = rows.filter((r) => !r.deleted_at);
   const reversed = new Set(kept.filter((r) => r.reversal_of != null).map((r) => r.reversal_of));
   return kept.filter((r) => r.reversal_of == null && !reversed.has(r.id));
@@ -53,7 +53,7 @@ function live<T extends Row>(rows: T[]): T[] {
 
 const sum = <T>(rows: T[], f: (r: T) => number) => rows.reduce((s, r) => s + f(r), 0);
 
-function monthsBetween(from: string, to: string): string[] {
+export function monthsBetween(from: string, to: string): string[] {
   const out: string[] = [];
   let [y, m] = from.split("-").map(Number);
   const [ty, tm] = to.split("-").map(Number);
@@ -195,7 +195,7 @@ export function computeBooks(db: Db, asOf: string = today()) {
     const out =
       sum(supplierPayments.filter((p) => p.contract_id === c.id), (p) => p.amount_pt) +
       sum(deductions.filter((d) => d.contract_id === c.id && d.paid_from_treasury), (d) => d.amount_pt) +
-      sum(expenses.filter((e) => e.contract_id === c.id), (e) => e.amount_pt);
+      sum(expenses.filter((e) => e.contract_id === c.id && !e.paid_by), (e) => e.amount_pt);
     const back = sum(invoices.filter((i) => i.contractId === c.id), (i) => i.collectedBasePt);
     return { contractId: c.id, outPt: out, collectedBasePt: back, deployedPt: Math.max(0, out - back) };
   });

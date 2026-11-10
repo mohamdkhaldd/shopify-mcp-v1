@@ -173,6 +173,7 @@ export default function ManagersPanels({ v, onSaved }: { v: ManagementView; onSa
                 <th>من كل عقد ({monthLabel(v.month)})</th>
                 <th className="n">توتال الشهر</th>
                 <th className="n">له من الأول</th>
+                <th className="n">صرف من جيبه</th>
                 <th className="n">اتصرفله</th>
                 <th className="n">الباقي له</th>
               </tr>
@@ -180,7 +181,7 @@ export default function ManagersPanels({ v, onSaved }: { v: ManagementView; onSa
             <tbody>
               {r.people.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center text-muted py-6">
+                  <td colSpan={7} className="text-center text-muted py-6">
                     لسه محددتش شركاء إدارة لأي عقد — دوس "حدد الشركاء" جنب العقد.
                   </td>
                 </tr>
@@ -201,6 +202,7 @@ export default function ManagersPanels({ v, onSaved }: { v: ManagementView; onSa
                   </td>
                   <td className="n font-extrabold text-in">{pounds(p.monthPt)}</td>
                   <td className="n">{pounds(p.accruedPt)}</td>
+                  <td className="n">{p.pocketPt ? pounds(p.pocketPt) : "—"}</td>
                   <td className="n">{pounds(p.paidPt)}</td>
                   <td className={`n font-bold ${p.balancePt > 0 ? "text-in" : ""}`}>{pounds(p.balancePt)}</td>
                 </tr>
@@ -208,7 +210,7 @@ export default function ManagersPanels({ v, onSaved }: { v: ManagementView; onSa
             </tbody>
           </table>
         </div>
-        <Note>اللي اتصرفله = اللي اتسجل باسمه في "صرف من نصيب الإدارة" تحت.</Note>
+        <Note>الباقي له = نصيبه + اللي صرفه من جيبه − اللي اتصرفله. «صرف من جيبه» = مصروف اتسجل «مين دفع: فلان من جيبه». «اتصرفله» = اللي اتسجل باسمه في "صرف من نصيب الإدارة" تحت (ومنها ترجّعله فلوسه).</Note>
       </Panel>
 
       {editing && <ManagersEditor contract={editing} names={names} onClose={() => setEditing(null)} onSaved={onSaved} />}

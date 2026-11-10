@@ -362,7 +362,9 @@ export function managementView(db: Db, month?: string, now: string = today()) {
     ? (
         db
           .prepare(
-            `SELECT x.id, x.kind, x.date, x.amount_pt, x.note, x.contract_id, c.code, k.name AS category
+            `SELECT x.id, x.kind, x.date, x.amount_pt,
+                    CASE WHEN x.paid_by IS NOT NULL THEN trim(coalesce(x.note, '') || ' — دفعه ' || x.paid_by || ' من جيبه', ' —') ELSE x.note END AS note,
+                    x.contract_id, c.code, k.name AS category
              FROM expenses x LEFT JOIN contracts c ON c.id = x.contract_id LEFT JOIN expense_categories k ON k.id = x.category_id
              WHERE substr(x.date, 1, 7) = ? AND x.deleted_at IS NULL AND x.reversal_of IS NULL
                AND NOT EXISTS (SELECT 1 FROM expenses r WHERE r.reversal_of = x.id AND r.deleted_at IS NULL)
@@ -677,7 +679,54 @@ export function taxView(db: Db, now: string = today()) {
     })),
     payments: livePayments,
     months: books.months.map((m) => m.month),
+    ...declarations(books, clients, equipment, contractEq, (m) => paidByMonth("vat", m)),
   };
+}
+
+/**
+ * الإقرارات: ملخص إقرار الـ ١٤٪ كل شهر (الفواتير اللي طلعت: لمين وبكام والضريبة
+ * عليها)، وإقرار الـ ٣٪ كل سنة (اشتغلت بكام مع كل شركة واتخصم منك كام).
+ */
+function declarations(
+  books: ReturnType<typeof computeBooks>,
+  clients: Map<number, { id: number; name: string; tax_id: string | null }>,
+  equipment: Map<number, { id: number; name: string; supplier: string }>,
+  contractEq: Map<number, number>,
+  vatPaid: (month: string) => number,
+) {
+  const codes = new Map(books.raw.contracts.map((c) => [c.id as number, c.code as string]));
+  const lines = books.invoices
+    .filter((i) => i.basePt !== 0)
+    .map((i) => ({
+      month: i.month,
+      serial: i.serial,
+      clientId: i.clientId,
+      client: clients.get(i.clientId)?.name ?? "",
+      taxId: clients.get(i.clientId)?.tax_id ?? null,
+      contract: codes.get(i.contractId) ?? "",
+      equipment: equipment.get(contractEq.get(i.contractId) ?? -1)?.name ?? "",
+      basePt: i.basePt,
+      vatPt: i.vatPt,
+      whtPt: i.whtPt ?? 0,
+      totalPt: i.totalPt,
+    }));
+  const total = (rows: typeof lines, k: "basePt" | "vatPt" | "whtPt" | "totalPt") => rows.reduce((s, r) => s + r[k], 0);
+  const vatMonths = [...new Set(lines.filter((l) => l.vatPt !== 0).map((l) => l.month))].sort().reverse();
+  const vatDeclarations = vatMonths.map((month) => {
+    const rows = lines.filter((l) => l.month === month && l.vatPt !== 0);
+    return { month, invoices: rows, basePt: total(rows, "basePt"), vatPt: total(rows, "vatPt"), whtPt: total(rows, "whtPt"), totalPt: total(rows, "totalPt"), paidPt: vatPaid(month) };
+  });
+  const years = [...new Set(lines.filter((l) => l.whtPt !== 0).map((l) => l.month.slice(0, 4)))].sort().reverse();
+  const whtDeclarations = years.map((year) => {
+    const rows = lines.filter((l) => l.month.startsWith(year) && l.whtPt !== 0);
+    const byClient = [...new Set(rows.map((r) => r.clientId))].map((id) => {
+      const mine = rows.filter((r) => r.clientId === id);
+      return { clientId: id, client: mine[0].client, taxId: mine[0].taxId, basePt: total(mine, "basePt"), whtPt: total(mine, "whtPt"), months: [...new Set(mine.map((r) => r.month))].length };
+    });
+    byClient.sort((a, b) => b.basePt - a.basePt);
+    return { year, clients: byClient, basePt: total(rows, "basePt"), whtPt: total(rows, "whtPt") };
+  });
+  return { vatDeclarations, whtDeclarations };
 }
 
 export type TaxView = ReturnType<typeof taxView>;

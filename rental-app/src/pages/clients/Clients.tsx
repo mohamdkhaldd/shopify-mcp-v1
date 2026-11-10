@@ -189,7 +189,7 @@ function ClientForm({ initial, onClose, onSaved }: { initial?: Selected["client"
             }}
           >
             <option value="company">شركة</option>
-            <option value="individual">فرد</option>
+            <option value="individual">مقاول باطن (من غير ضرايب)</option>
           </Select>
         </Labeled>
         <Labeled label="الاسم">
@@ -253,7 +253,7 @@ export default function Clients() {
 
   function exportStatement() {
     if (!s || !c) return;
-    appApi.exportExcel(`كشف حساب ${c.name}`, [
+    appApi.exportExcel(`مستخلص ${c.name}`, [
       {
         title: "كشف الحساب",
         columns: [
@@ -299,7 +299,7 @@ export default function Clients() {
 
   return (
     <div className="grid gap-5">
-      <PageHeader title="الشركات والأفراد" subtitle="العملاء اللي واخدين المعدات">
+      <PageHeader title="الشركات ومقاولين الباطن" subtitle="اللي واخدين المعدات — الشركات بالضرايب، ومقاولين الباطن من غير ضرايب">
         <Button onClick={() => setForm("new")}>+ عميل</Button>
       </PageHeader>
       {error && <ErrorBox message={error} />}
@@ -324,7 +324,7 @@ export default function Clients() {
               >
                 <b>{x.name}</b>
                 <small className="text-muted flex items-center gap-1.5">
-                  <Pill>{x.kind === "company" ? "شركة" : "فرد"}</Pill>
+                  <Pill>{x.kind === "company" ? "شركة" : "مقاول باطن"}</Pill>
                   {x.vat_applies || x.tax5_applies ? [x.vat_applies && "١٤٪", x.tax5_applies && "استقطاع ٣٪"].filter(Boolean).join(" + ") : "من غير ضرايب"}
                 </small>
                 <span className={`font-extrabold num ${x.remainingPt > 0 ? "text-out" : ""}`}>باقي عليه {pounds(x.remainingPt)}</span>
@@ -338,7 +338,7 @@ export default function Clients() {
               <>
                 <TaxSwitch label="عليه ١٤٪ قيمة مضافة" checked={!!c.vat_applies} onChange={(x) => setTaxes(x, !!c.tax5_applies)} />
                 <TaxSwitch label="بيخصم ٣٪ استقطاع" checked={!!c.tax5_applies} onChange={(x) => setTaxes(!!c.vat_applies, x)} />
-                <PrintButtons pdfName={`كشف حساب ${c.name}`} singlePage={false} />
+                <PrintButtons pdfName={`مستخلص ${c.name}`} singlePage={false} />
                 <Button onClick={exportStatement}>Excel</Button>
                 <Button onClick={() => setForm("edit")}>تعديل</Button>
                 <Button danger title="حذف العميل" onClick={() => setDeleting({ entity: "clients", id: c.id })}>
@@ -347,7 +347,7 @@ export default function Clients() {
               </>
             }
           >
-            <PrintHeader title={`كشف حساب — ${c.name}`} subtitle={dateLabel(new Date().toLocaleDateString("en-CA"))} />
+            <PrintHeader title={`مستخلص مبدئي — ${c.name}`} subtitle={dateLabel(new Date().toLocaleDateString("en-CA"))} />
             <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] border-b border-line">
               <Fact label="قيمة الشغل">{pounds(s.totals.basePt)}</Fact>
               {s.totals.whtPt !== 0 && (

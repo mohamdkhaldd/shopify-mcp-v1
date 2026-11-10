@@ -1,5 +1,6 @@
 import { CashWarning, Db, UserError } from "../db";
 import { computeBooks } from "./books";
+import { managersReport } from "./managers";
 import { formatPounds } from "../calc/money";
 
 // Every movement of money goes through here: the business row and its
@@ -162,7 +163,7 @@ export function recordSupplierPayment(
 /** Something we paid on the supplier's behalf; it comes off what we owe him. */
 export function recordSupplierDeduction(
   db: Db,
-  v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean } & Money,
+  v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; driverId?: number | null } & Money,
   opts: Opts = {},
 ) {
   positive(v.amountPt);
@@ -171,8 +172,8 @@ export function recordSupplierDeduction(
     if (fromTreasury) guardCash(db, v.date, v.amountPt, opts, v);
     const id = insertId(
       db
-        .prepare("INSERT INTO supplier_deductions (supplier_id, contract_id, date, amount_pt, note, paid_from_treasury) VALUES (?, ?, ?, ?, ?, ?)")
-        .run(v.supplierId, v.contractId ?? null, v.date, v.amountPt, v.note, Number(fromTreasury)),
+        .prepare("INSERT INTO supplier_deductions (supplier_id, contract_id, date, amount_pt, note, paid_from_treasury, driver_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run(v.supplierId, v.contractId ?? null, v.date, v.amountPt, v.note, Number(fromTreasury), v.driverId ?? null),
     );
     if (fromTreasury) {
       treasury(db, { date: v.date, direction: "out", amountPt: v.amountPt, type: "supplier_deduction", table: "supplier_deductions", id, partyKind: "supplier", partyId: v.supplierId, note: v.note, account: v.account });
@@ -184,18 +185,21 @@ export function recordSupplierDeduction(
 
 export function recordExpense(
   db: Db,
-  v: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string } & Money,
+  v: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; paidBy?: string | null } & Money,
   opts: Opts = {},
 ) {
   positive(v.amountPt);
   if (v.kind === "contract" && v.contractId == null) throw new UserError("مصروف العقد لازم يتربط بعقد");
+  // دفعه شريك إدارة من جيبه: مبيطلعش من الخزنة، والشركة بقت عليها له المبلغ
+  const paidBy = v.paidBy?.trim() || null;
   return db.transaction(() => {
-    guardCash(db, v.date, v.amountPt, opts, v);
+    if (!paidBy) guardCash(db, v.date, v.amountPt, opts, v);
     const id = insertId(
       db
-        .prepare("INSERT INTO expenses (kind, contract_id, category_id, date, amount_pt, note) VALUES (?, ?, ?, ?, ?, ?)")
-        .run(v.kind, v.kind === "contract" ? v.contractId : null, v.categoryId ?? null, v.date, v.amountPt, v.note ?? null),
+        .prepare("INSERT INTO expenses (kind, contract_id, category_id, date, amount_pt, note, paid_by) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run(v.kind, v.kind === "contract" ? v.contractId : null, v.categoryId ?? null, v.date, v.amountPt, v.note ?? null, paidBy),
     );
+    if (paidBy) return id;
     treasury(db, { date: v.date, direction: "out", amountPt: v.amountPt, type: "expense", table: "expenses", id, partyKind: v.contractId ? "contract" : undefined, partyId: v.contractId ?? null, note: v.note, account: v.account });
     chargeFee(db, v.date, v, v.amountPt, `مصروف${v.note ? `: ${v.note}` : ""}`, `expenses:${id}`);
     return id;
@@ -216,6 +220,16 @@ export function recordTaxPayment(db: Db, v: { tax: "vat" | "tax5"; periodMonth?:
   })();
 }
 
+/** شريك إدارة صرف من جيبه: فلوسه بترجعله حتى لو نصيب الإدارة لسه متحصّلش (بس مش أكتر من اللي ليه). */
+function managementDue(db: Db, b: ReturnType<typeof computeBooks>, name: string | null | undefined, due: number) {
+  const who = name?.trim();
+  if (!who) return due;
+  const p = managersReport(db, b, lastMonthOf(b)).people.find((x) => x.name === who);
+  if (!p || !p.pocketPt) return due;
+  return Math.max(due, Math.min(p.balancePt, due + p.pocketPt));
+}
+const lastMonthOf = (b: ReturnType<typeof computeBooks>) => b.months[b.months.length - 1]?.month ?? "";
+
 /** Profit payout. Only what clients have actually paid for can be paid out. */
 export function recordPayout(
   db: Db,
@@ -228,7 +242,7 @@ export function recordPayout(
     const due =
       v.payee === "investor"
         ? b.investors.find((i) => i.investorId === v.investorId)?.payableNowPt ?? 0
-        : Math.max(0, b.management.releasablePt - b.management.paidPt);
+        : managementDue(db, b, v.managerName, Math.max(0, b.management.releasablePt - b.management.paidPt));
     if (v.amountPt > due) throw new UserError("المبلغ أكبر من الأرباح اللي اتحصّلت ومتصرفتش");
     // profits owed are already set aside, so paying them doesn't reduce operating cash
     if (b.treasury.balancePt - b.treasury.taxHeldPt < v.amountPt && !opts.confirmNegative) throw new CashWarning(b.treasury.balancePt - b.treasury.taxHeldPt - v.amountPt);
@@ -248,8 +262,8 @@ export function recordPayout(
 const REVERSIBLE: Record<string, string[]> = {
   client_payments: ["client_id", "contract_id", "for_month"],
   supplier_payments: ["supplier_id", "contract_id", "for_month"],
-  supplier_deductions: ["supplier_id", "contract_id", "paid_from_treasury"],
-  expenses: ["kind", "contract_id", "category_id"],
+  supplier_deductions: ["supplier_id", "contract_id", "paid_from_treasury", "driver_id"],
+  expenses: ["kind", "contract_id", "category_id", "paid_by"],
   capital_movements: ["investor_id", "kind"],
   profit_payouts: ["payee_kind", "investor_id", "manager_name"],
   tax_payments: ["tax", "period_month", "receipt_no"],

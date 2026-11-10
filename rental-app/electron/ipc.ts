@@ -9,6 +9,7 @@ import { createClient, createEquipment, createExpenseCategory, createInvestor, c
 import { ManagerShare, setContractManagers } from "../core/services/managers";
 import { markDelivered, Money, recordHold, recordTransfer, returnHold, saveAccount } from "../core/services/ledger";
 import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, recordTaxPayment, reinvestProfit } from "../core/services/ledger";
+import { createDriver, DriverInput, driversView, recordDriverPayment, updateDriver } from "../core/services/drivers";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
 
 // Every screen call goes through one channel ("core:call") to a named function
@@ -47,6 +48,13 @@ export function makeRegistry(db: Db) {
     supplierDeduction: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean } & Money) =>
       recordSupplierDeduction(db, a, { confirmNegative: a.confirmNegative }),
 
+    // السواقين
+    drivers: (a: { month?: string; driverId?: number }) => driversView(db, a.month, a.driverId),
+    createDriver: (a: DriverInput) => createDriver(db, a),
+    updateDriver: (a: DriverInput & { id: number }) => updateDriver(db, a.id, a),
+    driverPayment: (a: { driverId: number; date: string; amountPt: number; note?: string; confirmNegative?: boolean } & Money) =>
+      recordDriverPayment(db, a, { confirmNegative: a.confirmNegative }),
+
     // الشركات والأفراد
     clients: (a: { clientId?: number }) => clientsView(db, a.clientId),
     createClient: (a: { kind: "company" | "individual"; name: string; phone?: string; taxId?: string; vatApplies?: boolean; tax5Applies?: boolean }) => createClient(db, a),
@@ -57,7 +65,7 @@ export function makeRegistry(db: Db) {
     // الإدارة
     management: (a: { month?: string }) => managementView(db, a.month),
     createExpenseCategory: (a: { name: string }) => createExpenseCategory(db, a.name),
-    expense: (a: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; confirmNegative?: boolean } & Money) =>
+    expense: (a: { kind: "contract" | "general"; contractId?: number | null; categoryId?: number | null; date: string; amountPt: number; note?: string; paidBy?: string | null; confirmNegative?: boolean } & Money) =>
       recordExpense(db, a, { confirmNegative: a.confirmNegative }),
     managementPayout: (a: { date: string; amountPt: number; note?: string; managerName?: string | null; confirmNegative?: boolean } & Money) =>
       recordPayout(db, { ...a, payee: "management" }, { confirmNegative: a.confirmNegative }),
@@ -151,6 +159,14 @@ function labelFor(db: Db, fn: string, a: any): string | null {
       return `دفعة لصاحب معدة ${egp(a.amountPt)}`;
     case "supplierDeduction":
       return `خصم لحساب صاحب معدة ${egp(a.amountPt)} — ${a.note}`;
+    case "createDriver":
+      return `سواق جديد: ${a.name}`;
+    case "updateDriver":
+      return `تعديل سواق: ${a.name}`;
+    case "driverPayment": {
+      const d = db.prepare("SELECT name FROM drivers WHERE id = ?").get(a.driverId) as { name: string } | undefined;
+      return `فلوس للسواق ${d?.name ?? ""} ${egp(a.amountPt)} (على صاحب المعدة)`;
+    }
     case "createClient":
       return `عميل جديد: ${a.name}`;
     case "updateClient":
@@ -162,7 +178,7 @@ function labelFor(db: Db, fn: string, a: any): string | null {
     case "createExpenseCategory":
       return `بند مصروف جديد: ${a.name}`;
     case "expense":
-      return `${a.kind === "general" ? "مصروف عام" : "مصروف عقد"} ${egp(a.amountPt)}${a.note ? ` — ${a.note}` : ""}`;
+      return `${a.kind === "general" ? "مصروف عام" : "مصروف عقد"} ${egp(a.amountPt)}${a.paidBy ? ` — دفعه ${a.paidBy} من جيبه` : ""}${a.note ? ` — ${a.note}` : ""}`;
     case "transfer":
       return `تحويل ${egp(a.amountPt)} بين حسابات الخزنة`;
     case "markDelivered":
@@ -214,7 +230,7 @@ function labelFor(db: Db, fn: string, a: any): string | null {
 }
 
 /** الحاجات اللي بتعرض بس (من غير تعديل) — دي بس اللي بتشتغل والاشتراك خالص */
-const READ_CALLS = new Set(["dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
+const READ_CALLS = new Set(["drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
 export const isReadCall = (fn: string) => READ_CALLS.has(fn);
 
 /** التشغيل: أي قناة بتعدّل أو بتضيف (create / delete / update / set …) — بتتقفل والاشتراك خالص */

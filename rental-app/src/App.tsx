@@ -5,6 +5,7 @@ import { UndoProvider } from "./context/UndoContext";
 import Dashboard from "./pages/Dashboard";
 import Sarki from "./pages/sarki/Sarki";
 import Suppliers from "./pages/suppliers/Suppliers";
+import Drivers from "./pages/drivers/Drivers";
 import Clients from "./pages/clients/Clients";
 import Management from "./pages/management/Management";
 import Investors from "./pages/investors/Investors";
@@ -53,6 +54,8 @@ export default function App() {
                 <Sarki />
               ) : active === "suppliers" ? (
                 <Suppliers />
+              ) : active === "drivers" ? (
+                <Drivers />
               ) : active === "clients" ? (
                 <Clients />
               ) : active === "management" ? (

@@ -163,6 +163,25 @@ CREATE TABLE IF NOT EXISTS supplier_deductions (
   ${reversalCheck}
 );
 
+-- السواقين: كل سواق على معدة صاحب معدة. اللي بيقبضه يا إحنا (مرتب شهري أو
+-- يومية × أيام شغل المعدة في السركي) يا صاحب المعدة نفسه (بنسجل بس اللي
+-- اديناهوله). أي فلوس بنديها للسواق بتتسجل خصم من صاحب المعدة
+-- (supplier_deductions.driver_id) — فبتتخصم من تصفيته آخر الشهر لوحدها.
+CREATE TABLE IF NOT EXISTS drivers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  phone TEXT,
+  supplier_id INTEGER NOT NULL REFERENCES suppliers(id),
+  equipment_id INTEGER REFERENCES equipment(id),
+  paid_by TEXT NOT NULL DEFAULT 'us' CHECK (paid_by IN ('us', 'owner')),
+  pay_kind TEXT NOT NULL DEFAULT 'month' CHECK (pay_kind IN ('month', 'day')),
+  ${pt("rate_pt", true)},
+  start_date TEXT NOT NULL,
+  deleted_at TEXT,
+  delete_reason TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS expense_categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -362,6 +381,7 @@ CREATE TABLE IF NOT EXISTS actions (
 CREATE UNIQUE INDEX IF NOT EXISTS ux_investors_name ON investors (name) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_suppliers_name ON suppliers (name) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_clients_name ON clients (name) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_drivers_name ON drivers (name) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_expense_categories_name ON expense_categories (name) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS ix_work_logs_contract_date ON work_logs (contract_id, date);
 CREATE INDEX IF NOT EXISTS ix_treasury_date ON treasury_entries (date);
@@ -525,6 +545,10 @@ export function setupDatabase(db: Db): Db {
   for (const t of ["client_payments", "supplier_payments"])
     if (!columnsOf(db, t).includes("for_month")) db.exec(`ALTER TABLE ${t} ADD COLUMN for_month TEXT`);
   if (!columnsOf(db, "profit_payouts").includes("manager_name")) db.exec("ALTER TABLE profit_payouts ADD COLUMN manager_name TEXT");
+  // فلوس اتدفعت لسواق (بتتخصم من صاحب المعدة)
+  if (!columnsOf(db, "supplier_deductions").includes("driver_id")) db.exec("ALTER TABLE supplier_deductions ADD COLUMN driver_id INTEGER REFERENCES drivers(id)");
+  // مصروف دفعه شريك إدارة من جيبه (مش من الخزنة) — الشركة عليها له المبلغ ده
+  if (!columnsOf(db, "expenses").includes("paid_by")) db.exec("ALTER TABLE expenses ADD COLUMN paid_by TEXT");
   const business = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'sync_%' AND name NOT IN ('audit_log', 'app_settings', 'actions', 'activity_log')")
     .all()
@@ -542,6 +566,7 @@ export function setupDatabase(db: Db): Db {
   acc.run("instapay", "انستا باي", 10, 50, 2000, 1);
   acc.run("wallet", "محفظة", 0, 0, null, 2);
   acc.run("cash", "كاش", 0, 0, null, 3);
+  acc.run("checks", "شيكات", 0, 0, null, 4);
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return db;
 }

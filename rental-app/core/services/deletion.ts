@@ -21,6 +21,7 @@ export type Deletable =
   | "suppliers"
   | "investors"
   | "expense_categories"
+  | "drivers"
   | "treasury_transfers"
   | "treasury_holds";
 
@@ -128,6 +129,10 @@ function targetsOf(db: Db, entity: Deletable, id: number): Target[] {
       if (!i) return [];
       return [{ table: "investors", id, label: `المستثمر ${i.name}` }, ...money(db, "capital_movements", "investor_id = ?", id), ...money(db, "profit_payouts", "investor_id = ?", id)];
     }
+    case "drivers": {
+      const d = db.prepare(`SELECT name FROM drivers WHERE id = ? AND ${live}`).get(id);
+      return d ? [{ table: "drivers", id, label: `السواق ${d.name} (الفلوس اللي اتدفعتله بتفضل متسجلة على صاحب المعدة)` }] : [];
+    }
     case "expense_categories": {
       const c = db.prepare(`SELECT name FROM expense_categories WHERE id = ? AND ${live}`).get(id);
       return c ? [{ table: "expense_categories", id, label: `نوع المصروف ${c.name}` }] : [];
@@ -167,7 +172,7 @@ export function deleteEntity(db: Db, entity: Deletable, id: number, reason = "ح
   return batch;
 }
 
-const ALL_TABLES = [...MONEY_TABLES, "treasury_entries", "treasury_transfers", "treasury_holds", "work_logs", "contracts", "equipment", "clients", "suppliers", "investors", "expense_categories"];
+const ALL_TABLES = [...MONEY_TABLES, "treasury_entries", "treasury_transfers", "treasury_holds", "work_logs", "contracts", "equipment", "clients", "suppliers", "investors", "expense_categories", "drivers"];
 
 /** Undo a delete (from the activity log or the undo bar). */
 export function restoreDeleted(db: Db, batch: string) {
