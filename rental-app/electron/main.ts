@@ -11,7 +11,7 @@ import { exportExcel, ExcelSheet } from "./excel";
 import { seedDemo } from "../core/demo";
 import { startDeviceSync } from "./sync";
 import { deviceIdentity } from "./device";
-import { createLicenseManager, EXPIRED_MESSAGE, LicenseManager, LicenseStatus, Product } from "../core/license/manager";
+import { AssistantRequest, createLicenseManager, EXPIRED_MESSAGE, LicenseManager, LicenseStatus, Product } from "../core/license/manager";
 import { licenseServer } from "../core/license/config";
 import type { ReadRequest } from "../core/ai/sarkiRead";
 import { OperationsBackend, operationsDbPath, startOperations } from "./operations";
@@ -189,6 +189,7 @@ app.whenReady().then(async () => {
   });
   // صورة السركي الورقي ← Claude يقراها (التأجير والتشغيل الاتنين)
   ipcMain.handle("shell:readSarki", (_e, r: ReadRequest) => (unlocked ? license.readSarki(r) : { ok: false, message: "ادخل الأول" }));
+  ipcMain.handle("shell:askAssistant", (_e, r: AssistantRequest) => (unlocked ? license.askAssistant(r) : { ok: false, message: "ادخل الأول" }));
   ipcMain.handle("shell:setPassword", (_e, { current, next }: { current: string; next: string }) =>
     unlocked ? license.setPassword(current, next) : { ok: false, message: "ادخل الأول" },
   );

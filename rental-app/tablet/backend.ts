@@ -13,7 +13,7 @@ import { Capacitor } from "@capacitor/core";
 import { Device } from "@capacitor/device";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex } from "@noble/hashes/utils";
-import { createLicenseManager, EXPIRED_MESSAGE, Product } from "../core/license/manager";
+import { AssistantRequest, createLicenseManager, EXPIRED_MESSAGE, Product } from "../core/license/manager";
 import { startOperations } from "./operations";
 import { licenseServer } from "../core/license/config";
 import { createPass } from "../core/shell/lock";
@@ -160,6 +160,7 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
     },
     // صورة السركي الورقي ← Claude يقراها (التأجير والتشغيل الاتنين)
     "shell:readSarki": (r: ReadRequest) => (unlocked ? license.readSarki(r) : { ok: false, message: "ادخل الأول" }),
+    "shell:askAssistant": (r: AssistantRequest) => (unlocked ? license.askAssistant(r) : { ok: false, message: "ادخل الأول" }),
     "shell:setPassword": async ({ current, next }: { current: string; next: string }) => {
       if (!unlocked) return { ok: false, message: "ادخل الأول" };
       const r = await license.setPassword(current, next);

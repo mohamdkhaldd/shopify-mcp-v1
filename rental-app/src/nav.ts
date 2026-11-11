@@ -1,4 +1,4 @@
-export type SectionId = "home" | "sarki" | "suppliers" | "drivers" | "clients" | "management" | "expenses" | "investors" | "treasury" | "tax" | "activity" | "settings";
+export type SectionId = "home" | "assistant" | "sarki" | "suppliers" | "drivers" | "clients" | "management" | "expenses" | "investors" | "treasury" | "tax" | "activity" | "settings";
 
 export interface NavItem {
   id: SectionId;
@@ -8,6 +8,7 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   { id: "home", label: "الرئيسية", icon: "home" },
+  { id: "assistant", label: "المساعد", icon: "assistant" },
   { id: "sarki", label: "السركي", icon: "sarki" },
   { id: "suppliers", label: "أصحاب المعدات", icon: "suppliers" },
   { id: "drivers", label: "السواقين", icon: "drivers" },

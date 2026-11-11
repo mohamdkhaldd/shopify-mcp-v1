@@ -3,6 +3,7 @@ import { REFRESH_EVENT } from "./api/client";
 import Sidebar from "./components/Sidebar";
 import { UndoProvider } from "./context/UndoContext";
 import Dashboard from "./pages/Dashboard";
+import Assistant from "./pages/assistant/Assistant";
 import Sarki from "./pages/sarki/Sarki";
 import Suppliers from "./pages/suppliers/Suppliers";
 import Drivers from "./pages/drivers/Drivers";
@@ -51,6 +52,8 @@ export default function App() {
             <div className="max-w-[1240px] mx-auto" key={pageKey}>
               {active === "home" ? (
                 <Dashboard onNavigate={go} />
+              ) : active === "assistant" ? (
+                <Assistant />
               ) : active === "sarki" ? (
                 <Sarki />
               ) : active === "suppliers" ? (

@@ -9,6 +9,7 @@ import { createClient, createEquipment, createExpenseCategory, createInvestor, c
 import { ManagerShare, setContractManagers } from "../core/services/managers";
 import { markDelivered, Money, recordHold, recordTransfer, returnHold, saveAccount } from "../core/services/ledger";
 import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, recordTaxPayment, reinvestProfit } from "../core/services/ledger";
+import { assistantApply, AssistantAction, assistantContext, assistantPreview } from "../core/ai/assistant";
 import { createDriver, DriverInput, driversView, recordDriverPayment, updateDriver } from "../core/services/drivers";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
 
@@ -47,6 +48,11 @@ export function makeRegistry(db: Db) {
       recordSupplierPayment(db, a, { confirmNegative: a.confirmNegative }),
     supplierDeduction: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean } & Money) =>
       recordSupplierDeduction(db, a, { confirmNegative: a.confirmNegative }),
+
+    // المساعد (الكلام بيتفهم على السيرفر، والتسجيل هنا بنفس دوال البرنامج)
+    assistantContext: () => assistantContext(db),
+    assistantPreview: (a: { actions: AssistantAction[] }) => assistantPreview(db, a.actions),
+    assistantApply: (a: { actions: AssistantAction[]; summary?: string }) => assistantApply(db, a.actions),
 
     // السواقين
     drivers: (a: { month?: string; driverId?: number }) => driversView(db, a.month, a.driverId),
@@ -159,6 +165,8 @@ function labelFor(db: Db, fn: string, a: any): string | null {
       return `دفعة لصاحب معدة ${egp(a.amountPt)}`;
     case "supplierDeduction":
       return `خصم لحساب صاحب معدة ${egp(a.amountPt)} — ${a.note}`;
+    case "assistantApply":
+      return `المساعد: ${String(a.summary ?? "").slice(0, 80) || `${(a.actions ?? []).length} حاجة`}`;
     case "createDriver":
       return `سواق جديد: ${a.name}`;
     case "updateDriver":
@@ -232,7 +240,7 @@ function labelFor(db: Db, fn: string, a: any): string | null {
 }
 
 /** الحاجات اللي بتعرض بس (من غير تعديل) — دي بس اللي بتشتغل والاشتراك خالص */
-const READ_CALLS = new Set(["drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
+const READ_CALLS = new Set(["assistantContext", "assistantPreview", "drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
 export const isReadCall = (fn: string) => READ_CALLS.has(fn);
 
 /** التشغيل: أي قناة بتعدّل أو بتضيف (create / delete / update / set …) — بتتقفل والاشتراك خالص */

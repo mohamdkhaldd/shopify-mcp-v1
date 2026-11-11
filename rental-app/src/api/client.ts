@@ -1,4 +1,6 @@
 import type { ReadRequest, ReadResult } from "../../core/ai/sarkiRead";
+import type { AssistantRequest, AssistantReply } from "../../core/license/manager";
+import type { AssistantAction, AssistantContext } from "../../core/ai/assistant";
 import type { ClientsView, ContractOptions, DashboardView, InvestorsView, ManagementView, SarkiView, SettingsView, SuppliersView, TaxView, TreasuryFilters, TreasuryView } from "../../core/services/views";
 import type { ActivityView } from "../../core/services/activity";
 import type { NewContractInput } from "../../core/services/master";
@@ -84,6 +86,9 @@ export const api = {
   supplierPayment: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null; confirmNegative?: boolean } & Money) => call<number>("supplierPayment", v),
   supplierDeduction: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean } & Money) =>
     call<number>("supplierDeduction", v),
+  assistantContext: () => call<AssistantContext>("assistantContext"),
+  assistantPreview: (actions: AssistantAction[]) => call<{ ok: true; lines: string[] } | { ok: false; message: string }>("assistantPreview", { actions }),
+  assistantApply: (actions: AssistantAction[], summary: string) => call<string[]>("assistantApply", { actions, summary }),
   drivers: (month?: string, driverId?: number) => call<DriversView>("drivers", { month, driverId }),
   createDriver: (v: DriverInput) => call<number>("createDriver", v),
   updateDriver: (v: DriverInput & { id: number }) => call("updateDriver", v),
@@ -215,6 +220,8 @@ export const shellApi = {
   /** the company password, from this device (needs internet) */
   setPassword: (current: string, next: string): Promise<ShellResult> => window.api!.invoke("shell:setPassword", { current, next }),
   /** صورة السركي الورقي ← Claude يقراها (محتاج نت). مش بيسجل حاجة — المراجعة والحفظ بعدها. */
+  askAssistant: (r: AssistantRequest): Promise<AssistantReply> =>
+    window.api ? window.api.invoke("shell:askAssistant", r) : Promise.resolve({ ok: false, message: "المساعد شغال في البرنامج نفسه بس" }),
   readSarki: (r: ReadRequest): Promise<ReadResult> =>
     window.api ? window.api.invoke("shell:readSarki", r) : Promise.resolve({ ok: false, message: "قراية الصور شغالة في البرنامج نفسه بس" }),
   /** "خروج": leave the code on this device; pending = changes not in the cloud yet (force = sign out anyway) */

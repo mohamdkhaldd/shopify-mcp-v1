@@ -1,4 +1,21 @@
 import { cleanSheet, READ_ERRORS, ReadRequest, ReadResult } from "../ai/sarkiRead";
+import type { AssistantAction } from "../ai/assistant";
+
+export interface AssistantRequest {
+  text: string;
+  /** الأسماء الموجودة في البرنامج (assistantContext) */
+  context: unknown;
+  /** آخر كام رسالة عشان يفهم "و كمان..." */
+  history?: { role: "user" | "assistant"; text: string }[];
+  /** صورة (فاتورة، ورقة) لو فيه */
+  image?: string;
+  mediaType?: string;
+}
+export type AssistantReply = { ok: true; reply: string; actions: AssistantAction[] } | { ok: false; message: string };
+const ASSISTANT_ERRORS: Record<string, string> = {
+  empty: "اكتب اللي عايز تسجله",
+  too_long: "الرسالة طويلة أوي — قسّمها على كذا رسالة",
+};
 import type { Db } from "../db";
 import { pbkdf2 } from "@noble/hashes/pbkdf2";
 import { sha256 } from "@noble/hashes/sha256";
@@ -371,7 +388,21 @@ export function createLicenseManager(o: LicenseOptions) {
     return { ok: true, sheet: cleanSheet(a.sheet, days) };
   }
 
-  return { status, activate, refresh, credentials, setPassword, checkPassword, signOut, readSarki, savedKey: () => get("license_key") };
+  /** المساعد: الكلام + الأسماء الموجودة ← السيرفر يرجّع رد وقايمة أفعال. مش بيسجل حاجة. */
+  async function askAssistant(r: AssistantRequest): Promise<AssistantReply> {
+    const key = get("license_key");
+    if (!key) return { ok: false, message: "البرنامج مش متفعّل" };
+    const a = await call<{ ok: true; reply: string; actions: unknown[] } | { ok: false; error: string }>(
+      { key, text: r.text, context: r.context, history: r.history ?? [], image: r.image, mediaType: r.mediaType },
+      120_000,
+      o.url.replace(/\/license$/, "/assistant"),
+    );
+    if (!a) return { ok: false, message: OFFLINE };
+    if (!a.ok) return { ok: false, message: ASSISTANT_ERRORS[a.error] ?? READ_ERRORS[a.error] ?? READ_ERRORS.server };
+    return { ok: true, reply: String(a.reply ?? ""), actions: Array.isArray(a.actions) ? (a.actions as AssistantAction[]) : [] };
+  }
+
+  return { status, activate, refresh, credentials, setPassword, checkPassword, signOut, readSarki, askAssistant, savedKey: () => get("license_key") };
 }
 
 export type LicenseManager = ReturnType<typeof createLicenseManager>;

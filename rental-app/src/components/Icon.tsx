@@ -1,5 +1,6 @@
 // Line icons (same set as the approved mockup).
 const PATHS: Record<string, string> = {
+  assistant: "M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-9l-5 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM8 10h.01M12 10h.01M16 10h.01",
   home: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
   sarki: "M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 8h8M8 12h8M8 16h5",
   suppliers: "M3 17h2l2-6h7l3 6h4M7 17a2 2 0 1 0 4 0M15 17a2 2 0 1 0 4 0M9 11V6h4l1 5",
