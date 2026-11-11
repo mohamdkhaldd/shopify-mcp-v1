@@ -456,7 +456,21 @@ export function createLicenseManager(o: LicenseOptions) {
     };
   }
 
-  return { status, activate, refresh, credentials, setPassword, checkPassword, signOut, readSarki, askAssistant, resetCompany, savedKey: () => get("license_key") };
+  /** صوت → كلام (Gemini بيكتب اللي اتقال بالعامية). hint = أسامي ممكن تيجي في الكلام */
+  async function transcribe(r: { audio: string; mediaType: string; hint?: string }): Promise<{ ok: true; text: string } | { ok: false; message: string }> {
+    const key = get("license_key");
+    if (!key) return { ok: false, message: "البرنامج مش متفعّل" };
+    const a = await call<{ ok: true; text: string } | { ok: false; error: string }>(
+      { key, transcribe: true, audio: r.audio, mediaType: r.mediaType, hint: r.hint },
+      90_000,
+      o.url.replace(/\/license$/, "/assistant"),
+    );
+    if (!a) return { ok: false, message: OFFLINE };
+    if (!a.ok) return { ok: false, message: a.error === "no_speech" ? "مسمعتش كلام — قرّب من المايك وجرّب تاني" : (ASSISTANT_ERRORS[a.error] ?? READ_ERRORS[a.error] ?? READ_ERRORS.server) };
+    return { ok: true, text: String(a.text ?? "").trim() };
+  }
+
+  return { status, activate, refresh, credentials, setPassword, checkPassword, signOut, readSarki, askAssistant, transcribe, resetCompany, savedKey: () => get("license_key") };
 }
 
 export type LicenseManager = ReturnType<typeof createLicenseManager>;

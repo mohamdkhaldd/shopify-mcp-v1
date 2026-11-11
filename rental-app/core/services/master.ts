@@ -201,6 +201,60 @@ export function endContract(db: Db, id: number, endDate: string) {
   db.prepare("UPDATE contracts SET end_date = ?, status = 'ended' WHERE id = ?").run(endDate, id);
 }
 
+export interface ContractPatch {
+  startDate?: string;
+  /** null = شغال من غير نهاية */
+  endDate?: string | null;
+  siteName?: string | null;
+  unit?: "day" | "month";
+  clientRatePt?: number;
+  supplierRatePt?: number;
+}
+
+/**
+ * تعديل عقد موجود (البداية، النهاية، الموقع، السعرين) — اللي متبعتش بيفضل زي ما هو.
+ * مبيسمحش بحاجة تبوّظ اللي متسجل: البداية متتأخرش عن أول يوم في السركي، والنهاية
+ * متتقدمش عن آخر يوم، والسعر ميتغيرش لو فيه أيام في شهر مقفول (غيّره من يوم معين من السركي).
+ */
+export function updateContract(db: Db, id: number, p: ContractPatch) {
+  const c = db.prepare("SELECT start_date, end_date, status, unit, client_rate_pt, supplier_rate_pt, site_name FROM contracts WHERE id = ? AND deleted_at IS NULL").get(id) as
+    | { start_date: string; end_date: string | null; status: string; unit: string; client_rate_pt: number; supplier_rate_pt: number; site_name: string | null }
+    | undefined;
+  if (!c) throw new UserError("العقد مش موجود");
+  const isDate = (d: unknown) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  const start = p.startDate !== undefined ? p.startDate : c.start_date;
+  const end = p.endDate !== undefined ? p.endDate : c.end_date;
+  if (!isDate(start)) throw new UserError("تاريخ البداية مش مفهوم");
+  if (end != null && !isDate(end)) throw new UserError("تاريخ النهاية مش مفهوم");
+  if (end != null && end < start) throw new UserError("تاريخ النهاية قبل تاريخ البداية");
+  const span = db.prepare("SELECT MIN(date) AS first, MAX(date) AS last FROM work_logs WHERE contract_id = ? AND deleted_at IS NULL").get(id) as { first: string | null; last: string | null };
+  if (span.first && start > span.first) throw new UserError(`فيه أيام متسجلة في السركي من ${span.first} — البداية متنفعش تبقى بعدها`);
+  if (span.last && end != null && end < span.last) throw new UserError(`فيه أيام متسجلة في السركي لحد ${span.last} — النهاية متنفعش تبقى قبلها`);
+  const rateChanged =
+    (p.clientRatePt !== undefined && p.clientRatePt !== c.client_rate_pt) ||
+    (p.supplierRatePt !== undefined && p.supplierRatePt !== c.supplier_rate_pt) ||
+    (p.unit !== undefined && p.unit !== c.unit);
+  for (const r of [p.clientRatePt, p.supplierRatePt]) if (r !== undefined && !(r > 0)) throw new UserError("السعر لازم يبقى أكبر من صفر");
+  if (rateChanged) {
+    const locked = db
+      .prepare("SELECT 1 FROM work_logs w JOIN month_closes m ON m.month = substr(w.date, 1, 7) WHERE w.contract_id = ? AND w.deleted_at IS NULL LIMIT 1")
+      .get(id);
+    if (locked) throw new UserError("العقد ده ليه أيام في شهر مقفول — السعر الجديد غيّره من يوم معين من السركي (أدوات ← السعر من يوم لـ يوم)");
+  }
+  db.prepare(
+    `UPDATE contracts SET start_date = ?, end_date = ?, status = ?, site_name = ?, unit = ?, client_rate_pt = ?, supplier_rate_pt = ? WHERE id = ?`,
+  ).run(
+    start,
+    end,
+    end == null ? "active" : c.status,
+    p.siteName !== undefined ? p.siteName?.trim() || null : c.site_name,
+    p.unit ?? c.unit,
+    p.clientRatePt ?? c.client_rate_pt,
+    p.supplierRatePt ?? c.supplier_rate_pt,
+    id,
+  );
+}
+
 /** رجّع العقد شغال (لو اتقفل بالغلط) — من غير تاريخ نهاية. */
 export function reopenContract(db: Db, id: number) {
   db.prepare("UPDATE contracts SET end_date = NULL, status = 'active' WHERE id = ? AND deleted_at IS NULL").run(id);

@@ -40,4 +40,19 @@ describe("الشركاء", () => {
     expect(db.prepare("SELECT COUNT(*) n FROM audit_log WHERE tbl LIKE 'team_%'").get()).toEqual({ n: 0 });
     void egp;
   });
+
+  it("المحادثات: كل واحدة لوحدها، والقايمة بعنوان أول رسالة", () => {
+    const db = freshDb({ withholding: true });
+    const reg = makeRegistry(db);
+    callCore(db, reg, "setMe", { name: "محمد خالد" });
+    callCore(db, reg, "chatAdd", { role: "user", text: "اعمل عقد لودر", conv: "a" });
+    callCore(db, reg, "chatAdd", { role: "assistant", text: "تمام", conv: "a" });
+    callCore(db, reg, "chatAdd", { role: "user", text: "الخزنة فيها كام؟", conv: "b" });
+    expect((callCore(db, reg, "chatList", { conv: "a" }) as { value: unknown[] }).value).toHaveLength(2);
+    const list = (callCore(db, reg, "chatConversations", {}) as { value: { conv: string; title: string; count: number; who: string }[] }).value;
+    expect(list.map((c) => [c.conv, c.title, c.count, c.who]).sort()).toEqual([
+      ["a", "اعمل عقد لودر", 2, "محمد خالد"],
+      ["b", "الخزنة فيها كام؟", 1, "محمد خالد"],
+    ]);
+  });
 });

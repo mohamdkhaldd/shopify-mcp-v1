@@ -6,7 +6,7 @@ import { PrintButtons, PrintHeader, PrintSignoff } from "../../components/Print"
 import ConfirmDelete from "../../components/ConfirmDelete";
 import Icon from "../../components/Icon";
 import { dateLabel, monthLabel, pounds, unitLabel } from "../../utils/format";
-import { milliToHours } from "../../utils/input";
+import { milliToHours, moneyToPt, ptToInput } from "../../utils/input";
 import { ClientSheet, SupplierSheet } from "./Sheets";
 import { ClientBulk, SupplierBulk } from "./BulkTools";
 import { ReadPhoto } from "./ReadPhoto";
@@ -62,9 +62,71 @@ function EndContract({ id, startDate, onClose, onDone, onError }: { id: number; 
   );
 }
 
+// تعديل العقد: البداية والنهاية والموقع والسعرين — اللي متغيرش بيفضل زي ما هو.
+function EditContract({ c, onClose, onDone, onError }: { c: OpenSarki["contract"]; onClose: () => void; onDone: (m: string) => void; onError: (m: string) => void }) {
+  const [start, setStart] = useState(c.startDate);
+  const [end, setEnd] = useState(c.endDate ?? "");
+  const [site, setSite] = useState(c.siteName ?? "");
+  const [clientRate, setClientRate] = useState(ptToInput(c.clientRatePt));
+  const [supplierRate, setSupplierRate] = useState(ptToInput(c.supplierRatePt));
+  const per = c.unit === "month" ? "في الشهر" : "في اليوم";
+  async function save() {
+    try {
+      const cr = moneyToPt(clientRate);
+      const sr = moneyToPt(supplierRate);
+      if (cr == null || sr == null) throw new Error("اكتب السعرين");
+      await api.updateContract(c.id, {
+        startDate: start,
+        endDate: end || null,
+        siteName: site.trim() || null,
+        ...(cr !== c.clientRatePt ? { clientRatePt: cr } : {}),
+        ...(sr !== c.supplierRatePt ? { supplierRatePt: sr } : {}),
+      });
+      onClose();
+      onDone("العقد اتعدل");
+    } catch (e) {
+      onError((e as Error).message);
+    }
+  }
+  return (
+    <Modal
+      title={`تعديل العقد — ${c.equipment} مع ${c.client}`}
+      onClose={onClose}
+      footer={
+        <>
+          <Button onClick={onClose}>إلغاء</Button>
+          <Button primary onClick={save}>
+            حفظ التعديل
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Labeled label="أول يوم">
+          <TextInput type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+        </Labeled>
+        <Labeled label="آخر يوم (فاضي = شغال)">
+          <TextInput type="date" min={start} value={end} onChange={(e) => setEnd(e.target.value)} />
+        </Labeled>
+        <Labeled label={`سعر الشركة ${per}`}>
+          <TextInput value={clientRate} onChange={(e) => setClientRate(e.target.value)} inputMode="decimal" />
+        </Labeled>
+        <Labeled label={`سعر صاحب المعدة ${per}`}>
+          <TextInput value={supplierRate} onChange={(e) => setSupplierRate(e.target.value)} inputMode="decimal" />
+        </Labeled>
+        <Labeled label="الموقع">
+          <TextInput value={site} onChange={(e) => setSite(e.target.value)} />
+        </Labeled>
+      </div>
+      <p className="mt-2 text-xs text-muted">السعر الجديد بيمشي على الأيام اللي مفيهاش سعر مكتوب لوحدها. لو فيه أيام في شهر مقفول، غيّر السعر من يوم معين من «أدوات».</p>
+    </Modal>
+  );
+}
+
 function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki; onDelete: (d: Deleting) => void; onDone: (m: string) => void; onError: (m: string) => void; reload: () => void }) {
   const [tab, setTab] = useState<Tab>("client");
   const [ending, setEnding] = useState(false);
+  const [editing, setEditing] = useState(false);
   const c = v.contract;
   const t = v.client.totals;
   return (
@@ -94,6 +156,9 @@ function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki;
             }}
           >
             ✏️ {c.name ? "تعديل الاسم" : "سمّي العقد"}
+          </Button>
+          <Button onClick={() => setEditing(true)} title="تعديل البداية والنهاية والأسعار">
+            تعديل العقد
           </Button>
           {c.status === "active" ? (
             <Button onClick={() => setEnding(true)} title="العقد خلص">
@@ -181,6 +246,7 @@ function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki;
       <div className="no-print text-xs text-muted px-4 py-2.5 border-t border-line">
         الدايرة الحمرا جنب اليوم = مشتغلش (اكتب السبب في البيان). الساعات الفعلية فاضية = يوم كامل. الأوفر تايم = الفعلية − الأساسية، وسعر ساعته لو فاضي = اليومية ÷ الساعات الأساسية.
       </div>
+      {editing && <EditContract c={c} onClose={() => setEditing(false)} onDone={onDone} onError={onError} />}
       {ending && <EndContract id={c.id} startDate={c.startDate} onClose={() => setEnding(false)} onDone={onDone} onError={onError} />}
     </Panel>
   );

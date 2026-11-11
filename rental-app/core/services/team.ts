@@ -24,7 +24,13 @@ export function ensureTeamTables(db: Db) {
       extra TEXT
     );
   `);
+  // كل محادثة ليها رقم (زي أي شات AI): «محادثة جديدة» بتبدأ واحدة، والقديمة بتفضل في القايمة
+  const cols = (db.prepare("PRAGMA table_info(team_chat)").all() as { name: string }[]).map((c) => c.name);
+  if (!cols.includes("conv")) db.exec("ALTER TABLE team_chat ADD COLUMN conv TEXT");
 }
+
+/** المحادثات القديمة (من قبل ما يبقى فيه أكتر من محادثة) ليها الرقم ده */
+export const OLD_CONV = "old";
 
 export const TEAM_TABLES = ["team_log", "team_chat"];
 
@@ -78,8 +84,10 @@ export interface ChatRow {
   extra: unknown;
 }
 
-export function chatList(db: Db, limit = 80): ChatRow[] {
-  const rows = db.prepare("SELECT id, at, who, role, text, extra FROM team_chat ORDER BY at DESC, id DESC LIMIT ?").all(limit) as (Omit<ChatRow, "extra"> & { extra: string | null })[];
+export function chatList(db: Db, conv: string = OLD_CONV, limit = 120): ChatRow[] {
+  const rows = db
+    .prepare("SELECT id, at, who, role, text, extra FROM team_chat WHERE COALESCE(conv, 'old') = ? ORDER BY at DESC, id DESC LIMIT ?")
+    .all(conv, limit) as (Omit<ChatRow, "extra"> & { extra: string | null })[];
   return rows.reverse().map((r) => {
     let extra: unknown = null;
     try {
@@ -91,12 +99,27 @@ export function chatList(db: Db, limit = 80): ChatRow[] {
   });
 }
 
-export function chatAdd(db: Db, m: { role: "user" | "assistant"; text: string; extra?: unknown }) {
+export function chatAdd(db: Db, m: { role: "user" | "assistant"; text: string; extra?: unknown; conv?: string }) {
   const role = m.role === "assistant" ? "assistant" : "user";
-  const r = db.prepare("INSERT INTO team_chat (who, role, text, extra) VALUES (?, ?, ?, ?)").run(myName(db), role, String(m.text ?? "").slice(0, 8000), m.extra == null ? null : JSON.stringify(m.extra).slice(0, 200_000));
+  const conv = m.conv && m.conv !== OLD_CONV ? String(m.conv).slice(0, 64) : null;
+  const r = db
+    .prepare("INSERT INTO team_chat (who, role, text, extra, conv) VALUES (?, ?, ?, ?, ?)")
+    .run(myName(db), role, String(m.text ?? "").slice(0, 8000), m.extra == null ? null : JSON.stringify(m.extra).slice(0, 200_000), conv);
   return Number(r.lastInsertRowid);
 }
 
 export function chatUpdate(db: Db, id: number, extra: unknown) {
   db.prepare("UPDATE team_chat SET extra = ? WHERE id = ?").run(extra == null ? null : JSON.stringify(extra).slice(0, 200_000), id);
+}
+
+/** قايمة المحادثات: العنوان = أول رسالة فيها، والأحدث فوق */
+export function chatConversations(db: Db, limit = 60) {
+  return db
+    .prepare(
+      `SELECT COALESCE(conv, 'old') AS conv, MIN(at) AS started, MAX(at) AS last, COUNT(*) AS count,
+         (SELECT t.text FROM team_chat t WHERE COALESCE(t.conv, 'old') = COALESCE(c.conv, 'old') AND t.role = 'user' ORDER BY t.at, t.id LIMIT 1) AS title,
+         (SELECT t.who FROM team_chat t WHERE COALESCE(t.conv, 'old') = COALESCE(c.conv, 'old') AND t.role = 'user' ORDER BY t.at, t.id LIMIT 1) AS who
+       FROM team_chat c GROUP BY COALESCE(conv, 'old') ORDER BY last DESC LIMIT ?`,
+    )
+    .all(limit) as { conv: string; started: string; last: string; count: number; title: string | null; who: string | null }[];
 }

@@ -114,6 +114,9 @@ jobs:
           # in-app updates need permission to install packages
           sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />#' android/app/src/main/AndroidManifest.xml
           grep -q REQUEST_INSTALL_PACKAGES android/app/src/main/AndroidManifest.xml
+          # the assistant's voice button needs the microphone
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />#' android/app/src/main/AndroidManifest.xml
+          grep -q RECORD_AUDIO android/app/src/main/AndroidManifest.xml
           cp tablet/android/release.keystore android/app/
           cat tablet/android/signing.gradle >> android/app/build.gradle
           sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"$APP_VERSION\"/" android/app/build.gradle

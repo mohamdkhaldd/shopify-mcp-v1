@@ -15,6 +15,8 @@ export const WRITE_CATALOG: Record<string, string> = {
   clearRange: "أيام مشتغلش (بتتشال من السركي): {contractId, from, to, reason}",
   applyOvertime: 'أوفر لأيام: {contractId, month:"YYYY-MM", days:"1,2,5-9", hoursMilli, ratePt?}',
   setSupplierRate: "سعر صاحب المعدة من يوم لـ يوم: {contractId, from, to, dayRatePt?, overtimeRatePt?}",
+  updateContract:
+    'تعديل عقد موجود (مش عقد جديد!): {id: contractId, startDate?, endDate? (null = مفتوح), siteName?, unit? "day"|"month", clientRatePt?, supplierRatePt?} — ابعت بس الخانات اللي اتغيرت، والباقي بيفضل زي ما هو',
   endContract: "العقد خلص: {id: contractId, endDate}",
   reopenContract: "رجّع العقد شغال: {id: contractId}",
   renameContract: "اسم للعقد: {id: contractId, name}",

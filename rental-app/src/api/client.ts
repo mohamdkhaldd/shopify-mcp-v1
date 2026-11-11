@@ -84,6 +84,7 @@ export const api = {
   endContract: (id: number, endDate: string) => call("endContract", { id, endDate }),
   reopenContract: (id: number) => call("reopenContract", { id }),
   renameContract: (id: number, name: string) => call("renameContract", { id, name }),
+  updateContract: (id: number, patch: import("../../core/services/master").ContractPatch) => call("updateContract", { id, ...patch }),
   partySheet: (contractId: number, month: string, side: "client" | "supplier") => call<PartySheet>("partySheet", { contractId, month, side }),
   supplierPayment: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null; confirmNegative?: boolean } & Money) => call<number>("supplierPayment", v),
   supplierDeduction: (v: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean } & Money) =>
@@ -96,8 +97,9 @@ export const api = {
   setMe: (name: string) => call<string | null>("setMe", { name }),
   teamNames: () => call<string[]>("teamNames"),
   teamLog: (from?: string, to?: string) => call<{ id: number; at: string; who: string | null; label: string; actionId: string | null }[]>("teamLog", { from, to }),
-  chatList: (limit?: number) => call<ChatRow[]>("chatList", { limit }),
-  chatAdd: (role: "user" | "assistant", text: string, extra?: unknown) => call<number>("chatAdd", { role, text, extra }),
+  chatList: (conv: string, limit?: number) => call<ChatRow[]>("chatList", { conv, limit }),
+  chatConversations: () => call<{ conv: string; started: string; last: string; count: number; title: string | null; who: string | null }[]>("chatConversations"),
+  chatAdd: (role: "user" | "assistant", text: string, extra: unknown, conv: string) => call<number>("chatAdd", { role, text, extra, conv }),
   chatUpdate: (id: number, extra: unknown) => call<void>("chatUpdate", { id, extra }),
   /** password: لو القايمة فيها مسح (لازم باسورد الشركة) */
   assistantApply: async (actions: AssistantAction[], summary: string, password?: string) => {
@@ -244,6 +246,8 @@ export const shellApi = {
   /** تصفير البرنامج (بباسورد الشركة) — لو نجح البرنامج بيتقفل ويفتح فاضي */
   resetCompany: (password: string): Promise<{ ok: true } | { ok: false; message: string }> =>
     window.api ? window.api.invoke("shell:resetCompany", { password }) : Promise.resolve({ ok: false, message: "التصفير شغال في البرنامج نفسه بس" }),
+  transcribe: (audio: string, mediaType: string, hint?: string): Promise<{ ok: true; text: string } | { ok: false; message: string }> =>
+    window.api ? window.api.invoke("shell:transcribe", { audio, mediaType, hint }) : Promise.resolve({ ok: false, message: "الصوت شغال في البرنامج نفسه بس" }),
   askAssistant: (r: AssistantRequest): Promise<AssistantReply> =>
     window.api ? window.api.invoke("shell:askAssistant", r) : Promise.resolve({ ok: false, message: "المساعد شغال في البرنامج نفسه بس" }),
   readSarki: (r: ReadRequest): Promise<ReadResult> =>

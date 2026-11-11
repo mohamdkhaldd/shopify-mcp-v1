@@ -12,6 +12,7 @@ import type { ChatRow } from "../../../core/services/team";
 import { photoForReading, ReadSheet } from "../../../core/ai/sarkiRead";
 import { ReadPhoto } from "../sarki/ReadPhoto";
 import type { OpenSarki } from "../../api/client";
+import { MAX_SECONDS, Recording, startRecording } from "./voice";
 
 // المساعد: تكتب اللي حصل بالعامية، والذكاء الاصطناعي يفهمه ويقولك هيسجل إيه.
 // مفيش حاجة بتتسجل غير لما تدوس «سجّل»، والتسجيل بيتعمل بنفس دوال البرنامج
@@ -105,14 +106,29 @@ const open = (a: AssistantAction) => {
   window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail }));
 };
 
-// «محادثة جديدة» بتخفي القديم على الجهاز ده بس (المحادثة نفسها مشتركة)
-const SINCE = "mk-assistant-since";
-const since = () => {
+// كل محادثة ليها رقم، والمحادثات كلها متحفظة (زي أي شات AI) — آخر واحدة فتحتها على الجهاز ده بتفتح تاني
+const CONV = "mk-assistant-conv";
+const newConv = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+const savedConv = () => {
   try {
-    return Number(localStorage.getItem(SINCE) ?? 0) || 0;
+    return localStorage.getItem(CONV) || "old";
   } catch {
-    return 0;
+    return "old";
   }
+};
+const rememberConv = (c: string) => {
+  try {
+    localStorage.setItem(CONV, c);
+  } catch {
+    /* مش مهم */
+  }
+};
+/** اللي المساعد يفتكره من المحادثة: الكلام + اللي اتعمل فعلاً (أو لسه مستني موافقة) */
+const memoryOf = (m: Msg) => {
+  if (m.role === "user") return m.who ? `${m.who}: ${m.text}${m.photo ? " (مع صورة سركي)" : ""}` : m.text;
+  const done = m.lines?.length ? `\n[${m.state === "saved" ? "اتعمل" : m.state === "cancelled" ? "اتلغى" : m.state === "pending" ? "مستني موافقة" : "متعملش"}: ${m.lines.join("؛ ")}]` : "";
+  const problem = m.problem ? `\n[مشكلة: ${m.problem}]` : "";
+  return `${m.text}${done}${problem}`;
 };
 const extraOf = (m: Msg) => {
   if (m.role !== "assistant") return null;
@@ -155,20 +171,82 @@ export default function Assistant() {
       if (photoInput.current) photoInput.current.value = "";
     }
   }
+  // الصوت: دوسة تبدأ، ودوسة توقف — والكلام بيتكتب ويتبعت على طول
+  const [rec, setRec] = useState<Recording | null>(null);
+  const [recSec, setRecSec] = useState(0);
+  const [hearing, setHearing] = useState(false);
+  const [voiceNote, setVoiceNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!rec) return;
+    const t = setInterval(() => setRecSec((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [rec]);
+  async function toggleVoice() {
+    setVoiceNote(null);
+    if (!rec) {
+      try {
+        setRecSec(0);
+        setRec(await startRecording());
+      } catch (e) {
+        setVoiceNote((e as Error).message);
+      }
+      return;
+    }
+    const r = rec;
+    setRec(null);
+    setHearing(true);
+    try {
+      const audio = await r.stop();
+      if (audio.seconds < 0.7) throw new Error("التسجيل قصير أوي — دوس واتكلم وبعدين دوس تاني");
+      const ctx = await api.assistantContext().catch(() => null);
+      const hint = ctx
+        ? [...ctx.suppliers.map((x) => x.name), ...ctx.clients.map((x) => x.name), ...ctx.equipment.map((x) => x.name), ...ctx.drivers.map((x) => x.name), ...ctx.partners].slice(0, 300).join("، ")
+        : undefined;
+      const t = await shellApi.transcribe(audio.data, audio.mediaType, hint);
+      if (!t.ok) throw new Error(t.message);
+      if (!t.text) throw new Error("مسمعتش كلام — جرّب تاني");
+      setHearing(false);
+      await send(t.text);
+    } catch (e) {
+      setVoiceNote((e as Error).message);
+    } finally {
+      setHearing(false);
+    }
+  }
+  // لو وصل للحد الأقصى بيقف لوحده
+  useEffect(() => {
+    if (rec && recSec >= MAX_SECONDS) toggleVoice();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recSec]);
   const [password, setPassword] = useState("");
   const [me, setMe] = useState<string | null | undefined>(undefined);
   const [names, setNames] = useState<string[]>([]);
   const [meDraft, setMeDraft] = useState("");
   const busyRef = useRef(false);
-  const load = () =>
-    api.chatList(80).then(
+  const [conv, setConv] = useState(savedConv);
+  const convRef = useRef(conv);
+  const [convs, setConvs] = useState<{ conv: string; last: string; count: number; title: string | null; who: string | null }[]>([]);
+  const [showList, setShowList] = useState(false);
+  const load = () => {
+    const c = convRef.current;
+    api.chatList(c).then(
       (rows) => {
-        if (busyRef.current) return;
-        const cut = since();
-        setMsgs((cur) => [...rows.filter((r) => r.id > cut).map(fromRow), ...cur.filter((m) => m.id == null)]);
+        if (busyRef.current || convRef.current !== c) return;
+        setMsgs((cur) => [...rows.map(fromRow), ...cur.filter((m) => m.id == null)]);
       },
       () => {},
     );
+    api.chatConversations().then(setConvs, () => {});
+  };
+  const openConv = (c: string) => {
+    if (busyRef.current) return;
+    convRef.current = c;
+    setConv(c);
+    rememberConv(c);
+    setMsgs([]);
+    setShowList(false);
+    load();
+  };
   useEffect(() => {
     api.me().then(setMe, () => setMe(null));
     api.teamNames().then(setNames, () => {});
@@ -182,7 +260,8 @@ export default function Assistant() {
   const push = async (m: Msg) => {
     setMsgs((cur) => [...cur, { ...m, who: me ?? null }]);
     try {
-      const id = await api.chatAdd(m.role, m.text, extraOf(m));
+      const id = await api.chatAdd(m.role, m.text, extraOf(m), convRef.current);
+      api.chatConversations().then(setConvs, () => {});
       setMsgs((cur) => cur.map((x) => (x === m || (x.id == null && x.text === m.text && x.role === m.role) ? { ...x, id } : x)));
     } catch {
       /* لو متحفظتش بتفضل ظاهرة هنا */
@@ -212,7 +291,8 @@ export default function Assistant() {
     if (!t || busy || !me) return;
     setText("");
     // الرسايل القديمة باسم اللي كتبها (المحادثة مشتركة بين الشركاء)
-    const history = msgs.slice(-8).map((m) => ({ role: m.role, text: m.role === "user" && m.who ? `${m.who}: ${m.text}` : m.text }));
+    // ذاكرة المحادثة: آخر ٢٠ رسالة فيها، ومعاها اللي اتعمل فعلاً
+    const history = msgs.slice(-20).map((m) => ({ role: m.role, text: memoryOf(m) }));
     setBusy(true);
     busyRef.current = true;
     await push({ role: "user", text: t, ...(pic ? { photo: true } : {}) });
@@ -305,23 +385,32 @@ export default function Assistant() {
   return (
     <div className="grid gap-4">
       <PageHeader title="المساعد" subtitle="اكتب اللي حصل بالعامية، أو اسأله عن أي رقم أو إزاي تعمل حاجة">
+        <Button onClick={() => setShowList((x) => !x)}>المحادثات{convs.length > 1 ? ` (${convs.length})` : ""}</Button>
         {msgs.length > 0 && (
-          <Button
-            onClick={() => {
-              if (busy) return;
-              try {
-                localStorage.setItem(SINCE, String(Math.max(0, ...msgs.map((m) => m.id ?? 0))));
-              } catch {
-                /* مش مهم */
-              }
-              setMsgs([]);
-            }}
-            disabled={busy}
-          >
-            محادثة جديدة
+          <Button primary onClick={() => openConv(newConv())} disabled={busy}>
+            + محادثة جديدة
           </Button>
         )}
       </PageHeader>
+
+      {showList && (
+        <div className="rounded-card border border-line bg-surface p-2 grid gap-1 max-h-[40vh] overflow-y-auto">
+          {convs.length === 0 && <div className="text-sm text-muted p-2">لسه مفيش محادثات.</div>}
+          {convs.map((c) => (
+            <button
+              key={c.conv}
+              onClick={() => openConv(c.conv)}
+              className={`text-start rounded-xl px-3 py-2 hover:bg-amber-soft ${c.conv === conv ? "bg-amber-soft font-bold" : ""}`}
+            >
+              <div className="truncate">{c.title ?? "محادثة"}</div>
+              <div className="text-xs text-muted">
+                {c.who ? `${c.who} · ` : ""}
+                {new Date(c.last).toLocaleString("ar-EG", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} · {c.count} رسالة
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
 
       {me === null && (
         <div className="rounded-card border-2 border-amber bg-amber-soft p-4 grid gap-3">
@@ -442,6 +531,11 @@ export default function Assistant() {
         <div ref={end} />
       </div>
 
+      {(rec || hearing || voiceNote) && (
+        <div className={`rounded-xl px-3 py-2 text-sm font-semibold ${voiceNote ? "bg-out-soft text-out" : "bg-amber-soft"}`}>
+          {voiceNote ?? (rec ? `🔴 بيسجل… اتكلم عادي ودوس ⏹ لما تخلص (لحد ${MAX_SECONDS} ثانية)` : "بيكتب اللي قلته…")}
+        </div>
+      )}
       {photo && (
         <div className="flex items-center gap-3 rounded-xl border border-amber bg-amber-soft px-3 py-2">
           <img src={photo.url} alt="صورة السركي" className="h-16 w-16 object-cover rounded-md" />
@@ -454,8 +548,11 @@ export default function Assistant() {
       )}
       <div className="flex gap-2 items-end">
         <input ref={photoInput} type="file" accept="image/*" className="hidden" onChange={(e) => pickPhoto(e.target.files?.[0])} />
-        <Button onClick={() => photoInput.current?.click()} disabled={busy || !me} title="صورة سركي">
+        <Button onClick={() => photoInput.current?.click()} disabled={busy || !me || !!rec} title="صورة سركي">
           📷
+        </Button>
+        <Button danger={!!rec} onClick={toggleVoice} disabled={(busy && !rec) || hearing || !me} title="اتكلم بدل ما تكتب">
+          {rec ? `⏹ ${recSec}ث` : hearing ? "…" : "🎤"}
         </Button>
         <textarea
           value={text}

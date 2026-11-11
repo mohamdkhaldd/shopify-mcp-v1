@@ -5,12 +5,12 @@ import { formatPounds } from "../core/calc/money";
 import { closeMonth, recordAdjustment } from "../core/services/close";
 import { today } from "../core/db";
 import { deleteEntity, deletePreview, restoreDeleted } from "../core/services/deletion";
-import { createClient, createEquipment, createExpenseCategory, createInvestor, createSupplier, setRates, setWithholding, updateInvestor, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier, endContract, reopenContract, renameContract } from "../core/services/master";
+import { createClient, createEquipment, createExpenseCategory, createInvestor, createSupplier, setRates, setWithholding, updateInvestor, newContract, NewContractInput, setClientTaxes, updateClient, updateEquipment, updateSupplier, endContract, reopenContract, renameContract, updateContract, ContractPatch } from "../core/services/master";
 import { ManagerShare, setContractManagers } from "../core/services/managers";
 import { markDelivered, Money, recordHold, recordTransfer, returnHold, saveAccount } from "../core/services/ledger";
 import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, recordTaxPayment, reinvestProfit } from "../core/services/ledger";
 import { assistantApply, AssistantAction, assistantContext, assistantFacts, assistantPreview, CallRunner, hasDelete, hasNotUndoable } from "../core/ai/assistant";
-import { chatAdd, chatList, chatUpdate, myName, setMyName, teamLogView, teamNames } from "../core/services/team";
+import { chatAdd, chatConversations, chatList, chatUpdate, myName, setMyName, teamLogView, teamNames } from "../core/services/team";
 import { PASSWORD_CALLS, READ_CATALOG, toHuman, toInternal, WRITE_CATALOG } from "../core/ai/catalog";
 import { createDriver, DriverInput, driversView, recordDriverPayment, updateDriver } from "../core/services/drivers";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
@@ -45,6 +45,7 @@ export function makeRegistry(db: Db) {
     endContract: (a: { id: number; endDate: string }) => endContract(db, a.id, a.endDate),
     reopenContract: (a: { id: number }) => reopenContract(db, a.id),
     renameContract: (a: { id: number; name: string }) => renameContract(db, a.id, a.name),
+    updateContract: (a: ContractPatch & { id: number }) => updateContract(db, a.id, a),
     partySheet: (a: { contractId: number; month: string; side: Side }) => getPartySheet(db, a.contractId, a.month, a.side),
     supplierPayment: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note?: string; forMonth?: string | null; confirmNegative?: boolean } & Money) =>
       recordSupplierPayment(db, a, { confirmNegative: a.confirmNegative }),
@@ -56,8 +57,9 @@ export function makeRegistry(db: Db) {
     setMe: (a: { name: string }) => setMyName(db, a.name),
     teamNames: () => teamNames(db),
     teamLog: (a: { from?: string; to?: string }) => teamLogView(db, a),
-    chatList: (a: { limit?: number }) => chatList(db, a.limit),
-    chatAdd: (a: { role: "user" | "assistant"; text: string; extra?: unknown }) => chatAdd(db, a),
+    chatList: (a: { conv?: string; limit?: number }) => chatList(db, a.conv, a.limit),
+    chatConversations: () => chatConversations(db),
+    chatAdd: (a: { role: "user" | "assistant"; text: string; extra?: unknown; conv?: string }) => chatAdd(db, a),
     chatUpdate: (a: { id: number; extra: unknown }) => chatUpdate(db, a.id, a.extra),
 
     // المساعد (الكلام بيتفهم على السيرفر، والتسجيل هنا بنفس دوال البرنامج)
@@ -176,6 +178,22 @@ function labelFor(db: Db, fn: string, a: any): string | null {
       return `معدة جديدة: ${a.name}`;
     case "endContract":
       return `العقد خلص يوم ${day(a.endDate)}`;
+    case "updateContract": {
+      const c = db
+        .prepare("SELECT c.start_date, c.end_date, c.client_rate_pt, c.supplier_rate_pt, c.unit, e.name AS eq, cl.name AS cl FROM contracts c JOIN equipment e ON e.id = c.equipment_id JOIN clients cl ON cl.id = c.client_id WHERE c.id = ?")
+        .get(a.id) as { start_date: string; end_date: string | null; client_rate_pt: number; supplier_rate_pt: number; unit: string; eq: string; cl: string } | undefined;
+      if (!c) return "تعديل عقد";
+      const per = c.unit === "month" ? "الشهر" : "اليوم";
+      const parts: string[] = [];
+      const keep: string[] = [];
+      const ch = (cond: boolean, changed: string, same: string) => (cond ? parts.push(changed) : keep.push(same));
+      ch(a.startDate !== undefined && a.startDate !== c.start_date, `البداية ${c.start_date} ← ${a.startDate}`, `البداية ${c.start_date}`);
+      ch(a.endDate !== undefined && a.endDate !== c.end_date, `النهاية ${c.end_date ?? "مفتوح"} ← ${a.endDate ?? "مفتوح"}`, `النهاية ${c.end_date ?? "مفتوح"}`);
+      ch(a.clientRatePt !== undefined && a.clientRatePt !== c.client_rate_pt, `سعر الشركة ${egp(c.client_rate_pt)} ← ${egp(a.clientRatePt)} في ${per}`, `سعر الشركة ${egp(c.client_rate_pt)}`);
+      ch(a.supplierRatePt !== undefined && a.supplierRatePt !== c.supplier_rate_pt, `سعر صاحب المعدة ${egp(c.supplier_rate_pt)} ← ${egp(a.supplierRatePt)} في ${per}`, `سعر صاحب المعدة ${egp(c.supplier_rate_pt)}`);
+      if (a.siteName !== undefined) parts.push(`الموقع ← ${a.siteName || "من غير"}`);
+      return `تعديل عقد ${c.eq} مع ${c.cl}: ${parts.join("، ") || "مفيش تغيير"}${keep.length ? ` — وزي ما هو: ${keep.join("، ")}` : ""}`;
+    }
     case "renameContract":
       return a.name?.trim() ? `اسم العقد: ${a.name.trim()}` : "شيل اسم العقد";
     case "reopenContract":
@@ -262,7 +280,7 @@ function labelFor(db: Db, fn: string, a: any): string | null {
 }
 
 /** الحاجات اللي بتعرض بس (من غير تعديل) — دي بس اللي بتشتغل والاشتراك خالص */
-const READ_CALLS = new Set(["me", "teamNames", "teamLog", "chatList", "assistantContext", "assistantFacts", "assistantPreview", "assistantRead", "drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
+const READ_CALLS = new Set(["me", "teamNames", "teamLog", "chatList", "chatConversations", "assistantContext", "assistantFacts", "assistantPreview", "assistantRead", "drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
 export const isReadCall = (fn: string) => READ_CALLS.has(fn);
 
 /** التشغيل: أي قناة بتعدّل أو بتضيف (create / delete / update / set …) — بتتقفل والاشتراك خالص */

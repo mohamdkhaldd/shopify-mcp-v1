@@ -67,10 +67,12 @@ const ACTION_PROPS = {
 const CARD = {
   type: "object",
   additionalProperties: false,
-  required: ["label", "value", "tone"],
+  required: ["label", "amount", "unit", "text", "tone"],
   properties: {
     label: { type: "string", description: "اسم الرقم (الباقي له، آخر دفعة…)" },
-    value: { type: "string", description: "الرقم مكتوب (١٢٬٥٠٠ ج، ٥ نوفمبر…)" },
+    amount: n("الرقم نفسه زي ما هو في البيانات بالظبط (3500 مش ٣٥٠٥) — البرنامج بيكتبه. null لو المربع مش رقم"),
+    unit: s("اللي بعد الرقم: «ج» أو «ج / يوم» أو «يوم» أو «ساعة» أو «٪»"),
+    text: s("لو المربع مش رقم (تاريخ، اسم): الكلام نفسه — وإلا null"),
     tone: e(["in", "out", "tax", "plain"], "in = أخضر (فلوس جت/لينا)، out = أحمر (علينا/باقي)، tax = ضرايب/خصم، plain"),
   },
 };
@@ -132,6 +134,8 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 - قبل أي تنفيذ البرنامج بيعرض على المستخدم «هعمل كذا» ومبيتنفذش غير لما يوافق — فاكتب في reply بالظبط هتعمل إيه.
 - المسح وقفل الشهر وتغيير النسب والتسويات محتاجين باسورد الشركة — البرنامج بيطلبه.
 - لو المستخدم طلب حاجة وناقصها معلومة لازمة (اسم الشركة، تاريخ البداية، السعر، صاحب المعدة، المبلغ، أنهي عقد…): متنفذش ومتخمّنش — actions فاضية، و reply: «ناقص كذا وكذا — قولّي عشان أعمل …». اسأل عن كل الناقص مرة واحدة.
+- التعديل غير الجديد: لو بيتكلم عن حاجة موجودة (عقد، صاحب معدة، شركة، سواق، دفعة…) وعايز يغيّر فيها (تاريخ، سعر، اسم، تليفون…) استخدم دالة التعديل بتاعتها (updateContract, updateSupplier, updateClient, updateEquipment, updateDriver…) بالـ id. ممنوع تعمل contract (عقد جديد) عشان تعدّل عقد موجود. ابعت بس الخانات اللي اتغيرت، ومتسألش عن الحاجات اللي موجودة أصلاً (السعر، الشركة…) — هي موجودة في contracts في السياق. وفي reply قول: «هغيّر كذا من … لـ …، والباقي زي ما هو (كذا وكذا)».
+- ذاكرة المحادثة: الرسايل اللي فاتت في نفس المحادثة (history) فيها اللي اتقال واللي اتعمل ([اتعمل: …]). لو قال «خليها كذا» أو «عدّل التاريخ بس» أو «نفس الأسعار» يبقى قصده نفس الحاجة اللي كنتوا بتتكلموا فيها — كمّل عليها ومتسألش من الأول.
 - whatsapp: رسالة جاهزة للواتساب (phone من السياق، و text = الرسالة كاملة بالعامية). مثلاً «ابعت لمحمد حسابه»: open suppliers id و tab full و pdf true (الملف الكامل PDF) + whatsapp بملخص الحساب وآخر دفعة.
 - لو مش في السياق catalog (نسخة قديمة من البرنامج): متستخدمش call ولا read ولا open ولا whatsapp ولا sarki_photo.
 
@@ -150,7 +154,7 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 - لو السؤال عن شخص معين (صاحب معدة، شركة، سواق، مستثمر) أو هتبعتله رسالة: اقرا حسابه الأول دايماً (read suppliers {supplierId} / clients {clientId} / drivers {driverId} / investors) عشان الدفعات بالتاريخ والشهور، وبعدين جاوب.
 - رد سؤال «ناقصله كام / دفعتله امتى»: أول سطر الباقي، وبعدين نقط: كل دفعة (المبلغ ويوم إيه — آخر ٥)، الخصومات وسببها، شغل الشهر ده (كام يوم وكام فلوس)، وإجمالي اللي اتصرف. ولو حسابه على أكتر من شهر اعمل chart شهر بشهر (له من السركي واتصرف له).
 - رسالة الواتساب (text) لازم تبقى كاملة بالأرقام: تحية بالاسم، من السركي كام، دفعنا عنه كام، اتصرف له كام، الباقي كام، آخر دفعة كام ويوم إيه، وشغل الشهر — بنقط قصيرة.
-- cards: حط الأرقام المهمة في مربعات (مثلاً: الباقي له / اتصرف له / آخر دفعة / أيام الشغل). tone: out للي علينا أو الباقي، in للي جه أو اتدفع.
+- cards: حط الأرقام المهمة في مربعات (مثلاً: الباقي له / اتصرف له / آخر دفعة / أيام الشغل): amount = الرقم بالظبط زي ما هو في البيانات (رقم مش كلام)، و unit = «ج» أو «ج / يوم» أو «يوم»…، و text للحاجة اللي مش رقم بس. tone: out للي علينا أو الباقي، in للي جه أو اتدفع.
 - chart: لو الأرقام على كذا شهر أو مقارنة بين حاجات (الربح شهر بشهر، حساب صاحب معدة شهر بشهر، الخزنة بالحسابات) اعمل رسم: bar للمقارنة، line للشهور، pie للتقسيم. labels بالعربي. لو مفيش داعي = null.
 
 الأرقام: في السياق فيه facts (أرقام البرنامج الحقيقية بالجنيه). لو سأل عن فلوس (كسبت كام، الخزنة فيها كام، مين عليه فلوس، النسبة على رأس المال…) جاوب منها بس، بالأرقام، و actions فاضية. متخترعش رقم مش موجود؛ لو مش موجود قول إنه مش متسجل.
@@ -275,6 +279,41 @@ async function askGemini(key: string, history: Turn[], text: string, image?: { d
   throw new AiError(last);
 }
 
+async function transcribeGemini(key: string, audio: string, mediaType: string, hint: string) {
+  const prompt =
+    "ده تسجيل صوتي من حد بيستخدم برنامج حسابات لشركة تأجير معدات في مصر. اكتب اللي قاله بالظبط بالعامية المصرية زي ما نطقه، " +
+    "والأرقام والمبالغ اكتبها أرقام (ألف وخمسمية = 1500، ٣ ونص = 3.5)، والتواريخ زي ما قالها. متترجمش ومتشرحش ومتضيفش أي حاجة — الكلام بس. " +
+    "لو مفيش كلام مفهوم اكتب: مفيش كلام" +
+    (hint ? `\nأسامي موجودة في البرنامج ممكن يقولها (اكتبها بنفس الشكل لو هي اللي اتقالت): ${hint}` : "");
+  let last = 503;
+  for (const model of await listGeminiModels(key)) {
+    const res = await fetch(`${GEMINI}/models/${model}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ inline_data: { mime_type: mediaType, data: audio } }, { text: prompt }] }],
+        generationConfig: { temperature: 0, ...lightThinking(model) },
+      }),
+      signal: AbortSignal.timeout(45_000),
+    }).catch(() => null);
+    if (!res) continue;
+    if (res.ok) {
+      const j = await res.json();
+      const parts = j.candidates?.[0]?.content?.parts ?? [];
+      return {
+        model,
+        text: parts.map((p: { text?: string; thought?: boolean }) => (p.thought ? "" : p.text ?? "")).join("").trim(),
+        inTokens: j.usageMetadata?.promptTokenCount ?? null,
+        outTokens: j.usageMetadata?.candidatesTokenCount ?? null,
+      };
+    }
+    last = res.status;
+    console.warn(`gemini voice ${model}: ${res.status} ${(await res.text()).slice(0, 300)}`);
+    if (res.status === 401 || res.status === 403) throw new AiError(res.status);
+  }
+  throw new AiError(last);
+}
+
 async function askClaude(apiKey: string, history: Turn[], text: string, image?: { data: string; mediaType: string }) {
   const client = new Anthropic({ apiKey, timeout: 90_000, maxRetries: 1 });
   const res = await client.beta.messages.create({
@@ -304,7 +343,7 @@ async function askClaude(apiKey: string, history: Turn[], text: string, image?: 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return fail("method", 405);
-  let b: { key?: string; deviceId?: string; text?: string; context?: unknown; history?: Turn[]; image?: string; mediaType?: string; catalog?: string; reads?: unknown };
+  let b: { key?: string; deviceId?: string; text?: string; context?: unknown; history?: Turn[]; image?: string; mediaType?: string; catalog?: string; reads?: unknown; transcribe?: boolean; audio?: string; hint?: string };
   try {
     b = await req.json();
   } catch {
@@ -322,14 +361,29 @@ Deno.serve(async (req) => {
                                   where coalesce(l.data_from, l.id) = ${lic.owner} and a.at > now() - interval '1 day'`;
     if (used >= DAILY_LIMIT) return fail("limit");
 
+    // صوت → كلام: Gemini بيكتب اللي اتقال بالظبط (والكلام ده بعدين بيتبعت للمساعد زي أي رسالة)
+    if (b.transcribe) {
+      const geminiKey = Deno.env.get("GEMINI_API_KEY");
+      if (!geminiKey) return fail("not_configured");
+      const audio = String(b.audio ?? "").replace(/^data:[^,]+,/, "");
+      if (!audio) return fail("empty");
+      if (audio.length * 0.75 > 8_000_000) return fail("too_big");
+      const mediaType = /^audio\/(wav|mp3|mpeg|ogg|aac|flac|webm)$/.test(b.mediaType ?? "") ? b.mediaType! : "audio/wav";
+      const t = await transcribeGemini(geminiKey, audio, mediaType, String(b.hint ?? "").slice(0, 6000));
+      await sql`insert into licensing.ai_usage (license_id, device_id, kind, input_tokens, output_tokens, ok)
+                values (${lic.id}, ${b.deviceId ?? null}, ${"voice:" + t.model}, ${t.inTokens}, ${t.outTokens}, ${!!t.text})`;
+      if (!t.text || /^\(?(مفيش كلام|no speech)/i.test(t.text)) return fail("no_speech");
+      return json({ ok: true, text: t.text });
+    }
+
     const said = String(b.text ?? "").trim();
     if (!said) return fail("empty");
     if (said.length > 4000) return fail("too_long");
     const context = JSON.stringify(b.context ?? {}).slice(0, 60_000);
     const history = (Array.isArray(b.history) ? b.history : [])
       .filter((t) => t && (t.role === "user" || t.role === "assistant") && typeof t.text === "string")
-      .slice(-8)
-      .map((t) => ({ role: t.role, text: t.text.slice(0, 2000) }));
+      .slice(-20)
+      .map((t) => ({ role: t.role, text: t.text.slice(0, 3000) }));
     let image: { data: string; mediaType: string } | undefined;
     if (b.image) {
       const data = String(b.image).replace(/^data:[^,]+,/, "");
@@ -381,10 +435,16 @@ Deno.serve(async (req) => {
         return o;
       });
     const o2 = out as { cards?: unknown; chart?: unknown };
+    // الرقم بيتكتب هنا (مش من الذكاء الاصطناعي) عشان ميطلعش فيه غلط في الكتابة
+    const ar = new Intl.NumberFormat("ar-EG", { maximumFractionDigits: 2 });
     const cards = (Array.isArray(o2.cards) ? o2.cards : [])
-      .filter((c): c is { label: unknown; value: unknown; tone?: unknown } => !!c && typeof c === "object")
+      .filter((c): c is { label: unknown; amount?: unknown; unit?: unknown; text?: unknown; value?: unknown; tone?: unknown } => !!c && typeof c === "object")
       .slice(0, 8)
-      .map((c) => ({ label: String(c.label ?? "").slice(0, 60), value: String(c.value ?? "").slice(0, 60), tone: ["in", "out", "tax"].includes(String(c.tone)) ? String(c.tone) : "plain" }))
+      .map((c) => {
+        const amount = typeof c.amount === "number" && Number.isFinite(c.amount) ? c.amount : null;
+        const value = amount != null ? `${ar.format(amount)}${c.unit ? ` ${String(c.unit).slice(0, 20)}` : ""}` : String(c.text ?? c.value ?? "").slice(0, 60);
+        return { label: String(c.label ?? "").slice(0, 60), value, tone: ["in", "out", "tax"].includes(String(c.tone)) ? String(c.tone) : "plain" };
+      })
       .filter((c) => c.label && c.value);
     let chart: unknown = null;
     const ch = o2.chart as { title?: unknown; kind?: unknown; labels?: unknown; series?: unknown } | null;
