@@ -88,7 +88,16 @@ export const api = {
     call<number>("supplierDeduction", v),
   assistantContext: () => call<AssistantContext>("assistantContext"),
   assistantPreview: (actions: AssistantAction[]) => call<{ ok: true; lines: string[] } | { ok: false; message: string }>("assistantPreview", { actions }),
-  assistantApply: (actions: AssistantAction[], summary: string) => call<string[]>("assistantApply", { actions, summary }),
+  assistantFacts: () => call<unknown>("assistantFacts"),
+  /** password: لو القايمة فيها مسح (لازم باسورد الشركة) */
+  assistantApply: async (actions: AssistantAction[], summary: string, password?: string) => {
+    if (password === undefined) return call<string[]>("assistantApply", { actions, summary });
+    if (!window.api) throw new ApiError("البرنامج لازم يشتغل من نسخة الويندوز");
+    const r = await window.api.invoke("shell:assistantApplyDeletes", { actions, summary, password });
+    if (!r?.ok) throw new ApiError(r?.message ?? "حصلت مشكلة", r?.code);
+    if (r.actionId) window.dispatchEvent(new CustomEvent(CHANGED_EVENT, { detail: { actionId: r.actionId, label: r.label, undoable: r.undoable } }));
+    return r.value as string[];
+  },
   drivers: (month?: string, driverId?: number) => call<DriversView>("drivers", { month, driverId }),
   createDriver: (v: DriverInput) => call<number>("createDriver", v),
   updateDriver: (v: DriverInput & { id: number }) => call("updateDriver", v),

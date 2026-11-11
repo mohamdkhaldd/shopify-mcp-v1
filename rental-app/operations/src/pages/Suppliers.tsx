@@ -5,6 +5,7 @@ import { SupplierDashboardRow } from "../api/types";
 import { formatEGP } from "../utils/format";
 import { PAYMENT_METHODS, paymentMethodLabel } from "../utils/paymentMethods";
 import { useUndo } from "../context/UndoContext";
+import UnpaidEquipmentExpenses from "./suppliers/UnpaidEquipmentExpenses";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -302,6 +303,7 @@ export default function Suppliers() {
           </table>
         )}
       </div>
+      <UnpaidEquipmentExpenses />
     </div>
   );
 }

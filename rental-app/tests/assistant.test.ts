@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { freshDb, egp } from "./helpers";
-import { assistantApply, assistantContext, assistantPreview, normalizeName } from "../core/ai/assistant";
+import { assistantApply, assistantContext, assistantFacts, assistantPreview, hasDelete, normalizeName } from "../core/ai/assistant";
 import { computeBooks } from "../core/services/books";
 import { supplierStatement } from "../core/services/reports";
 import { recordCapital } from "../core/services/ledger";
@@ -78,5 +78,27 @@ describe("المساعد", () => {
     expect(ctx.equipment).toEqual([{ name: "لودر", supplier: "محمد" }]);
     expect(ctx.contracts[0]).toMatchObject({ equipment: "لودر", client: "النور", supplier: "محمد" });
     expect(ctx.accounts.map((a) => a.key)).toContain("cash");
+  });
+
+  it("المسح بالاسم: المعاينة بتقول هيتمسح إيه، والمسح بيشيل العقد", () => {
+    const db = freshDb({ withholding: true });
+    assistantApply(db, [{ type: "contract", equipment: "لودر", supplier: "محمد", client: "النور", unit: "day", clientRate: 1500, supplierRate: 1200, startDate: "2026-10-01" }]);
+    const del = [{ type: "delete" as const, target: "contract" as const, equipment: "لودر", client: "النور" }];
+    expect(hasDelete(del)).toBe(true);
+    const p = assistantPreview(db, del);
+    expect(p.ok).toBe(true);
+    expect(count(db, "contracts")).toBe(1);
+    assistantApply(db, del);
+    expect(count(db, "contracts")).toBe(0);
+    expect(assistantPreview(db, [{ type: "delete", target: "supplier", supplier: "حد مش موجود" }]).ok).toBe(false);
+  });
+
+  it("الأرقام: facts فيها الشهور ورأس المال", () => {
+    const db = freshDb({ withholding: true });
+    recordCapital(db, { investorId: createInvestor(db, { name: "م" }), kind: "deposit", date: "2026-10-01", amountPt: egp(100_000) });
+    const f = assistantFacts(db) as Record<string, unknown>;
+    expect(f).toHaveProperty("capital");
+    expect(f).toHaveProperty("treasury");
+    expect(Array.isArray((f as { months?: unknown }).months)).toBe(true);
   });
 });

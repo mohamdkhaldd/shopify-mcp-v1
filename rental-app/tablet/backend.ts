@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { setupDatabase } from "../core/schema";
 import { createSyncEngine } from "../core/sync/syncEngine";
 import { cloud } from "../core/sync/cloudConfig";
-import { callCore, isReadCall, makeRegistry } from "../electron/ipc";
+import { assistantDeletesRegistry, callCore, isReadCall, makeRegistry } from "../electron/ipc";
 import { wipeCompanyData } from "../core/services/reset";
 import { createDatabase } from "./sqlAdapter";
 import { forget, loadSaved, save } from "./storage";
@@ -173,6 +173,16 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
       if (!unlocked) return { ok: false, message: "ادخل الأول" };
       const r = await license.resetCompany(password);
       if (r.ok) setTimeout(() => void wipeAndRestart(), 300);
+      return r;
+    },
+    "shell:assistantApplyDeletes": async ({ actions, summary, password }: { actions: unknown[]; summary?: string; password: string }) => {
+      if (!licensed()) return { ok: false, code: "license", message: "البرنامج محتاج كود تفعيل" };
+      if (readOnly()) return { ok: false, code: "expired", message: EXPIRED_MESSAGE };
+      if (!hasPassword()) return { ok: false, message: "المسح من المساعد محتاج باسورد للشركة — اعمله من الإعدادات (باسورد الشركة) الأول" };
+      const check = await license.checkPassword(password ?? "");
+      if (!check.ok) return { ok: false, message: check.message };
+      const r = callCore(db, assistantDeletesRegistry(db), "assistantApplyDeletes", { actions, summary });
+      flush();
       return r;
     },
     "shell:askAssistant": (r: AssistantRequest) => (unlocked ? license.askAssistant(r) : { ok: false, message: "ادخل الأول" }),

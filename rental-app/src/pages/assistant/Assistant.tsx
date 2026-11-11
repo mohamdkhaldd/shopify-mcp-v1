@@ -2,24 +2,48 @@ import { useEffect, useRef, useState } from "react";
 import { api, shellApi } from "../../api/client";
 import type { AssistantAction } from "../../../core/ai/assistant";
 import { Button, PageHeader } from "../../components/ui";
+import { TextInput } from "../../components/Field";
 
 // المساعد: تكتب اللي حصل بالعامية، والذكاء الاصطناعي يفهمه ويقولك هيسجل إيه.
 // مفيش حاجة بتتسجل غير لما تدوس «سجّل»، والتسجيل بيتعمل بنفس دوال البرنامج
-// (فيه تراجع زي أي تعديل تاني من سجل التعديلات).
+// (فيه تراجع زي أي تعديل تاني من سجل التعديلات). المسح بباسورد الشركة بس.
+// بيجاوب كمان على "إزاي أعمل كذا" وعلى أسئلة الأرقام (كسبت كام، النسبة…).
+// المحادثة محفوظة على الجهاز ده.
 
 type Msg =
   | { role: "user"; text: string }
   | { role: "assistant"; text: string; actions?: AssistantAction[]; lines?: string[]; problem?: string; state?: "pending" | "saved" | "cancelled" | "error" };
+
+const STORE = "mk-assistant-chat";
+const loadChat = (): Msg[] => {
+  try {
+    const v = JSON.parse(localStorage.getItem(STORE) ?? "[]");
+    return Array.isArray(v) ? v.slice(-60) : [];
+  } catch {
+    return [];
+  }
+};
+const saveChat = (m: Msg[]) => {
+  try {
+    localStorage.setItem(STORE, JSON.stringify(m.slice(-60)));
+  } catch {
+    /* مش مهم لو مقدرش يحفظ */
+  }
+};
 
 const EXAMPLES = [
   "دخلت لودر ٩٥٠ صاحبه محمد علي لشركة النور في التجمع، الشركة بـ ١٥٠٠ في اليوم وصاحبه ياخد ١٢٠٠ من أول الشهر",
   "صرفت ٢٠٠٠ للسواق أحمد سلفة، وجبت زيت هيدروليك بـ ١٥٠٠ للودر بتاع محمد",
   "شركة النور دفعت ٣٠ ألف انستا باي",
   "اللودر اشتغل من ١ لحد ١٠ الشهر ده",
+  "كسبت كام الشهر ده؟ ومكسبي كام في المية على فلوسي؟",
+  "إزاي أعمل عقد جديد؟",
 ];
 
 export default function Assistant() {
-  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [msgs, setMsgs] = useState<Msg[]>(loadChat);
+  const [password, setPassword] = useState("");
+  useEffect(() => saveChat(msgs), [msgs]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const end = useRef<HTMLDivElement>(null);
@@ -39,7 +63,8 @@ export default function Assistant() {
     setMsgs((m) => [...m, { role: "user", text: t }]);
     setBusy(true);
     try {
-      const context = await api.assistantContext();
+      const [names, facts] = await Promise.all([api.assistantContext(), api.assistantFacts()]);
+      const context = { ...names, facts };
       const r = await shellApi.askAssistant({ text: t, context, history });
       if (!r.ok) {
         setMsgs((m) => [...m, { role: "assistant", text: r.message, state: "error" }]);
@@ -69,7 +94,10 @@ export default function Assistant() {
     if (m.role !== "assistant" || !m.actions) return;
     setBusy(true);
     try {
-      const lines = await api.assistantApply(m.actions, m.text || (m.lines ?? []).join("، "));
+      const deleting = m.actions.some((a) => a.type === "delete");
+      if (deleting && !password) throw new Error("اكتب باسورد الشركة عشان تمسح");
+      const lines = await api.assistantApply(m.actions, m.text || (m.lines ?? []).join("، "), deleting ? password : undefined);
+      setPassword("");
       update(i, { state: "saved", lines });
     } catch (e) {
       update(i, { state: "error", problem: (e as Error).message });
@@ -80,7 +108,13 @@ export default function Assistant() {
 
   return (
     <div className="grid gap-4">
-      <PageHeader title="المساعد" subtitle="اكتب اللي حصل بالعامية — هو يفهم ويقولك هيسجل إيه، وانت تأكد" />
+      <PageHeader title="المساعد" subtitle="اكتب اللي حصل بالعامية، أو اسأله عن أي رقم أو إزاي تعمل حاجة">
+        {msgs.length > 0 && (
+          <Button onClick={() => !busy && setMsgs([])} disabled={busy}>
+            محادثة جديدة
+          </Button>
+        )}
+      </PageHeader>
 
       <div className="rounded-card border border-line bg-surface min-h-[55vh] max-h-[65vh] overflow-y-auto p-4 grid content-start gap-3">
         {!msgs.length && (
@@ -112,10 +146,16 @@ export default function Assistant() {
                 </ul>
               )}
               {m.problem && <div className="text-sm font-semibold text-out">{m.problem}</div>}
+              {m.state === "pending" && m.actions?.some((a) => a.type === "delete") && (
+                <label className="grid gap-1 text-sm">
+                  <span className="font-semibold text-out">ده مسح — اكتب باسورد الشركة:</span>
+                  <TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" className="max-w-[220px]" />
+                </label>
+              )}
               {m.state === "pending" && (
                 <div className="flex gap-2 pt-1">
-                  <Button primary onClick={() => save(i)} disabled={busy}>
-                    سجّل
+                  <Button primary danger={m.actions?.some((a) => a.type === "delete")} onClick={() => save(i)} disabled={busy}>
+                    {m.actions?.some((a) => a.type === "delete") ? "امسح" : "سجّل"}
                   </Button>
                   <Button onClick={() => update(i, { state: "cancelled" })} disabled={busy}>
                     لأ

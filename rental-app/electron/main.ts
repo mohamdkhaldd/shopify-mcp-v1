@@ -6,7 +6,7 @@ import { dbPath, openDatabase } from "./db";
 import { backupTo, dailyBackup, lastBackup, looksLikeRentalDb } from "./backup";
 import { printPreview, savePdf } from "./print";
 import { setupAutoUpdate } from "./updater";
-import { callCore, isReadCall, makeRegistry } from "./ipc";
+import { assistantDeletesRegistry, callCore, isReadCall, makeRegistry } from "./ipc";
 import { wipeCompanyData } from "../core/services/reset";
 import { exportExcel, ExcelSheet } from "./excel";
 import { seedDemo } from "../core/demo";
@@ -204,6 +204,15 @@ app.whenReady().then(async () => {
   });
   // صورة السركي الورقي ← Claude يقراها (التأجير والتشغيل الاتنين)
   ipcMain.handle("shell:readSarki", (_e, r: ReadRequest) => (unlocked ? license.readSarki(r) : { ok: false, message: "ادخل الأول" }));
+  // المساعد بيمسح: لازم الشركة يكون ليها باسورد والباسورد يتكتب صح
+  ipcMain.handle("shell:assistantApplyDeletes", async (_e, { actions, summary, password }: { actions: unknown[]; summary?: string; password: string }) => {
+    if (!usable()) return { ok: false, code: "license", message: "البرنامج محتاج كود تفعيل" };
+    if (readOnly()) return { ok: false, code: "expired", message: EXPIRED_MESSAGE };
+    if (!hasPassword()) return { ok: false, message: "المسح من المساعد محتاج باسورد للشركة — اعمله من الإعدادات (باسورد الشركة) الأول" };
+    const check = await license.checkPassword(password ?? "");
+    if (!check.ok) return { ok: false, message: check.message };
+    return callCore(db, assistantDeletesRegistry(db), "assistantApplyDeletes", { actions, summary });
+  });
   ipcMain.handle("shell:askAssistant", (_e, r: AssistantRequest) => (unlocked ? license.askAssistant(r) : { ok: false, message: "ادخل الأول" }));
   ipcMain.handle("shell:setPassword", (_e, { current, next }: { current: string; next: string }) =>
     unlocked ? license.setPassword(current, next) : { ok: false, message: "ادخل الأول" },

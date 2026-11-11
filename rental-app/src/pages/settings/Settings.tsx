@@ -439,60 +439,6 @@ function Updates() {
   );
 }
 
-/** تصفير البرنامج: كل البيانات بتتمسح من كل أجهزة الشركة (بعد نسخة محفوظة على السحابة ترجعها MK). */
-function ResetCompany() {
-  const [open, setOpen] = useState(false);
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const ready = !!password && confirm.trim() === "امسح" && !busy;
-  async function go() {
-    setBusy(true);
-    setMsg(null);
-    const r = await shellApi.resetCompany(password);
-    setBusy(false);
-    if (r.ok) setMsg({ ok: true, text: "اتصفّر — البرنامج هيقفل ويفتح فاضي دلوقتي. باقي أجهزة الشركة هتتصفّر لوحدها أول ما تفتح على النت." });
-    else setMsg({ ok: false, text: r.message });
-  }
-  return (
-    <Panel title="تصفير البرنامج" hint="خطر">
-      <div className="px-4 py-3.5 grid gap-3">
-        <div className="text-sm leading-relaxed">
-          بيمسح <b>كل</b> بيانات التأجير (العقود، السركي، الحسابات، الخزنة، الضرايب…) من الجهاز ده ومن كل أجهزة الشركة، وتبدأ من الأول. الترخيص والإعدادات بيفضلوا.
-          <br />
-          قبل المسح بتتاخد نسخة كاملة على السحابة — لو غيّرت رأيك، MK-Tech تقدر ترجّعهالك.
-        </div>
-        {!open ? (
-          <div>
-            <Button danger onClick={() => setOpen(true)}>
-              صفّر البرنامج
-            </Button>
-          </div>
-        ) : (
-          <div className="grid gap-3 rounded-card border border-out bg-out-soft p-3">
-            <Labeled label="باسورد الشركة">
-              <TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" />
-            </Labeled>
-            <Labeled label="اكتب كلمة «امسح» للتأكيد">
-              <TextInput value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="امسح" />
-            </Labeled>
-            <div className="flex flex-wrap gap-2">
-              <Button danger disabled={!ready} onClick={go}>
-                {busy ? "بيصفّر…" : "امسح كل البيانات"}
-              </Button>
-              <Button onClick={() => (setOpen(false), setPassword(""), setConfirm(""), setMsg(null))} disabled={busy}>
-                إلغاء
-              </Button>
-            </div>
-          </div>
-        )}
-        {msg && <div className={`text-sm font-semibold ${msg.ok ? "text-in" : "text-out"}`}>{msg.text}</div>}
-      </div>
-    </Panel>
-  );
-}
-
 export default function Settings() {
   const [v, setV] = useState<SettingsView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -512,7 +458,6 @@ export default function Settings() {
         <SyncPanel />
         <License plan={v.plan} />
         <CompanyPassword />
-        <ResetCompany />
       </div>
     </div>
   );

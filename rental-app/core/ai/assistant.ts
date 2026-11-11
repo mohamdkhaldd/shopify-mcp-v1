@@ -4,6 +4,10 @@ import { createClient, createEquipment, createExpenseCategory, createSupplier, n
 import { recordClientPayment, recordExpense, recordSupplierDeduction, recordSupplierPayment } from "../services/ledger";
 import { createDriver, recordDriverPayment } from "../services/drivers";
 import { fillRange } from "../services/sarki";
+import { computeBooks } from "../services/books";
+import { managersReport } from "../services/managers";
+import { clientStatement, supplierStatement } from "../services/reports";
+import { Deletable, deleteEntity, deletePreview } from "../services/deletion";
 
 // المساعد: المستخدم بيكتب بالعامية ("دخلت لودر صاحبه محمد لشركة النور بـ ١٥٠٠
 // وصاحبه ياخد ١٢٠٠")، والذكاء الاصطناعي (على السيرفر) بيحوّل الكلام لقايمة
@@ -24,7 +28,8 @@ export type AssistantActionType =
   | "supplier_payment"
   | "supplier_deduction"
   | "driver"
-  | "driver_payment";
+  | "driver_payment"
+  | "delete";
 
 /** فعل واحد. الفلوس بالجنيه، والتواريخ YYYY-MM-DD، والأسماء زي ما المستخدم بيقولها. */
 export interface AssistantAction {
@@ -56,6 +61,8 @@ export interface AssistantAction {
   payKind?: "month" | "day" | null;
   rate?: number | null;
   overtimeRate?: number | null;
+  /** delete: إيه اللي يتمسح (supplier / client / equipment / driver / contract) */
+  target?: "supplier" | "client" | "equipment" | "driver" | "contract" | null;
 }
 
 type Named = { id: number; name: string };
@@ -123,6 +130,86 @@ export function assistantContext(db: Db) {
   };
 }
 export type AssistantContext = ReturnType<typeof assistantContext>;
+
+const egpN = (pt: number) => Math.round(pt) / 100;
+
+/**
+ * الأرقام اللي المساعد بيجاوب منها ("كسبت كام"، "مكسبي كام في المية على فلوسي"…):
+ * ملخص كل شهر، والخزنة، واللي لينا واللي علينا، ورأس المال، والمستثمرين،
+ * وشركاء الإدارة، وحساب كل شركة وكل صاحب معدة. كله بالجنيه.
+ */
+export function assistantFacts(db: Db) {
+  const now = today();
+  const books = computeBooks(db, now);
+  const names = (t: string) => new Map((db.prepare(`SELECT id, name FROM ${t}`).all() as Named[]).map((r) => [r.id, r.name]));
+  const eqName = names("equipment");
+  const clName = names("clients");
+  const months = books.months.slice(-12).map((m) => ({
+    month: m.month,
+    closed: m.closed,
+    fromClients: egpN(m.contracts.reduce((s, c) => s + c.clientBasePt, 0)),
+    toOwners: egpN(m.contracts.reduce((s, c) => s + c.supplierCostPt, 0)),
+    margin: egpN(m.contracts.reduce((s, c) => s + c.marginPt, 0)),
+    tax: egpN(m.contracts.reduce((s, c) => s + c.tax5Pt + (c.whtPt ?? 0), 0)),
+    contractExpenses: egpN(m.contracts.reduce((s, c) => s + c.expensesPt, 0)),
+    generalExpenses: egpN(m.generalExpensesPt),
+    netProfit: egpN(m.monthNetPt),
+    managementShare: egpN(m.distribution.managementPt),
+    investorsShare: egpN(m.distribution.investorsPoolPt),
+    contracts: m.contracts.map((c) => ({ equipment: eqName.get(c.equipmentId) ?? c.code, client: clName.get(c.clientId) ?? "", days: c.clientDays, net: egpN(c.netPt) })),
+  }));
+  // تفاصيل العقود لآخر ٣ شهور بس (عشان الرسالة متكبرش)
+  months.forEach((m, i) => {
+    if (i < months.length - 3) m.contracts = [];
+  });
+  const receivables = books.invoices.reduce((s, i) => s + i.totalPt - i.collectedPt - i.creditedPt, 0);
+  const supplierCost = books.months.reduce((s, m) => s + m.contracts.reduce((a, c) => a + c.supplierCostPt, 0), 0);
+  const payables = supplierCost - books.raw.deductions.reduce((s, d) => s + d.amount_pt, 0) - books.raw.supplierPayments.reduce((s, p) => s + p.amount_pt, 0);
+  const totalNet = books.months.reduce((s, m) => s + m.monthNetPt, 0);
+  const q = <T>(sql: string) => db.prepare(sql).all() as T[];
+  const clients = q<{ id: number; name: string }>("SELECT id, name FROM clients WHERE deleted_at IS NULL").map((c) => ({
+    name: c.name,
+    stillOwesUs: egpN(clientStatement(db, c.id, now, books).totals.remainingPt),
+  }));
+  const owners = q<{ id: number; name: string }>("SELECT id, name FROM suppliers WHERE deleted_at IS NULL").map((x) => ({
+    name: x.name,
+    weStillOweHim: egpN(supplierStatement(db, x.id, now, books).totals.remainingPt),
+  }));
+  const partners = managersReport(db, books, now.slice(0, 7)).people.map((p) => ({
+    name: p.name,
+    shareThisMonth: egpN(p.monthPt),
+    shareSinceStart: egpN(p.accruedPt),
+    paidFromPocket: egpN(p.pocketPt),
+    takenSoFar: egpN(p.paidPt),
+    stillOwedToHim: egpN(p.balancePt),
+  }));
+  return {
+    today: now,
+    note: "كل المبالغ بالجنيه. netProfit = صافي ربح الشهر بعد الضرايب والمصروفات (قبل التقسيم بين الإدارة والمستثمرين).",
+    months,
+    sinceStart: { netProfit: egpN(totalNet), managementShare: egpN(books.management.accruedPt), managementPaid: egpN(books.management.paidPt) },
+    treasury: {
+      balance: egpN(books.treasury.balancePt),
+      availableForWork: egpN(books.treasury.availablePt),
+      taxMoneyHeld: egpN(books.treasury.taxHeldPt),
+      byAccount: books.treasury.byAccount.map((a) => ({ account: a.name, balance: egpN(a.balancePt) })),
+    },
+    clientsStillOweUs: egpN(receivables),
+    weStillOweOwners: egpN(payables),
+    capital: { total: egpN(books.capital.totalPt), inUse: egpN(books.capital.deployedPt), inTreasury: egpN(books.capital.inTreasuryPt) },
+    investors: books.investors.map((i) => ({
+      name: i.name,
+      capital: egpN(i.capitalPt),
+      profitSinceStart: egpN(i.accruedPt),
+      paidOut: egpN(i.paidPt),
+      stillOwed: egpN(i.owedPt),
+      lastMonthReturnPercent: i.monthlyReturnBp / 100,
+    })),
+    managementPartners: partners,
+    clients,
+    owners,
+  };
+}
 
 /** بينفذ القايمة بالترتيب ويرجّع سطر عربي لكل حاجة اتعملت. بيترمي UserError لو حاجة ناقصة. */
 function run(db: Db, actions: AssistantAction[]): string[] {
@@ -306,12 +393,58 @@ function run(db: Db, actions: AssistantAction[]): string[] {
         lines.push(`فلوس للسواق ${d.name}: ${egp(a.amount!)}${a.note ? ` (${a.note})` : ""} — من الخزنة، وبتتخصم من صاحب المعدة — ${day(a.date)}`);
         break;
       }
+      case "delete": {
+        const { entity, id, label } = deleteTarget(db, a);
+        const p = deletePreview(db, entity, id);
+        if (p.blocked) throw new UserError(p.blocked);
+        deleteEntity(db, entity, id, "اتمسح من المساعد");
+        lines.push(`مسح ${label}${p.count > 1 ? ` — ومعاه: ${p.items.slice(1, 6).join("، ")}${p.count > 6 ? "…" : ""}` : ""} (يترجع من سجل التعديلات)`);
+        break;
+      }
       default:
         throw new UserError(`مش فاهم نوع العملية: ${(a as { type?: string }).type}`);
     }
   }
   return lines;
 }
+
+/** المسح بالأسماء: صاحب معدة / شركة / معدة / سواق / عقد (معدة + شركة). */
+function deleteTarget(db: Db, a: AssistantAction): { entity: Deletable; id: number; label: string } {
+  switch (a.target) {
+    case "supplier": {
+      const r = finder(db, "suppliers", "صاحب معدة").must(a.supplier);
+      return { entity: "suppliers", id: r.id, label: `صاحب المعدة ${r.name}` };
+    }
+    case "client": {
+      const r = finder(db, "clients", "شركة").must(a.client);
+      return { entity: "clients", id: r.id, label: `${r.name}` };
+    }
+    case "equipment": {
+      const r = finder(db, "equipment", "معدة").must(a.equipment);
+      return { entity: "equipment", id: r.id, label: `المعدة ${r.name}` };
+    }
+    case "driver": {
+      const r = finder(db, "drivers", "سواق").must(a.driver);
+      return { entity: "drivers", id: r.id, label: `السواق ${r.name}` };
+    }
+    case "contract": {
+      const e = finder(db, "equipment", "معدة").must(a.equipment);
+      const rows = db.prepare("SELECT c.id, cl.name AS client FROM contracts c JOIN clients cl ON cl.id = c.client_id WHERE c.equipment_id = ? AND c.deleted_at IS NULL ORDER BY c.start_date DESC").all(e.id) as {
+        id: number;
+        client: string;
+      }[];
+      const picked = a.client ? rows.filter((r) => normalizeName(r.client) === normalizeName(a.client!)) : rows;
+      if (!picked.length) throw new UserError(`مش لاقي عقد للمعدة ${e.name}${a.client ? ` مع ${a.client}` : ""}`);
+      if (picked.length > 1) throw new UserError(`المعدة ${e.name} ليها أكتر من عقد — قول مع أنهي شركة`);
+      return { entity: "contracts", id: picked[0].id, label: `عقد ${e.name} مع ${picked[0].client}` };
+    }
+    default:
+      throw new UserError("قول تمسح إيه بالظبط (صاحب معدة، شركة، معدة، سواق، أو عقد) — والحاجات التانية (دفعة، مصروف، يوم سركي) امسحها من مكانها بعلامة الزبالة");
+  }
+}
+
+/** القايمة فيها مسح؟ (المسح من المساعد لازم باسورد الشركة) */
+export const hasDelete = (actions: AssistantAction[]) => actions.some((a) => a.type === "delete");
 
 class Rollback extends Error {}
 
