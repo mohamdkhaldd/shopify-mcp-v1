@@ -10,6 +10,7 @@ import { ManagerShare, setContractManagers } from "../core/services/managers";
 import { markDelivered, Money, recordHold, recordTransfer, returnHold, saveAccount } from "../core/services/ledger";
 import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, recordTaxPayment, reinvestProfit } from "../core/services/ledger";
 import { assistantApply, AssistantAction, assistantContext, assistantFacts, assistantPreview, CallRunner, hasDelete, hasNotUndoable } from "../core/ai/assistant";
+import { chatAdd, chatList, chatUpdate, myName, setMyName, teamLogView, teamNames } from "../core/services/team";
 import { PASSWORD_CALLS, READ_CATALOG, toHuman, toInternal, WRITE_CATALOG } from "../core/ai/catalog";
 import { createDriver, DriverInput, driversView, recordDriverPayment, updateDriver } from "../core/services/drivers";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
@@ -49,6 +50,15 @@ export function makeRegistry(db: Db) {
       recordSupplierPayment(db, a, { confirmNegative: a.confirmNegative }),
     supplierDeduction: (a: { supplierId: number; contractId?: number | null; date: string; amountPt: number; note: string; paidFromTreasury?: boolean; confirmNegative?: boolean } & Money) =>
       recordSupplierDeduction(db, a, { confirmNegative: a.confirmNegative }),
+
+    // الشركاء: اسم الشريك على الجهاز ده، مين عمل إيه، ومحادثة المساعد المشتركة
+    me: () => myName(db),
+    setMe: (a: { name: string }) => setMyName(db, a.name),
+    teamNames: () => teamNames(db),
+    teamLog: (a: { from?: string; to?: string }) => teamLogView(db, a),
+    chatList: (a: { limit?: number }) => chatList(db, a.limit),
+    chatAdd: (a: { role: "user" | "assistant"; text: string; extra?: unknown }) => chatAdd(db, a),
+    chatUpdate: (a: { id: number; extra: unknown }) => chatUpdate(db, a.id, a.extra),
 
     // المساعد (الكلام بيتفهم على السيرفر، والتسجيل هنا بنفس دوال البرنامج)
     assistantContext: () => assistantContext(db),
@@ -252,7 +262,7 @@ function labelFor(db: Db, fn: string, a: any): string | null {
 }
 
 /** الحاجات اللي بتعرض بس (من غير تعديل) — دي بس اللي بتشتغل والاشتراك خالص */
-const READ_CALLS = new Set(["assistantContext", "assistantFacts", "assistantPreview", "assistantRead", "drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
+const READ_CALLS = new Set(["me", "teamNames", "teamLog", "chatList", "assistantContext", "assistantFacts", "assistantPreview", "assistantRead", "drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
 export const isReadCall = (fn: string) => READ_CALLS.has(fn);
 
 /** التشغيل: أي قناة بتعدّل أو بتضيف (create / delete / update / set …) — بتتقفل والاشتراك خالص */

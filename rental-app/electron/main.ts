@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs";
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { isWhatsappUrl } from "../core/whatsapp";
 import Database from "better-sqlite3";
 import { dbPath, openDatabase } from "./db";
 import { backupTo, dailyBackup, lastBackup, looksLikeRentalDb } from "./backup";
@@ -213,6 +214,8 @@ app.whenReady().then(async () => {
     if (!check.ok) return { ok: false, message: check.message };
     return callCore(db, assistantDeletesRegistry(db), "assistantApplyDeletes", { actions, summary });
   });
+  // واتساب بس (رسالة جاهزة لصاحب المعدة / الشركة) — أي رابط تاني مرفوض
+  ipcMain.handle("shell:whatsapp", (_e, { url }: { url: string }) => (isWhatsappUrl(url) ? shell.openExternal(url).then(() => true) : false));
   ipcMain.handle("shell:askAssistant", (_e, r: AssistantRequest) => (unlocked ? license.askAssistant(r) : { ok: false, message: "ادخل الأول" }));
   ipcMain.handle("shell:setPassword", (_e, { current, next }: { current: string; next: string }) =>
     unlocked ? license.setPassword(current, next) : { ok: false, message: "ادخل الأول" },

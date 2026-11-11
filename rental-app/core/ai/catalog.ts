@@ -77,7 +77,8 @@ export const READ_CATALOG: Record<string, string> = {
   treasury: "{from?, to?, type?, party?, account?} الخزنة: الحركات (بالـ id) والأرصدة والفلوس اللي مع حد",
   accounts: "{} حسابات الخزنة",
   tax: "{} الضرايب: المستحق والمدفوع والإقرارات",
-  activity: "{from?, to?} سجل التعديلات",
+  activity: "{from?, to?} سجل التعديلات على الجهاز ده",
+  teamLog: "{from?, to?} مين من الشركاء عمل إيه وامتى (من كل الأجهزة)",
   settings: "{} الإعدادات والنسب",
   deletePreview: "{entity, id} لو مسحت دي هيتمسح معاها إيه",
 };
@@ -98,7 +99,7 @@ export function catalogText() {
   const r = Object.entries(READ_CATALOG)
     .map(([k, v]) => `${k}: ${v}`)
     .join("\n");
-  return `دوال التعديل (type "call" و fn = الاسم و args):\n${w}\n\nدوال القراءة (type "read" و fn = الاسم و args):\n${r}\n\nالصفحات (type "open" و page): ${PAGES.join(", ")}`;
+  return `دوال التعديل (type "call" و fn = الاسم و args):\n${w}\n\nدوال القراءة (type "read" و fn = الاسم و args):\n${r}\n\nالصفحات (type "open" و page): ${PAGES.join(", ")} — suppliers مع id و tab "full" = الملف الكامل لصاحب المعدة (التصفية + الدفعات + الخصومات + السركي) ولو pdf = true يطلع PDF`;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);

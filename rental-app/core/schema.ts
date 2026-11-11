@@ -1,3 +1,4 @@
+import { ensureTeamTables } from "./services/team";
 import { Db } from "./db";
 
 // Money columns are INTEGER piasters, enforced with CHECK(typeof(x) = 'integer').
@@ -551,8 +552,10 @@ export function setupDatabase(db: Db): Db {
   if (!columnsOf(db, "supplier_deductions").includes("driver_id")) db.exec("ALTER TABLE supplier_deductions ADD COLUMN driver_id INTEGER REFERENCES drivers(id)");
   // مصروف دفعه شريك إدارة من جيبه (مش من الخزنة) — الشركة عليها له المبلغ ده
   if (!columnsOf(db, "expenses").includes("paid_by")) db.exec("ALTER TABLE expenses ADD COLUMN paid_by TEXT");
+  // الشركاء: مين عمل إيه + محادثة المساعد (بيتزامنوا، بس برا الحمايات وسجل التعديلات)
+  ensureTeamTables(db);
   const business = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'sync_%' AND name NOT IN ('audit_log', 'app_settings', 'actions', 'activity_log')")
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'sync_%' AND name NOT IN ('audit_log', 'app_settings', 'actions', 'activity_log', 'team_log', 'team_chat')")
     .all()
     .map((r: any) => r.name as string);
   installGuards(db);

@@ -1,3 +1,4 @@
+import { isWhatsappUrl } from "../core/whatsapp";
 import { registerPlugin } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
@@ -172,6 +173,13 @@ export function tabletAppHandlers(emit: (channel: string, data: unknown) => void
     "print:preview": ({ singlePage = true }: { singlePage?: boolean }) => print(singlePage, native),
     // Android's and the browser's print screens both have "Save as PDF"
     // ملف متعدد الصفحات (ملف الشريك في التشغيل) بيتطبع بصفحاته زي ما هي.
+    // واتساب بس: على التابلت الرابط بيفتح التطبيق، وعلى الويب في تاب جديد
+    "shell:whatsapp": ({ url }: { url: string }) => {
+      if (!isWhatsappUrl(url)) return false;
+      if (native) window.location.href = url;
+      else window.open(url, "_blank", "noopener");
+      return true;
+    },
     "print:savePdf": ({ singlePage = true }: { singlePage?: boolean } = {}) => print(singlePage, native),
     "export:excel": async ({ fileName, sheets }: { fileName: string; sheets: ExcelSheet[] }) => {
       const buf = await buildWorkbook(sheets).xlsx.writeBuffer();

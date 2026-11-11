@@ -5,7 +5,7 @@ import { UndoProvider } from "./context/UndoContext";
 import Dashboard from "./pages/Dashboard";
 import Assistant from "./pages/assistant/Assistant";
 import Sarki from "./pages/sarki/Sarki";
-import Suppliers from "./pages/suppliers/Suppliers";
+import Suppliers, { Tab as SupplierTab } from "./pages/suppliers/Suppliers";
 import Drivers from "./pages/drivers/Drivers";
 import Clients from "./pages/clients/Clients";
 import Management from "./pages/management/Management";
@@ -80,7 +80,7 @@ export default function App() {
               ) : active === "sarki" ? (
                 <Sarki initialId={pick("sarki")?.id} initialMonth={pick("sarki")?.month} />
               ) : active === "suppliers" ? (
-                <Suppliers initialId={pick("suppliers")?.id} />
+                <Suppliers initialId={pick("suppliers")?.id} initialTab={pick("suppliers")?.tab as SupplierTab | undefined} initialMonth={pick("suppliers")?.month} />
               ) : active === "drivers" ? (
                 <Drivers initialId={pick("drivers")?.id} initialMonth={pick("drivers")?.month} />
               ) : active === "clients" ? (

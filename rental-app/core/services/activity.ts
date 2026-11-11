@@ -1,3 +1,4 @@
+import { logTeam } from "./team";
 import { Db, UserError } from "../db";
 
 // سجل التعديلات + التراجع. Every write the user makes runs inside runAction():
@@ -41,6 +42,8 @@ export function runAction<T>(db: Db, label: string, fn: () => T): { value: T; ac
   })();
   // a call that changed nothing leaves no trace in the log
   if (!db.prepare("SELECT 1 FROM audit_log WHERE action_id = ? LIMIT 1").get(id)) db.prepare("DELETE FROM actions WHERE id = ?").run(id);
+  // مين عملها (بيتزامن لكل الشركاء)
+  else logTeam(db, id, label);
   return { value, actionId: id };
 }
 
@@ -93,12 +96,12 @@ export function activityView(db: Db, f: { from?: string; to?: string; limit?: nu
   }
   const rows = db
     .prepare(
-      `SELECT a.id, a.at, a.label, a.undone, a.undo_of,
+      `SELECT a.id, a.at, a.label, a.undone, a.undo_of, (SELECT t.who FROM team_log t WHERE t.action_id = a.id LIMIT 1) AS who,
          (SELECT COUNT(*) FROM audit_log l WHERE l.action_id = a.id) AS changes,
          (SELECT COUNT(*) FROM audit_log l WHERE l.action_id = a.id AND l.op = 'insert' AND l.tbl IN ('month_closes', 'adjustments', 'rate_settings', 'invoices')) AS locked
        FROM actions a ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY a.at DESC, a.rowid DESC LIMIT ?`,
     )
-    .all(...p, f.limit ?? 300) as { id: string; at: string; label: string; undone: number; undo_of: string | null; changes: number; locked: number }[];
+    .all(...p, f.limit ?? 300) as { id: string; at: string; label: string; undone: number; undo_of: string | null; who: string | null; changes: number; locked: number }[];
   return rows.map((r) => ({ ...r, undone: !!r.undone, canUndo: !r.undone && !r.undo_of && !r.locked && r.changes > 0 }));
 }
 

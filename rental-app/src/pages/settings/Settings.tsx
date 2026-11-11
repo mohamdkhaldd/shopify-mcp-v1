@@ -256,6 +256,45 @@ function SyncPanel() {
 // The company password (optional, kept on the server): asked on every device
 // of the company when MK-Tech opens, after "قفل", and when the code is entered
 // on a new device. Changing it needs internet.
+/** اسم الشريك اللي بيستخدم الجهاز ده: بيتكتب على كل تعديل وكل رسالة للمساعد. */
+function MyName() {
+  const [name, setName] = useState<string | null | undefined>(undefined);
+  const [draft, setDraft] = useState("");
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    api.me().then((n) => {
+      setName(n);
+      setDraft(n ?? "");
+    }, () => setName(null));
+  }, []);
+  if (name === undefined) return null;
+  return (
+    <Panel title="انت مين من الشركاء؟" hint={name ?? "مش متسجل"}>
+      <div className="px-4 py-3.5 grid gap-3">
+        <div className="text-sm text-muted">اسمك على الجهاز ده: بيتكتب على كل تعديل تعمله (سجل التعديلات ← كل الشركاء) وكل رسالة للمساعد، و«دفعت من جيبي» بتتسجل عليك. كل شريك يكتب اسمه على جهازه.</div>
+        <div className="flex gap-2 items-end">
+          <Labeled label="الاسم">
+            <TextInput value={draft} onChange={(e) => (setDraft(e.target.value), setSaved(false))} className="w-56" />
+          </Labeled>
+          <Button
+            primary
+            disabled={!draft.trim() || draft.trim() === name}
+            onClick={() =>
+              api.setMe(draft).then((n) => {
+                setName(n);
+                setSaved(true);
+              })
+            }
+          >
+            حفظ
+          </Button>
+          {saved && <span className="text-sm text-in font-bold self-center">اتحفظ</span>}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
 function CompanyPassword() {
   const [has, setHas] = useState<boolean | null>(null);
   const [current, setCurrent] = useState("");
@@ -457,6 +496,7 @@ export default function Settings() {
         <Updates />
         <SyncPanel />
         <License plan={v.plan} />
+        <MyName />
         <CompanyPassword />
       </div>
     </div>

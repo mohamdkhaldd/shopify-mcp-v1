@@ -26,7 +26,7 @@ const s = (description: string) => ({ anyOf: [{ type: "string" }, { type: "null"
 const bool = (description: string) => ({ anyOf: [{ type: "boolean" }, { type: "null" }], description });
 const e = (values: string[], description: string) => ({ anyOf: [{ type: "string", enum: values }, { type: "null" }], description });
 
-const TYPES = ["supplier", "client", "equipment", "contract", "work_days", "expense", "client_payment", "supplier_payment", "supplier_deduction", "driver", "driver_payment", "delete", "call", "read", "open"];
+const TYPES = ["supplier", "client", "equipment", "contract", "work_days", "expense", "client_payment", "supplier_payment", "supplier_deduction", "driver", "driver_payment", "delete", "call", "read", "open", "whatsapp"];
 const PAGES = ["home", "sarki", "suppliers", "drivers", "clients", "management", "expenses", "investors", "treasury", "tax", "activity", "settings"];
 const ACTION_PROPS = {
   type: { type: "string", enum: TYPES, description: "نوع العملية" },
@@ -61,12 +61,46 @@ const ACTION_PROPS = {
   id: n("open: id صاحب المعدة (suppliers) / الشركة (clients) / العقد (sarki) / السواق (drivers)"),
   month: s("open: الشهر YYYY-MM"),
   pdf: bool("open: true لو عايز PDF من الصفحة"),
+  tab: e(["full", "statement", "sheet", "payments", "deductions"], "open suppliers: full = الملف الكامل (التصفية + الدفعات + الخصومات + السركي) اللي بيتبعت لصاحب المعدة"),
+  text: s("whatsapp: نص الرسالة كامل بالعامية"),
+};
+const CARD = {
+  type: "object",
+  additionalProperties: false,
+  required: ["label", "value", "tone"],
+  properties: {
+    label: { type: "string", description: "اسم الرقم (الباقي له، آخر دفعة…)" },
+    value: { type: "string", description: "الرقم مكتوب (١٢٬٥٠٠ ج، ٥ نوفمبر…)" },
+    tone: e(["in", "out", "tax", "plain"], "in = أخضر (فلوس جت/لينا)، out = أحمر (علينا/باقي)، tax = ضرايب/خصم، plain"),
+  },
+};
+const CHART = {
+  anyOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["title", "kind", "labels", "series"],
+      properties: {
+        title: { type: "string" },
+        kind: { type: "string", enum: ["bar", "line", "pie"] },
+        labels: { type: "array", items: { type: "string" }, description: "المحور (الشهور بالعربي، الأسماء…)" },
+        series: {
+          type: "array",
+          items: { type: "object", additionalProperties: false, required: ["name", "values"], properties: { name: { type: "string" }, values: { type: "array", items: { type: "number" } } } },
+        },
+      },
+    },
+    { type: "null" },
+  ],
+  description: "رسم لو فيه أرقام على شهور أو مقارنة (اختياري)",
 };
 const SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["reply", "actions"],
+  required: ["reply", "actions", "cards", "chart"],
   properties: {
+    cards: { type: "array", items: CARD, description: "مربعات الأرقام المهمة في الرد (٢ لـ ٦) — فاضية لو مفيش أرقام" },
+    chart: CHART,
     reply: { type: "string", description: "رد قصير بالعامية المصرية: يا ملخص اللي هيتسجل، يا سؤال عن الناقص" },
     actions: {
       type: "array",
@@ -98,7 +132,20 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 - قبل أي تنفيذ البرنامج بيعرض على المستخدم «هعمل كذا» ومبيتنفذش غير لما يوافق — فاكتب في reply بالظبط هتعمل إيه.
 - المسح وقفل الشهر وتغيير النسب والتسويات محتاجين باسورد الشركة — البرنامج بيطلبه.
 - لو المستخدم طلب حاجة وناقصها معلومة لازمة (اسم الشركة، تاريخ البداية، السعر، صاحب المعدة، المبلغ، أنهي عقد…): متنفذش ومتخمّنش — actions فاضية، و reply: «ناقص كذا وكذا — قولّي عشان أعمل …». اسأل عن كل الناقص مرة واحدة.
-- لو مش في السياق catalog (نسخة قديمة من البرنامج): متستخدمش call ولا read ولا open.
+- whatsapp: رسالة جاهزة للواتساب (phone من السياق، و text = الرسالة كاملة بالعامية). مثلاً «ابعت لمحمد حسابه»: open suppliers id و tab full و pdf true (الملف الكامل PDF) + whatsapp بملخص الحساب وآخر دفعة.
+- لو مش في السياق catalog (نسخة قديمة من البرنامج): متستخدمش call ولا read ولا open ولا whatsapp.
+
+الشركاء: البرنامج بيستخدمه شركاء الإدارة، والمحادثة واحدة للكل. me في السياق = اسم الشريك اللي بيكلمك دلوقتي، ورسايل الشركاء التانيين في المحادثة مكتوب قبلها اسم اللي كتبها.
+- «من جيبي» / «دفعت من فلوسي» = paidBy = me. «فلان دفع من جيبه» = paidBy فلان. «من الخزنة» = من غير paidBy.
+- كلّم الشريك باسمه لما ينفع، ولو حد سأل «مين عمل كذا» اقرا teamLog — كل تعديل من كل الأجهزة عليه اسم اللي عمله.
+
+الرد على الأسئلة (زي ما محاسب شاطر بيرد):
+- جاوب السؤال الأول بالرقم في أول سطر، وبعدين التفاصيل اللي ليها علاقة حتى لو مسألش عنها: آخر دفعة (كام ويوم إيه)، اللي اتصرف قبلها، أيام الشغل الشهر ده، الخصومات… بإيجاز وبنقط.
+- لو السؤال عن شخص معين (صاحب معدة، شركة، سواق، مستثمر) أو هتبعتله رسالة: اقرا حسابه الأول دايماً (read suppliers {supplierId} / clients {clientId} / drivers {driverId} / investors) عشان الدفعات بالتاريخ والشهور، وبعدين جاوب.
+- رد سؤال «ناقصله كام / دفعتله امتى»: أول سطر الباقي، وبعدين نقط: كل دفعة (المبلغ ويوم إيه — آخر ٥)، الخصومات وسببها، شغل الشهر ده (كام يوم وكام فلوس)، وإجمالي اللي اتصرف. ولو حسابه على أكتر من شهر اعمل chart شهر بشهر (له من السركي واتصرف له).
+- رسالة الواتساب (text) لازم تبقى كاملة بالأرقام: تحية بالاسم، من السركي كام، دفعنا عنه كام، اتصرف له كام، الباقي كام، آخر دفعة كام ويوم إيه، وشغل الشهر — بنقط قصيرة.
+- cards: حط الأرقام المهمة في مربعات (مثلاً: الباقي له / اتصرف له / آخر دفعة / أيام الشغل). tone: out للي علينا أو الباقي، in للي جه أو اتدفع.
+- chart: لو الأرقام على كذا شهر أو مقارنة بين حاجات (الربح شهر بشهر، حساب صاحب معدة شهر بشهر، الخزنة بالحسابات) اعمل رسم: bar للمقارنة، line للشهور، pie للتقسيم. labels بالعربي. لو مفيش داعي = null.
 
 الأرقام: في السياق فيه facts (أرقام البرنامج الحقيقية بالجنيه). لو سأل عن فلوس (كسبت كام، الخزنة فيها كام، مين عليه فلوس، النسبة على رأس المال…) جاوب منها بس، بالأرقام، و actions فاضية. متخترعش رقم مش موجود؛ لو مش موجود قول إنه مش متسجل.
 - "كسبت كام" = netProfit للشهر (أو مجموع الشهور لو قال من الأول). "نصيبي"/"نصيب الإدارة" = managementShare.
@@ -109,7 +156,7 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 - الرئيسية: ملخص الشهر (الخزنة، الربح، اللي لينا واللي علينا). زرار العين بيخفي/يظهر الأرقام.
 - المساعد: الصفحة دي.
 - السركي: اختار العقد والشهر، وسجّل كل يوم (الساعات، الأوفر، إجازة). «+ عقد جديد» فوق = عقد جديد (معدة + صاحبها + الشركة + السعرين). «صورة السركي» بيقرا الورقة بالصورة. أدوات: املى أيام كتير مرة واحدة.
-- أصحاب المعدات: دوس على الاسم ← التصفية (الحساب شهر بشهر وPDF)، السركي، «اديله فلوس» (دفعة)، الخصومات (حاجة دفعناها عنه)، معداته.
+- أصحاب المعدات: دوس على الاسم ← التصفية (الحساب شهر بشهر وPDF)، الملف الكامل (كل حاجة في PDF واحد وزرار واتساب)، السركي، «اديله فلوس» (دفعة)، الخصومات (حاجة دفعناها عنه)، معداته.
 - السواقين: السواقين اللي بنقبّضهم، المرتب أو اليومية والأوفر، «اديله فلوس» (بتتخصم من صاحب المعدة)، والتصفية PDF.
 - الشركات ومقاولين الباطن: دوس على الاسم ← المستخلص، السركي، الدفعات (فلوس جت من الشركة)، الفواتير.
 - الإدارة: داش بورد الشهر: الدخل، الهالك، صافي الربح، نصيب الإدارة، العقود، شركاء الإدارة، وقفل الشهر.
@@ -327,7 +374,23 @@ Deno.serve(async (req) => {
         delete o.argsJson;
         return o;
       });
-    return json({ ok: true, reply: String(out.reply ?? ""), actions });
+    const o2 = out as { cards?: unknown; chart?: unknown };
+    const cards = (Array.isArray(o2.cards) ? o2.cards : [])
+      .filter((c): c is { label: unknown; value: unknown; tone?: unknown } => !!c && typeof c === "object")
+      .slice(0, 8)
+      .map((c) => ({ label: String(c.label ?? "").slice(0, 60), value: String(c.value ?? "").slice(0, 60), tone: ["in", "out", "tax"].includes(String(c.tone)) ? String(c.tone) : "plain" }))
+      .filter((c) => c.label && c.value);
+    let chart: unknown = null;
+    const ch = o2.chart as { title?: unknown; kind?: unknown; labels?: unknown; series?: unknown } | null;
+    if (ch && typeof ch === "object" && Array.isArray(ch.labels) && Array.isArray(ch.series) && ch.labels.length && ch.series.length) {
+      const labels = ch.labels.slice(0, 36).map((l) => String(l).slice(0, 30));
+      const series = (ch.series as { name?: unknown; values?: unknown }[])
+        .slice(0, 4)
+        .filter((x) => x && Array.isArray(x.values))
+        .map((x) => ({ name: String(x.name ?? "").slice(0, 40), values: (x.values as unknown[]).slice(0, labels.length).map((v) => (Number.isFinite(Number(v)) ? Number(v) : 0)) }));
+      if (series.length) chart = { title: String(ch.title ?? "").slice(0, 80), kind: ["bar", "line", "pie"].includes(String(ch.kind)) ? String(ch.kind) : "bar", labels, series };
+    }
+    return json({ ok: true, reply: String(out.reply ?? ""), actions, cards, chart });
   } catch (err) {
     console.error(err);
     if (err instanceof AiError) return fail(err.status === 401 || err.status === 403 ? "bad_key" : err.status === 429 || err.status >= 500 ? "busy" : "ai_error", 502);

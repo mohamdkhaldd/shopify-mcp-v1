@@ -1,3 +1,5 @@
+import type { ChatRow } from "../../core/services/team";
+import { whatsappUrl } from "../../core/whatsapp";
 import type { ReadRequest, ReadResult } from "../../core/ai/sarkiRead";
 import type { AssistantRequest, AssistantReply } from "../../core/license/manager";
 import type { AssistantAction, AssistantContext } from "../../core/ai/assistant";
@@ -90,6 +92,13 @@ export const api = {
   assistantPreview: (actions: AssistantAction[]) => call<{ ok: true; lines: string[] } | { ok: false; message: string }>("assistantPreview", { actions }),
   assistantFacts: () => call<unknown>("assistantFacts"),
   assistantRead: (fn: string, args?: unknown) => call<unknown>("assistantRead", { fn, args }),
+  me: () => call<string | null>("me"),
+  setMe: (name: string) => call<string | null>("setMe", { name }),
+  teamNames: () => call<string[]>("teamNames"),
+  teamLog: (from?: string, to?: string) => call<{ id: number; at: string; who: string | null; label: string; actionId: string | null }[]>("teamLog", { from, to }),
+  chatList: (limit?: number) => call<ChatRow[]>("chatList", { limit }),
+  chatAdd: (role: "user" | "assistant", text: string, extra?: unknown) => call<number>("chatAdd", { role, text, extra }),
+  chatUpdate: (id: number, extra: unknown) => call<void>("chatUpdate", { id, extra }),
   /** password: لو القايمة فيها مسح (لازم باسورد الشركة) */
   assistantApply: async (actions: AssistantAction[], summary: string, password?: string) => {
     if (password === undefined) return call<string[]>("assistantApply", { actions, summary });
@@ -187,6 +196,8 @@ export const appApi = {
   backupNow: (): Promise<string | null> => window.api?.invoke("backup:now") ?? Promise.resolve(null),
   restoreBackup: (): Promise<{ ok: boolean; message?: string }> => window.api?.invoke("backup:restore") ?? Promise.resolve({ ok: false }),
   savePdf: (name: string) => window.api?.invoke("print:savePdf", { name }),
+  /** رسالة واتساب جاهزة (لرقم معين أو تختار انت) */
+  whatsapp: (phone: string | null | undefined, text: string) => window.api?.invoke("shell:whatsapp", { url: whatsappUrl(phone, text) }),
 };
 
 export interface SyncStatus {

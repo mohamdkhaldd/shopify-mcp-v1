@@ -8,6 +8,8 @@ export interface OpenRequest {
   id?: number;
   month?: string;
   pdf?: boolean;
+  /** أصحاب المعدات: أنهي تاب (full = الملف الكامل) */
+  tab?: string;
 }
 
 export interface NavItem {

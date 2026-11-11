@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import type { PartySheet } from "../../api/client";
+import PartySheetView from "../../components/PartySheetView";
+import { Select } from "../../components/Field";
 import { api, appApi, Deletable, DriversView, SuppliersView } from "../../api/client";
 import { Button, ErrorBox, Loading, PageHeader, Panel, Pill } from "../../components/ui";
 import { Labeled, TextInput } from "../../components/Field";
@@ -12,7 +15,7 @@ import Icon from "../../components/Icon";
 import { dateLabel, monthLabel, pounds } from "../../utils/format";
 
 type Selected = NonNullable<SuppliersView["selected"]>;
-type Tab = "statement" | "equipment" | "sheet" | "deductions" | "payments";
+export type Tab = "full" | "statement" | "equipment" | "sheet" | "deductions" | "payments";
 
 /** كشف الحساب: one "up to today" sentence + one row per month. Nothing about clients or margins. */
 function Statement({ s }: { s: Selected }) {
@@ -97,6 +100,108 @@ function Statement({ s }: { s: Selected }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** رسالة واتساب لصاحب المعدة: الحساب لحد النهارده وآخر دفعة وشغل الشهر. */
+export function supplierSummaryText(s: Selected, month?: string, sheets: PartySheet[] = []) {
+  const t = s.totals;
+  const last = [...s.payments].sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  const lines = [
+    `أهلاً ${s.supplier.name}،`,
+    `حسابك لحد النهارده (${dateLabel(new Date().toLocaleDateString("en-CA"))}):`,
+    `• من السركي: ${pounds(t.fromSarkiPt)}`,
+    `• دفعنا عنك: ${pounds(t.deductionsPt)}`,
+    `• اتصرف لك: ${pounds(t.paidPt)}`,
+    `• الباقي لك: ${pounds(t.remainingPt)}`,
+  ];
+  if (last) lines.push(`آخر دفعة: ${pounds(last.amountPt)} يوم ${dateLabel(last.date)}`);
+  if (month && sheets.length) {
+    lines.push(`شغل ${monthLabel(month)}:`);
+    for (const sh of sheets) {
+      const worked = sh.days.filter((d) => d.entered && !d.isDayOff);
+      lines.push(`• ${sh.equipmentName}: ${worked.length} يوم — ${pounds(worked.reduce((a, d) => a + d.totalPt, 0))}`);
+    }
+  }
+  lines.push("والملف بالتفاصيل كلها (التصفية والسركي) مبعوت PDF.");
+  return lines.join("\n");
+}
+
+/** الملف الكامل: التصفية + الدفعات + الخصومات + سركي كل معدة في الشهر — PDF واحد يتبعت لصاحب المعدة. */
+function FullFile({ s, initialMonth }: { s: Selected; initialMonth?: string }) {
+  const months = [...new Set(s.contracts.flatMap((c) => c.months))].sort();
+  const [month, setMonth] = useState<string | undefined>(initialMonth && months.includes(initialMonth) ? initialMonth : months[months.length - 1]);
+  const [sheets, setSheets] = useState<PartySheet[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!month) return setSheets([]);
+    Promise.all(s.contracts.filter((c) => c.months.includes(month)).map((c) => api.partySheet(c.id, month, "supplier"))).then(setSheets, (e) => setError(e.message));
+  }, [month, s]);
+  const payments = [...s.payments].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const deductions = [...s.deductions].sort((a, b) => (a.date < b.date ? 1 : -1));
+  return (
+    <div>
+      <div className="no-print flex flex-wrap items-end gap-2.5 px-4 py-3 border-b border-line bg-surface-2">
+        {months.length > 0 && (
+          <Labeled label="السركي بتاع شهر">
+            <Select value={month} onChange={(e) => setMonth(e.target.value)}>
+              {[...months].reverse().map((m) => (
+                <option key={m} value={m}>
+                  {monthLabel(m)}
+                </option>
+              ))}
+            </Select>
+          </Labeled>
+        )}
+        <PrintButtons pdfName={`ملف ${s.supplier.name}${month ? ` ${monthLabel(month)}` : ""}`} singlePage={false} />
+        <Button onClick={() => appApi.whatsapp(s.supplier.phone, supplierSummaryText(s, month, sheets))}>واتساب{s.supplier.phone ? "" : " (اختار الرقم)"}</Button>
+        <span className="text-xs text-muted self-center">كل حاجة تخص صاحب المعدة في ملف واحد — من غير أي حاجة عن الشركة أو ربحنا. اعمل PDF وابعته على الواتساب.</span>
+      </div>
+      {error && <ErrorBox message={error} />}
+      <Statement s={s} />
+      <div className="px-4 pt-4 pb-2 font-display font-bold text-[15px]">الفلوس اللي اتصرفت له</div>
+      <SimpleMoney rows={payments} empty="لسه متصرفلوش فلوس." />
+      <div className="px-4 pt-4 pb-2 font-display font-bold text-[15px]">حاجات دفعناها عنه (بتتخصم من حسابه)</div>
+      <SimpleMoney rows={deductions} empty="مفيش خصومات." />
+      {sheets.map((sh, i) => (
+        <div key={i} style={{ breakBefore: "page" }}>
+          <PartySheetView sheet={sh} partyLabel="صاحب المعدة" signLabel="توقيع صاحب المعدة" />
+        </div>
+      ))}
+      <PrintSignoff others={["توقيع صاحب المعدة"]} />
+    </div>
+  );
+}
+
+function SimpleMoney({ rows, empty }: { rows: { id: number; date: string; amountPt: number; note: string | null }[]; empty: string }) {
+  if (!rows.length) return <div className="px-4 pb-3 text-muted text-sm">{empty}</div>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="tbl">
+        <thead>
+          <tr>
+            <th>التاريخ</th>
+            <th>البيان</th>
+            <th className="n">المبلغ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id}>
+              <td>{dateLabel(r.date)}</td>
+              <td>{r.note ?? ""}</td>
+              <td className="n">{pounds(r.amountPt)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colSpan={2}>الإجمالي</td>
+            <td className="n">{pounds(rows.reduce((a, r) => a + r.amountPt, 0))}</td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   );
 }
@@ -232,10 +337,10 @@ function SupplierForm({ initial, onClose, onSaved }: { initial?: { id: number; n
   );
 }
 
-export default function Suppliers({ initialId }: { initialId?: number } = {}) {
+export default function Suppliers({ initialId, initialTab, initialMonth }: { initialId?: number; initialTab?: Tab; initialMonth?: string } = {}) {
   const [supplierId, setSupplierId] = useState<number | undefined>(initialId);
   const [v, setV] = useState<SuppliersView | null>(null);
-  const [tab, setTab] = useState<Tab>("statement");
+  const [tab, setTab] = useState<Tab>(initialTab ?? "statement");
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<null | "newSupplier" | "editSupplier" | "newEquipment" | { equipment: Selected["equipment"][number] }>(null);
   const [deleting, setDeleting] = useState<{ entity: Deletable; id: number } | null>(null);
@@ -288,6 +393,7 @@ export default function Suppliers({ initialId }: { initialId?: number } = {}) {
 
   const tabs: [Tab, string][] = [
     ["statement", "التصفية"],
+    ["full", "الملف الكامل"],
     ["sheet", "السركي"],
     ["payments", "اديله فلوس"],
     ["deductions", "الخصومات"],
@@ -364,6 +470,8 @@ export default function Suppliers({ initialId }: { initialId?: number } = {}) {
                 </button>
               ))}
             </div>
+
+            {tab === "full" && <FullFile key={s.supplier.id} s={s} initialMonth={initialMonth} />}
 
             {tab === "statement" && (
               <>

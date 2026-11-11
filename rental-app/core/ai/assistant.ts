@@ -9,6 +9,7 @@ import { managersReport } from "../services/managers";
 import { clientStatement, supplierStatement } from "../services/reports";
 import { Deletable, deleteEntity, deletePreview } from "../services/deletion";
 import { NOT_UNDOABLE_CALLS, PASSWORD_CALLS } from "./catalog";
+import { myName, teamNames } from "../services/team";
 
 // المساعد: المستخدم بيكتب بالعامية ("دخلت لودر صاحبه محمد لشركة النور بـ ١٥٠٠
 // وصاحبه ياخد ١٢٠٠")، والذكاء الاصطناعي (على السيرفر) بيحوّل الكلام لقايمة
@@ -36,7 +37,9 @@ export type AssistantActionType =
   /** قراية أرقام/بيانات — البرنامج بينفذها ويبعت النتيجة للذكاء الاصطناعي */
   | "read"
   /** فتح صفحة (ولو pdf: يطلع منها PDF) */
-  | "open";
+  | "open"
+  /** رسالة واتساب جاهزة (زرار في الشات) */
+  | "whatsapp";
 
 /** فعل واحد. الفلوس بالجنيه، والتواريخ YYYY-MM-DD، والأسماء زي ما المستخدم بيقولها. */
 export interface AssistantAction {
@@ -78,6 +81,10 @@ export interface AssistantAction {
   id?: number | null;
   month?: string | null;
   pdf?: boolean | null;
+  /** open suppliers: أنهي تاب (full = الملف الكامل) */
+  tab?: string | null;
+  /** whatsapp: نص الرسالة (والرقم في phone) */
+  text?: string | null;
 }
 
 /** بينفذ دالة تعديل بالاسم ويرجّع سطر بالعربي — بيتعمل في electron/ipc.ts */
@@ -129,8 +136,10 @@ export function assistantContext(db: Db) {
   const q = <T>(sql: string) => db.prepare(sql).all() as T[];
   return {
     today: today(),
-    suppliers: q<{ id: number; name: string }>("SELECT id, name FROM suppliers WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 150"),
-    clients: q<{ id: number; name: string; kind: string }>("SELECT id, name, kind FROM clients WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 150"),
+    /** الشريك اللي بيكلم المساعد دلوقتي (على الجهاز ده) — «من جيبي» = هو */
+    me: myName(db),
+    suppliers: q<{ id: number; name: string; phone: string | null }>("SELECT id, name, phone FROM suppliers WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 150"),
+    clients: q<{ id: number; name: string; kind: string; phone: string | null }>("SELECT id, name, kind, phone FROM clients WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 150"),
     equipment: q<{ id: number; name: string; supplier: string }>(
       "SELECT e.id, e.name, s.name AS supplier FROM equipment e JOIN suppliers s ON s.id = e.supplier_id WHERE e.deleted_at IS NULL ORDER BY e.id DESC LIMIT 200",
     ),
@@ -145,7 +154,7 @@ export function assistantContext(db: Db) {
     investors: q<{ id: number; name: string }>("SELECT id, name FROM investors WHERE deleted_at IS NULL ORDER BY id"),
     expenseCategories: q<{ id: number; name: string }>("SELECT id, name FROM expense_categories WHERE deleted_at IS NULL ORDER BY name"),
     accounts: q<{ key: string; name: string }>("SELECT key, name FROM treasury_accounts WHERE deleted_at IS NULL ORDER BY sort, id"),
-    partners: q<{ name: string }>("SELECT DISTINCT name FROM contract_managers WHERE deleted_at IS NULL ORDER BY name").map((r) => r.name),
+    partners: teamNames(db),
   };
 }
 export type AssistantContext = ReturnType<typeof assistantContext>;
@@ -188,11 +197,13 @@ export function assistantFacts(db: Db) {
   const q = <T>(sql: string) => db.prepare(sql).all() as T[];
   const clients = q<{ id: number; name: string }>("SELECT id, name FROM clients WHERE deleted_at IS NULL").map((c) => {
     const t = clientStatement(db, c.id, now, books).totals;
-    return { name: c.name, invoicedIncludingTaxes: egpN(t.invoicedPt), paidSoFar: egpN(t.paidPt), stillOwesUs: egpN(t.remainingPt) };
+    const last = db.prepare("SELECT date, amount_pt FROM client_payments WHERE client_id = ? AND deleted_at IS NULL ORDER BY date DESC, id DESC LIMIT 1").get(c.id) as { date: string; amount_pt: number } | undefined;
+    return { name: c.name, invoicedIncludingTaxes: egpN(t.invoicedPt), paidSoFar: egpN(t.paidPt), stillOwesUs: egpN(t.remainingPt), lastPayment: last ? { date: last.date, amount: egpN(last.amount_pt) } : null };
   });
   const owners = q<{ id: number; name: string }>("SELECT id, name FROM suppliers WHERE deleted_at IS NULL").map((x) => {
     const t = supplierStatement(db, x.id, now, books).totals;
-    return { name: x.name, earnedFromSarki: egpN(t.fromSarkiPt), deductions: egpN(t.deductionsPt), paidSoFar: egpN(t.paidPt), weStillOweHim: egpN(t.remainingPt) };
+    const last = db.prepare("SELECT date, amount_pt FROM supplier_payments WHERE supplier_id = ? AND deleted_at IS NULL ORDER BY date DESC, id DESC LIMIT 1").get(x.id) as { date: string; amount_pt: number } | undefined;
+    return { name: x.name, earnedFromSarki: egpN(t.fromSarkiPt), deductions: egpN(t.deductionsPt), paidSoFar: egpN(t.paidPt), weStillOweHim: egpN(t.remainingPt), lastPayment: last ? { date: last.date, amount: egpN(last.amount_pt) } : null };
   });
   const partners = managersReport(db, books, now.slice(0, 7)).people.map((p) => ({
     name: p.name,
@@ -427,6 +438,7 @@ function run(db: Db, actions: AssistantAction[], call?: CallRunner): string[] {
       }
       case "read":
       case "open":
+      case "whatsapp":
         break; // دول بيتعملوا في الشاشة، مش هنا
       default:
         throw new UserError(`مش فاهم نوع العملية: ${(a as { type?: string }).type}`);
