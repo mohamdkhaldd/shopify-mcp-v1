@@ -136,7 +136,16 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 - لو المستخدم طلب حاجة وناقصها معلومة لازمة (اسم الشركة، تاريخ البداية، السعر، صاحب المعدة، المبلغ، أنهي عقد…): متنفذش ومتخمّنش — actions فاضية، و reply: «ناقص كذا وكذا — قولّي عشان أعمل …». اسأل عن كل الناقص مرة واحدة.
 - التعديل غير الجديد: لو بيتكلم عن حاجة موجودة (عقد، صاحب معدة، شركة، سواق، دفعة…) وعايز يغيّر فيها (تاريخ، سعر، اسم، تليفون…) استخدم دالة التعديل بتاعتها (updateContract, updateSupplier, updateClient, updateEquipment, updateDriver…) بالـ id. ممنوع تعمل contract (عقد جديد) عشان تعدّل عقد موجود. ابعت بس الخانات اللي اتغيرت، ومتسألش عن الحاجات اللي موجودة أصلاً (السعر، الشركة…) — هي موجودة في contracts في السياق. وفي reply قول: «هغيّر كذا من … لـ …، والباقي زي ما هو (كذا وكذا)».
 - الدروس (lessons في السياق): قواعد الشركة اللي اتعلمتها قبل كده — امشي عليها دايماً وقبل أي حاجة تانية.
-- التعلّم من التصحيح: لو المستخدم صحّحك («لا، أنا قصدي…»، «مش كده، كذا»، «اسمه كذا مش كذا») أو قال «افتكر إن…»: اعمل اللي طلبه صح، وضيف معاه call fn lessonAdd بـ text = القاعدة بجملة واحدة واضحة تنفع لأي مرة جاية (من غير تفاصيل المرة دي بس). ومتحفظش درس لحاجة عادية مش تصحيح.
+- التعلّم من التصحيح: لو المستخدم صحّحك («لا، أنا قصدي…»، «مش كده، كذا»، «اسمه كذا مش كذا») أو قال «افتكر إن…» أو بان من كلامه طريقة شغل ثابتة للشركة: اعمل اللي طلبه صح، وضيف معاه call fn lessonAdd بـ text = القاعدة بجملة واحدة واضحة تنفع لأي مرة جاية (من غير تفاصيل المرة دي بس). البرنامج بيحفظها لوحده في السكوت — متقولش في reply إنك اتعلمت أو حفظت، رد عادي على طلبه بس. ومتحفظش درس لحاجة عادية أو لقاعدة موجودة أصلاً في lessons.
+
+اللي بيكلمك ممكن ميعرفش يستخدم البرنامج خالص ولا له في التكنولوجيا — انت اللي بتشغّل البرنامج عنه:
+- اعمل الحاجة انت (actions) بدل ما تقوله «روح صفحة كذا ودوس كذا». قوله يروح مكان بإيده بس لو الحاجة مش في قدرتك، وساعتها خطوات قصيرة مرقّمة بأسامي الزراير زي ما هي، أو open للصفحة.
+- كلّمه بكلام بسيط من غير مصطلحات (مش «id» ولا «entity» ولا «catalog» ولا أسامي الدوال) — قول «عقد اللودر بتاع محمد في شركة النور».
+- لو كلامه ناقص أو مش واضح اسأل سؤال واحد بسيط، ولو فيه اختيارات اعرضها عليه (١- … ٢- …) عشان يرد برقم.
+- لو طلب حاجة كبيرة (أول الشهر، آخر الشهر، تصفية حساب حد) اعملها كلها مرة واحدة واعرضها عليه يوافق عليها مرة واحدة.
+- لو عمل حاجة غلط أو عايز يرجّعها: قوله إن «سجل التعديلات ← تراجع» بترجّعها، أو اعمل التعديل العكسي انت.
+- بعد ما يخلّص حاجة اقترح الخطوة الجاية الطبيعية في سطر (مثلاً بعد تسجيل دفعة: «تحب أبعتله رسالة واتساب بحسابه؟»).
+- شغل الشهر العادي اللي ممكن يطلبه: تسجيل أيام السركي لكل عقد، الدفعات اللي جت من الشركات، الدفعات لأصحاب المعدات والسواقين، المصروفات، وفي آخر الشهر مراجعة الحسابات (مين ليه ومين عليه) وقفل الشهر بعد ما يتأكد إن كله اتسجل.
 - ذاكرة المحادثة: الرسايل اللي فاتت في نفس المحادثة (history) فيها اللي اتقال واللي اتعمل ([اتعمل: …]). لو قال «خليها كذا» أو «عدّل التاريخ بس» أو «نفس الأسعار» يبقى قصده نفس الحاجة اللي كنتوا بتتكلموا فيها — كمّل عليها ومتسألش من الأول.
 - whatsapp: رسالة جاهزة للواتساب (phone من السياق، و text = الرسالة كاملة بالعامية). مثلاً «ابعت لمحمد حسابه»: open suppliers id و tab full و pdf true (الملف الكامل PDF) + whatsapp بملخص الحساب وآخر دفعة.
 - لو مش في السياق catalog (نسخة قديمة من البرنامج): متستخدمش call ولا read ولا open ولا whatsapp ولا sarki_photo.
@@ -196,10 +205,14 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
 let geminiModels: string[] | null = null;
 class AiError extends Error {
-  constructor(public status: number) {
+  // daily = الحد المجاني بتاع اليوم خلص في كل الموديلات (مش زحمة دقيقة)
+  constructor(public status: number, public daily = false) {
     super(`ai ${status}`);
   }
 }
+/** الحد اليومي (بتاعنا وبتاع Gemini) بيرجع الساعة ١٠ الصبح بتوقيت القاهرة */
+const reopensToday = () => Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", hour: "numeric", hourCycle: "h23" }).format(new Date())) < 10;
+const quotaError = () => (reopensToday() ? "quota_today" : "quota_tomorrow");
 async function listGeminiModels(key: string) {
   if (geminiModels) return geminiModels;
   const res = await fetch(`${GEMINI}/models?pageSize=200`, { headers: { "x-goog-api-key": key }, signal: AbortSignal.timeout(15_000) });
@@ -234,10 +247,11 @@ type Turn = { role: "user" | "assistant"; text: string };
 async function askGemini(key: string, history: Turn[], text: string, image?: { data: string; mediaType: string }) {
   const started = Date.now();
   let last = 503;
+  let daily = true;
   for (const model of await listGeminiModels(key)) {
     for (const full of [true, false]) {
       const left = 100_000 - (Date.now() - started);
-      if (left < 8_000) throw new AiError(last);
+      if (left < 8_000) throw new AiError(last, false);
       const contents = [
         ...history.map((t) => ({ role: t.role === "assistant" ? "model" : "user", parts: [{ text: t.text }] })),
         { role: "user", parts: [...(image ? [{ inline_data: { mime_type: image.mediaType, data: image.data } }] : []), { text }] },
@@ -257,6 +271,7 @@ async function askGemini(key: string, history: Turn[], text: string, image?: { d
       } catch (err) {
         if ((err as Error)?.name !== "TimeoutError") throw err;
         last = 504;
+        daily = false;
         break;
       }
       if (res.ok) {
@@ -271,7 +286,9 @@ async function askGemini(key: string, history: Turn[], text: string, image?: { d
         };
       }
       last = res.status;
-      console.warn(`gemini ${model}: ${res.status} ${(await res.text()).slice(0, 300)}`);
+      const body = await res.text();
+      console.warn(`gemini ${model}: ${res.status} ${body.slice(0, 300)}`);
+      if (!(res.status === 429 && /PerDay/i.test(body))) daily = false;
       if (res.status === 400 && full) continue;
       if (res.status === 401 || res.status === 403) throw new AiError(res.status);
       if (res.status === 404) geminiModels = null;
@@ -279,7 +296,7 @@ async function askGemini(key: string, history: Turn[], text: string, image?: { d
       break;
     }
   }
-  throw new AiError(last);
+  throw new AiError(last, daily && last === 429);
 }
 
 async function transcribeGemini(key: string, audio: string, mediaType: string, hint: string) {
@@ -289,6 +306,7 @@ async function transcribeGemini(key: string, audio: string, mediaType: string, h
     "لو مفيش كلام مفهوم اكتب: مفيش كلام" +
     (hint ? `\nأسامي موجودة في البرنامج ممكن يقولها (اكتبها بنفس الشكل لو هي اللي اتقالت): ${hint}` : "");
   let last = 503;
+  let daily = true;
   for (const model of await listGeminiModels(key)) {
     const res = await fetch(`${GEMINI}/models/${model}:generateContent`, {
       method: "POST",
@@ -311,10 +329,12 @@ async function transcribeGemini(key: string, audio: string, mediaType: string, h
       };
     }
     last = res.status;
-    console.warn(`gemini voice ${model}: ${res.status} ${(await res.text()).slice(0, 300)}`);
+    const body = await res.text();
+    console.warn(`gemini voice ${model}: ${res.status} ${body.slice(0, 300)}`);
+    if (!(res.status === 429 && /PerDay/i.test(body))) daily = false;
     if (res.status === 401 || res.status === 403) throw new AiError(res.status);
   }
-  throw new AiError(last);
+  throw new AiError(last, daily && last === 429);
 }
 
 async function askClaude(apiKey: string, history: Turn[], text: string, image?: { data: string; mediaType: string }) {
@@ -361,8 +381,9 @@ Deno.serve(async (req) => {
         and (l.expires_at is null or l.expires_at >= (now() at time zone 'Africa/Cairo')::date)`;
     if (!lic) return fail("license");
     const [{ used }] = await sql`select count(*)::int as used from licensing.ai_usage a join public.licenses l on l.id = a.license_id
-                                  where coalesce(l.data_from, l.id) = ${lic.owner} and a.at > now() - interval '1 day'`;
-    if (used >= DAILY_LIMIT) return fail("limit");
+                                  where coalesce(l.data_from, l.id) = ${lic.owner}
+                                    and a.at > ((date_trunc('day', (now() at time zone 'Africa/Cairo') - interval '10 hours') + interval '10 hours') at time zone 'Africa/Cairo')`;
+    if (used >= DAILY_LIMIT) return fail(quotaError());
 
     // صوت → كلام: Gemini بيكتب اللي اتقال بالظبط (والكلام ده بعدين بيتبعت للمساعد زي أي رسالة)
     if (b.transcribe) {
@@ -471,7 +492,7 @@ Deno.serve(async (req) => {
     return json({ ok: true, reply: String(out.reply ?? ""), actions, cards, chart });
   } catch (err) {
     console.error(err);
-    if (err instanceof AiError) return fail(err.status === 401 || err.status === 403 ? "bad_key" : err.status === 429 || err.status >= 500 ? "busy" : "ai_error", 502);
+    if (err instanceof AiError) return fail(err.daily ? quotaError() : err.status === 401 || err.status === 403 ? "bad_key" : err.status === 429 || err.status >= 500 ? "busy" : "ai_error", 502);
     if (err instanceof Anthropic.APIError) return fail(err.status === 429 || (err.status ?? 0) >= 500 ? "busy" : "ai_error", 502);
     if ((err as Error)?.name === "TimeoutError") return fail("busy", 502);
     return fail("server", 500);

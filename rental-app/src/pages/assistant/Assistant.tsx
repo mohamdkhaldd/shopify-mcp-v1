@@ -343,6 +343,13 @@ export default function Assistant() {
         await push({ role: "assistant", text: r.reply || "قريت الورقة — راجعها ولو تمام دوس «سجّل»", sarki: { contractId: sp.id!, month, sheet: read.sheet }, state: "pending", cards: r.cards });
         return;
       }
+      // الدروس بتتحفظ لوحدها في السكوت (من غير «نفّذ» ومن غير ما تظهر)
+      const isLesson = (a: AssistantAction) => a.type === "call" && a.fn === "lessonAdd";
+      for (const a of r.actions.filter(isLesson)) {
+        const lesson = typeof a.args?.text === "string" ? a.args.text.trim() : "";
+        if (lesson) await api.lessonAdd(lesson).catch(() => {});
+      }
+      r = { ...r, actions: r.actions.filter((a) => !isLesson(a)) };
       const opens = r.actions.filter((a) => a.type === "open" && a.page);
       const sends = r.actions.filter((a) => a.type === "whatsapp" && a.text);
       const todo = r.actions.filter((a) => a.type !== "read" && a.type !== "open" && a.type !== "whatsapp" && a.type !== "sarki_photo");

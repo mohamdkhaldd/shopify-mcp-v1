@@ -21,6 +21,10 @@ export type AssistantReply = { ok: true; reply: string; actions: AssistantAction
 const ASSISTANT_ERRORS: Record<string, string> = {
   empty: "اكتب اللي عايز تسجله",
   too_long: "الرسالة طويلة أوي — قسّمها على كذا رسالة",
+  limit: "خلص حد المساعد بتاع النهارده — هيرجع يشتغل بكرة الساعة ١٠ الصبح",
+  quota_today: "خلص حد المساعد المجاني — هيرجع يشتغل النهارده الساعة ١٠ الصبح",
+  quota_tomorrow: "خلص حد المساعد المجاني بتاع النهارده — هيرجع يشتغل بكرة الساعة ١٠ الصبح",
+  busy: "أسئلة كتير في نفس الدقيقة — استنى دقيقة وجرّب تاني",
 };
 import type { Db } from "../db";
 import { pbkdf2 } from "@noble/hashes/pbkdf2";

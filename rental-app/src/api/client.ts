@@ -98,6 +98,7 @@ export const api = {
   teamNames: () => call<string[]>("teamNames"),
   teamLog: (from?: string, to?: string) => call<{ id: number; at: string; who: string | null; label: string; actionId: string | null }[]>("teamLog", { from, to }),
   chatList: (conv: string, limit?: number) => call<ChatRow[]>("chatList", { conv, limit }),
+  lessonAdd: (text: string) => call<unknown>("lessonAdd", { text }),
   lessons: () => call<{ id: number; at: string; who: string | null; text: string }[]>("lessons"),
   lessonDelete: (id: number) => call<void>("lessonDelete", { id }),
   chatConversations: () => call<{ conv: string; started: string; last: string; count: number; title: string | null; who: string | null }[]>("chatConversations"),
