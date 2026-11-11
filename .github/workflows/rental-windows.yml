@@ -41,15 +41,18 @@ jobs:
       # every build gets a higher number so installed copies see it as an update
       - run: npm version "0.1.${{ github.run_number }}" --no-git-tag-version
 
-      - name: Build and publish
-        if: env.HAS_RELEASES_TOKEN == 'true'
-        run: npm run electron:build -- --publish always
-        env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
-
-      - name: Build only (no RELEASES_TOKEN yet)
-        if: env.HAS_RELEASES_TOKEN != 'true'
+      # البناء من غير نشر: النسخة بتتجرّب الأول، وبعدين الملفات كلها بتترفع مرة واحدة
+      - name: Build
         run: npm run electron:build -- --publish never
+
+      - name: Update files are all there
+        shell: bash
+        run: |
+          ls -la release
+          test -f release/latest.yml
+          test -f "release/mk-tech-rental-setup-0.1.${{ github.run_number }}.exe"
+          test -f "release/mk-tech-rental-setup-0.1.${{ github.run_number }}.exe.blockmap"
+          grep -q "0.1.${{ github.run_number }}" release/latest.yml
 
       # تجربة آلية على ويندوز: النسخة المبنية، وبعدين النسخة بعد ما تتسطب فعلًا
       - run: npm install --no-save playwright
@@ -65,7 +68,7 @@ jobs:
           Write-Host "installed at $exe"
           node scripts/smoke.cjs "$exe"
 
-      # the same installer under a fixed name, so one link always downloads the latest:
+      # النشر (بعد ما التجربة تعدي بس): ملف التحديث + ملف التسطيب + نسخة باسم ثابت للينك التنزيل
       # https://github.com/mohamdkhaldd/mk-tech/releases/latest/download/mk-tech-rental-setup.exe
       - name: Fixed-name copy for the download link
         if: env.HAS_RELEASES_TOKEN == 'true'
@@ -77,7 +80,13 @@ jobs:
           repository: mohamdkhaldd/mk-tech
           token: ${{ secrets.RELEASES_TOKEN }}
           tag_name: v0.1.${{ github.run_number }}
-          files: rental-app/release/mk-tech-rental-setup.exe
+          name: 0.1.${{ github.run_number }}
+          fail_on_unmatched_files: true
+          files: |
+            rental-app/release/latest.yml
+            rental-app/release/mk-tech-rental-setup-0.1.${{ github.run_number }}.exe
+            rental-app/release/mk-tech-rental-setup-0.1.${{ github.run_number }}.exe.blockmap
+            rental-app/release/mk-tech-rental-setup.exe
 
       # the same release for copies installed before MK-Tech (they read the old repo)
       - uses: softprops/action-gh-release@v2
