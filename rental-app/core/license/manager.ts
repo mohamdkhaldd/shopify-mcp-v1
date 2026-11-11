@@ -78,6 +78,8 @@ type ServerAnswer =
       token: string;
       logoUrl?: string | null;
       hasPassword?: boolean;
+      /** بيزيد كل ما بيانات الشركة تتصفّر أو نسخة قديمة ترجع (من لوحة MK) */
+      dataEpoch?: number | null;
       sync?: SyncCredentials;
       syncByProduct?: Partial<Record<Product, SyncCredentials>>;
     }
@@ -114,6 +116,8 @@ export interface LicenseOptions {
   publicKey?: string;
   /** called after every successful check with the login of this customer's own cloud space, per program */
   onCredentials?: (c: SyncCredentials, product: Product) => void;
+  /** بيانات الشركة اتصفّرت أو اترجعت لنسخة قديمة من جهاز تاني أو من MK: امسح نسخة الجهاز ده وابدأ تاني */
+  onDataReset?: () => void;
 }
 
 const PRODUCTS: Product[] = ["rental", "operations"];
@@ -136,6 +140,8 @@ export function createLicenseManager(o: LicenseOptions) {
       : o.db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(k, v);
 
   let lastMessage: string | null = null;
+  /** الشركة اتصفّرت من جهاز تاني: بعد ما accept يخلص، الجهاز ده يمسح ويبدأ تاني */
+  let resetPending = false;
 
   /** فيه بيانات شغل حقيقية على الجهاز ده؟ */
   const hasData = () => {
@@ -249,6 +255,15 @@ export function createLicenseManager(o: LicenseOptions) {
 
   /** "" = fine; otherwise why this answer can't be used on this device */
   async function accept(key: string, a: ServerAnswer & { ok: true }): Promise<string> {
+    const problem = await acceptAnswer(key, a);
+    if (!problem && resetPending) {
+      resetPending = false;
+      o.onDataReset?.();
+    }
+    return problem;
+  }
+
+  async function acceptAnswer(key: string, a: ServerAnswer & { ok: true }): Promise<string> {
     const c = checkToken(a.token, o.deviceId, now(), o.publicKey ?? LICENSE_PUBLIC_KEY);
     if (!c.ok) return "حصلت مشكلة في التفعيل — جرّب تاني";
     // one device holds one company's data: a code of another company would mix the two
@@ -264,6 +279,12 @@ export function createLicenseManager(o: LicenseOptions) {
     set("plan_max_equipment", c.payload.maxEquipment != null ? String(c.payload.maxEquipment) : null);
     set("license_has_password", a.hasPassword ? "1" : null);
     if (!a.hasPassword) rememberPassword(null);
+    // التصفير: الجهاز بيقارن رقم "نسخة البيانات" باللي عنده (أول مرة بيحفظه بس)
+    if (a.dataEpoch != null) {
+      const prev = get("data_epoch");
+      set("data_epoch", String(a.dataEpoch));
+      if (prev != null && Number(prev) !== a.dataEpoch) resetPending = true;
+    }
     const byProduct: Partial<Record<Product, SyncCredentials>> = a.syncByProduct ?? (a.sync ? { rental: a.sync } : {});
     for (const p of PRODUCTS) {
       const c = byProduct[p];
@@ -388,6 +409,27 @@ export function createLicenseManager(o: LicenseOptions) {
     return { ok: true, sheet: cleanSheet(a.sheet, days) };
   }
 
+  /** "صفّر البرنامج": السيرفر بياخد نسخة من داتا الشركة ويمسحها، وكل أجهزتها بتبدأ من الأول. */
+  async function resetCompany(password: string): Promise<PasswordResult> {
+    const key = get("license_key");
+    if (!key) return { ok: false, message: "البرنامج مش متفعّل" };
+    if (!password) return { ok: false, message: "اكتب باسورد الشركة" };
+    const a = await call<{ ok: true; dataEpoch: number } | { ok: false; error: string }>({ action: "reset", key, password }, 60_000);
+    if (!a) return { ok: false, message: OFFLINE };
+    if (!a.ok)
+      return {
+        ok: false,
+        message:
+          a.error === "password_needed"
+            ? "لازم الشركة يكون ليها باسورد الأول — اعمله من الإعدادات (باسورد الشركة) وارجع صفّر"
+            : a.error === "wrong_password"
+              ? WRONG_PASSWORD
+              : (MESSAGES[a.error]?.(a as ServerAnswer & { ok: false }) ?? "حصلت مشكلة على السيرفر — جرّب تاني"),
+      };
+    set("data_epoch", String(a.dataEpoch));
+    return { ok: true };
+  }
+
   /** المساعد: الكلام + الأسماء الموجودة ← السيرفر يرجّع رد وقايمة أفعال. مش بيسجل حاجة. */
   async function askAssistant(r: AssistantRequest): Promise<AssistantReply> {
     const key = get("license_key");
@@ -402,7 +444,7 @@ export function createLicenseManager(o: LicenseOptions) {
     return { ok: true, reply: String(a.reply ?? ""), actions: Array.isArray(a.actions) ? (a.actions as AssistantAction[]) : [] };
   }
 
-  return { status, activate, refresh, credentials, setPassword, checkPassword, signOut, readSarki, askAssistant, savedKey: () => get("license_key") };
+  return { status, activate, refresh, credentials, setPassword, checkPassword, signOut, readSarki, askAssistant, resetCompany, savedKey: () => get("license_key") };
 }
 
 export type LicenseManager = ReturnType<typeof createLicenseManager>;

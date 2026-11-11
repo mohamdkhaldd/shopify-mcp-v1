@@ -6,6 +6,7 @@ import { setupDatabase } from "../core/schema";
 import { createSyncEngine } from "../core/sync/syncEngine";
 import { cloud } from "../core/sync/cloudConfig";
 import { callCore, isReadCall, makeRegistry } from "../electron/ipc";
+import { wipeCompanyData } from "../core/services/reset";
 import { createDatabase } from "./sqlAdapter";
 import { forget, loadSaved, save } from "./storage";
 import { tabletAppHandlers } from "./appHandlers";
@@ -65,7 +66,15 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
     ...licenseServer,
     ...(typeof __TEST_LICENSE_KEY__ !== "undefined" && __TEST_LICENSE_KEY__ ? { publicKey: __TEST_LICENSE_KEY__ } : {}),
     onCredentials: (c, p) => (p === "rental" ? rentalSync : opsSync)?.ensureLogin(c).catch(() => {}),
+    onDataReset: () => void wipeAndRestart(),
   });
+  // الشركة اتصفّرت: امسح نسخة الجهاز ده، احفظ، وافتح تاني (بيسحب من السحابة من الأول)
+  async function wipeAndRestart() {
+    rentalSync?.stop();
+    wipeCompanyData(db);
+    await save(db.exportNow());
+    location.replace(location.pathname);
+  }
   const products = (): Product[] => {
     const s = license.status();
     return s.state === "active" ? s.products : [];
@@ -160,6 +169,12 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
     },
     // صورة السركي الورقي ← Claude يقراها (التأجير والتشغيل الاتنين)
     "shell:readSarki": (r: ReadRequest) => (unlocked ? license.readSarki(r) : { ok: false, message: "ادخل الأول" }),
+    "shell:resetCompany": async ({ password }: { password: string }) => {
+      if (!unlocked) return { ok: false, message: "ادخل الأول" };
+      const r = await license.resetCompany(password);
+      if (r.ok) setTimeout(() => void wipeAndRestart(), 300);
+      return r;
+    },
     "shell:askAssistant": (r: AssistantRequest) => (unlocked ? license.askAssistant(r) : { ok: false, message: "ادخل الأول" }),
     "shell:setPassword": async ({ current, next }: { current: string; next: string }) => {
       if (!unlocked) return { ok: false, message: "ادخل الأول" };

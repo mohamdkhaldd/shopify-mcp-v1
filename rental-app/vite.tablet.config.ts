@@ -48,7 +48,7 @@ const adminPage = (): Plugin => ({
   name: "admin-page",
   apply: "build",
   writeBundle(opts) {
-    if (process.env.PREVIEW) return;
+    // نسخة التجربة كمان (/preview/admin/) عشان التعديلات الجديدة في اللوحة تتجرب قبل ما تتنشر
     fs.cpSync(path.resolve(__dirname, "admin-web"), path.join(opts.dir!, "admin"), { recursive: true });
   },
 });

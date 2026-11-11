@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ ok: false, error: "method" }, 405);
   let body: {
-    action?: "activate" | "release" | "setPassword" | "checkPassword";
+    action?: "activate" | "release" | "setPassword" | "checkPassword" | "reset";
     key?: string;
     deviceId?: string;
     deviceName?: string;
@@ -52,6 +52,8 @@ Deno.serve(async (req) => {
     const device = body.deviceId ?? "";
     if (body.action === "release") return json((await sql`select licensing.release(${key}, ${device}) as r`)[0].r);
     if (body.action === "setPassword") return json((await sql`select licensing.set_password(${key}, ${device}, ${body.current ?? ""}, ${body.next ?? ""}) as r`)[0].r);
+    // تصفير بيانات التأجير بتاعة الشركة (بباسورد الشركة) — بعد نسخة محفوظة ترجّعها MK
+    if (body.action === "reset") return json((await sql`select licensing.reset_company(${key}, ${device}, ${body.password ?? ""}) as r`)[0].r);
     if (body.action === "checkPassword") return json((await sql`select licensing.check_password(${key}, ${device}, ${body.password ?? ""}) as r`)[0].r);
     const [row] = await sql`select licensing.activate(${key}, ${device}, ${body.deviceName ?? null}, ${body.platform ?? null}, ${body.appVersion ?? null}, ${body.password ?? null}) as r`;
     const r = row.r as {
@@ -69,6 +71,7 @@ Deno.serve(async (req) => {
       plan?: string | null;
       maxEquipment?: number | null;
       hasPassword?: boolean;
+      dataEpoch?: number | null;
       sync?: { email: string; password: string };
       syncByProduct?: Record<string, { email: string; password: string }>;
     };
@@ -80,7 +83,7 @@ Deno.serve(async (req) => {
     const payload = { v: 1, lic: r.licenseId, customer: r.customer, name: r.name, products: r.products ?? ["rental"], device: body.deviceId, expiresAt: r.expiresAt ?? null, plan: r.plan ?? null, maxEquipment: r.maxEquipment ?? null, iat: r.iat, exp: r.exp };
     const bytes = new TextEncoder().encode(JSON.stringify(payload));
     const token = `${b64url(bytes)}.${b64url(ed.sign(bytes, privateKey))}`;
-    return json({ ok: true, token, customer: r.customer, name: r.name, logoUrl: r.logoUrl ?? null, expiresAt: r.expiresAt ?? null, products: r.products, plan: r.plan ?? null, maxEquipment: r.maxEquipment ?? null, hasPassword: !!r.hasPassword, sync: r.sync, syncByProduct: r.syncByProduct });
+    return json({ ok: true, token, customer: r.customer, name: r.name, logoUrl: r.logoUrl ?? null, expiresAt: r.expiresAt ?? null, products: r.products, plan: r.plan ?? null, maxEquipment: r.maxEquipment ?? null, hasPassword: !!r.hasPassword, dataEpoch: r.dataEpoch ?? null, sync: r.sync, syncByProduct: r.syncByProduct });
   } catch (e) {
     console.error(e);
     return json({ ok: false, error: "server" }, 500);

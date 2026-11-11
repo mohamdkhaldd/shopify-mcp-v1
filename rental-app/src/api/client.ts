@@ -220,6 +220,9 @@ export const shellApi = {
   /** the company password, from this device (needs internet) */
   setPassword: (current: string, next: string): Promise<ShellResult> => window.api!.invoke("shell:setPassword", { current, next }),
   /** صورة السركي الورقي ← Claude يقراها (محتاج نت). مش بيسجل حاجة — المراجعة والحفظ بعدها. */
+  /** تصفير البرنامج (بباسورد الشركة) — لو نجح البرنامج بيتقفل ويفتح فاضي */
+  resetCompany: (password: string): Promise<{ ok: true } | { ok: false; message: string }> =>
+    window.api ? window.api.invoke("shell:resetCompany", { password }) : Promise.resolve({ ok: false, message: "التصفير شغال في البرنامج نفسه بس" }),
   askAssistant: (r: AssistantRequest): Promise<AssistantReply> =>
     window.api ? window.api.invoke("shell:askAssistant", r) : Promise.resolve({ ok: false, message: "المساعد شغال في البرنامج نفسه بس" }),
   readSarki: (r: ReadRequest): Promise<ReadResult> =>

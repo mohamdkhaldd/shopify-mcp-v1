@@ -7,6 +7,7 @@ import { backupTo, dailyBackup, lastBackup, looksLikeRentalDb } from "./backup";
 import { printPreview, savePdf } from "./print";
 import { setupAutoUpdate } from "./updater";
 import { callCore, isReadCall, makeRegistry } from "./ipc";
+import { wipeCompanyData } from "../core/services/reset";
 import { exportExcel, ExcelSheet } from "./excel";
 import { seedDemo } from "../core/demo";
 import { startDeviceSync } from "./sync";
@@ -97,6 +98,7 @@ app.whenReady().then(async () => {
       appVersion: app.getVersion(),
       ...licenseServer,
       onCredentials: (c, p) => (p === "rental" ? rentalSync : operations?.sync)?.ensureLogin(c).catch(() => {}),
+      onDataReset: () => wipeAndRestart(),
     });
   let license: LicenseManager = makeLicense();
 
@@ -171,6 +173,19 @@ app.whenReady().then(async () => {
     app.relaunch({ args: [...shellArgs(), ...args] });
     app.exit(0);
   };
+  // الشركة اتصفّرت (من هنا أو من جهاز تاني أو MK رجّعت نسخة): امسح نسخة الجهاز ده
+  // وافتح تاني — البرنامج بيسحب من السحابة من الأول. الترخيص بيفضل.
+  function wipeAndRestart() {
+    rentalSync?.stop();
+    wipeCompanyData(db);
+    restart();
+  }
+  ipcMain.handle("shell:resetCompany", async (_e, { password }: { password: string }) => {
+    if (!unlocked) return { ok: false, message: "ادخل الأول" };
+    const r = await license.resetCompany(password);
+    if (r.ok) setTimeout(wipeAndRestart, 300);
+    return r;
+  });
   ipcMain.handle("shell:info", () => ({ product, products: products(), locked: !unlocked, hasPassword: hasPassword() }));
   ipcMain.handle("shell:open", (_e, { product: next }: { product: Product }) => {
     if (!unlocked || !products().includes(next)) return { ok: false };

@@ -382,6 +382,13 @@
 
 
       <div class="card">
+        <h2>نسخ البيانات المحفوظة</h2>
+        <div class="muted">بتتاخد لوحدها قبل أي تصفير من البرنامج أو رجوع لنسخة. «رجّع» بيحفظ الحالي نسخة الأول، وكل أجهزة العميل بتفتح على النسخة اللي رجعت.</div>
+        <div id="snaps" class="sub muted">بيحمّل…</div>
+        <button class="btn soft" id="snapNow" style="margin-top:8px">خد نسخة دلوقتي</button>
+      </div>
+
+      <div class="card">
         <h2>الباقة</h2>
         <select id="plan">${planOptions(d.plans, c.plan)}</select>
         <div class="muted" style="margin-top:6px">الحد بيوصل الأجهزة أول ما تفتح البرنامج بنت.</div>
@@ -476,6 +483,8 @@
     $("#loadDev").onclick = (e) => busy(e.target, () => devicesInto($("#devs"), c));
     activityInto($("#act"), c).catch((e) => ($("#act").textContent = msg(e)));
     paymentsInto($("#pays"), c).catch((e) => ($("#pays").textContent = msg(e)));
+    snapshotsInto($("#snaps"), c).catch((e) => ($("#snaps").textContent = msg(e)));
+    $("#snapNow").onclick = (e) => busy(e.target, async () => { await call("snapshot.save", { id: c.id }); toast("اتاخدت نسخة ✓"); await snapshotsInto($("#snaps"), c); });
     $("#payF").onsubmit = (e) => {
       e.preventDefault();
       const f = e.target;
@@ -517,6 +526,29 @@
       if (stop && !confirm(`توقف ${c.displayName || c.customer} خالص؟`)) return;
       busy(all, async () => { await update({ revoked: stop }); await done(stop ? "اتوقف ✓" : "رجع ✓"); });
     };
+  }
+
+  /** نسخ بيانات التأجير المحفوظة، ورجوع لأي واحدة */
+  async function snapshotsInto(box, c) {
+    const r = await call("snapshots", { id: c.id });
+    if (!r.snapshots.length) { box.textContent = "لسه مفيش نسخ محفوظة."; return; }
+    box.classList.remove("muted");
+    box.innerHTML = r.snapshots.map((x) => `
+      <div class="dev">
+        <div class="grow"><b>${esc(x.at)}</b> <span class="muted">#${x.id}</span>
+          <div class="muted">${esc(x.reason || "")} · ${ar(x.rows_count)} سطر بيانات${x.rows_count ? "" : " (فاضية)"}</div></div>
+        <button class="btn ghost" data-restore="${x.id}" data-at="${esc(x.at)}">رجّع</button>
+      </div>`).join("");
+    box.querySelectorAll("[data-restore]").forEach((b) => (b.onclick = () => {
+      const name = prompt(`هترجّع بيانات ${c.displayName || c.customer} لنسخة ${b.dataset.at}.\nالبيانات الحالية هتتحفظ نسخة الأول، وكل أجهزته هتفتح على النسخة دي.\nللتأكيد اكتب: رجّع`);
+      if (name == null) return;
+      if (name.trim() !== "رجّع" && name.trim() !== "رجع") return toast("اكتب «رجّع» للتأكيد");
+      busy(b, async () => {
+        const res = await call("snapshot.restore", { id: c.id, snapshotId: Number(b.dataset.restore) });
+        toast(`رجعت ✓ (${ar(res.rows)} سطر) — الأجهزة هتتحدّث أول ما تفتح على النت`);
+        await snapshotsInto(box, c);
+      });
+    }));
   }
 
   /** دفعات الاشتراك (مع مسح الدفعة الغلط) */

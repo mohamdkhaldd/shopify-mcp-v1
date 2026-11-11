@@ -294,6 +294,21 @@ Deno.serve(async (req) => {
         await sql`delete from licensing.subscription_payments where id = ${Number(b.paymentId)}`;
         return json({ ok: true });
       }
+      // نسخ بيانات التأجير المحفوظة للعميل (بتتاخد لوحدها قبل أي تصفير أو رجوع)
+      case "snapshots": {
+        const rows = await sql`select id, to_char(created_at at time zone 'Africa/Cairo', 'YYYY-MM-DD HH24:MI') as at, reason, rows_count, log_count
+                               from licensing.data_snapshots where owner_id = ${Number(b.id)} order by created_at desc, id desc limit 50`;
+        return json({ ok: true, snapshots: rows });
+      }
+      // رجّع نسخة: الداتا الحالية بتتحفظ نسخة الأول، وكل أجهزة العميل بتسحب النسخة دي من جديد
+      case "snapshot.restore": {
+        const [r] = await sql`select licensing.restore_snapshot(${Number(b.id)}, ${Number(b.snapshotId)}) as r`;
+        return json(r.r);
+      }
+      case "snapshot.save": {
+        const [r] = await sql`select licensing.snapshot_tenant(${Number(b.id)}, ${"نسخة من لوحة MK"}) as id`;
+        return json({ ok: true, id: r.id });
+      }
       case "push.subscribe": {
         const sub = b.subscription ?? {};
         if (!sub.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) return fail("bad_request", 400);
