@@ -229,8 +229,8 @@ function TaxSwitch({ label, checked, onChange }: { label: string; checked: boole
   );
 }
 
-export default function Clients() {
-  const [clientId, setClientId] = useState<number | undefined>();
+export default function Clients({ initialId }: { initialId?: number } = {}) {
+  const [clientId, setClientId] = useState<number | undefined>(initialId);
   const [v, setV] = useState<ClientsView | null>(null);
   const [tab, setTab] = useState<Tab>("statement");
   const [error, setError] = useState<string | null>(null);

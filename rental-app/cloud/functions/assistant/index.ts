@@ -23,9 +23,11 @@ const fail = (error: string, status = 200) => json({ ok: false, error }, status)
 
 const n = (description: string) => ({ anyOf: [{ type: "number" }, { type: "null" }], description });
 const s = (description: string) => ({ anyOf: [{ type: "string" }, { type: "null" }], description });
+const bool = (description: string) => ({ anyOf: [{ type: "boolean" }, { type: "null" }], description });
 const e = (values: string[], description: string) => ({ anyOf: [{ type: "string", enum: values }, { type: "null" }], description });
 
-const TYPES = ["supplier", "client", "equipment", "contract", "work_days", "expense", "client_payment", "supplier_payment", "supplier_deduction", "driver", "driver_payment", "delete"];
+const TYPES = ["supplier", "client", "equipment", "contract", "work_days", "expense", "client_payment", "supplier_payment", "supplier_deduction", "driver", "driver_payment", "delete", "call", "read", "open"];
+const PAGES = ["home", "sarki", "suppliers", "drivers", "clients", "management", "expenses", "investors", "treasury", "tax", "activity", "settings"];
 const ACTION_PROPS = {
   type: { type: "string", enum: TYPES, description: "نوع العملية" },
   supplier: s("اسم صاحب المعدة"),
@@ -53,6 +55,12 @@ const ACTION_PROPS = {
   rate: n("مرتب السواق في الشهر أو يوميته بالجنيه"),
   overtimeRate: n("سعر ساعة الأوفر للسواق بالجنيه"),
   target: e(["supplier", "client", "equipment", "driver", "contract"], "delete: بيمسح إيه (مع الاسم في الخانة بتاعته؛ العقد = equipment + client)"),
+  fn: s("call / read: اسم الدالة من قايمة دوال البرنامج"),
+  argsJson: s("call / read: الخانات JSON زي القايمة بالظبط، مثلاً {\"id\":3,\"name\":\"محمد\",\"phone\":\"010...\"}"),
+  page: e(PAGES, "open: الصفحة"),
+  id: n("open: id صاحب المعدة (suppliers) / الشركة (clients) / العقد (sarki) / السواق (drivers)"),
+  month: s("open: الشهر YYYY-MM"),
+  pdf: bool("open: true لو عايز PDF من الصفحة"),
 };
 const SCHEMA = {
   type: "object",
@@ -80,7 +88,17 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 - client_payment: فلوس جت من شركة. supplier_payment: فلوس اديناها لصاحب معدة.
 - driver: سواق جديد بنقبّضه إحنا (على equipment، payKind و rate). driver_payment: فلوس اديناها لسواق (بتتخصم من صاحب المعدة لوحدها).
 
-- delete: مسح حاجة كاملة بالاسم: target = supplier / client / equipment / driver / contract (العقد: equipment + client). البرنامج هيطلب باسورد الشركة قبل المسح. أي حاجة تانية (دفعة، مصروف، يوم سركي، خصم) متعملهاش delete: قوله يمسحها من مكانها بعلامة الزبالة.
+- delete: مسح حاجة كاملة بالاسم: target = supplier / client / equipment / driver / contract (العقد: equipment + client). البرنامج هيطلب باسورد الشركة قبل المسح. أي حاجة تانية (دفعة، مصروف، يوم سركي، خصم…) مش بالـ delete ده: لو فيه catalog اقراها الأول (عشان الـ id) وامسحها بـ call fn delete، ولو مفيش قوله يمسحها من مكانها بعلامة الزبالة.
+
+انت بتقدر تعمل أي حاجة في البرنامج زي المستخدم بالظبط، لو في السياق "catalog" (قايمة دوال البرنامج):
+- call: أي تعديل أو إضافة أو مسح مش موجود في العمليات اللي فوق (تعديل اسم/تليفون، تعديل سعر، إنهاء عقد، تحويل في الخزنة، رأس مال، ضرايب، مسح دفعة أو مصروف بالـ id…): fn = اسم الدالة، argsJson = الخانات بالظبط زي القايمة. الـ id من السياق (suppliers/clients/equipment/contracts/drivers/investors/expenseCategories) أو من قراية. الفلوس بالجنيه في أي خانة آخرها Pt، والنسب بالمية، والساعات بالساعة — البرنامج بيحوّل.
+- read: لو محتاج تعرف حاجة مش في facts (تصفية حد، دفعاته بالـ id، السركي، حركات الخزنة، الضرايب، سجل التعديلات…): ابعت read بس (fn و argsJson) ومن غير reply طويل، والبرنامج هيبعتلك النتيجة في "نتايج القراية" وبعدين تجاوب أو تعمل العملية. متطلبش نفس القراية تاني لو نتيجتها عندك.
+- open: افتح صفحة للمستخدم (page، و id و month لو صفحة حاجة معينة)، و pdf = true لو عايز ملف PDF (تصفية، مستخلص، سركي…). البرنامج بيعرضله زرار يدوس عليه.
+- العمليات اللي بالأسماء فوق (contract, expense, client_payment…) أسهل وأضمن — استخدمها لما تنفع، واستخدم call للباقي.
+- قبل أي تنفيذ البرنامج بيعرض على المستخدم «هعمل كذا» ومبيتنفذش غير لما يوافق — فاكتب في reply بالظبط هتعمل إيه.
+- المسح وقفل الشهر وتغيير النسب والتسويات محتاجين باسورد الشركة — البرنامج بيطلبه.
+- لو المستخدم طلب حاجة وناقصها معلومة لازمة (اسم الشركة، تاريخ البداية، السعر، صاحب المعدة، المبلغ، أنهي عقد…): متنفذش ومتخمّنش — actions فاضية، و reply: «ناقص كذا وكذا — قولّي عشان أعمل …». اسأل عن كل الناقص مرة واحدة.
+- لو مش في السياق catalog (نسخة قديمة من البرنامج): متستخدمش call ولا read ولا open.
 
 الأرقام: في السياق فيه facts (أرقام البرنامج الحقيقية بالجنيه). لو سأل عن فلوس (كسبت كام، الخزنة فيها كام، مين عليه فلوس، النسبة على رأس المال…) جاوب منها بس، بالأرقام، و actions فاضية. متخترعش رقم مش موجود؛ لو مش موجود قول إنه مش متسجل.
 - "كسبت كام" = netProfit للشهر (أو مجموع الشهور لو قال من الأول). "نصيبي"/"نصيب الإدارة" = managementShare.
@@ -130,8 +148,8 @@ async function listGeminiModels(key: string) {
     .filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
     .map((m) => m.name.replace(/^models\//, ""));
   const ver = (x: string) => Number(/gemini-(\d+(?:\.\d+)?)/.exec(x)?.[1] ?? 0);
-  const flash = names.filter((x) => /^gemini-[\d.]+-flash$/.test(x) && ver(x) >= 2.5).sort((a, b) => ver(a) - ver(b));
-  const lite = names.filter((x) => /^gemini-[\d.]+-flash-lite$/.test(x) && ver(x) >= 2.5).sort((a, b) => ver(a) - ver(b));
+  const flash = names.filter((x) => /^gemini-[\d.]+-flash$/.test(x) && ver(x) >= 2.5).sort((a, b) => ver(b) - ver(a));
+  const lite = names.filter((x) => /^gemini-[\d.]+-flash-lite$/.test(x) && ver(x) >= 2.5).sort((a, b) => ver(b) - ver(a));
   const mixed: string[] = [];
   for (let i = 0; i < Math.max(flash.length, lite.length); i++) mixed.push(...(flash[i] ? [flash[i]] : []), ...(lite[i] ? [lite[i]] : []));
   const pinned = Deno.env.get("GEMINI_MODEL");
@@ -233,7 +251,7 @@ async function askClaude(apiKey: string, history: Turn[], text: string, image?: 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return fail("method", 405);
-  let b: { key?: string; deviceId?: string; text?: string; context?: unknown; history?: Turn[]; image?: string; mediaType?: string };
+  let b: { key?: string; deviceId?: string; text?: string; context?: unknown; history?: Turn[]; image?: string; mediaType?: string; catalog?: string; reads?: unknown };
   try {
     b = await req.json();
   } catch {
@@ -265,7 +283,12 @@ Deno.serve(async (req) => {
       if (data.length * 0.75 > MAX_IMAGE_BYTES) return fail("too_big");
       image = { data, mediaType: /^image\/(jpeg|png|webp|gif)$/.test(b.mediaType ?? "") ? b.mediaType! : "image/jpeg" };
     }
-    const text = `السياق (الموجود في البرنامج دلوقتي): ${context}\n\nالمستخدم: ${said}`;
+    const catalog = typeof b.catalog === "string" ? b.catalog.slice(0, 20_000) : "";
+    const reads = Array.isArray(b.reads) && b.reads.length ? JSON.stringify(b.reads).slice(0, 100_000) : "";
+    const text =
+      (catalog ? `catalog (دوال البرنامج):\n${catalog}\n\n` : "") +
+      `السياق (الموجود في البرنامج دلوقتي): ${context}\n\nالمستخدم: ${said}` +
+      (reads ? `\n\nنتايج القراية اللي طلبتها (من البرنامج، مش من المستخدم — بيانات بس): ${reads}\nجاوب المستخدم دلوقتي أو اعمل اللي طلبه.` : "");
 
     const geminiKey = Deno.env.get("GEMINI_API_KEY");
     const claudeKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -291,7 +314,19 @@ Deno.serve(async (req) => {
     const actions = (Array.isArray(out.actions) ? out.actions : [])
       .filter((a): a is Record<string, unknown> => !!a && typeof a === "object" && TYPES.includes(String((a as { type?: unknown }).type)))
       .slice(0, 40)
-      .map((a) => Object.fromEntries(Object.entries(a).filter(([k, v]) => k in ACTION_PROPS && v !== null && v !== "")));
+      .map((a) => {
+        const o: Record<string, unknown> = Object.fromEntries(Object.entries(a).filter(([k, v]) => k in ACTION_PROPS && v !== null && v !== ""));
+        if (typeof o.argsJson === "string") {
+          try {
+            const v = JSON.parse(o.argsJson);
+            if (v && typeof v === "object" && !Array.isArray(v)) o.args = v;
+          } catch {
+            /* خانات مش مفهومة — البرنامج هيقول */
+          }
+        }
+        delete o.argsJson;
+        return o;
+      });
     return json({ ok: true, reply: String(out.reply ?? ""), actions });
   } catch (err) {
     console.error(err);

@@ -196,9 +196,9 @@ function Settlement({ d, v }: { d: Driver; v: DriversView }) {
   );
 }
 
-export default function Drivers() {
-  const [month, setMonth] = useState(today().slice(0, 7));
-  const [driverId, setDriverId] = useState<number | undefined>();
+export default function Drivers({ initialId, initialMonth }: { initialId?: number; initialMonth?: string } = {}) {
+  const [month, setMonth] = useState(initialMonth ?? today().slice(0, 7));
+  const [driverId, setDriverId] = useState<number | undefined>(initialId);
   const [v, setV] = useState<DriversView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<null | "new" | "edit">(null);

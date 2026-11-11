@@ -10,6 +10,10 @@ export interface AssistantRequest {
   /** صورة (فاتورة، ورقة) لو فيه */
   image?: string;
   mediaType?: string;
+  /** كل دوال البرنامج اللي المساعد يقدر يعملها (core/ai/catalog.ts) */
+  catalog?: string;
+  /** نتايج القراية اللي المساعد طلبها في نفس السؤال */
+  reads?: { fn: string; args?: unknown; result: unknown }[];
 }
 export type AssistantReply = { ok: true; reply: string; actions: AssistantAction[] } | { ok: false; message: string };
 const ASSISTANT_ERRORS: Record<string, string> = {
@@ -435,7 +439,7 @@ export function createLicenseManager(o: LicenseOptions) {
     const key = get("license_key");
     if (!key) return { ok: false, message: "البرنامج مش متفعّل" };
     const a = await call<{ ok: true; reply: string; actions: unknown[] } | { ok: false; error: string }>(
-      { key, text: r.text, context: r.context, history: r.history ?? [], image: r.image, mediaType: r.mediaType },
+      { key, text: r.text, context: r.context, history: r.history ?? [], image: r.image, mediaType: r.mediaType, catalog: r.catalog, reads: r.reads },
       120_000,
       o.url.replace(/\/license$/, "/assistant"),
     );

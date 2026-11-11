@@ -15,7 +15,8 @@ import Treasury from "./pages/treasury/Treasury";
 import Tax from "./pages/tax/Tax";
 import Activity from "./pages/activity/Activity";
 import Settings from "./pages/settings/Settings";
-import { SectionId } from "./nav";
+import { OPEN_EVENT, OpenRequest, SectionId } from "./nav";
+import { appApi } from "./api/client";
 import { SyncBars } from "./components/Sync";
 import LicenseGate from "./components/LicenseGate";
 import ExpiredBar from "./components/ExpiredBar";
@@ -32,6 +33,28 @@ export default function App() {
     window.scrollTo(0, 0);
   };
   const title = [...navItems, ...footerItems].find((i) => i.id === active)?.label ?? "";
+  // المساعد بيفتح صفحة على حاجة معينة (ولو طلب PDF: بعد ما الصفحة تحمّل)
+  const [opened, setOpened] = useState<OpenRequest | null>(null);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onOpen = (e: Event) => {
+      const r = (e as CustomEvent<OpenRequest>).detail;
+      if (!r?.page) return;
+      setOpened(r);
+      go(r.page);
+      setPageKey((k) => k + 1);
+      if (r.pdf) {
+        clearTimeout(timer);
+        timer = setTimeout(() => appApi.savePdf([...navItems, ...footerItems].find((i) => i.id === r.page)?.label ?? "MK-Tech"), 2000);
+      }
+    };
+    window.addEventListener(OPEN_EVENT, onOpen);
+    return () => {
+      window.removeEventListener(OPEN_EVENT, onOpen);
+      clearTimeout(timer);
+    };
+  }, []);
+  const pick = (page: SectionId) => (opened?.page === page ? opened : undefined);
   useEffect(() => {
     const onRefresh = () => setPageKey((k) => k + 1);
     window.addEventListener(REFRESH_EVENT, onRefresh);
@@ -41,7 +64,7 @@ export default function App() {
     <LicenseGate>
       <UndoProvider>
         <div className="flex min-h-screen" dir="rtl">
-          <Sidebar active={active} onSelect={go} open={menuOpen} />
+          <Sidebar active={active} onSelect={(id) => { setOpened(null); go(id); }} open={menuOpen} />
           {menuOpen && <div className="no-print fixed inset-0 z-40 bg-black/40 min-[1024px]:hidden" onClick={() => setMenuOpen(false)} aria-hidden />}
           <main className="flex-1 min-w-0 px-6 xl:px-8 pt-[26px] pb-14 max-[1023px]:px-3 max-[1023px]:pt-0">
             <MobileTopBar title={title} onMenu={() => setMenuOpen(true)} />
@@ -51,17 +74,17 @@ export default function App() {
             </div>
             <div className="max-w-[1240px] mx-auto" key={pageKey}>
               {active === "home" ? (
-                <Dashboard onNavigate={go} />
+                <Dashboard onNavigate={(id) => { setOpened(null); go(id); }} />
               ) : active === "assistant" ? (
                 <Assistant />
               ) : active === "sarki" ? (
-                <Sarki />
+                <Sarki initialId={pick("sarki")?.id} initialMonth={pick("sarki")?.month} />
               ) : active === "suppliers" ? (
-                <Suppliers />
+                <Suppliers initialId={pick("suppliers")?.id} />
               ) : active === "drivers" ? (
-                <Drivers />
+                <Drivers initialId={pick("drivers")?.id} initialMonth={pick("drivers")?.month} />
               ) : active === "clients" ? (
-                <Clients />
+                <Clients initialId={pick("clients")?.id} />
               ) : active === "management" ? (
                 <Management />
               ) : active === "expenses" ? (

@@ -1,5 +1,15 @@
 export type SectionId = "home" | "assistant" | "sarki" | "suppliers" | "drivers" | "clients" | "management" | "expenses" | "investors" | "treasury" | "tax" | "activity" | "settings";
 
+/** المساعد بيفتح صفحة (وممكن يطلع منها PDF): window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail })) */
+export const OPEN_EVENT = "mk-open";
+export interface OpenRequest {
+  page: SectionId;
+  /** صاحب معدة / شركة / عقد (السركي) / سواق */
+  id?: number;
+  month?: string;
+  pdf?: boolean;
+}
+
 export interface NavItem {
   id: SectionId;
   label: string;

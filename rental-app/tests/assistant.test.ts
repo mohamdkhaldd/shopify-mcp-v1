@@ -5,6 +5,7 @@ import { computeBooks } from "../core/services/books";
 import { supplierStatement } from "../core/services/reports";
 import { recordCapital } from "../core/services/ledger";
 import { createInvestor } from "../core/services/master";
+import { callCore, makeRegistry, assistantDeletesRegistry } from "../electron/ipc";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const count = (db: any, t: string) => (db.prepare(`SELECT COUNT(*) n FROM ${t} WHERE deleted_at IS NULL`).get() as { n: number }).n;
@@ -74,8 +75,8 @@ describe("المساعد", () => {
     const db = freshDb({ withholding: true });
     assistantApply(db, [{ type: "contract", equipment: "لودر", supplier: "محمد", client: "النور", unit: "day", clientRate: 1500, supplierRate: 1200, startDate: "2026-10-01" }]);
     const ctx = assistantContext(db);
-    expect(ctx.suppliers).toEqual(["محمد"]);
-    expect(ctx.equipment).toEqual([{ name: "لودر", supplier: "محمد" }]);
+    expect(ctx.suppliers.map((x) => x.name)).toEqual(["محمد"]);
+    expect(ctx.equipment[0]).toMatchObject({ name: "لودر", supplier: "محمد" });
     expect(ctx.contracts[0]).toMatchObject({ equipment: "لودر", client: "النور", supplier: "محمد" });
     expect(ctx.accounts.map((a) => a.key)).toContain("cash");
   });
@@ -101,4 +102,56 @@ describe("المساعد", () => {
     expect(f).toHaveProperty("treasury");
     expect(Array.isArray((f as { months?: unknown }).months)).toBe(true);
   });
+
+  it("أي دالة في البرنامج (call): تعديل تليفون ودفعة بالجنيه، مع معاينة وتراجع", () => {
+    const db = freshDb({ withholding: true });
+    recordCapital(db, { investorId: createInvestor(db, { name: "م" }), kind: "deposit", date: "2026-10-01", amountPt: egp(50_000) });
+    assistantApply(db, [{ type: "contract", equipment: "لودر", supplier: "محمد", client: "النور", unit: "day", clientRate: 1500, supplierRate: 1200, startDate: "2026-10-01" }]);
+    const reg = makeRegistry(db);
+    const sid = (db.prepare("SELECT id FROM suppliers").get() as { id: number }).id;
+    const actions = [
+      { type: "call" as const, fn: "updateSupplier", args: { id: sid, name: "محمد علي", phone: "01012345678" } },
+      { type: "call" as const, fn: "supplierPayment", args: { supplierId: sid, date: "2026-10-02", amountPt: 1000, account: "instapay" } },
+    ];
+    const p = callCore(db, reg, "assistantPreview", { actions });
+    expect(p).toMatchObject({ ok: true, value: { ok: true, lines: ["تعديل صاحب معدة: محمد علي", "دفعة لصاحب معدة 1,000 ج"] } });
+    expect((db.prepare("SELECT name FROM suppliers").get() as { name: string }).name).toBe("محمد");
+    const r = callCore(db, reg, "assistantApply", { actions, summary: "تجربة" });
+    expect(r.ok).toBe(true);
+    expect(db.prepare("SELECT name, phone FROM suppliers").get()).toEqual({ name: "محمد علي", phone: "01012345678" });
+    expect((db.prepare("SELECT amount_pt FROM supplier_payments").get() as { amount_pt: number }).amount_pt).toBe(egp(1000));
+    // الرسالة كلها بتترجع مرة واحدة
+    expect(callCore(db, reg, "undo", { actionId: (r as { actionId: string }).actionId }).ok).toBe(true);
+    expect((db.prepare("SELECT name FROM suppliers").get() as { name: string }).name).toBe("محمد");
+    expect(count(db, "supplier_payments")).toBe(0);
+  });
+
+  it("دالة مش في القايمة مرفوضة، والمسح بالـ id محتاج باسورد", () => {
+    const db = freshDb({ withholding: true });
+    assistantApply(db, [{ type: "contract", equipment: "لودر", supplier: "محمد", client: "النور", unit: "day", clientRate: 1500, supplierRate: 1200, startDate: "2026-10-01" }]);
+    const reg = makeRegistry(db);
+    expect(callCore(db, reg, "assistantApply", { actions: [{ type: "call", fn: "undo", args: {} }] })).toMatchObject({ ok: false });
+    const cid = (db.prepare("SELECT id FROM clients").get() as { id: number }).id;
+    recordClientPaymentFor(db, cid);
+    const payId = (db.prepare("SELECT id FROM client_payments").get() as { id: number }).id;
+    const del = [{ type: "call" as const, fn: "delete", args: { entity: "client_payments", id: payId } }];
+    expect(callCore(db, reg, "assistantApply", { actions: del })).toMatchObject({ ok: false, message: "دي محتاجة باسورد الشركة" });
+    expect(callCore(db, reg, "assistantPreview", { actions: del })).toMatchObject({ ok: true, value: { ok: true } });
+    expect(callCore(db, assistantDeletesRegistry(db), "assistantApplyDeletes", { actions: del, summary: "مسح" }).ok).toBe(true);
+    expect(count(db, "client_payments")).toBe(0);
+  });
+
+  it("القراية: النتيجة بالجنيه", () => {
+    const db = freshDb({ withholding: true });
+    recordCapital(db, { investorId: createInvestor(db, { name: "م" }), kind: "deposit", date: "2026-10-01", amountPt: egp(100_000) });
+    const r = callCore(db, makeRegistry(db), "assistantRead", { fn: "treasury", args: {} }) as { ok: boolean; value: unknown };
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(r.value)).toContain("100000");
+    expect(callCore(db, makeRegistry(db), "assistantRead", { fn: "createSupplier", args: { name: "x" } }).ok).toBe(false);
+  });
 });
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function recordClientPaymentFor(db: any, clientId: number) {
+  makeRegistry(db).clientPayment({ clientId, date: "2026-10-05", amountPt: egp(5000) });
+}

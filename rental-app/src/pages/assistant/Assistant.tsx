@@ -3,16 +3,55 @@ import { api, shellApi } from "../../api/client";
 import type { AssistantAction } from "../../../core/ai/assistant";
 import { Button, PageHeader } from "../../components/ui";
 import { TextInput } from "../../components/Field";
+import { catalogText, PAGES } from "../../../core/ai/catalog";
+import { footerItems, navItems, OPEN_EVENT, OpenRequest, SectionId } from "../../nav";
 
 // المساعد: تكتب اللي حصل بالعامية، والذكاء الاصطناعي يفهمه ويقولك هيسجل إيه.
 // مفيش حاجة بتتسجل غير لما تدوس «سجّل»، والتسجيل بيتعمل بنفس دوال البرنامج
 // (فيه تراجع زي أي تعديل تاني من سجل التعديلات). المسح بباسورد الشركة بس.
 // بيجاوب كمان على "إزاي أعمل كذا" وعلى أسئلة الأرقام (كسبت كام، النسبة…).
 // المحادثة محفوظة على الجهاز ده.
+// يقدر يعمل أي حاجة في البرنامج (core/ai/catalog.ts): يقرا أي رقم لوحده (من غير
+// ما يسأل)، ويضيف ويعدّل ويمسح بعد ما يقولك هيعمل إيه وتوافق، ويفتح أي صفحة ويطلع PDF.
 
 type Msg =
   | { role: "user"; text: string }
-  | { role: "assistant"; text: string; actions?: AssistantAction[]; lines?: string[]; problem?: string; state?: "pending" | "saved" | "cancelled" | "error" };
+  | {
+      role: "assistant";
+      text: string;
+      actions?: AssistantAction[];
+      lines?: string[];
+      problem?: string;
+      state?: "pending" | "saved" | "cancelled" | "error";
+      /** صفحات يفتحها (وممكن PDF) */
+      opens?: AssistantAction[];
+      /** قرا إيه عشان يجاوب */
+      looked?: string[];
+    };
+
+const pageLabel = (id: string) => [...navItems, ...footerItems].find((i) => i.id === id)?.label ?? id;
+const READ_LABEL: Record<string, string> = {
+  dashboard: "الرئيسية",
+  sarki: "السركي",
+  contractOptions: "العقود",
+  suppliers: "أصحاب المعدات",
+  partySheet: "حساب العقد",
+  clients: "الشركات",
+  drivers: "السواقين",
+  management: "الإدارة",
+  investors: "المستثمرين",
+  treasury: "الخزنة",
+  accounts: "حسابات الخزنة",
+  tax: "الضرايب",
+  activity: "سجل التعديلات",
+  settings: "الإعدادات",
+  deletePreview: "اللي هيتمسح",
+};
+const open = (a: AssistantAction) => {
+  if (!a.page || !(PAGES as readonly string[]).includes(a.page)) return;
+  const detail: OpenRequest = { page: a.page as SectionId, id: a.id ?? undefined, month: a.month ?? undefined, pdf: !!a.pdf };
+  window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail }));
+};
 
 const STORE = "mk-assistant-chat";
 const loadChat = (): Msg[] => {
@@ -38,7 +77,13 @@ const EXAMPLES = [
   "اللودر اشتغل من ١ لحد ١٠ الشهر ده",
   "كسبت كام الشهر ده؟ ومكسبي كام في المية على فلوسي؟",
   "إزاي أعمل عقد جديد؟",
+  "طلّعلي تصفية محمد علي PDF",
+  "غيّر تليفون صاحب المعدة محمد علي لـ 01012345678",
 ];
+
+const PASSWORD_FNS = new Set(["delete", "closeMonth", "setRates", "setWithholding", "adjustment"]);
+const needsPassword = (actions?: AssistantAction[]) => !!actions?.some((a) => a.type === "delete" || (a.type === "call" && PASSWORD_FNS.has(String(a.fn))));
+const isDelete = (actions?: AssistantAction[]) => !!actions?.some((a) => a.type === "delete" || (a.type === "call" && a.fn === "delete"));
 
 export default function Assistant() {
   const [msgs, setMsgs] = useState<Msg[]>(loadChat);
@@ -65,22 +110,44 @@ export default function Assistant() {
     try {
       const [names, facts] = await Promise.all([api.assistantContext(), api.assistantFacts()]);
       const context = { ...names, facts };
-      const r = await shellApi.askAssistant({ text: t, context, history });
+      const catalog = catalogText();
+      // لو محتاج يقرا حاجة (تصفية، خزنة، سركي…) البرنامج بيقراها ويبعتهاله، لحد ٤ مرات
+      const reads: { fn: string; args?: unknown; result: unknown }[] = [];
+      const looked: string[] = [];
+      let r = await shellApi.askAssistant({ text: t, context, history, catalog });
+      for (let round = 0; r.ok && round < 4; round++) {
+        const want = r.actions.filter((a) => a.type === "read" && a.fn).slice(0, 6);
+        if (!want.length) break;
+        for (const a of want) {
+          let result: unknown;
+          try {
+            result = JSON.stringify(await api.assistantRead(a.fn!, a.args ?? {})).slice(0, 30_000);
+          } catch (e) {
+            result = { error: (e as Error).message };
+          }
+          reads.push({ fn: a.fn!, args: a.args, result });
+          looked.push(READ_LABEL[a.fn!] ?? a.fn!);
+        }
+        r = await shellApi.askAssistant({ text: t, context, history, catalog, reads });
+      }
       if (!r.ok) {
         setMsgs((m) => [...m, { role: "assistant", text: r.message, state: "error" }]);
         return;
       }
-      if (!r.actions.length) {
-        setMsgs((m) => [...m, { role: "assistant", text: r.reply || "مفهمتش — اكتبها تاني بتفاصيل أكتر" }]);
+      const opens = r.actions.filter((a) => a.type === "open" && a.page);
+      const todo = r.actions.filter((a) => a.type !== "read" && a.type !== "open");
+      const seen = looked.length ? [...new Set(looked)] : undefined;
+      if (!todo.length) {
+        setMsgs((m) => [...m, { role: "assistant", text: r.reply || "مفهمتش — اكتبها تاني بتفاصيل أكتر", opens, looked: seen }]);
         return;
       }
       // قبل ما يتسجل: البرنامج يجرّب ويقول هيعمل إيه بالظبط
-      const p = await api.assistantPreview(r.actions);
+      const p = await api.assistantPreview(todo);
       setMsgs((m) => [
         ...m,
         p.ok
-          ? { role: "assistant", text: r.reply, actions: r.actions, lines: p.lines, state: "pending" }
-          : { role: "assistant", text: r.reply, actions: r.actions, problem: p.message, state: "error" },
+          ? { role: "assistant", text: r.reply, actions: todo, lines: p.lines, state: "pending", opens, looked: seen }
+          : { role: "assistant", text: r.reply, actions: todo, problem: p.message, state: "error", opens, looked: seen },
       ]);
     } catch (e) {
       setMsgs((m) => [...m, { role: "assistant", text: (e as Error).message, state: "error" }]);
@@ -94,7 +161,7 @@ export default function Assistant() {
     if (m.role !== "assistant" || !m.actions) return;
     setBusy(true);
     try {
-      const deleting = m.actions.some((a) => a.type === "delete");
+      const deleting = needsPassword(m.actions);
       if (deleting && !password) throw new Error("اكتب باسورد الشركة عشان تمسح");
       const lines = await api.assistantApply(m.actions, m.text || (m.lines ?? []).join("، "), deleting ? password : undefined);
       setPassword("");
@@ -134,6 +201,7 @@ export default function Assistant() {
             </div>
           ) : (
             <div key={i} className="justify-self-end max-w-[90%] w-full sm:w-auto rounded-2xl rounded-se-sm border border-line bg-surface-2 px-4 py-3 grid gap-2">
+              {m.looked && <div className="text-xs text-muted">قريت: {m.looked.join("، ")}</div>}
               {m.text && <div className="whitespace-pre-wrap">{m.text}</div>}
               {m.lines && m.lines.length > 0 && (
                 <ul className="grid gap-1 text-sm list-none p-0 m-0">
@@ -146,16 +214,25 @@ export default function Assistant() {
                 </ul>
               )}
               {m.problem && <div className="text-sm font-semibold text-out">{m.problem}</div>}
-              {m.state === "pending" && m.actions?.some((a) => a.type === "delete") && (
+              {m.opens && m.opens.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {m.opens.map((a, k) => (
+                    <Button key={k} onClick={() => open(a)}>
+                      {a.pdf ? `PDF — ${pageLabel(a.page!)}` : `افتح ${pageLabel(a.page!)}`}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              {m.state === "pending" && needsPassword(m.actions) && (
                 <label className="grid gap-1 text-sm">
-                  <span className="font-semibold text-out">ده مسح — اكتب باسورد الشركة:</span>
+                  <span className="font-semibold text-out">{isDelete(m.actions) ? "ده مسح" : "دي حاجة مبترجعش"} — اكتب باسورد الشركة:</span>
                   <TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" className="max-w-[220px]" />
                 </label>
               )}
               {m.state === "pending" && (
                 <div className="flex gap-2 pt-1">
-                  <Button primary danger={m.actions?.some((a) => a.type === "delete")} onClick={() => save(i)} disabled={busy}>
-                    {m.actions?.some((a) => a.type === "delete") ? "امسح" : "سجّل"}
+                  <Button primary danger={needsPassword(m.actions)} onClick={() => save(i)} disabled={busy}>
+                    {isDelete(m.actions) ? "امسح" : "نفّذ"}
                   </Button>
                   <Button onClick={() => update(i, { state: "cancelled" })} disabled={busy}>
                     لأ

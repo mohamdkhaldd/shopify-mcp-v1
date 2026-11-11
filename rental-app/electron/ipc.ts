@@ -9,7 +9,8 @@ import { createClient, createEquipment, createExpenseCategory, createInvestor, c
 import { ManagerShare, setContractManagers } from "../core/services/managers";
 import { markDelivered, Money, recordHold, recordTransfer, returnHold, saveAccount } from "../core/services/ledger";
 import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, recordTaxPayment, reinvestProfit } from "../core/services/ledger";
-import { assistantApply, AssistantAction, assistantContext, assistantFacts, assistantPreview, hasDelete } from "../core/ai/assistant";
+import { assistantApply, AssistantAction, assistantContext, assistantFacts, assistantPreview, CallRunner, hasDelete, hasNotUndoable } from "../core/ai/assistant";
+import { PASSWORD_CALLS, READ_CATALOG, toHuman, toInternal, WRITE_CATALOG } from "../core/ai/catalog";
 import { createDriver, DriverInput, driversView, recordDriverPayment, updateDriver } from "../core/services/drivers";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
 
@@ -51,12 +52,17 @@ export function makeRegistry(db: Db) {
 
     // المساعد (الكلام بيتفهم على السيرفر، والتسجيل هنا بنفس دوال البرنامج)
     assistantContext: () => assistantContext(db),
-    assistantPreview: (a: { actions: AssistantAction[] }) => assistantPreview(db, a.actions),
+    assistantPreview: (a: { actions: AssistantAction[] }) => assistantPreview(db, a.actions, assistantCalls(db, true)),
     assistantFacts: () => assistantFacts(db),
-    // المسح من المساعد مش من هنا: لازم باسورد الشركة (shell:assistantApplyDeletes)
+    assistantRead: (a: { fn: string; args?: Record<string, unknown> | null }) => {
+      if (!Object.prototype.hasOwnProperty.call(READ_CATALOG, a.fn)) throw new UserError(`مفيش قراية اسمها «${a.fn}»`);
+      const f = (makeRegistry(db) as unknown as Record<string, (x: unknown) => unknown>)[a.fn];
+      return toHuman(f(toInternal(a.args ?? {}, a.fn)));
+    },
+    // المسح (وأي حاجة مبترجعش) من المساعد مش من هنا: لازم باسورد الشركة (shell:assistantApplyDeletes)
     assistantApply: (a: { actions: AssistantAction[]; summary?: string }) => {
-      if (hasDelete(a.actions)) throw new UserError("المسح من المساعد محتاج باسورد الشركة");
-      return assistantApply(db, a.actions);
+      if (hasDelete(a.actions)) throw new UserError("دي محتاجة باسورد الشركة");
+      return assistantApply(db, a.actions, assistantCalls(db, false));
     },
 
     // السواقين
@@ -246,7 +252,7 @@ function labelFor(db: Db, fn: string, a: any): string | null {
 }
 
 /** الحاجات اللي بتعرض بس (من غير تعديل) — دي بس اللي بتشتغل والاشتراك خالص */
-const READ_CALLS = new Set(["assistantContext", "assistantFacts", "assistantPreview", "drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
+const READ_CALLS = new Set(["assistantContext", "assistantFacts", "assistantPreview", "assistantRead", "drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
 export const isReadCall = (fn: string) => READ_CALLS.has(fn);
 
 /** التشغيل: أي قناة بتعدّل أو بتضيف (create / delete / update / set …) — بتتقفل والاشتراك خالص */
@@ -255,7 +261,27 @@ export const isOperationsWrite = (channel: string) =>
 
 /** المساعد لما فيه مسح: بيتنده بعد ما باسورد الشركة يتأكد (في main / backend). */
 export function assistantDeletesRegistry(db: Db) {
-  return { assistantApplyDeletes: (a: { actions: AssistantAction[]; summary?: string }) => assistantApply(db, a.actions) } as unknown as Registry;
+  return { assistantApplyDeletes: (a: { actions: AssistantAction[]; summary?: string }) => assistantApply(db, a.actions, assistantCalls(db, true)) } as unknown as Registry;
+}
+
+/**
+ * المساعد بينفذ أي دالة تعديل من القايمة (core/ai/catalog.ts) بنفس دوال الشاشات.
+ * الفلوس جاية بالجنيه وبتتحوّل هنا. withPassword = الباسورد اتأكد (أو معاينة بس).
+ */
+function assistantCalls(db: Db, withPassword: boolean): CallRunner {
+  return (fn, raw) => {
+    if (!Object.prototype.hasOwnProperty.call(WRITE_CATALOG, fn)) throw new UserError(`المساعد ميعرفش يعمل «${fn}»`);
+    if (PASSWORD_CALLS.has(fn) && !withPassword) throw new UserError("دي محتاجة باسورد الشركة");
+    const args: Record<string, unknown> = { ...(toInternal(raw, fn) as Record<string, unknown>), confirmNegative: true };
+    const label = labelFor(db, fn, args) ?? fn;
+    if (fn === "delete") {
+      const p = deletePreview(db, args.entity as Parameters<typeof deletePreview>[1], Number(args.id));
+      if (p.blocked) throw new UserError(p.blocked);
+    }
+    const f = (makeRegistry(db) as unknown as Record<string, (x: unknown) => unknown>)[fn];
+    f(args);
+    return label;
+  };
 }
 
 export function callCore(db: Db, registry: Registry, fn: string, args: unknown) {
@@ -266,7 +292,7 @@ export function callCore(db: Db, registry: Registry, fn: string, args: unknown) 
     if (!label) return { ok: true, value: f(args ?? {}) };
     const r = runAction(db, label, () => f(args ?? {}));
     // closing a month, corrections and rate changes stay in the log but can't be undone
-    return { ok: true, value: r.value, actionId: r.actionId, label, undoable: !["closeMonth", "adjustment", "setRates", "setWithholding"].includes(fn) };
+    return { ok: true, value: r.value, actionId: r.actionId, label, undoable: !["closeMonth", "adjustment", "setRates", "setWithholding"].includes(fn) && !(fn.startsWith("assistantApply") && hasNotUndoable((args as { actions?: AssistantAction[] })?.actions ?? [])) };
   } catch (err) {
     if (err instanceof UserError) return { ok: false, message: err.message, code: err.code };
     // SQLite RAISE(ABORT, '...') messages from the guard triggers are Arabic and meant for the user

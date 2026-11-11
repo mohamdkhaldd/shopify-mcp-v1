@@ -89,6 +89,7 @@ export const api = {
   assistantContext: () => call<AssistantContext>("assistantContext"),
   assistantPreview: (actions: AssistantAction[]) => call<{ ok: true; lines: string[] } | { ok: false; message: string }>("assistantPreview", { actions }),
   assistantFacts: () => call<unknown>("assistantFacts"),
+  assistantRead: (fn: string, args?: unknown) => call<unknown>("assistantRead", { fn, args }),
   /** password: لو القايمة فيها مسح (لازم باسورد الشركة) */
   assistantApply: async (actions: AssistantAction[], summary: string, password?: string) => {
     if (password === undefined) return call<string[]>("assistantApply", { actions, summary });

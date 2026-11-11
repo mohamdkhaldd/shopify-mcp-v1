@@ -8,6 +8,7 @@ import { computeBooks } from "../services/books";
 import { managersReport } from "../services/managers";
 import { clientStatement, supplierStatement } from "../services/reports";
 import { Deletable, deleteEntity, deletePreview } from "../services/deletion";
+import { NOT_UNDOABLE_CALLS, PASSWORD_CALLS } from "./catalog";
 
 // المساعد: المستخدم بيكتب بالعامية ("دخلت لودر صاحبه محمد لشركة النور بـ ١٥٠٠
 // وصاحبه ياخد ١٢٠٠")، والذكاء الاصطناعي (على السيرفر) بيحوّل الكلام لقايمة
@@ -29,7 +30,13 @@ export type AssistantActionType =
   | "supplier_deduction"
   | "driver"
   | "driver_payment"
-  | "delete";
+  | "delete"
+  /** أي دالة تعديل في البرنامج بالاسم (core/ai/catalog.ts) */
+  | "call"
+  /** قراية أرقام/بيانات — البرنامج بينفذها ويبعت النتيجة للذكاء الاصطناعي */
+  | "read"
+  /** فتح صفحة (ولو pdf: يطلع منها PDF) */
+  | "open";
 
 /** فعل واحد. الفلوس بالجنيه، والتواريخ YYYY-MM-DD، والأسماء زي ما المستخدم بيقولها. */
 export interface AssistantAction {
@@ -63,7 +70,18 @@ export interface AssistantAction {
   overtimeRate?: number | null;
   /** delete: إيه اللي يتمسح (supplier / client / equipment / driver / contract) */
   target?: "supplier" | "client" | "equipment" | "driver" | "contract" | null;
+  /** call / read: اسم الدالة، و args بالجنيه/بالمية/بالساعات */
+  fn?: string | null;
+  args?: Record<string, unknown> | null;
+  /** open: الصفحة، والـ id (صاحب معدة / شركة / عقد / سواق)، والشهر، و pdf */
+  page?: string | null;
+  id?: number | null;
+  month?: string | null;
+  pdf?: boolean | null;
 }
+
+/** بينفذ دالة تعديل بالاسم ويرجّع سطر بالعربي — بيتعمل في electron/ipc.ts */
+export type CallRunner = (fn: string, args: Record<string, unknown>) => string;
 
 type Named = { id: number; name: string };
 
@@ -111,20 +129,21 @@ export function assistantContext(db: Db) {
   const q = <T>(sql: string) => db.prepare(sql).all() as T[];
   return {
     today: today(),
-    suppliers: q<{ name: string }>("SELECT name FROM suppliers WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 150").map((r) => r.name),
-    clients: q<{ name: string; kind: string }>("SELECT name, kind FROM clients WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 150"),
-    equipment: q<{ name: string; supplier: string }>(
-      "SELECT e.name, s.name AS supplier FROM equipment e JOIN suppliers s ON s.id = e.supplier_id WHERE e.deleted_at IS NULL ORDER BY e.id DESC LIMIT 200",
+    suppliers: q<{ id: number; name: string }>("SELECT id, name FROM suppliers WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 150"),
+    clients: q<{ id: number; name: string; kind: string }>("SELECT id, name, kind FROM clients WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 150"),
+    equipment: q<{ id: number; name: string; supplier: string }>(
+      "SELECT e.id, e.name, s.name AS supplier FROM equipment e JOIN suppliers s ON s.id = e.supplier_id WHERE e.deleted_at IS NULL ORDER BY e.id DESC LIMIT 200",
     ),
-    contracts: q<{ equipment: string; client: string; supplier: string; site: string | null; ended: number }>(
-      `SELECT e.name AS equipment, cl.name AS client, s.name AS supplier, c.site_name AS site, (c.status <> 'active') AS ended
+    contracts: q<{ id: number; code: string; name: string | null; equipment: string; client: string; supplier: string; site: string | null; unit: string; start: string; end: string | null; ended: number }>(
+      `SELECT c.id, c.code, c.name, e.name AS equipment, cl.name AS client, s.name AS supplier, c.site_name AS site, c.unit, c.start_date AS start, c.end_date AS end, (c.status <> 'active') AS ended
        FROM contracts c JOIN equipment e ON e.id = c.equipment_id JOIN clients cl ON cl.id = c.client_id JOIN suppliers s ON s.id = c.supplier_id
        WHERE c.deleted_at IS NULL ORDER BY c.id DESC LIMIT 200`,
     ),
-    drivers: q<{ name: string; equipment: string | null }>(
-      "SELECT d.name, e.name AS equipment FROM drivers d LEFT JOIN equipment e ON e.id = d.equipment_id WHERE d.deleted_at IS NULL ORDER BY d.id DESC LIMIT 100",
+    drivers: q<{ id: number; name: string; equipment: string | null }>(
+      "SELECT d.id, d.name, e.name AS equipment FROM drivers d LEFT JOIN equipment e ON e.id = d.equipment_id WHERE d.deleted_at IS NULL ORDER BY d.id DESC LIMIT 100",
     ),
-    expenseCategories: q<{ name: string }>("SELECT name FROM expense_categories WHERE deleted_at IS NULL ORDER BY name").map((r) => r.name),
+    investors: q<{ id: number; name: string }>("SELECT id, name FROM investors WHERE deleted_at IS NULL ORDER BY id"),
+    expenseCategories: q<{ id: number; name: string }>("SELECT id, name FROM expense_categories WHERE deleted_at IS NULL ORDER BY name"),
     accounts: q<{ key: string; name: string }>("SELECT key, name FROM treasury_accounts WHERE deleted_at IS NULL ORDER BY sort, id"),
     partners: q<{ name: string }>("SELECT DISTINCT name FROM contract_managers WHERE deleted_at IS NULL ORDER BY name").map((r) => r.name),
   };
@@ -167,14 +186,14 @@ export function assistantFacts(db: Db) {
   const payables = supplierCost - books.raw.deductions.reduce((s, d) => s + d.amount_pt, 0) - books.raw.supplierPayments.reduce((s, p) => s + p.amount_pt, 0);
   const totalNet = books.months.reduce((s, m) => s + m.monthNetPt, 0);
   const q = <T>(sql: string) => db.prepare(sql).all() as T[];
-  const clients = q<{ id: number; name: string }>("SELECT id, name FROM clients WHERE deleted_at IS NULL").map((c) => ({
-    name: c.name,
-    stillOwesUs: egpN(clientStatement(db, c.id, now, books).totals.remainingPt),
-  }));
-  const owners = q<{ id: number; name: string }>("SELECT id, name FROM suppliers WHERE deleted_at IS NULL").map((x) => ({
-    name: x.name,
-    weStillOweHim: egpN(supplierStatement(db, x.id, now, books).totals.remainingPt),
-  }));
+  const clients = q<{ id: number; name: string }>("SELECT id, name FROM clients WHERE deleted_at IS NULL").map((c) => {
+    const t = clientStatement(db, c.id, now, books).totals;
+    return { name: c.name, invoicedIncludingTaxes: egpN(t.invoicedPt), paidSoFar: egpN(t.paidPt), stillOwesUs: egpN(t.remainingPt) };
+  });
+  const owners = q<{ id: number; name: string }>("SELECT id, name FROM suppliers WHERE deleted_at IS NULL").map((x) => {
+    const t = supplierStatement(db, x.id, now, books).totals;
+    return { name: x.name, earnedFromSarki: egpN(t.fromSarkiPt), deductions: egpN(t.deductionsPt), paidSoFar: egpN(t.paidPt), weStillOweHim: egpN(t.remainingPt) };
+  });
   const partners = managersReport(db, books, now.slice(0, 7)).people.map((p) => ({
     name: p.name,
     shareThisMonth: egpN(p.monthPt),
@@ -212,7 +231,7 @@ export function assistantFacts(db: Db) {
 }
 
 /** بينفذ القايمة بالترتيب ويرجّع سطر عربي لكل حاجة اتعملت. بيترمي UserError لو حاجة ناقصة. */
-function run(db: Db, actions: AssistantAction[]): string[] {
+function run(db: Db, actions: AssistantAction[], call?: CallRunner): string[] {
   if (!Array.isArray(actions) || !actions.length) throw new UserError("مفيش حاجة تتسجل");
   if (actions.length > 40) throw new UserError("الطلب فيه حاجات كتير أوي — قسّمه على كذا رسالة");
   const suppliers = finder(db, "suppliers", "صاحب معدة");
@@ -401,6 +420,14 @@ function run(db: Db, actions: AssistantAction[]): string[] {
         lines.push(`مسح ${label}${p.count > 1 ? ` — ومعاه: ${p.items.slice(1, 6).join("، ")}${p.count > 6 ? "…" : ""}` : ""} (يترجع من سجل التعديلات)`);
         break;
       }
+      case "call": {
+        if (!call || !a.fn) throw new UserError("العملية دي مش متاحة هنا");
+        lines.push(call(a.fn, (a.args && typeof a.args === "object" ? a.args : {}) as Record<string, unknown>));
+        break;
+      }
+      case "read":
+      case "open":
+        break; // دول بيتعملوا في الشاشة، مش هنا
       default:
         throw new UserError(`مش فاهم نوع العملية: ${(a as { type?: string }).type}`);
     }
@@ -444,16 +471,18 @@ function deleteTarget(db: Db, a: AssistantAction): { entity: Deletable; id: numb
 }
 
 /** القايمة فيها مسح؟ (المسح من المساعد لازم باسورد الشركة) */
-export const hasDelete = (actions: AssistantAction[]) => actions.some((a) => a.type === "delete");
+export const hasDelete = (actions: AssistantAction[]) => actions.some((a) => a.type === "delete" || (a.type === "call" && PASSWORD_CALLS.has(String(a.fn))));
+/** حاجات مبتترجعش (قفل شهر، نسب…) — سطر المساعد في سجل التعديلات ميبقاش فيه تراجع */
+export const hasNotUndoable = (actions: AssistantAction[]) => actions.some((a) => a.type === "call" && NOT_UNDOABLE_CALLS.has(String(a.fn)));
 
 class Rollback extends Error {}
 
 /** يوري هيحصل إيه من غير ما يسجل حاجة: بينفذ ويرجّع في كلامه. */
-export function assistantPreview(db: Db, actions: AssistantAction[]): { ok: true; lines: string[] } | { ok: false; message: string } {
+export function assistantPreview(db: Db, actions: AssistantAction[], call?: CallRunner): { ok: true; lines: string[] } | { ok: false; message: string } {
   let lines: string[] = [];
   try {
     db.transaction(() => {
-      lines = run(db, actions);
+      lines = run(db, actions, call);
       throw new Rollback();
     })();
   } catch (e) {
@@ -466,6 +495,6 @@ export function assistantPreview(db: Db, actions: AssistantAction[]): { ok: true
 }
 
 /** يسجل القايمة كلها مرة واحدة: يا كلها يا ولا حاجة. */
-export function assistantApply(db: Db, actions: AssistantAction[]): string[] {
-  return db.transaction(() => run(db, actions))();
+export function assistantApply(db: Db, actions: AssistantAction[], call?: CallRunner): string[] {
+  return db.transaction(() => run(db, actions, call))();
 }

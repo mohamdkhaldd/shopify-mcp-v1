@@ -186,9 +186,9 @@ function ContractPanel({ v, onDelete, onDone, onError, reload }: { v: OpenSarki;
   );
 }
 
-export default function Sarki() {
-  const [contractId, setContractId] = useState<number | undefined>();
-  const [month, setMonth] = useState<string | undefined>();
+export default function Sarki({ initialId, initialMonth }: { initialId?: number; initialMonth?: string } = {}) {
+  const [contractId, setContractId] = useState<number | undefined>(initialId);
+  const [month, setMonth] = useState<string | undefined>(initialMonth);
   const [v, setV] = useState<SarkiView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);

@@ -232,8 +232,8 @@ function SupplierForm({ initial, onClose, onSaved }: { initial?: { id: number; n
   );
 }
 
-export default function Suppliers() {
-  const [supplierId, setSupplierId] = useState<number | undefined>();
+export default function Suppliers({ initialId }: { initialId?: number } = {}) {
+  const [supplierId, setSupplierId] = useState<number | undefined>(initialId);
   const [v, setV] = useState<SuppliersView | null>(null);
   const [tab, setTab] = useState<Tab>("statement");
   const [error, setError] = useState<string | null>(null);
