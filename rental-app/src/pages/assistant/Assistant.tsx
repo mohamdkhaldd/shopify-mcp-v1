@@ -229,7 +229,7 @@ export default function Assistant() {
   const [showList, setShowList] = useState(false);
   const load = () => {
     const c = convRef.current;
-    api.chatList(c).then(
+    api.chatList(c, 300).then(
       (rows) => {
         if (busyRef.current || convRef.current !== c) return;
         setMsgs((cur) => [...rows.map(fromRow), ...cur.filter((m) => m.id == null)]);
@@ -291,8 +291,10 @@ export default function Assistant() {
     if (!t || busy || !me) return;
     setText("");
     // الرسايل القديمة باسم اللي كتبها (المحادثة مشتركة بين الشركاء)
-    // ذاكرة المحادثة: آخر ٢٠ رسالة فيها، ومعاها اللي اتعمل فعلاً
-    const history = msgs.slice(-20).map((m) => ({ role: m.role, text: memoryOf(m) }));
+    // ذاكرة المحادثة: المحادثة كلها (لحد ١٠٠ رسالة / حوالي ٨٠ ألف حرف)، ومعاها اللي اتعمل فعلاً
+    const all = msgs.slice(-100).map((m) => ({ role: m.role, text: memoryOf(m).slice(0, 3000) }));
+    let size = 0;
+    const history = all.reverse().filter((m) => (size += m.text.length) <= 80_000).reverse();
     setBusy(true);
     busyRef.current = true;
     await push({ role: "user", text: t, ...(pic ? { photo: true } : {}) });
