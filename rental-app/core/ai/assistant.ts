@@ -39,7 +39,9 @@ export type AssistantActionType =
   /** فتح صفحة (ولو pdf: يطلع منها PDF) */
   | "open"
   /** رسالة واتساب جاهزة (زرار في الشات) */
-  | "whatsapp";
+  | "whatsapp"
+  /** صورة سركي: id = العقد، month — البرنامج بيقرا الورقة ويعرضها للمراجعة */
+  | "sarki_photo";
 
 /** فعل واحد. الفلوس بالجنيه، والتواريخ YYYY-MM-DD، والأسماء زي ما المستخدم بيقولها. */
 export interface AssistantAction {
@@ -439,6 +441,7 @@ function run(db: Db, actions: AssistantAction[], call?: CallRunner): string[] {
       case "read":
       case "open":
       case "whatsapp":
+      case "sarki_photo":
         break; // دول بيتعملوا في الشاشة، مش هنا
       default:
         throw new UserError(`مش فاهم نوع العملية: ${(a as { type?: string }).type}`);

@@ -26,7 +26,7 @@ const s = (description: string) => ({ anyOf: [{ type: "string" }, { type: "null"
 const bool = (description: string) => ({ anyOf: [{ type: "boolean" }, { type: "null" }], description });
 const e = (values: string[], description: string) => ({ anyOf: [{ type: "string", enum: values }, { type: "null" }], description });
 
-const TYPES = ["supplier", "client", "equipment", "contract", "work_days", "expense", "client_payment", "supplier_payment", "supplier_deduction", "driver", "driver_payment", "delete", "call", "read", "open", "whatsapp"];
+const TYPES = ["supplier", "client", "equipment", "contract", "work_days", "expense", "client_payment", "supplier_payment", "supplier_deduction", "driver", "driver_payment", "delete", "call", "read", "open", "whatsapp", "sarki_photo"];
 const PAGES = ["home", "sarki", "suppliers", "drivers", "clients", "management", "expenses", "investors", "treasury", "tax", "activity", "settings"];
 const ACTION_PROPS = {
   type: { type: "string", enum: TYPES, description: "نوع العملية" },
@@ -58,8 +58,8 @@ const ACTION_PROPS = {
   fn: s("call / read: اسم الدالة من قايمة دوال البرنامج"),
   argsJson: s("call / read: الخانات JSON زي القايمة بالظبط، مثلاً {\"id\":3,\"name\":\"محمد\",\"phone\":\"010...\"}"),
   page: e(PAGES, "open: الصفحة"),
-  id: n("open: id صاحب المعدة (suppliers) / الشركة (clients) / العقد (sarki) / السواق (drivers)"),
-  month: s("open: الشهر YYYY-MM"),
+  id: n("open: id صاحب المعدة (suppliers) / الشركة (clients) / العقد (sarki) / السواق (drivers). sarki_photo: id العقد من contracts"),
+  month: s("open / sarki_photo: الشهر YYYY-MM"),
   pdf: bool("open: true لو عايز PDF من الصفحة"),
   tab: e(["full", "statement", "sheet", "payments", "deductions"], "open suppliers: full = الملف الكامل (التصفية + الدفعات + الخصومات + السركي) اللي بيتبعت لصاحب المعدة"),
   text: s("whatsapp: نص الرسالة كامل بالعامية"),
@@ -133,7 +133,13 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 - المسح وقفل الشهر وتغيير النسب والتسويات محتاجين باسورد الشركة — البرنامج بيطلبه.
 - لو المستخدم طلب حاجة وناقصها معلومة لازمة (اسم الشركة، تاريخ البداية، السعر، صاحب المعدة، المبلغ، أنهي عقد…): متنفذش ومتخمّنش — actions فاضية، و reply: «ناقص كذا وكذا — قولّي عشان أعمل …». اسأل عن كل الناقص مرة واحدة.
 - whatsapp: رسالة جاهزة للواتساب (phone من السياق، و text = الرسالة كاملة بالعامية). مثلاً «ابعت لمحمد حسابه»: open suppliers id و tab full و pdf true (الملف الكامل PDF) + whatsapp بملخص الحساب وآخر دفعة.
-- لو مش في السياق catalog (نسخة قديمة من البرنامج): متستخدمش call ولا read ولا open ولا whatsapp.
+- لو مش في السياق catalog (نسخة قديمة من البرنامج): متستخدمش call ولا read ولا open ولا whatsapp ولا sarki_photo.
+
+صورة السركي: لو مع الرسالة صورة ورقة سركي:
+- حدد العقد من كلام المستخدم (المعدة، صاحبها، الشركة أو مقاول الباطن — أي اسم منهم بيطابق contracts) ومن المكتوب على الورقة، وارجع action واحد بس: sarki_photo فيه id = id العقد من contracts، و month = YYYY-MM لو اتقال أو مكتوب على الورقة (وإلا null).
+- reply: «هقرا سركي <المعدة> بتاع <صاحبها> في <الشركة> — راجع الأيام ولو تمام دوس سجّل».
+- متقراش الأيام انت — البرنامج هيقرا الورقة ويعرضها جدول للمراجعة.
+- لو مفيش عقد بالأسماء دي أو فيه أكتر من عقد ينفع: actions فاضية واسأل أنهي عقد بالظبط. ولو العقد مش موجود خالص: قوله واعرض تعمله الأول (contract بالسعرين) وبعدين يبعت الصورة تاني.
 
 الشركاء: البرنامج بيستخدمه شركاء الإدارة، والمحادثة واحدة للكل. me في السياق = اسم الشريك اللي بيكلمك دلوقتي، ورسايل الشركاء التانيين في المحادثة مكتوب قبلها اسم اللي كتبها.
 - «من جيبي» / «دفعت من فلوسي» = paidBy = me. «فلان دفع من جيبه» = paidBy فلان. «من الخزنة» = من غير paidBy.

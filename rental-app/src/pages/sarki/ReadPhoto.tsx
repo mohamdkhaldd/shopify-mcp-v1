@@ -23,12 +23,25 @@ const dateOf = (month: string, day: number) => `${month}-${String(day).padStart(
  * overtime, days off and site → the user checks them and types the prices →
  * saved on the company's sarki (the owner's copy follows by itself).
  */
-export function ReadPhoto({ v, onDone, onError }: { v: OpenSarki; onDone: (msg: string) => void; onError: (m: string) => void }) {
+export function ReadPhoto({
+  v,
+  onDone,
+  onError,
+  initialSheet,
+  onCancel,
+}: {
+  v: OpenSarki;
+  onDone: (msg: string) => void;
+  onError: (m: string) => void;
+  /** من المساعد: الورقة اتقرت خلاص — اعرضها للمراجعة على طول */
+  initialSheet?: ReadSheet;
+  onCancel?: () => void;
+}) {
   const c = v.contract;
   const file = useRef<HTMLInputElement>(null);
-  const [state, setState] = useState<"idle" | "reading" | "review" | "saving">("idle");
-  const [sheet, setSheet] = useState<ReadSheet | null>(null);
-  const [rows, setRows] = useState<Row[]>([]);
+  const [state, setState] = useState<"idle" | "reading" | "review" | "saving">(initialSheet ? "review" : "idle");
+  const [sheet, setSheet] = useState<ReadSheet | null>(initialSheet ?? null);
+  const [rows, setRows] = useState<Row[]>(initialSheet ? initialSheet.days.map(toRow) : []);
   const [base, setBase] = useState("8");
   const [rate, setRate] = useState(c.unit === "day" ? ptToInput(c.clientRatePt) : "");
   const [otRate, setOtRate] = useState("");
@@ -109,6 +122,10 @@ export function ReadPhoto({ v, onDone, onError }: { v: OpenSarki; onDone: (msg: 
   }
 
   const input = "w-full min-w-0 rounded-md border border-line bg-surface px-1.5 py-1 text-sm";
+  // من المساعد: بعد الحفظ أو الإلغاء مفيش زرار «اقرا صورة» تاني هنا
+  if (initialSheet && (state === "idle" || state === "reading")) return null;
+  const worked = rows.filter((r) => r.worked);
+  const otTotal = worked.reduce((a, r) => a + (Number(r.overtime) || 0), 0);
   return (
     <div className="no-print px-4 py-3 border-b border-line">
       <input ref={file} type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
@@ -128,6 +145,12 @@ export function ReadPhoto({ v, onDone, onError }: { v: OpenSarki; onDone: (msg: 
             <span className="text-xs text-muted">
               {[sheet?.equipment, sheet?.person, sheet?.month].filter(Boolean).join(" · ")} — راجع كل سطر وعدّل اللي مش مظبوط
             </span>
+          </div>
+          <div className="flex flex-wrap gap-2 text-sm">
+            <span className="rounded-lg bg-in-soft text-in px-2.5 py-1 font-bold">اشتغل {worked.length} يوم</span>
+            <span className="rounded-lg bg-surface-2 px-2.5 py-1 font-bold">إجازة {rows.length - worked.length} يوم</span>
+            {otTotal > 0 && <span className="rounded-lg bg-amber-soft px-2.5 py-1 font-bold">أوفر {otTotal} ساعة</span>}
+            {rows.some((r) => r.unclear) && <span className="rounded-lg bg-out-soft text-out px-2.5 py-1 font-bold">⚠︎ {rows.filter((r) => r.unclear).length} يوم مش واضح — راجعهم</span>}
           </div>
           {sheet?.month && sheet.month !== v.month && (
             <div className="rounded-md bg-amber-soft px-3 py-2 text-sm font-semibold">
@@ -217,7 +240,14 @@ export function ReadPhoto({ v, onDone, onError }: { v: OpenSarki; onDone: (msg: 
             <Button primary disabled={state === "saving" || !rows.length} onClick={save}>
               {state === "saving" ? "بيسجل…" : `سجّل ${rows.length - outside.length} يوم`}
             </Button>
-            <Button disabled={state === "saving"} onClick={() => (setState("idle"), setSheet(null))}>
+            <Button
+              disabled={state === "saving"}
+              onClick={() => {
+                setState("idle");
+                setSheet(null);
+                onCancel?.();
+              }}
+            >
               إلغاء
             </Button>
           </div>

@@ -9,6 +9,9 @@ import type { AssistantCard, AssistantChart } from "../../../core/license/manage
 import { Cards, Chart } from "./Visuals";
 import { appApi } from "../../api/client";
 import type { ChatRow } from "../../../core/services/team";
+import { photoForReading, ReadSheet } from "../../../core/ai/sarkiRead";
+import { ReadPhoto } from "../sarki/ReadPhoto";
+import type { OpenSarki } from "../../api/client";
 
 // المساعد: تكتب اللي حصل بالعامية، والذكاء الاصطناعي يفهمه ويقولك هيسجل إيه.
 // مفيش حاجة بتتسجل غير لما تدوس «سجّل»، والتسجيل بيتعمل بنفس دوال البرنامج
@@ -20,8 +23,10 @@ import type { ChatRow } from "../../../core/services/team";
 // ما يسأل)، ويضيف ويعدّل ويمسح بعد ما يقولك هيعمل إيه وتوافق، ويفتح أي صفحة ويطلع PDF.
 
 type Meta = { id?: number; who?: string | null };
+/** صورة سركي اتقرت: العقد والشهر واللي اتقرا — بيتراجع في الشات ويتسجل */
+type SarkiRead = { contractId: number; month: string; sheet: ReadSheet; title?: string };
 type Msg =
-  | ({ role: "user"; text: string } & Meta)
+  | ({ role: "user"; text: string; photo?: boolean } & Meta)
   | ({
       role: "assistant";
       text: string;
@@ -37,7 +42,43 @@ type Msg =
       chart?: AssistantChart | null;
       /** رسايل واتساب جاهزة */
       sends?: AssistantAction[];
+      sarki?: SarkiRead;
     } & Meta);
+
+const thisMonth = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
+/** مراجعة السركي اللي اتقرا من الصورة جوه الشات (نفس شاشة صفحة السركي) */
+function SarkiReview({ r, onDone, onCancel }: { r: SarkiRead; onDone: (msg: string) => void; onCancel: () => void }) {
+  const [v, setV] = useState<OpenSarki | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    api.sarki(r.contractId, r.month).then(
+      (x) => (x.contract ? setV(x as OpenSarki) : setProblem("العقد ده مش موجود")),
+      (e) => setProblem((e as Error).message),
+    );
+  }, [r.contractId, r.month]);
+  if (problem) return <div className="text-sm font-semibold text-out">{problem}</div>;
+  if (!v) return <div className="text-sm text-muted">بيجهز السركي…</div>;
+  if (v.closed) return <div className="text-sm font-semibold text-out">شهر {r.month} مقفول — مينفعش يتسجل عليه أيام</div>;
+  // السركي بيفتح أقرب شهر للعقد لو الشهر المطلوب برا مدته — ساعتها منسجلش على شهر غلط
+  if (v.month !== r.month)
+    return (
+      <div className="text-sm font-semibold text-out">
+        العقد ده ({v.contract.equipment} — {v.contract.client}) مش شغال في شهر {r.month} — اتأكد من الشهر أو من تاريخ بداية العقد ونهايته، وابعت الصورة تاني.
+      </div>
+    );
+  return (
+    <div className="rounded-xl border border-line bg-surface -mx-2">
+      <div className="px-4 pt-3 text-sm font-bold">
+        سركي {v.contract.equipment} — {v.contract.client} — شهر {r.month}
+      </div>
+      <ReadPhoto v={v} initialSheet={r.sheet} onDone={onDone} onError={setProblem} onCancel={onCancel} />
+    </div>
+  );
+}
 
 const pageLabel = (id: string) => [...navItems, ...footerItems].find((i) => i.id === id)?.label ?? id;
 const READ_LABEL: Record<string, string> = {
@@ -100,6 +141,20 @@ const isDelete = (actions?: AssistantAction[]) => !!actions?.some((a) => a.type 
 
 export default function Assistant() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
+  // صورة سركي مرفقة مع الرسالة الجاية
+  const [photo, setPhoto] = useState<{ image: string; mediaType: string; url: string } | null>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
+  async function pickPhoto(f?: File) {
+    if (!f) return;
+    try {
+      const p = await photoForReading(f);
+      setPhoto({ ...p, url: `data:${p.mediaType};base64,${p.image}` });
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      if (photoInput.current) photoInput.current.value = "";
+    }
+  }
   const [password, setPassword] = useState("");
   const [me, setMe] = useState<string | null | undefined>(undefined);
   const [names, setNames] = useState<string[]>([]);
@@ -152,14 +207,15 @@ export default function Assistant() {
     );
 
   async function send(said = text) {
-    const t = said.trim();
+    const pic = photo;
+    const t = said.trim() || (pic ? "ده سركي — اقراه" : "");
     if (!t || busy || !me) return;
     setText("");
     // الرسايل القديمة باسم اللي كتبها (المحادثة مشتركة بين الشركاء)
     const history = msgs.slice(-8).map((m) => ({ role: m.role, text: m.role === "user" && m.who ? `${m.who}: ${m.text}` : m.text }));
     setBusy(true);
     busyRef.current = true;
-    await push({ role: "user", text: t });
+    await push({ role: "user", text: t, ...(pic ? { photo: true } : {}) });
     try {
       const [ctxNames, facts] = await Promise.all([api.assistantContext(), api.assistantFacts()]);
       const context = { ...ctxNames, facts };
@@ -167,7 +223,7 @@ export default function Assistant() {
       // لو محتاج يقرا حاجة (تصفية، خزنة، سركي…) البرنامج بيقراها ويبعتهاله، لحد ٤ مرات
       const reads: { fn: string; args?: unknown; result: unknown }[] = [];
       const looked: string[] = [];
-      let r = await shellApi.askAssistant({ text: t, context, history, catalog });
+      let r = await shellApi.askAssistant({ text: pic ? `${t}\n(مع الرسالة صورة ورقة سركي)` : t, context, history, catalog, ...(pic ? { image: pic.image, mediaType: pic.mediaType } : {}) });
       for (let round = 0; r.ok && round < 4; round++) {
         const want = r.actions.filter((a) => a.type === "read" && a.fn).slice(0, 6);
         if (!want.length) break;
@@ -187,9 +243,27 @@ export default function Assistant() {
         await push({ role: "assistant", text: r.message, state: "error" });
         return;
       }
+      // صورة سركي: المساعد عرف العقد → البرنامج يقرا الورقة ويعرضها للمراجعة قبل ما تتسجل
+      const sp = pic ? r.actions.find((a) => a.type === "sarki_photo" && a.id) : undefined;
+      if (sp && pic) {
+        const c = ctxNames.contracts.find((x) => x.id === sp.id);
+        const read = await shellApi.readSarki({ image: pic.image, mediaType: pic.mediaType, month: sp.month ?? undefined, hint: c ? `المعدة: ${c.equipment}. الشركة: ${c.client}. صاحب المعدة: ${c.supplier}.` : undefined });
+        if (!read.ok) {
+          await push({ role: "assistant", text: read.message, state: "error" });
+          return;
+        }
+        if (!read.sheet.days.length) {
+          await push({ role: "assistant", text: "ملقتش أيام في الصورة دي — صوّر الورقة كلها بوضوح وابعتها تاني", state: "error" });
+          return;
+        }
+        const month = sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : (read.sheet.month ?? thisMonth());
+        setPhoto(null);
+        await push({ role: "assistant", text: r.reply || "قريت الورقة — راجعها ولو تمام دوس «سجّل»", sarki: { contractId: sp.id!, month, sheet: read.sheet }, state: "pending", cards: r.cards });
+        return;
+      }
       const opens = r.actions.filter((a) => a.type === "open" && a.page);
       const sends = r.actions.filter((a) => a.type === "whatsapp" && a.text);
-      const todo = r.actions.filter((a) => a.type !== "read" && a.type !== "open" && a.type !== "whatsapp");
+      const todo = r.actions.filter((a) => a.type !== "read" && a.type !== "open" && a.type !== "whatsapp" && a.type !== "sarki_photo");
       const seen = looked.length ? [...new Set(looked)] : undefined;
       const extras = { opens, sends, looked: seen, cards: r.cards, chart: r.chart };
       if (!todo.length) {
@@ -294,7 +368,10 @@ export default function Assistant() {
           m.role === "user" ? (
             <div key={i} className="justify-self-start max-w-[85%] grid gap-0.5">
               {m.who && <span className="text-xs font-bold text-amber-deep">{m.who === me ? `${m.who} (انت)` : m.who}</span>}
-              <div className="rounded-2xl rounded-ss-sm bg-amber-soft px-4 py-2.5 whitespace-pre-wrap">{m.text}</div>
+              <div className="rounded-2xl rounded-ss-sm bg-amber-soft px-4 py-2.5 whitespace-pre-wrap">
+                {m.photo && <span className="block text-xs font-bold text-amber-deep mb-1">📷 صورة سركي</span>}
+                {m.text}
+              </div>
             </div>
           ) : (
             <div key={i} className="justify-self-end max-w-[90%] w-full sm:w-auto rounded-2xl rounded-se-sm border border-line bg-surface-2 px-4 py-3 grid gap-2">
@@ -342,7 +419,10 @@ export default function Assistant() {
                   <TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" className="max-w-[220px]" />
                 </label>
               )}
-              {m.state === "pending" && (
+              {m.sarki && m.state === "pending" && (
+                <SarkiReview r={m.sarki} onDone={(msg) => update(i, { state: "saved", lines: [msg] })} onCancel={() => update(i, { state: "cancelled" })} />
+              )}
+              {m.state === "pending" && !m.sarki && (
                 <div className="flex gap-2 pt-1">
                   <Button primary danger={needsPassword(m.actions)} onClick={() => save(i)} disabled={busy}>
                     {isDelete(m.actions) ? "امسح" : "نفّذ"}
@@ -362,7 +442,21 @@ export default function Assistant() {
         <div ref={end} />
       </div>
 
+      {photo && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber bg-amber-soft px-3 py-2">
+          <img src={photo.url} alt="صورة السركي" className="h-16 w-16 object-cover rounded-md" />
+          <div className="text-sm flex-1">
+            <b>صورة سركي جاهزة</b>
+            <div className="text-muted">اكتب ده سركي أنهي معدة (وصاحبها والشركة أو مقاول الباطن) وابعت</div>
+          </div>
+          <Button onClick={() => setPhoto(null)}>شيلها</Button>
+        </div>
+      )}
       <div className="flex gap-2 items-end">
+        <input ref={photoInput} type="file" accept="image/*" className="hidden" onChange={(e) => pickPhoto(e.target.files?.[0])} />
+        <Button onClick={() => photoInput.current?.click()} disabled={busy || !me} title="صورة سركي">
+          📷
+        </Button>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -373,10 +467,10 @@ export default function Assistant() {
             }
           }}
           rows={2}
-          placeholder="مثلاً: صرفت ٥٠٠ سولار للبوكلين النهارده"
+          placeholder={photo ? "مثلاً: ده سركي اللودر بتاع محمد علي في شركة النور" : "مثلاً: صرفت ٥٠٠ سولار للبوكلين النهارده"}
           className="flex-1 resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-[15px] focus:outline-none focus:border-amber"
         />
-        <Button primary onClick={() => send()} disabled={busy || !text.trim() || !me}>
+        <Button primary onClick={() => send()} disabled={busy || (!text.trim() && !photo) || !me}>
           ابعت
         </Button>
       </div>
