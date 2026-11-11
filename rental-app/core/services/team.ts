@@ -27,12 +27,19 @@ export function ensureTeamTables(db: Db) {
   // كل محادثة ليها رقم (زي أي شات AI): «محادثة جديدة» بتبدأ واحدة، والقديمة بتفضل في القايمة
   const cols = (db.prepare("PRAGMA table_info(team_chat)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes("conv")) db.exec("ALTER TABLE team_chat ADD COLUMN conv TEXT");
+  // اللي المساعد اتعلمه من تصحيح الشركاء («لا أنا قصدي كذا») — بيتبعت معاه في كل سؤال
+  db.exec(`CREATE TABLE IF NOT EXISTS team_lessons (
+    id INTEGER PRIMARY KEY,
+    at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    who TEXT,
+    text TEXT NOT NULL
+  )`);
 }
 
 /** المحادثات القديمة (من قبل ما يبقى فيه أكتر من محادثة) ليها الرقم ده */
 export const OLD_CONV = "old";
 
-export const TEAM_TABLES = ["team_log", "team_chat"];
+export const TEAM_TABLES = ["team_log", "team_chat", "team_lessons"];
 
 export function myName(db: Db): string | null {
   const r = db.prepare("SELECT value FROM app_settings WHERE key = 'partner_name'").get() as { value: string } | undefined;
@@ -122,4 +129,19 @@ export function chatConversations(db: Db, limit = 60) {
        FROM team_chat c GROUP BY COALESCE(conv, 'old') ORDER BY last DESC LIMIT ?`,
     )
     .all(limit) as { conv: string; started: string; last: string; count: number; title: string | null; who: string | null }[];
+}
+
+/** الدروس: قواعد الشركة اللي المساعد بيمشي عليها (الأحدث الأول) */
+export function lessonsList(db: Db) {
+  return db.prepare("SELECT id, at, who, text FROM team_lessons ORDER BY at DESC, id DESC LIMIT 200").all() as { id: number; at: string; who: string | null; text: string }[];
+}
+export function lessonAdd(db: Db, text: string) {
+  const t = String(text ?? "").trim().replace(/\s+/g, " ").slice(0, 400);
+  if (!t) return null;
+  const dup = db.prepare("SELECT id FROM team_lessons WHERE text = ?").get(t) as { id: number } | undefined;
+  if (dup) return dup.id;
+  return Number(db.prepare("INSERT INTO team_lessons (who, text) VALUES (?, ?)").run(myName(db), t).lastInsertRowid);
+}
+export function lessonDelete(db: Db, id: number) {
+  db.prepare("DELETE FROM team_lessons WHERE id = ?").run(id);
 }

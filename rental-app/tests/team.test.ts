@@ -55,4 +55,21 @@ describe("الشركاء", () => {
       ["b", "الخزنة فيها كام؟", 1, "محمد خالد"],
     ]);
   });
+
+  it("الدروس: المساعد بيحفظ التصحيح ويبعته مع كل سؤال، وبيتمسح", () => {
+    const db = freshDb({ withholding: true });
+    const reg = makeRegistry(db);
+    callCore(db, reg, "setMe", { name: "محمد خالد" });
+    const actions = [{ type: "call", fn: "lessonAdd", args: { text: "«الكبير» يعني لودر 950 بتاع محمد علي" } }];
+    const p = callCore(db, reg, "assistantPreview", { actions }) as { value: { lines: string[] } };
+    expect(p.value.lines[0]).toBe("المساعد اتعلم: «الكبير» يعني لودر 950 بتاع محمد علي");
+    expect(assistantContext(db).lessons).toEqual([]);
+    callCore(db, reg, "assistantApply", { actions, summary: "درس" });
+    callCore(db, reg, "assistantApply", { actions, summary: "درس" });
+    expect(assistantContext(db).lessons).toEqual(["«الكبير» يعني لودر 950 بتاع محمد علي"]);
+    const id = (callCore(db, reg, "lessons", {}) as { value: { id: number; who: string }[] }).value[0];
+    expect(id.who).toBe("محمد خالد");
+    callCore(db, reg, "lessonDelete", { id: id.id });
+    expect(assistantContext(db).lessons).toEqual([]);
+  });
 });

@@ -60,6 +60,8 @@ export const WRITE_CATALOG: Record<string, string> = {
   // الإعدادات
   setRates: "النسب من تاريخ (مبيترجعش): {effectiveFrom, vat (بالمية، ١٤), tax5 (بالمية، ٥), management (نصيب الإدارة بالمية)}",
   setWithholding: "الاستقطاع من تاريخ (مبيترجعش): {effectiveFrom, bp (بالمية)}",
+  // التعلّم
+  lessonAdd: "احفظ درس/قاعدة للشركة عشان تمشي عليها كل مرة بعد كده: {text} — جملة واضحة (مثلاً «لما حد يقول (الكبير) يقصد لودر 950 بتاع محمد علي»)",
   // المسح
   delete:
     "مسح أي حاجة بالـ id: {entity, id} — entity واحدة من: client_payments, supplier_payments, supplier_deductions, expenses, capital_movements, profit_payouts, tax_payments, work_logs, contracts, equipment, clients, suppliers, investors, expense_categories, drivers, treasury_transfers, treasury_holds",

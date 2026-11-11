@@ -9,7 +9,7 @@ import { managersReport } from "../services/managers";
 import { clientStatement, supplierStatement } from "../services/reports";
 import { Deletable, deleteEntity, deletePreview } from "../services/deletion";
 import { NOT_UNDOABLE_CALLS, PASSWORD_CALLS } from "./catalog";
-import { myName, teamNames } from "../services/team";
+import { lessonsList, myName, teamNames } from "../services/team";
 
 // المساعد: المستخدم بيكتب بالعامية ("دخلت لودر صاحبه محمد لشركة النور بـ ١٥٠٠
 // وصاحبه ياخد ١٢٠٠")، والذكاء الاصطناعي (على السيرفر) بيحوّل الكلام لقايمة
@@ -157,6 +157,8 @@ export function assistantContext(db: Db) {
     expenseCategories: q<{ id: number; name: string }>("SELECT id, name FROM expense_categories WHERE deleted_at IS NULL ORDER BY name"),
     accounts: q<{ key: string; name: string }>("SELECT key, name FROM treasury_accounts WHERE deleted_at IS NULL ORDER BY sort, id"),
     partners: teamNames(db),
+    /** قواعد الشركة اللي المساعد اتعلمها من التصحيح — لازم يمشي عليها */
+    lessons: lessonsList(db).map((l) => l.text),
   };
 }
 export type AssistantContext = ReturnType<typeof assistantContext>;

@@ -295,6 +295,44 @@ function MyName() {
   );
 }
 
+/** اللي المساعد اتعلمه من تصحيح الشركاء — بيمشي عليه في كل سؤال، وتقدر تمسح أي درس. */
+function Lessons() {
+  const [list, setList] = useState<{ id: number; at: string; who: string | null; text: string }[] | null>(null);
+  const load = () => api.lessons().then(setList, () => setList([]));
+  useEffect(() => {
+    load();
+  }, []);
+  if (!list) return null;
+  return (
+    <Panel title="اللي المساعد اتعلمه" hint={list.length ? `${list.length} درس` : "لسه مفيش"}>
+      <div className="px-4 py-3.5 grid gap-2">
+        <div className="text-sm text-muted">لما تصحّح المساعد («لا، أنا قصدي كذا») أو تقوله «افتكر إن…» بيحفظها هنا ويمشي عليها كل مرة بعد كده — على كل أجهزة الشركة.</div>
+        {list.map((l) => (
+          <div key={l.id} className="flex items-start gap-3 rounded-xl border border-line px-3 py-2">
+            <div className="flex-1">
+              <div>{l.text}</div>
+              <div className="text-xs text-muted">
+                {l.who ? `${l.who} · ` : ""}
+                {new Date(l.at).toLocaleDateString("ar-EG")}
+              </div>
+            </div>
+            <Button
+              danger
+              onClick={async () => {
+                if (!window.confirm("تمسح الدرس ده؟ المساعد مش هيمشي عليه تاني.")) return;
+                await api.lessonDelete(l.id);
+                load();
+              }}
+            >
+              امسح
+            </Button>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
 function CompanyPassword() {
   const [has, setHas] = useState<boolean | null>(null);
   const [current, setCurrent] = useState("");
@@ -497,6 +535,7 @@ export default function Settings() {
         <SyncPanel />
         <License plan={v.plan} />
         <MyName />
+        <Lessons />
         <CompanyPassword />
       </div>
     </div>

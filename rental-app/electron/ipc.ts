@@ -10,7 +10,7 @@ import { ManagerShare, setContractManagers } from "../core/services/managers";
 import { markDelivered, Money, recordHold, recordTransfer, returnHold, saveAccount } from "../core/services/ledger";
 import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, recordTaxPayment, reinvestProfit } from "../core/services/ledger";
 import { assistantApply, AssistantAction, assistantContext, assistantFacts, assistantPreview, CallRunner, hasDelete, hasNotUndoable } from "../core/ai/assistant";
-import { chatAdd, chatConversations, chatList, chatUpdate, myName, setMyName, teamLogView, teamNames } from "../core/services/team";
+import { chatAdd, chatConversations, chatList, chatUpdate, lessonAdd, lessonDelete, lessonsList, myName, setMyName, teamLogView, teamNames } from "../core/services/team";
 import { PASSWORD_CALLS, READ_CATALOG, toHuman, toInternal, WRITE_CATALOG } from "../core/ai/catalog";
 import { createDriver, DriverInput, driversView, recordDriverPayment, updateDriver } from "../core/services/drivers";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
@@ -59,6 +59,9 @@ export function makeRegistry(db: Db) {
     teamLog: (a: { from?: string; to?: string }) => teamLogView(db, a),
     chatList: (a: { conv?: string; limit?: number }) => chatList(db, a.conv, a.limit),
     chatConversations: () => chatConversations(db),
+    lessons: () => lessonsList(db),
+    lessonAdd: (a: { text: string }) => lessonAdd(db, a.text),
+    lessonDelete: (a: { id: number }) => lessonDelete(db, a.id),
     chatAdd: (a: { role: "user" | "assistant"; text: string; extra?: unknown; conv?: string }) => chatAdd(db, a),
     chatUpdate: (a: { id: number; extra: unknown }) => chatUpdate(db, a.id, a.extra),
 
@@ -194,6 +197,8 @@ function labelFor(db: Db, fn: string, a: any): string | null {
       if (a.siteName !== undefined) parts.push(`الموقع ← ${a.siteName || "من غير"}`);
       return `تعديل عقد ${c.eq} مع ${c.cl}: ${parts.join("، ") || "مفيش تغيير"}${keep.length ? ` — وزي ما هو: ${keep.join("، ")}` : ""}`;
     }
+    case "lessonAdd":
+      return `المساعد اتعلم: ${String(a.text ?? "").slice(0, 120)}`;
     case "renameContract":
       return a.name?.trim() ? `اسم العقد: ${a.name.trim()}` : "شيل اسم العقد";
     case "reopenContract":
@@ -280,7 +285,7 @@ function labelFor(db: Db, fn: string, a: any): string | null {
 }
 
 /** الحاجات اللي بتعرض بس (من غير تعديل) — دي بس اللي بتشتغل والاشتراك خالص */
-const READ_CALLS = new Set(["me", "teamNames", "teamLog", "chatList", "chatConversations", "assistantContext", "assistantFacts", "assistantPreview", "assistantRead", "drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
+const READ_CALLS = new Set(["me", "teamNames", "teamLog", "chatList", "chatConversations", "lessons", "assistantContext", "assistantFacts", "assistantPreview", "assistantRead", "drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
 export const isReadCall = (fn: string) => READ_CALLS.has(fn);
 
 /** التشغيل: أي قناة بتعدّل أو بتضيف (create / delete / update / set …) — بتتقفل والاشتراك خالص */
