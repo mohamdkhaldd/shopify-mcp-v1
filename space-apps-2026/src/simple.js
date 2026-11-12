@@ -7,10 +7,10 @@ const RINGS = [
   { k: "money", n: { en: "Money", ar: "الفلوس" }, q: { en: "Is it within the budget?", ar: "في حدود الميزانية؟" }, c: "#ffc26b" },
   { k: "data", n: { en: "Data", ar: "الداتا" }, q: { en: "Can the pictures reach Earth?", ar: "الصور هتوصل الأرض؟" }, c: "#c79bff" }];
 const STEP_ORDER = [
-  { k: "rocket", role: "planner", t: { en: "Choose the rocket", ar: "اختار الصاروخ" } },
-  { k: "power", role: "engineer", t: { en: "Choose the power", ar: "اختار الكهربا" } },
-  { k: "science", role: "science", t: { en: "Choose the science tool", ar: "اختار جهاز العلم" } },
-  { k: "comms", role: "comms", t: { en: "Choose the antenna", ar: "اختار الهوائي" } }];
+  { k: "science", role: "science", t: { en: "1. What do we want to discover?", ar: "1. عايزين نكتشف إيه؟" } },
+  { k: "comms", role: "comms", t: { en: "2. How do we send the results home?", ar: "2. هنبعت النتايج للأرض إزاي؟" } },
+  { k: "power", role: "engineer", t: { en: "3. Where does the electricity come from?", ar: "3. الكهربا هتيجي منين؟" } },
+  { k: "rocket", role: "planner", t: { en: "4. Which rocket can carry it all?", ar: "4. أنهي صاروخ هيشيل كل ده؟" } }];
 const ROLE_AR = { planner: "مخطط المهمة", engineer: "مهندس المركبة", science: "رئيس العلماء", comms: "مسؤول الاتصالات" };
 const roleName = r => LANG === "ar" ? ROLE_AR[r] : ROLES[r].name;
 const ROLE_COL = { planner: "#7dffb0", engineer: "#ffb35f", science: "#5fd8ff", comms: "#c79bff" };
@@ -83,13 +83,13 @@ const S_MISSIONS = [
        { k: "p2", icon: "panel3", n: { en: "Big solar panels", ar: "ألواح شمسية كبيرة" }, d: { en: "More power, but heavy, and dust is still a problem.", ar: "كهربا أكتر، بس تقيلة، والتراب لسه مشكلة." }, supply: 6, mass: 4, cost: 25, panel: 10 },
        { k: "p3", icon: "rtg", rtg: true, n: { en: "Nuclear power source (RTG)", ar: "مصدر كهربا نووي (RTG)" }, d: { en: "Works day and night, even in dust storms. Expensive.", ar: "بيشتغل ليل ونهار حتى في عواصف التراب. غالي." }, supply: 6, mass: 2, cost: 70 }],
      science: [
-       { k: "s1", icon: "cam1", instr: "mastcam", n: { en: "3D cameras", ar: "كاميرات 3D" }, d: { en: "Beautiful views, but only see the outside of rocks.", ar: "مناظر حلوة، بس بتشوف الصخور من برا بس." }, mass: 1, power: 1, cost: 20, data: 2, sci: 1 },
-       { k: "s2", icon: "drill", instr: "drill", star: true, n: { en: "Drill + rock lab", ar: "دريل + معمل صخور" }, d: { en: "Drills into rocks and tests what's inside.", ar: "بيحفر في الصخور ويحلل اللي جواها." }, mass: 3, power: 3, cost: 60, data: 1, sci: 3 },
+       { k: "s1", icon: "cam1", instr: "mastcam", n: { en: "3D cameras", ar: "كاميرات 3D" }, d: { en: "Beautiful views, but only see the outside of rocks.", ar: "مناظر حلوة، بس بتشوف الصخور من برا بس." }, mass: 1, power: 1, cost: 20, data: 3, sci: 1 },
+       { k: "s2", icon: "drill", instr: "drill", star: true, n: { en: "Drill + rock lab", ar: "دريل + معمل صخور" }, d: { en: "Drills into rocks and tests what's inside.", ar: "بيحفر في الصخور ويحلل اللي جواها." }, mass: 3, power: 3, cost: 60, data: 2, sci: 3 },
        { k: "s3", icon: "weather", instr: "weather_st", n: { en: "Weather station", ar: "محطة أرصاد" }, d: { en: "Measures wind and dust, but can't find signs of life.", ar: "بتقيس الريح والتراب، بس مش هتلاقي علامات حياة." }, mass: 1, power: 1, cost: 15, data: 1, sci: 1 }],
      comms: [
-       { k: "a1", icon: "dish1", ant: "small", n: { en: "Small antenna to Earth", ar: "هوائي صغير للأرض" }, d: { en: "Light, but very slow from so far.", ar: "خفيف، بس بطيء جداً من المسافة دي." }, cap: .5, mass: 1, power: 1, cost: 5 },
-       { k: "a2", icon: "dish3", ant: "large", n: { en: "Big dish to Earth", ar: "طبق كبير للأرض" }, d: { en: "Faster, but heavy.", ar: "أسرع، بس تقيل." }, cap: 1.2, mass: 2, power: 2, cost: 20 },
-       { k: "a3", icon: "relay", ant: "medium", relay: true, n: { en: "Relay through Mars orbiters", ar: "توصيل عن طريق أقمار المريخ" }, d: { en: "Send data to satellites above you; they pass it home.", ar: "ابعت الداتا للأقمار اللي فوقك، وهما يوصّلوها للأرض." }, cap: 4, mass: 1, power: 1, cost: 30 }] },
+       { k: "a1", icon: "dish1", ant: "small", n: { en: "Small antenna to Earth", ar: "هوائي صغير للأرض" }, d: { en: "Light, but very slow from so far.", ar: "خفيف، بس بطيء جداً من المسافة دي." }, cap: 1, mass: 1, power: 1, cost: 5 },
+       { k: "a2", icon: "dish3", ant: "large", n: { en: "Big dish to Earth", ar: "طبق كبير للأرض" }, d: { en: "Faster, but heavy.", ar: "أسرع، بس تقيل." }, cap: 2, mass: 2, power: 2, cost: 20 },
+       { k: "a3", icon: "relay", ant: "medium", relay: true, n: { en: "Relay through Mars orbiters", ar: "توصيل عن طريق أقمار المريخ" }, d: { en: "Send data to satellites above you; they pass it home.", ar: "ابعت الداتا للأقمار اللي فوقك، وهما يوصّلوها للأرض." }, cap: 6, mass: 1, power: 1, cost: 30 }] },
    events: ["dust", "delay"],
    fact: { en: "NASA's Perseverance landed in an old lake called Jezero Crater in 2021. It runs on a nuclear power source, drives itself around rocks, and drills rock samples.", ar: "الروڤر Perseverance بتاع ناسا نزل في بحيرة قديمة اسمها فوهة جيزيرو سنة 2021. بيشتغل بمصدر كهربا نووي، وبيسوق نفسه بعيد عن الصخور، وبيحفر ياخد عينات." } }
 ];
@@ -148,6 +148,54 @@ function sEngineDesign(m, p) {
     antenna: p.comms ? p.comms.ant : "medium", relay: !!(p.comms && p.comms.relay), instr: p.science ? [p.science.instr] : [], adcs: "precise", shield: "light" }) };
 }
 
+
+/* what this step must satisfy, from the choices before it */
+function sNeed(k) {
+  const m = SM(), p = SA.pick;
+  if (k === "comms") return p.science ? p.science.data : null;
+  if (k === "power") return p.science && p.comms ? m.basePower + p.science.power + p.comms.power : null;
+  if (k === "rocket") return p.science && p.comms && p.power ? m.baseMass + p.science.mass + p.comms.mass + p.power.mass : null;
+  return null;
+}
+const CAPK = { comms: "cap", power: "supply", rocket: "lift" };
+function sSpentWithout(k) { return STEP_ORDER.reduce((a, s) => a + (s.k !== k && SA.pick[s.k] ? SA.pick[s.k].cost : 0), 0); }
+function sFit(c, k) {
+  const need = sNeed(k), m = SM(), total = sSpentWithout(k) + c.cost;
+  const enough = need == null ? null : c[CAPK[k]] >= need;
+  return { need, enough, over: total > m.budget, total };
+}
+function sChips(c, k) {
+  const W = (n, en, ar, cls) => `<span class="chip2 ${cls || ""}">${L({ en, ar })} <b>${n}</b></span>`;
+  const out = [];
+  if (k === "science") out.push(W(c.data, "pictures/day", "صور في اليوم", "cdata"));
+  if (k === "comms") out.push(W(c.cap, "sends/day", "يبعت في اليوم", "cdata"));
+  if (k === "power") out.push(W(c.supply, "makes power", "بيعمل كهربا", "cpow"));
+  if (k === "rocket") out.push(W(c.lift, "can lift", "يشيل وزن", "cmass"));
+  if (c.power) out.push(W(c.power, "uses power", "بياكل كهربا", "cpow"));
+  if (c.mass) out.push(W(c.mass, "weight", "وزن", "cmass"));
+  out.push(W(c.cost, "cost", "فلوس", "cmoney"));
+  return `<span class="chips3">${out.join("")}</span>`;
+}
+function sNeedLine(k) {
+  const m = SM(), n = sNeed(k);
+  if (k === "science") return L({ en: `The question: ${m.goal.en} Only one tool can answer it: look for ★.`, ar: `السؤال: ${m.goal.ar} جهاز واحد بس يقدر يجاوب: دوّر على ★.` });
+  if (n == null) return L({ en: "Finish the steps before this one first.", ar: "خلّص الخطوات اللي قبل دي الأول." });
+  if (k === "comms") return L({ en: `Your science tool makes ${n} pictures a day. Pick an antenna that sends at least ${n}.`, ar: `جهاز العلم بتاعك بيطلّع ${n} صور في اليوم. اختار هوائي يبعت ${n} على الأقل.` });
+  if (k === "power") return L({ en: `Your science tool, antenna and computer need ${n} power. Pick a source that makes at least ${n}.`, ar: `جهاز العلم والهوائي والكمبيوتر محتاجين ${n} كهربا. اختار مصدر يعمل ${n} على الأقل.` });
+  if (k === "rocket") return L({ en: `Your spacecraft now weighs ${n}. Pick a rocket that can lift at least ${n}.`, ar: `مركبتك وزنها دلوقتي ${n}. اختار صاروخ يشيل ${n} على الأقل.` });
+}
+function sCardHtml(c, k) {
+  const sel = SA.pick[k] && SA.pick[k].k === c.k, f = sFit(c, k), cards = SM().steps[k];
+  const okCards = cards.filter(x => { const g = sFit(x, k); return g.enough !== false && !g.over; });
+  const best = k !== "science" && f.enough && !f.over && okCards.length && c.cost === Math.min(...okCards.map(x => x.cost));
+  let badge = "";
+  if (k === "science") badge = c.star ? `<span class="fit ok">★ ${L({ en: "Answers the question", ar: "بيجاوب على السؤال" })}</span>` : `<span class="fit no">✗ ${L({ en: "Can't answer the question", ar: "مش بيجاوب على السؤال" })}</span>`;
+  else if (f.enough === false) badge = `<span class="fit no">✗ ${L({ en: `Not enough (need ${f.need})`, ar: `مش كفاية (محتاج ${f.need})` })}</span>`;
+  else if (f.over) badge = `<span class="fit no">✗ ${L({ en: "Not enough money", ar: "الفلوس مش هتكفي" })}</span>`;
+  else if (f.enough) badge = `<span class="fit ok">✓ ${L({ en: "Enough", ar: "كفاية" })}</span>${best ? `<span class="fit best">👍 ${L({ en: "Best value", ar: "الأوفر" })}</span>` : ""}`;
+  return `<button type="button" class="ccard ${sel ? "sel" : ""} ${(k === "science" ? !c.star : f.enough === false || f.over) ? "dim" : ""}" data-scard="${c.k}">
+    <span class="cicon">${sIcon(c.icon)}</span><b>${L(c.n)}</b><span class="cd">${L(c.d)}</span>${sChips(c, k)}<span class="fits">${badge}</span></button>`;
+}
 /* ---- icons (hologram line art) ---- */
 function sIcon(k) {
   const st = 'fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"';
@@ -214,10 +262,8 @@ function sbrief() {
     <div class="briefgrid"><span class="globe big" style="background-image:url(tex/${m.planet})"></span>
     <div><div class="kick">${L({ en: "Mission briefing", ar: "شرح المهمة" })}</div><h2 class="hh">${L(m.name)}</h2>
       <p class="goalbox"><b>${L({ en: "Your goal", ar: "هدفك" })}:</b> ${L(m.goal)}</p>
-      <ol class="steps3">
-        <li>${L({ en: "Your team makes 4 choices: rocket, power, science tool, antenna.", ar: "التيم بياخد 4 قرارات: الصاروخ، والكهربا، وجهاز العلم، والهوائي." })}</li>
-        <li>${L({ en: "Every choice moves the 4 rings. If a ring turns red, something will go wrong.", ar: "كل اختيار بيحرّك الأربع دواير. لو دايرة قلبت حمرا، حاجة هتبوظ." })}</li>
-        <li>${L({ en: "Launch, then make 2 quick decisions when surprises happen.", ar: "اطلق، وبعدين خد قرارين سريعين لما تحصل مفاجآت." })}</li></ol>
+      <div class="chain">${[["science", { en: "Science tool", ar: "جهاز العلم" }, { en: "Answers the question", ar: "بيجاوب على السؤال" }], ["comms", { en: "Antenna", ar: "الهوائي" }, { en: "Sends its pictures", ar: "بيبعت صوره" }], ["engineer", { en: "Power", ar: "الكهربا" }, { en: "Feeds everything", ar: "بتشغّل كل حاجة" }], ["planner", { en: "Rocket", ar: "الصاروخ" }, { en: "Lifts it all", ar: "بيشيل كل ده" }]].map(([r, t, d], i) => `${i ? '<span class="arrow">→</span>' : ""}<div class="link" style="--sc:${ROLE_COL[r]}"><span>${i + 1}</span><b>${L(t)}</b><em>${L(d)}</em></div>`).join("")}</div>
+      <p class="rule">${L({ en: "The rule: start from the question, then make each choice just big enough for the one before it. Bigger isn't always better: it adds weight and costs money.", ar: "القاعدة: ابدأ من السؤال، وبعدين خلّي كل اختيار على قد اللي قبله بالظبط. الأكبر مش دايماً أحسن: بيزوّد الوزن والفلوس." })}</p>
       ${ringsRow({ ring: { mass: .5, power: .5, money: .5, data: .5 } })}
       <div class="row"><button class="hbtn" type="button" data-go="sbuild">${L({ en: "Let's build", ar: "يلا نبني" })}</button><button class="linkbtn" type="button" data-go="spick">${L({ en: "Other missions", ar: "مهمات تانية" })}</button></div></div></div></section>`;
 }
@@ -234,10 +280,9 @@ function sbuild() {
       <div class="choose">
         <div class="steptitle" style="--sc:${ROLE_COL[s.role]}"><span class="rolechip">${roleName(s.role)}${who}</span><h2 class="hh">${L(s.t)}</h2></div>
         ${guide(s.role, L(m.tips[s.k]))}
-        <div class="cards3">${cards.map(c => { const sel = SA.pick[s.k] && SA.pick[s.k].k === c.k;
-          return `<button type="button" class="ccard ${sel ? "sel" : ""}" data-scard="${c.k}">
-            <span class="cicon">${sIcon(c.icon)}</span><b>${L(c.n)}</b><span class="cd">${L(c.d)}</span>
-            ${c.star ? `<span class="cstar">★ ${L({ en: "Answers the goal", ar: "بيجاوب على الهدف" })}</span>` : ""}</button>`; }).join("")}</div>
+        <p class="needline">${sNeedLine(s.k)}</p>
+        <div class="wallet">${L({ en: "Budget", ar: "الميزانية" })}: <b>${cmp.cost}</b> / ${m.budget} ${L({ en: "spent", ar: "مصروفين" })}</div>
+        <div class="cards3">${cards.map(c => sCardHtml(c, s.k)).join("")}</div>
         <div class="nav2">${SA.step > 0 ? `<button class="hbtn ghost" type="button" data-act="sprev">${L({ en: "Back", ar: "رجوع" })}</button>` : ""}
           ${SA.step < 3 ? `<button class="hbtn" type="button" data-act="snext" ${SA.pick[s.k] ? "" : "disabled"}>${L({ en: "Next", ar: "اللي بعده" })}</button>`
             : `<button class="hbtn launch" type="button" data-act="slaunch" ${cmp.done ? "" : "disabled"}>${L({ en: "Launch!", ar: "اطلق!" })}</button>`}</div>
@@ -374,6 +419,7 @@ function sClick(t) {
   if (t.dataset.scard) { const s = STEP_ORDER[SA.step]; SA.pick[s.k] = SM().steps[s.k].find(c => c.k === t.dataset.scard); SA.hover = null;
     document.querySelectorAll(".ccard[data-scard]").forEach(b => b.classList.toggle("sel", b === t)); const nb = document.querySelector("[data-act=snext],[data-act=slaunch]"); if (nb) nb.disabled = SA.step < 3 ? false : !sCompute(SA.pick).done;
     document.querySelectorAll(".stp").forEach((b, i) => b.classList.toggle("done", !!SA.pick[STEP_ORDER[i].k])); const tag = document.querySelector(".holotag"); if (tag) tag.textContent = sCompute(SA.pick).done ? L({ en: "Spacecraft ready", ar: "المركبة جاهزة" }) : L({ en: "Building your spacecraft…", ar: "بنبني مركبتك…" });
+    document.querySelector(".build .wallet") && (document.querySelector(".build .wallet b").textContent = sCompute(SA.pick).cost);
     sRenderBuildParts(); sRefreshHolo(); return true; }
   const a = t.dataset.act;
   if (a === "snext") { SA.step = Math.min(3, SA.step + 1); SA.hover = null; render(); return true; }

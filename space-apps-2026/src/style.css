@@ -315,3 +315,18 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .cine canvas.holo{left:38%;right:0;width:auto}
 [dir=rtl] .cine canvas.holo{left:0;right:38%}
 @media (max-width:760px){.cine canvas.holo,[dir=rtl] .cine canvas.holo{left:0;right:0;opacity:.55}}
+
+.needline{margin:0;font-size:16px;color:#eaf6ff;background:rgba(95,216,255,.08);border:1px solid var(--edge);border-radius:6px;padding:10px 12px}
+.wallet{font-size:14px;color:#ffc26b} .wallet b{font-size:16px}
+.chips3{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}
+.chip2{font-size:12px;border:1px solid var(--edge);border-radius:999px;padding:1px 8px;color:#bcd3e8}
+.chip2 b{color:#fff} .chip2.cdata{border-color:#c79bff66} .chip2.cpow{border-color:#7dffb066} .chip2.cmass{border-color:#5fd8ff66} .chip2.cmoney{border-color:#ffc26b66}
+.fits{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}
+.fit{font-size:13px;font-weight:600;border-radius:4px;padding:2px 8px}
+.fit.ok{color:#7dffb0;background:rgba(125,255,176,.1)} .fit.no{color:#ff8a95;background:rgba(255,77,94,.1)} .fit.best{color:#ffc26b;background:rgba(255,194,107,.12)}
+.ccard.dim{opacity:.6} .ccard.dim:hover{opacity:.9}
+.chain{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chain .link{display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid var(--sc);border-radius:6px;padding:8px 12px;min-width:110px;text-align:center;box-shadow:0 0 14px color-mix(in srgb,var(--sc) 25%,transparent)}
+.chain .link span{font-family:var(--f-mono);color:var(--sc);font-size:12px} .chain .link b{color:#fff} .chain .link em{font-style:normal;font-size:12px;color:#9fb8cd}
+.chain .arrow{color:var(--holo);font-size:20px} [dir=rtl] .chain .arrow{transform:scaleX(-1)}
+.rule{margin:0;font-size:16px;color:#ffe2b0;border-inline-start:3px solid #ffc26b;padding-inline-start:12px}

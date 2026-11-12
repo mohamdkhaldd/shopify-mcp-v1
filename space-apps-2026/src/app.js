@@ -20,7 +20,7 @@ const Voice = (()=>{
   const load=()=>{ try{ const all=speechSynthesis.getVoices(); voices=all.filter(v=>/^en/i.test(v.lang)); arVoices=all.filter(v=>/^ar/i.test(v.lang)); }catch(e){} };
   if(ok){ load(); try{ speechSynthesis.onvoiceschanged=load; }catch(e){} }
   const P={planner:[0,1,1.02],engineer:[1,1.08,1.04],science:[2,1.18,1.02],comms:[3,.92,1]};
-  return { say(role,text,onend){ if(!ok||!A.voice){ onend&&setTimeout(onend,1200); return; } try{ speechSynthesis.cancel(); const ar=LANG==="ar"; const u=new SpeechSynthesisUtterance(ar?tr(text):text); const [i,p,r]=P[role]||P.planner; const vs=ar?arVoices:voices; if(vs.length) u.voice=vs[i%vs.length]; if(ar) u.lang="ar-EG"; u.pitch=p; u.rate=r; u.onend=()=>onend&&onend(); speechSynthesis.speak(u);}catch(e){ onend&&onend(); } },
+  return { say(role,text,onend){ if(true){ onend&&setTimeout(onend,1200); return; } try{ speechSynthesis.cancel(); const ar=LANG==="ar"; const u=new SpeechSynthesisUtterance(ar?tr(text):text); const [i,p,r]=P[role]||P.planner; const vs=ar?arVoices:voices; if(vs.length) u.voice=vs[i%vs.length]; if(ar) u.lang="ar-EG"; u.pitch=p; u.rate=r; u.onend=()=>onend&&onend(); speechSynthesis.speak(u);}catch(e){ onend&&onend(); } },
            stop(){ try{ ok&&speechSynthesis.cancel(); }catch(e){} } };
 })();
 
@@ -116,7 +116,6 @@ function render(){
     navBtns.push(`<button class="btn ghost" data-go="training" type="button">Training</button>`);
   }
   if(!FLY()) navBtns.push(`<button class="btn ghost langbtn" data-act="lang" type="button">${LANG==="ar"?"English":"عربي"}</button>`);
-  navBtns.push(`<button class="btn ghost" data-act="voice" type="button" aria-pressed="${A.voice}">Voice: ${A.voice?"on":"off"}</button>`);
   if(Space3D.ok) navBtns.push(`<button class="btn ghost" data-act="gfx" type="button">Graphics: ${Space3D.quality}</button>`);
   $("#nav").innerHTML = navBtns.join("");
   const fn = ({home,setup,training,select,briefing,design,flight,report,...SIMPLE})[A.screen];
