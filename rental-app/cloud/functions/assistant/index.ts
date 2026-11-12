@@ -473,6 +473,7 @@ function cleanActions(raw: unknown) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return fail("method", 405);
+  const t0 = Date.now();
   let b: { key?: string; deviceId?: string; text?: string; context?: unknown; history?: Turn[]; image?: string; mediaType?: string; catalog?: string; reads?: unknown; transcribe?: boolean; audio?: string; hint?: string; speak?: string; audioType?: string };
   try {
     b = await req.json();
@@ -614,7 +615,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, reply: String(out.reply ?? ""), actions: cleanActions(out.actions), cards: [], chart: null, heard, title: String((out as { title?: unknown }).title ?? "").trim().slice(0, 40) });
     }
     const title = String((out as { title?: unknown }).title ?? "").trim().slice(0, 40);
-    return json({ ok: true, reply: String(out.reply ?? ""), actions, cards, chart, title, ...(voice ? { heard } : {}) });
+    return json({ ok: true, reply: String(out.reply ?? ""), actions, cards, chart, title, model: r.model, ms: Date.now() - t0, ...(voice ? { heard } : {}) });
   } catch (err) {
     console.error(err);
     if (err instanceof AiError) return fail(err.daily ? quotaError() : err.status === 401 || err.status === 403 ? "bad_key" : err.status === 429 || err.status >= 500 ? "busy" : "ai_error", 502);
