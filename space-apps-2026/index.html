@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mission Architect</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: mission-control console — build column on the left, live telemetry rail on the right, simulation deck below. Deliberately single dark theme (a control-room screen). */
+:root{
+  color-scheme: dark;
+  --void:#0b1020;        /* page ground: deep space */
+  --panel:#121a30;       /* console panels */
+  --line:#24304f;        /* hairlines */
+  --ink:#e6ebf7;         /* primary text */
+  --dim:#8f9bbb;         /* secondary text */
+  --amber:#f2a93b;       /* accent: caution-amber instrument light */
+  --cyan:#5fd0e0;        /* data trace */
+  --ok:#5ccf8a; --warn:#f2c94c; --bad:#ef6b6b;
+  --f-display:"Chakra Petch", "Rajdhani", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+*{box-sizing:border-box}
+html,body{background:var(--void);color:var(--ink)}
+body{font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px;
+  background-image:radial-gradient(circle at 80% -10%, #1b2750 0, transparent 45%);}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:14px}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(28px,5vw,44px);letter-spacing:.04em;margin:0;line-height:1;text-transform:uppercase}
+h1 span{color:var(--amber)}
+.tag{font-family:var(--f-mono);font-size:12px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+.lede{max-width:65ch;color:var(--dim);margin:6px 0 0}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:20px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.build{display:flex;flex-direction:column;gap:16px;min-width:0}
+.step h2{font-family:var(--f-display);font-size:19px;font-weight:600;margin:0;letter-spacing:.03em;display:flex;gap:10px;align-items:baseline}
+.step h2 .n{font-family:var(--f-mono);font-size:12px;color:var(--amber);border:1px solid var(--amber);padding:1px 6px;border-radius:3px}
+.why{font-size:13px;color:var(--dim);margin:0;max-width:75ch}
+.why b{color:var(--cyan);font-weight:500}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.opt{position:relative;display:flex;flex-direction:column;gap:4px;padding:12px;border:1px solid var(--line);border-radius:5px;cursor:pointer;background:#0f1628;transition:border-color .15s}
+.opt:hover{border-color:#3b4a74}
+.opt input{position:absolute;opacity:0;pointer-events:none}
+.opt:has(input:checked){border-color:var(--amber);background:#1a1d2a}
+.opt:has(input:focus-visible){outline:2px solid var(--cyan);outline-offset:2px}
+.opt:has(input:disabled){opacity:.38;cursor:not-allowed}
+.opt .t{font-weight:600}
+.opt .s{font-size:12.5px;color:var(--dim)}
+.opt .k{font-family:var(--f-mono);font-size:11.5px;color:var(--cyan);font-variant-numeric:tabular-nums}
+.row{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+.slider{display:flex;flex-direction:column;gap:4px;min-width:220px;flex:1}
+.slider label{font-size:13px;color:var(--dim);display:flex;justify-content:space-between;gap:8px}
+.slider label output{font-family:var(--f-mono);color:var(--ink)}
+input[type=range]{accent-color:var(--amber);width:100%}
+.brief{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 16px;border-top:1px dashed var(--line);padding-top:10px}
+.brief div{display:flex;flex-direction:column}
+.brief .l{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+.brief .v{font-family:var(--f-mono);font-size:13.5px}
+.goal{font-size:14px;border-left:3px solid var(--amber);padding:4px 0 4px 10px;margin:0}
+/* telemetry rail */
+.rail{position:sticky;top:max(12px,env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:12px;min-width:0}
+@media (max-width:900px){.rail{position:static}}
+.tele{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.tele h3{font-family:var(--f-display);font-size:14px;letter-spacing:.12em;text-transform:uppercase;margin:0;color:var(--dim)}
+.meter{display:flex;flex-direction:column;gap:4px}
+.meter .top{display:flex;justify-content:space-between;font-size:13px;gap:8px}
+.meter .top span:last-child{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.bar{height:8px;background:#0b1224;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--cyan);transition:width .25s,background .25s}
+.big{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.big div{border:1px solid var(--line);border-radius:5px;padding:8px 10px}
+.big .l{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+.big .v{font-family:var(--f-display);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+.warns{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none;font-size:13px}
+.warns li{padding:6px 8px;border-radius:4px;border-left:3px solid var(--warn);background:#1b1a1c}
+.warns li.bad{border-color:var(--bad)}
+.warns li.ok{border-color:var(--ok)}
+button{font-family:var(--f-display);font-size:18px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;border:0;border-radius:5px;padding:14px;cursor:pointer;background:var(--amber);color:#1a1205}
+button:disabled{background:#3a3f52;color:#8a90a6;cursor:not-allowed}
+button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-size:14px;padding:10px 14px}
+/* sim deck */
+.deck{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px}
+@media (max-width:900px){.deck{grid-template-columns:minmax(0,1fr)}}
+canvas{width:100%;max-width:100%;aspect-ratio:4/3;background:#070b17;border:1px solid var(--line);border-radius:6px;display:block}
+.log{font-family:var(--f-mono);font-size:12.5px;background:#070b17;border:1px solid var(--line);border-radius:6px;padding:12px;height:100%;min-height:260px;max-height:420px;overflow:auto;display:flex;flex-direction:column;gap:4px}
+.log .t{color:var(--dim)}
+.log .good{color:var(--ok)} .log .warn{color:var(--warn)} .log .bad{color:var(--bad)}
+.report{display:flex;flex-direction:column;gap:10px}
+.grade{font-family:var(--f-display);font-size:56px;font-weight:700;line-height:1;color:var(--amber)}
+.lessons{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;max-width:75ch}
+footer{font-size:12.5px;color:var(--dim);border-top:1px solid var(--line);padding-top:12px}
+footer a{color:var(--cyan)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="tag">Space Apps 2026 · Space Mission Design Game</div>
+      <h1>Mission <span>Architect</span></h1>
+      <p class="lede">You are the mission's chief engineer. Pick a world, build a spacecraft, and fit it inside a real rocket's lift capacity, a real power budget and a fixed price cap. Then launch it and see whether your design survives.</p>
+    </div>
+    <button class="ghost" id="reset" type="button">New mission</button>
+  </header>
+
+  <div class="grid">
+    <div class="build">
+      <section class="step">
+        <h2><span class="n">1</span>Destination</h2>
+        <div class="opts" id="dests"></div>
+        <p class="goal" id="goal"></p>
+        <div class="brief" id="brief"></div>
+      </section>
+
+      <section class="step">
+        <h2><span class="n">2</span>Mission type</h2>
+        <p class="why">Landing and bringing samples home return far more science, but every extra maneuver costs <b>Δv</b> (change in velocity), and the rocket equation makes fuel needs grow exponentially with Δv.</p>
+        <div class="opts" id="types"></div>
+      </section>
+
+      <section class="step">
+        <h2><span class="n">3</span>Science payload</h2>
+        <p class="why">Each instrument adds mass, power draw and cost. Instruments that answer the <b>mission goal</b> earn bonus science. Some only work on the surface.</p>
+        <div class="opts" id="instr"></div>
+      </section>
+
+      <section class="step">
+        <h2><span class="n">4</span>Power</h2>
+        <p class="why">Sunlight weakens with the square of distance: at Jupiter it is about <b>4%</b> of what Earth gets, which is why Jupiter probes need huge solar wings. <b>RTGs</b> turn heat from decaying plutonium into steady power, day or night, but they are heavy and costly, and their waste heat keeps the spacecraft warm so it needs no heaters. Aim for at least a 20% power margin.</p>
+        <div class="row">
+          <div class="slider"><label for="solar">Solar array area <output id="solarOut"></output></label><input type="range" id="solar" min="0" max="120" step="2" value="4"></div>
+          <div class="slider"><label for="rtg">RTG units (110 W each) <output id="rtgOut"></output></label><input type="range" id="rtg" min="0" max="3" step="1" value="0"></div>
+        </div>
+        <div class="opts" id="comms"></div>
+      </section>
+
+      <section class="step">
+        <h2><span class="n">5</span>Propulsion &amp; protection</h2>
+        <p class="why"><b>Chemical</b> engines push hard but waste fuel (exhaust ≈ 3.1 km/s). <b>Electric</b> ion thrusters are ten times more fuel‑efficient but push gently, need kilowatts of power, and can't do a landing. <b>Shielding</b> protects electronics from radiation; <b>redundancy</b> adds backup hardware.</p>
+        <div class="opts" id="props"></div>
+        <div class="row">
+          <div class="slider"><label for="shield">Radiation shielding <output id="shieldOut"></output></label><input type="range" id="shield" min="0" max="3" step="1" value="1"></div>
+          <div class="slider"><label for="redund">Redundancy <output id="redundOut"></output></label><input type="range" id="redund" min="0" max="2" step="1" value="1"></div>
+        </div>
+      </section>
+
+      <section class="step">
+        <h2><span class="n">6</span>Launch vehicle</h2>
+        <p class="why">Everything you built, fuel included, must fit under the rocket's lift capacity to low Earth orbit. In this game your spacecraft performs every maneuver after reaching orbit.</p>
+        <div class="opts" id="lvs"></div>
+      </section>
+    </div>
+
+    <aside class="rail">
+      <div class="tele">
+        <h3>Live design telemetry</h3>
+        <div class="meter"><div class="top"><span>Mass at launch</span><span id="mTxt"></span></div><div class="bar"><i id="mBar"></i></div></div>
+        <div class="meter"><div class="top"><span>Power margin</span><span id="pTxt"></span></div><div class="bar"><i id="pBar"></i></div></div>
+        <div class="meter"><div class="top"><span>Cost vs. cap</span><span id="cTxt"></span></div><div class="bar"><i id="cBar"></i></div></div>
+        <div class="big">
+          <div><div class="l">Success odds</div><div class="v" id="odds"></div></div>
+          <div><div class="l">Science value</div><div class="v" id="sci"></div></div>
+        </div>
+        <div class="meter"><div class="top"><span>Propellant / dry mass</span><span id="fuelTxt"></span></div></div>
+        <div class="meter"><div class="top"><span>Cruise time</span><span id="timeTxt"></span></div></div>
+        <ul class="warns" id="warns"></ul>
+        <button id="launch" type="button">Launch</button>
+      </div>
+    </aside>
+  </div>
+
+  <section class="step" id="simSec" hidden>
+    <h2><span class="n">7</span>Mission flight</h2>
+    <div class="deck">
+      <canvas id="cv" width="800" height="600" aria-label="Trajectory view"></canvas>
+      <div class="log" id="log" aria-live="polite"></div>
+    </div>
+    <div class="report" id="report" hidden></div>
+  </section>
+
+  <footer>
+    Physics: Tsiolkovsky rocket equation with Isp 320 s (chemical) and 3,000 s (electric); inverse-square sunlight at 300 W/m² at 1 AU; Δv budgets from low Earth orbit are simplified textbook values.
+    Data references: <a href="https://nssdc.gsfc.nasa.gov/planetary/factsheet/" target="_blank" rel="noopener">NASA Planetary Fact Sheets</a> ·
+    <a href="https://trajbrowser.arc.nasa.gov/" target="_blank" rel="noopener">NASA Trajectory Browser</a> ·
+    <a href="https://science.nasa.gov/solar-system/" target="_blank" rel="noopener">NASA Solar System Exploration</a>.
+    Figures are rounded for gameplay and are not engineering-grade.
+  </footer>
+</div>
+
+<script>
+const G0 = 0.00980665; // km/s²
+const DEST = {
+  moon:{name:"The Moon",sub:"3 days away",au:1,sun:1,dist:"384,400 km",delay:"1.3 s",days:4,dv:4.0,budget:900,rad:.05,heat:20,land:.10,
+    goal:"Map water ice hidden in permanently shadowed craters near the poles.",goalI:["grs","radar"],
+    types:{orbiter:{},lander:{desc:2.0},sample:{desc:2.0,ret:2.7}},
+    fact:"Lunar night lasts about 14 Earth days. A solar-only lander must survive it or it stops working."},
+  mars:{name:"Mars",sub:"7 months away",au:1.52,sun:.43,dist:"55–400 million km",delay:"3–22 min",days:210,dv:5.7,budget:1600,rad:.10,heat:40,land:.18,
+    goal:"Search for signs of ancient microbial life in old lakebed rock.",goalI:["drill","spec"],
+    types:{orbiter:{},lander:{cruise:3.6,desc:.6},sample:{cruise:3.6,desc:.6,ret:6.2}},
+    fact:"Landers ride the thin atmosphere down inside a heat shield, which skips orbit insertion but adds an aeroshell's mass. Dust slowly covers solar panels."},
+  asteroid:{name:"Near-Earth asteroid",sub:"2 years away",au:1.1,sun:.83,dist:"varies, ~0.1–2 AU",delay:"1–17 min",days:760,dv:5.0,budget:1300,rad:.08,heat:10,land:.08,
+    goal:"Bring back pristine carbon-rich material from the birth of the solar system.",goalI:["drill","spec"],
+    types:{orbiter:{},lander:{desc:.05},sample:{desc:.05,ret:.5}},
+    fact:"Gravity is so weak that 'landing' is a brief touch-and-go. Returning home needs little Δv but a capsule that survives reentry."},
+  europa:{name:"Europa (Jupiter)",sub:"5½ years away",au:5.2,sun:.037,dist:"~630 million km",delay:"33–53 min",days:2000,dv:6.2,budget:1800,rad:.60,heat:80,land:.3,
+    goal:"Find out whether the ocean under Europa's ice could support life.",goalI:["radar","mag"],
+    types:{orbiter:{}},
+    fact:"Jupiter's radiation belts fry unprotected electronics. Real Europa missions put their electronics inside a thick metal vault."}
+};
+const TYPE = {orbiter:{name:"Orbiter",s:"Study from orbit for years",mult:1,m:0,c:0},
+  lander:{name:"Lander",s:"Touch down and measure in place",mult:1.5,m:150,c:150},
+  sample:{name:"Sample return",s:"Land, collect, fly samples home",mult:2.2,m:250,c:350}};
+const INSTR = {
+  cam:{name:"High-resolution camera",m:20,p:15,c:30,sci:{moon:6,mars:7,asteroid:8,europa:8}},
+  spec:{name:"Imaging spectrometer",m:25,p:30,c:45,sci:{moon:7,mars:8,asteroid:9,europa:8}},
+  radar:{name:"Ice-penetrating radar",m:35,p:60,c:60,sci:{moon:7,mars:8,asteroid:5,europa:10}},
+  mag:{name:"Magnetometer",m:5,p:4,c:10,sci:{moon:3,mars:4,asteroid:3,europa:9}},
+  grs:{name:"Gamma-ray & neutron spectrometer",m:15,p:20,c:35,sci:{moon:9,mars:7,asteroid:6,europa:4}},
+  seis:{name:"Seismometer",m:10,p:8,c:25,surface:true,sci:{moon:7,mars:9,asteroid:4,europa:0}},
+  drill:{name:"Drill & sample arm",m:40,p:50,c:70,surface:true,sci:{moon:7,mars:9,asteroid:9,europa:0}}
+};
+const PROP = {chem:{name:"Chemical",s:"High thrust, Isp 320 s",isp:320,m:40,c:20,ep:0},
+  elec:{name:"Electric (ion)",s:"Isp 3,000 s, needs 3 kW",isp:3000,m:120,c:70,ep:3000}};
+const COMMS = {lga:{name:"Low-gain antenna",s:"Light and cheap, slow far from Earth",m:5,p:20,c:5},
+  hga:{name:"High-gain dish",s:"Fast data link, must point at Earth",m:25,p:60,c:25}};
+const LV = {
+  light:{name:"Light rocket",cap:8000,c:70,rel:.96},
+  medium:{name:"Medium rocket",cap:22000,c:120,rel:.98},
+  heavy:{name:"Heavy rocket",cap:60000,c:180,rel:.98},
+  superh:{name:"Super-heavy rocket",cap:95000,c:900,rel:.95}};
+const SHIELD = [{n:"None",m:0,c:0,f:1},{n:"Light (30 kg)",m:30,c:10,f:.55},{n:"Heavy (80 kg)",m:80,c:30,f:.3},{n:"Vault (150 kg)",m:150,c:60,f:.12}];
+const REDUND = [{n:"None",bus:0,c:0,f:1},{n:"Key systems",bus:.1,c:40,f:.7},{n:"Full backup",bus:.25,c:100,f:.45}];
+
+const DEFAULT = {dest:"moon",type:"orbiter",instr:["cam","grs"],solar:4,rtg:0,comms:"hga",prop:"chem",shield:1,redund:1,lv:"light"};
+let S = structuredClone(DEFAULT);
+const $ = id => document.getElementById(id);
+const fmt = n => Math.round(n).toLocaleString("en-US");
+
+function card(group,type,key,checked,disabled,t,s,k){
+  return `<label class="opt"><input type="${type}" name="${group}" value="${key}" ${checked?"checked":""} ${disabled?"disabled":""}>
+  <span class="t">${t}</span><span class="s">${s}</span>${k?`<span class="k">${k}</span>`:""}</label>`;
+}
+function render(){
+  const D = DEST[S.dest];
+  $("dests").innerHTML = Object.entries(DEST).map(([k,d])=>card("dest","radio",k,S.dest===k,false,d.name,d.sub,`Δv ${d.dv} km/s · cap $${fmt(d.budget)}M`)).join("");
+  $("types").innerHTML = Object.entries(TYPE).map(([k,t])=>card("type","radio",k,S.type===k,!D.types[k],t.name,t.s,D.types[k]?`science ×${t.mult}`:"not offered here")).join("");
+  $("instr").innerHTML = Object.entries(INSTR).map(([k,i])=>{
+    const off = i.surface && S.type==="orbiter"; const goal = D.goalI.includes(k);
+    return card("instr","checkbox",k,S.instr.includes(k)&&!off,off,i.name+(goal?" ★":""),off?"Needs a lander":`${i.m} kg · ${i.p} W · $${i.c}M`,`science ${i.sci[S.dest]}/10`);
+  }).join("");
+  $("comms").innerHTML = Object.entries(COMMS).map(([k,c])=>card("comms","radio",k,S.comms===k,false,c.name,c.s,`${c.m} kg · ${c.p} W`)).join("");
+  $("props").innerHTML = Object.entries(PROP).map(([k,p])=>card("prop","radio",k,S.prop===k,false,p.name,p.s,`${p.m} kg · $${p.c}M`)).join("");
+  $("lvs").innerHTML = Object.entries(LV).map(([k,l])=>card("lv","radio",k,S.lv===k,false,l.name,`${fmt(l.cap)} kg to orbit`,`$${l.c}M · ${Math.round(l.rel*100)}% reliable`)).join("");
+  $("goal").innerHTML = `<b>Mission goal:</b> ${D.goal} <span style="color:var(--dim)">(★ = instruments that answer it)</span>`;
+  $("brief").innerHTML = [["Distance",D.dist],["Signal delay",D.delay],["Sunlight vs Earth",Math.round(D.sun*100)+"%"],["Radiation",D.rad>.3?"Extreme":D.rad>.07?"Moderate":"Low"]]
+    .map(([l,v])=>`<div><span class="l">${l}</span><span class="v">${v}</span></div>`).join("") + `<div style="grid-column:1/-1"><span class="l">Field note</span><span style="font-size:13.5px">${D.fact}</span></div>`;
+  $("solar").value=S.solar; $("rtg").value=S.rtg; $("shield").value=S.shield; $("redund").value=S.redund;
+  update();
+}
+
+function compute(){
+  const D = DEST[S.dest], T = TYPE[S.type], tv = D.types[S.type]||{}, P = PROP[S.prop], C = COMMS[S.comms], L = LV[S.lv];
+  const surface = S.type!=="orbiter";
+  const instr = S.instr.filter(k=>!(INSTR[k].surface && !surface));
+  const W = [];
+  // mass
+  const bus = 300;
+  let dry = bus + bus*REDUND[S.redund].bus + T.m + S.solar*5 + S.rtg*45 + P.m + SHIELD[S.shield].m + C.m;
+  instr.forEach(k=>dry+=INSTR[k].m);
+  const aero = (S.dest==="mars" && surface) ? .35*dry : 0; dry += aero;
+  const veC = 320*G0, veCr = P.isp*G0;
+  const dvCr = tv.cruise ?? D.dv, dvD = tv.desc||0, dvR = tv.ret||0;
+  let tanks = 0, pr=0, pd=0, pc=0;
+  for(let i=0;i<5;i++){
+    const d = dry + tanks;
+    pr = .35*d*(Math.exp(dvR/veC)-1);
+    pd = (d+pr)*(Math.exp(dvD/veC)-1);
+    pc = (d+pr+pd)*(Math.exp(dvCr/veCr)-1);
+    tanks = .08*(pr+pd+(S.prop==="chem"?pc:0)) + (S.prop==="elec"?.05*pc:0);
+  }
+  const dryT = dry+tanks, prop = pr+pd+pc, wet = dryT+prop;
+  // power
+  let solarW = S.solar*300*D.sun;
+  if(S.dest==="mars"&&surface) solarW*=.6;
+  const gen = solarW + S.rtg*110;
+  let need = 150 + C.p + (S.rtg>0?0:D.heat); instr.forEach(k=>need+=INSTR[k].p);
+  const margin = gen/need;
+  const epOk = S.prop!=="elec" || (S.solar*300 + S.rtg*110) >= need + P.ep;
+  // time
+  let days = D.days;
+  if(S.prop==="elec") days = S.dest==="moon" ? 400 : days*1.3;
+  if(S.type==="sample") days *= 2;
+  const years = days/365 + (S.dest==="moon"?1:2);
+  // cost
+  let cost = 200 + T.c + S.solar*1.5 + S.rtg*90 + P.c + SHIELD[S.shield].c + REDUND[S.redund].c + C.c + L.c + 25*years + (aero?80:0);
+  instr.forEach(k=>cost+=INSTR[k].c);
+  // science potential
+  let raw = 0; instr.forEach(k=>raw+=INSTR[k].sci[S.dest]);
+  const hits = D.goalI.filter(k=>instr.includes(k)).length;
+  const goalB = hits===D.goalI.length?1.3:hits?1.1:1;
+  let dataF = 1;
+  if(S.comms==="lga") dataF = S.dest==="moon"?.9:S.dest==="europa"?.25:.4;
+  let opsF = 1;
+  const nightKill = S.dest==="moon" && surface && S.rtg===0;
+  if(nightKill) opsF*=.5;
+  if(S.dest==="mars" && surface && S.rtg===0) opsF*=.8;
+  const sciPot = raw*T.mult*goalB;
+  // risks (mission-ending)
+  const rf = REDUND[S.redund].f;
+  const risks = {
+    launch: 1-L.rel,
+    power: margin<1?.6:margin<1.2?.15:.02,
+    radiation: D.rad*SHIELD[S.shield].f*rf,
+    hazard: .05*rf,
+    landing: surface ? D.land*(rf*.6+.4) : 0,
+    reentry: S.type==="sample"?.04:0,
+    ep: (S.prop==="elec" && (!epOk || S.dest==="europa"))?.25:0
+  };
+  let odds = 1; Object.values(risks).forEach(p=>odds*=1-p);
+  // warnings
+  if(wet>L.cap) W.push(["bad",`Too heavy: ${fmt(wet)} kg is over the ${L.name.toLowerCase()}'s ${fmt(L.cap)} kg limit. Pick a bigger rocket or cut mass.`]);
+  if(cost>D.budget) W.push(["bad",`Over the cost cap by $${fmt(cost-D.budget)}M. The review board will not approve it.`]);
+  else if(cost>D.budget*.9) W.push(["warn","Less than 10% of the budget left as reserve. Real projects keep extra money for surprises."]);
+  if(!instr.length) W.push(["bad","No science instruments on board."]);
+  if(margin<1) W.push(["bad",`Power deficit: ${fmt(gen)} W available for ${fmt(need)} W needed.`]);
+  else if(margin<1.2) W.push(["warn","Power margin under 20%. Panels degrade over time."]);
+  if(S.prop==="elec" && !epOk) W.push(["warn",`Ion thrusters need ${fmt(need+P.ep)} W near Earth. Add solar area or they'll underperform.`]);
+  if(S.prop==="elec" && S.dest==="europa") W.push(["warn","Ion thrusters starve for power beyond the asteroid belt."]);
+  if(nightKill) W.push(["warn","Solar-only Moon lander: it will likely freeze in its first 14-day lunar night."]);
+  if(S.comms==="lga" && S.dest!=="moon") W.push(["warn","Low-gain antenna this far away: most of your data never reaches Earth."]);
+  if(risks.radiation>.15) W.push(["warn","High radiation risk. Add shielding or redundancy."]);
+  if(!W.length) W.push(["ok","Design closes: mass, power and budget all fit. Ready for launch review."]);
+  const canLaunch = wet<=L.cap && cost<=D.budget && instr.length>0;
+  return {dry:dryT,prop,wet,gen,need,margin,cost,budget:D.budget,cap:L.cap,odds,sciPot,dataF,opsF,risks,W,canLaunch,days,instr,surface,nightKill,epOk};
+}
+
+function setBar(id,frac,color){const b=$(id);b.style.width=Math.min(100,frac*100)+"%";b.style.background=color;}
+function update(){
+  const R = compute();
+  $("mTxt").textContent=`${fmt(R.wet)} / ${fmt(R.cap)} kg`; setBar("mBar",R.wet/R.cap,R.wet>R.cap?"var(--bad)":R.wet>.9*R.cap?"var(--warn)":"var(--cyan)");
+  $("pTxt").textContent=`${fmt(R.gen)} W / ${fmt(R.need)} W`; setBar("pBar",R.margin/1.5,R.margin<1?"var(--bad)":R.margin<1.2?"var(--warn)":"var(--ok)");
+  $("cTxt").textContent=`$${fmt(R.cost)}M / $${fmt(R.budget)}M`; setBar("cBar",R.cost/R.budget,R.cost>R.budget?"var(--bad)":R.cost>.9*R.budget?"var(--warn)":"var(--cyan)");
+  $("odds").textContent=Math.round(R.odds*100)+"%"; $("odds").style.color=R.odds>.8?"var(--ok)":R.odds>.6?"var(--warn)":"var(--bad)";
+  $("sci").textContent=fmt(R.sciPot*R.dataF*R.opsF*10);
+  $("fuelTxt").textContent=`${fmt(R.prop)} kg / ${fmt(R.dry)} kg`;
+  $("timeTxt").textContent=R.days<30?`${Math.round(R.days)} days`:R.days<730?`${(R.days/30.4).toFixed(1)} months`:`${(R.days/365).toFixed(1)} years`;
+  $("warns").innerHTML=R.W.map(([c,t])=>`<li class="${c}">${t}</li>`).join("");
+  $("launch").disabled=!R.canLaunch || simRunning;
+  $("solarOut").textContent=`${S.solar} m² · ${fmt(S.solar*300*DEST[S.dest].sun)} W here`;
+  $("rtgOut").textContent=S.rtg;
+  $("shieldOut").textContent=SHIELD[S.shield].n; $("redundOut").textContent=REDUND[S.redund].n;
+}
+
+document.addEventListener("change",e=>{
+  const t=e.target; if(!t.name) return;
+  if(t.name==="dest"){S.dest=t.value; if(!DEST[S.dest].types[S.type]) S.type="orbiter"; render(); return;}
+  if(t.name==="type"){S.type=t.value; render(); return;}
+  if(t.name==="instr"){S.instr=[...document.querySelectorAll('input[name=instr]:checked')].map(i=>i.value); update(); return;}
+  if(["comms","prop","lv"].includes(t.name)){S[t.name]=t.value; update();}
+});
+["solar","rtg","shield","redund"].forEach(id=>$(id).addEventListener("input",e=>{S[id]=+e.target.value; update();}));
+$("reset").addEventListener("click",()=>{S=structuredClone(DEFAULT); $("simSec").hidden=true; render();});
+
+/* ---------- flight simulation ---------- */
+let simRunning=false, anim=null;
+const cv=$("cv"), cx=cv.getContext("2d");
+function orbitR(au){return 70+170*Math.log2(1+au)/Math.log2(6.2);}
+function draw(prog,phase,status){
+  const w=cv.width,h=cv.height,ox=w/2,oy=h/2; cx.clearRect(0,0,w,h);
+  // stars
+  cx.fillStyle="#2a3658"; for(let i=0;i<120;i++){const x=(i*397)%w,y=(i*211)%h;cx.fillRect(x,y,1.5,1.5);}
+  const D=DEST[S.dest]; let sx,sy,tx,ty;
+  if(S.dest==="moon"){
+    const r=230; cx.strokeStyle="#24304f";cx.beginPath();cx.arc(ox,oy,r,0,7);cx.stroke();
+    cx.fillStyle="#4a8fe0";cx.beginPath();cx.arc(ox,oy,26,0,7);cx.fill();
+    const ma=Math.PI*.15+prog*Math.PI*.2; tx=ox+r*Math.cos(Math.PI+ma); ty=oy-r*Math.sin(Math.PI+ma)*.95;
+    cx.fillStyle="#c8c8c8";cx.beginPath();cx.arc(tx,ty,12,0,7);cx.fill();
+    const t=Math.min(1,prog); sx=ox+(tx-ox)*t+Math.sin(t*Math.PI)*-60; sy=oy+(ty-oy)*t+Math.sin(t*Math.PI)*-90;
+    label("Earth",ox,oy+44); label("Moon",tx,ty+26);
+  } else {
+    const r1=orbitR(1), r2=orbitR(D.au);
+    cx.fillStyle="#f2a93b";cx.beginPath();cx.arc(ox,oy,16,0,7);cx.fill();
+    [r1,r2].forEach(r=>{cx.strokeStyle="#24304f";cx.beginPath();cx.arc(ox,oy,r,0,7);cx.stroke();});
+    const a=(r1+r2)/2,b=Math.sqrt(r1*r2),x0=(r1-r2)/2;
+    cx.setLineDash([5,6]);cx.strokeStyle="#5fd0e055";cx.beginPath();
+    for(let i=0;i<=60;i++){const t=Math.PI*i/60;const x=ox+x0+a*Math.cos(t),y=oy-b*Math.sin(t);i?cx.lineTo(x,y):cx.moveTo(x,y);} cx.stroke();cx.setLineDash([]);
+    const t=Math.PI*Math.min(1,prog); sx=ox+x0+a*Math.cos(t); sy=oy-b*Math.sin(t);
+    cx.fillStyle="#4a8fe0";cx.beginPath();cx.arc(ox+r1,oy,8,0,7);cx.fill(); label("Earth",ox+r1,oy+22);
+    tx=ox-r2;ty=oy; cx.fillStyle=S.dest==="mars"?"#d0603a":S.dest==="europa"?"#d9c2a0":"#9a8f80";
+    cx.beginPath();cx.arc(tx,ty,S.dest==="europa"?14:8,0,7);cx.fill(); label(D.name,tx,ty+(S.dest==="europa"?30:22));
+  }
+  if(status!=="lost"||prog<1){cx.fillStyle=status==="lost"?"#ef6b6b":"#ffffff";cx.beginPath();cx.arc(sx,sy,4.5,0,7);cx.fill();
+    cx.strokeStyle=status==="lost"?"#ef6b6b":"#5fd0e0";cx.beginPath();cx.arc(sx,sy,9,0,7);cx.stroke();}
+  cx.fillStyle="#8f9bbb";cx.font="500 18px 'IBM Plex Mono', monospace";cx.textAlign="left";cx.fillText(phase,18,32);
+}
+function label(t,x,y){cx.fillStyle="#8f9bbb";cx.font="15px 'IBM Plex Sans', sans-serif";cx.textAlign="center";cx.fillText(t,x,y);}
+function log(msg,cls=""){const el=document.createElement("div");el.innerHTML=`<span class="t">${clock()}</span> <span class="${cls}">${msg}</span>`;$("log").appendChild(el);$("log").scrollTop=1e9;}
+let tday=0; const clock=()=>`T+${tday<1?"0":Math.round(tday)}d`;
+const wait=ms=>new Promise(r=>setTimeout(r,matchMedia("(prefers-reduced-motion: reduce)").matches?ms/4:ms));
+function animTo(from,to,ms,phase){return new Promise(res=>{const t0=performance.now();
+  const step=n=>{const k=Math.min(1,(n-t0)/ms);draw(from+(to-from)*k,phase,"ok");k<1?anim=requestAnimationFrame(step):res();};anim=requestAnimationFrame(step);});}
+
+$("launch").addEventListener("click",async()=>{
+  const R=compute(); if(!R.canLaunch) return;
+  simRunning=true; update(); $("simSec").hidden=false; $("report").hidden=true; $("log").innerHTML=""; tday=0;
+  $("simSec").scrollIntoView({behavior:"smooth",block:"start"});
+  const D=DEST[S.dest], lessons=[]; let sciF=1, lost=null;
+  const roll=p=>Math.random()<p;
+  draw(0,"LAUNCH","ok");
+  log(`${LV[S.lv].name} on the pad. Mass ${fmt(R.wet)} kg.`); await wait(900);
+  if(roll(R.risks.launch)){lost="launch"; log("Launch vehicle anomaly during ascent. Vehicle lost.","bad");
+    lessons.push(`Rockets fail too: this one was ${Math.round(LV[S.lv].rel*100)}% reliable. Proven rockets with long flight records cost more but fail less.`);}
+  else log("Liftoff. Spacecraft separated in low Earth orbit.","good");
+  if(!lost){
+    log(`Departure burn: ${(D.types[S.type].cruise??D.dv)} km/s of Δv ${S.prop==="elec"?"spread over months of gentle ion thrust":"in one chemical burn"}.`);
+    await animTo(0,.35,1500,"CRUISE"); tday=R.days*.35;
+    if(roll(R.risks.power)){
+      if(R.margin<1){lost="power"; log("Batteries drained. Not enough power to keep the spacecraft alive.","bad");}
+      else {sciF*=.7; log("Solar panels degrading faster than planned. Instruments placed on a power-sharing schedule.","warn");}
+      lessons.push("Engineers keep a power margin because panels degrade and needs grow. Distance from the Sun cuts solar output with the square of distance.");
+    } else log(`Power steady: ${fmt(R.gen)} W against ${fmt(R.need)} W demand.`,"good");
+  }
+  if(!lost){
+    if(R.risks.ep>0 && roll(R.risks.ep)){sciF*=.6; log("Ion engines underpowered. Arrival delayed, extended cruise eats into operations.","warn");
+      lessons.push("Electric propulsion saves fuel but needs kilowatts of power. Far from the Sun there isn't enough sunlight to run it.");}
+    await animTo(.35,.75,1600,"CRUISE"); tday=R.days*.75;
+    if(roll(R.risks.hazard)){
+      if(S.redund>0){sciF*=.85; log("Micrometeoroid strike damaged a computer. Backup unit took over.","warn");
+        lessons.push("Redundancy saved the mission: the backup computer took over after a micrometeoroid hit.");}
+      else {lost="hazard"; log("Micrometeoroid strike disabled the flight computer. No backup on board.","bad");
+        lessons.push("Single points of failure are deadly. Redundant computers are why many missions survive hardware faults.");}
+    } else log("Cruise nominal. Trajectory correction maneuvers on target.","good");
+  }
+  if(!lost){
+    await animTo(.75,1,1100,"ARRIVAL"); tday=R.days;
+    log(`Arrived at ${D.name}. Signal delay ${D.delay}: every command is pre-programmed.`,"good");
+    if(roll(R.risks.radiation)){lost="radiation"; log("Radiation-induced electronics failure. Spacecraft unresponsive.","bad");
+      lessons.push(`Radiation at ${D.name} is ${D.rad>.3?"extreme":"significant"}. Shielding and redundant electronics lower the odds of a fatal hit.`);}
+  }
+  if(!lost && R.surface){
+    log("Beginning descent. Seven minutes of autonomous landing…"); await wait(1200);
+    if(roll(R.risks.landing)){lost="landing"; log("Touchdown failed. Lander lost.","bad");
+      lessons.push("Landing is the riskiest phase: the spacecraft must fly itself because signals take too long to reach Earth. Redundancy helps.");}
+    else log("Touchdown confirmed on the surface!","good");
+  }
+  if(!lost){
+    tday+=60; log("Science operations under way.");
+    if(R.nightKill){log("Lunar night arrives. Without heat or power the lander freezes.","warn"); lessons.push("A 14-day lunar night kills solar-only landers. An RTG or big batteries and heaters keep them alive.");}
+    if(S.dest==="mars"&&R.surface&&S.rtg===0){log("Dust storms coat the solar panels. Power slowly fades.","warn"); lessons.push("Martian dust covers solar panels over time. The big Mars rovers use RTGs for this reason.");}
+    if(S.comms==="lga"&&S.dest!=="moon"){log("Low-gain link: only a trickle of data reaches Earth.","warn"); lessons.push("Data rate falls with the square of distance. A high-gain dish is how deep-space probes send their pictures home.");}
+    await wait(1000);
+    if(S.type==="sample"){
+      log("Samples sealed. Ascent and return cruise…"); await wait(1200);
+      if(roll(R.risks.reentry)){sciF*=.5; log("Capsule parachute anomaly. Samples recovered, partly contaminated.","warn");}
+      else log("Sample capsule landed on Earth and was recovered!","good");
+    }
+  }
+  const sci = lost ? 0 : R.sciPot*R.dataF*R.opsF*sciF*10;
+  const potential = R.sciPot*10;
+  const reserve = (R.budget-R.cost)/R.budget;
+  const score = Math.round(sci + (lost?0:Math.max(0,reserve)*200));
+  let grade = lost?"F":sci/Math.max(1,potential)>.9?"A":sci/Math.max(1,potential)>.7?"B":sci/Math.max(1,potential)>.45?"C":"D";
+  if(!lost && reserve>.15 && grade!=="A") lessons.push("You kept a healthy reserve; review boards reward missions that are likely to stay on budget.");
+  if(!lost && !lessons.length) lessons.push("Every subsystem held. A balanced design with margin in mass, power and budget is how real missions succeed.");
+  if(lost) lessons.push(`Your estimated odds were ${Math.round(R.odds*100)}%. Space is unforgiving; try again with more margin where this mission failed.`);
+  draw(1,lost?"MISSION LOST":"MISSION COMPLETE",lost?"lost":"ok");
+  $("report").innerHTML = `<div class="row"><div class="grade">${grade}</div><div><div style="font-family:var(--f-display);font-size:22px;font-weight:600">${lost?"Mission lost":"Mission complete"}</div>
+    <div style="color:var(--dim)">Science returned <b style="color:var(--ink)">${fmt(sci)}</b> of ${fmt(potential)} possible · Budget reserve ${Math.round(reserve*100)}% · Score <b style="color:var(--amber)">${fmt(score)}</b></div></div></div>
+    <div style="font-family:var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-size:13px">What we learned</div>
+    <ul class="lessons">${lessons.map(l=>`<li>${l}</li>`).join("")}</ul>
+    <div class="row"><button class="ghost" type="button" id="again">Tweak design and fly again</button></div>`;
+  $("report").hidden=false;
+  $("again").addEventListener("click",()=>window.scrollTo({top:0,behavior:"smooth"}));
+  simRunning=false; update();
+});
+
+render();
+draw(0,"STANDBY","ok");
+</script>
+</body>
+</html>
