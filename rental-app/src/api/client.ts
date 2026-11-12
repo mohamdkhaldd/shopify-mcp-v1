@@ -98,6 +98,7 @@ export const api = {
   teamNames: () => call<string[]>("teamNames"),
   teamLog: (from?: string, to?: string) => call<{ id: number; at: string; who: string | null; label: string; actionId: string | null }[]>("teamLog", { from, to }),
   chatList: (conv: string, limit?: number) => call<ChatRow[]>("chatList", { conv, limit }),
+  reminders: () => call<{ text: string; ask: string }[]>("reminders"),
   lessonAdd: (text: string) => call<unknown>("lessonAdd", { text }),
   lessons: () => call<{ id: number; at: string; who: string | null; text: string }[]>("lessons"),
   lessonDelete: (id: number) => call<void>("lessonDelete", { id }),
@@ -251,6 +252,8 @@ export const shellApi = {
     window.api ? window.api.invoke("shell:resetCompany", { password }) : Promise.resolve({ ok: false, message: "التصفير شغال في البرنامج نفسه بس" }),
   transcribe: (audio: string, mediaType: string, hint?: string): Promise<{ ok: true; text: string } | { ok: false; message: string }> =>
     window.api ? window.api.invoke("shell:transcribe", { audio, mediaType, hint }) : Promise.resolve({ ok: false, message: "الصوت شغال في البرنامج نفسه بس" }),
+  speak: (text: string): Promise<{ ok: true; audio: string; mediaType: string } | { ok: false; message: string }> =>
+    window.api ? window.api.invoke("shell:speak", { text }) : Promise.resolve({ ok: false, message: "الصوت شغال في البرنامج نفسه بس" }),
   askAssistant: (r: AssistantRequest): Promise<AssistantReply> =>
     window.api ? window.api.invoke("shell:askAssistant", r) : Promise.resolve({ ok: false, message: "المساعد شغال في البرنامج نفسه بس" }),
   readSarki: (r: ReadRequest): Promise<ReadResult> =>

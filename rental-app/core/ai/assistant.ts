@@ -269,7 +269,22 @@ function run(db: Db, actions: AssistantAction[], call?: CallRunner): string[] {
     return { account: a.key };
   };
   /** العقد الشغال على المعدة دي (للمصروفات والأيام) */
-  const contractOf = (equipmentName?: string | null, date?: string) => {
+  const contractOf = (equipmentName?: string | null, date?: string, hint?: AssistantAction) => {
+    // الذكاء الاصطناعي ساعات بيبعت العقد (id) أو صاحب المعدة أو الشركة بدل اسم المعدة — نلاقيها منهم لو واضحة
+    if (!equipmentName?.trim() && hint) {
+      const d = date ?? today();
+      const live = db
+        .prepare(
+          `SELECT c.id, c.equipment_id AS eq, s.name AS supplier, cl.name AS client FROM contracts c JOIN suppliers s ON s.id = c.supplier_id JOIN clients cl ON cl.id = c.client_id
+           WHERE c.deleted_at IS NULL AND c.start_date <= ? AND (c.end_date IS NULL OR c.end_date >= ?)`,
+        )
+        .all(d, d) as { id: number; eq: number; supplier: string; client: string }[];
+      const pick = hint.id != null ? live.filter((c) => c.id === hint.id) : hint.supplier?.trim() ? live.filter((c) => normalizeName(c.supplier) === normalizeName(hint.supplier!)) : hint.client?.trim() ? live.filter((c) => normalizeName(c.client) === normalizeName(hint.client!)) : [];
+      if (pick.length === 1) {
+        const row = db.prepare("SELECT name FROM equipment WHERE id = ?").get(pick[0].eq) as { name: string };
+        equipmentName = row.name;
+      }
+    }
     const e = equipment.must(equipmentName);
     const c = db
       .prepare(
@@ -341,7 +356,7 @@ function run(db: Db, actions: AssistantAction[], call?: CallRunner): string[] {
         const from = day(a.from ?? a.date);
         const to = day(a.to ?? a.from ?? a.date);
         if (to < from) throw new UserError("أيام الشغل: آخر يوم قبل أول يوم");
-        const { contractId, equipment: e } = contractOf(a.equipment, from);
+        const { contractId, equipment: e } = contractOf(a.equipment, from, a);
         fillRange(db, contractId, "client", from, to, { siteName: a.site?.trim() || undefined });
         lines.push(from === to ? `يوم شغل للمعدة ${e.name}: ${from}` : `أيام شغل للمعدة ${e.name}: من ${from} لحد ${to}`);
         break;

@@ -12,7 +12,8 @@ import type { ChatRow } from "../../../core/services/team";
 import { photoForReading, ReadSheet } from "../../../core/ai/sarkiRead";
 import { ReadPhoto } from "../sarki/ReadPhoto";
 import type { OpenSarki } from "../../api/client";
-import { MAX_SECONDS, Recording, startRecording } from "./voice";
+import { MAX_SECONDS, playSpeech, Recording, startRecording, stopSpeech } from "./voice";
+import { SHELL_CALLS } from "../../../core/ai/catalog";
 
 // المساعد: تكتب اللي حصل بالعامية، والذكاء الاصطناعي يفهمه ويقولك هيسجل إيه.
 // مفيش حاجة بتتسجل غير لما تدوس «سجّل»، والتسجيل بيتعمل بنفس دوال البرنامج
@@ -27,7 +28,7 @@ type Meta = { id?: number; who?: string | null };
 /** صورة سركي اتقرت: العقد والشهر واللي اتقرا — بيتراجع في الشات ويتسجل */
 type SarkiRead = { contractId: number; month: string; sheet: ReadSheet; title?: string };
 type Msg =
-  | ({ role: "user"; text: string; photo?: boolean } & Meta)
+  | ({ role: "user"; text: string; photo?: boolean; voice?: boolean } & Meta)
   | ({
       role: "assistant";
       text: string;
@@ -44,6 +45,8 @@ type Msg =
       /** رسايل واتساب جاهزة */
       sends?: AssistantAction[];
       sarki?: SarkiRead;
+      /** تصفير البرنامج أو نسخة احتياطية (البرنامج نفسه بيعملهم مش دوال البيانات) */
+      shell?: "resetCompany" | "backupNow";
     } & Meta);
 
 const thisMonth = () => {
@@ -125,7 +128,7 @@ const rememberConv = (c: string) => {
 };
 /** اللي المساعد يفتكره من المحادثة: الكلام + اللي اتعمل فعلاً (أو لسه مستني موافقة) */
 const memoryOf = (m: Msg) => {
-  if (m.role === "user") return m.who ? `${m.who}: ${m.text}${m.photo ? " (مع صورة سركي)" : ""}` : m.text;
+  if (m.role === "user") return m.who ? `${m.who}: ${m.text}${m.photo ? " (مع صورة)" : ""}` : m.text;
   const done = m.lines?.length ? `\n[${m.state === "saved" ? "اتعمل" : m.state === "cancelled" ? "اتلغى" : m.state === "pending" ? "مستني موافقة" : "متعملش"}: ${m.lines.join("؛ ")}]` : "";
   const problem = m.problem ? `\n[مشكلة: ${m.problem}]` : "";
   return `${m.text}${done}${problem}`;
@@ -152,7 +155,7 @@ const EXAMPLES = [
 ];
 
 const PASSWORD_FNS = new Set(["delete", "closeMonth", "setRates", "setWithholding", "adjustment"]);
-const needsPassword = (actions?: AssistantAction[]) => !!actions?.some((a) => a.type === "delete" || (a.type === "call" && PASSWORD_FNS.has(String(a.fn))));
+const needsPassword = (actions?: AssistantAction[], shell?: string) => shell === "resetCompany" || !!actions?.some((a) => a.type === "delete" || (a.type === "call" && PASSWORD_FNS.has(String(a.fn))));
 const isDelete = (actions?: AssistantAction[]) => !!actions?.some((a) => a.type === "delete" || (a.type === "call" && a.fn === "delete"));
 
 export default function Assistant() {
@@ -198,15 +201,8 @@ export default function Assistant() {
     try {
       const audio = await r.stop();
       if (audio.seconds < 0.7) throw new Error("التسجيل قصير أوي — دوس واتكلم وبعدين دوس تاني");
-      const ctx = await api.assistantContext().catch(() => null);
-      const hint = ctx
-        ? [...ctx.suppliers.map((x) => x.name), ...ctx.clients.map((x) => x.name), ...ctx.equipment.map((x) => x.name), ...ctx.drivers.map((x) => x.name), ...ctx.partners].slice(0, 300).join("، ")
-        : undefined;
-      const t = await shellApi.transcribe(audio.data, audio.mediaType, hint);
-      if (!t.ok) throw new Error(t.message);
-      if (!t.text) throw new Error("مسمعتش كلام — جرّب تاني");
-      setHearing(false);
-      await send(t.text);
+      // الصوت بيتبعت للمساعد على طول: بيسمعه ويرد في نفس المرة (أسرع من إنه يتكتب الأول)
+      await send(text, { data: audio.data, mediaType: audio.mediaType });
     } catch (e) {
       setVoiceNote((e as Error).message);
     } finally {
@@ -219,6 +215,30 @@ export default function Assistant() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recSec]);
   const [password, setPassword] = useState("");
+  // الرد بالصوت: 🔊 جنب كل رد (ولو انت بعت صوت، الرد بيتقري لوحده)
+  const [speaking, setSpeaking] = useState<string | null>(null);
+  async function speak(t: string) {
+    if (speaking === t) {
+      stopSpeech();
+      setSpeaking(null);
+      return;
+    }
+    setSpeaking(t);
+    try {
+      const v = await shellApi.speak(t.slice(0, 1500));
+      if (!v.ok) throw new Error(v.message);
+      await playSpeech(v.audio, v.mediaType);
+    } catch (e) {
+      setVoiceNote((e as Error).message);
+    } finally {
+      setSpeaking((x) => (x === t ? null : x));
+    }
+  }
+  // تذكيرات من الأرقام (سركي مش متسجل، شهر مفتوح…) — بتظهر فوق ودوسة عليها بتسأل المساعد
+  const [reminders, setReminders] = useState<{ text: string; ask: string }[]>([]);
+  useEffect(() => {
+    api.reminders().then(setReminders, () => {});
+  }, []);
   const [me, setMe] = useState<string | null | undefined>(undefined);
   const [names, setNames] = useState<string[]>([]);
   const [meDraft, setMeDraft] = useState("");
@@ -285,10 +305,10 @@ export default function Assistant() {
       }),
     );
 
-  async function send(said = text) {
+  async function send(said = text, voice?: { data: string; mediaType: string }) {
     const pic = photo;
-    const t = said.trim() || (pic ? "ده سركي — اقراه" : "");
-    if (!t || busy || !me) return;
+    let t = said.trim() || (pic && !voice ? "اقرا الصورة دي" : "");
+    if ((!t && !voice) || busyRef.current || !me) return;
     setText("");
     // الرسايل القديمة باسم اللي كتبها (المحادثة مشتركة بين الشركاء)
     // ذاكرة المحادثة: المحادثة كلها (لحد ١٠٠ رسالة / حوالي ٨٠ ألف حرف)، ومعاها اللي اتعمل فعلاً
@@ -297,7 +317,8 @@ export default function Assistant() {
     const history = all.reverse().filter((m) => (size += m.text.length) <= 80_000).reverse();
     setBusy(true);
     busyRef.current = true;
-    await push({ role: "user", text: t, ...(pic ? { photo: true } : {}) });
+    stopSpeech();
+    if (!voice) await push({ role: "user", text: t, ...(pic ? { photo: true } : {}) });
     try {
       const [ctxNames, facts] = await Promise.all([api.assistantContext(), api.assistantFacts()]);
       const context = { ...ctxNames, facts };
@@ -305,7 +326,18 @@ export default function Assistant() {
       // لو محتاج يقرا حاجة (تصفية، خزنة، سركي…) البرنامج بيقراها ويبعتهاله، لحد ٤ مرات
       const reads: { fn: string; args?: unknown; result: unknown }[] = [];
       const looked: string[] = [];
-      let r = await shellApi.askAssistant({ text: pic ? `${t}\n(مع الرسالة صورة ورقة سركي)` : t, context, history, catalog, ...(pic ? { image: pic.image, mediaType: pic.mediaType } : {}) });
+      const img = pic ? { image: pic.image, mediaType: pic.mediaType } : {};
+      const withPic = (x: string) => (pic ? `${x}\n(مع الرسالة صورة)` : x);
+      let r = await shellApi.askAssistant({ text: withPic(t), context, history, catalog, ...img, ...(voice ? { audio: voice.data, audioType: voice.mediaType } : {}) });
+      // الرسالة الصوتية: اللي اتسمع بيظهر كرسالة منك (والقراية اللي بعدها بتتبعت كلام)
+      if (voice) {
+        if (!r.ok) {
+          setVoiceNote(r.message);
+          return;
+        }
+        t = (r.heard ?? "").trim() || "(رسالة صوتية)";
+        await push({ role: "user", text: `🎤 ${t}`, ...(pic ? { photo: true } : {}) });
+      }
       for (let round = 0; r.ok && round < 4; round++) {
         const want = r.actions.filter((a) => a.type === "read" && a.fn).slice(0, 6);
         if (!want.length) break;
@@ -319,7 +351,7 @@ export default function Assistant() {
           reads.push({ fn: a.fn!, args: a.args, result });
           looked.push(READ_LABEL[a.fn!] ?? a.fn!);
         }
-        r = await shellApi.askAssistant({ text: t, context, history, catalog, reads });
+        r = await shellApi.askAssistant({ text: withPic(t), context, history, catalog, reads, ...img });
       }
       if (!r.ok) {
         await push({ role: "assistant", text: r.message, state: "error" });
@@ -350,6 +382,27 @@ export default function Assistant() {
         if (lesson) await api.lessonAdd(lesson).catch(() => {});
       }
       r = { ...r, actions: r.actions.filter((a) => !isLesson(a)) };
+      if (voice && r.reply) speak(r.reply);
+      // التصفير والنسخة الاحتياطية: البرنامج نفسه بيعملهم — كل واحدة لوحدها بزرار أيوه / لأ
+      const sh = r.actions.find((a) => a.type === "call" && SHELL_CALLS.has(String(a.fn)));
+      if (sh) {
+        const reset = sh.fn === "resetCompany";
+        await push({
+          role: "assistant",
+          text: r.reply,
+          shell: reset ? "resetCompany" : "backupNow",
+          state: "pending",
+          lines: reset
+            ? [
+                "هيتمسح: كل العقود والسركي، أصحاب المعدات ومعداتهم، الشركات، السواقين، المصروفات، الخزنة وحركاتها، المستثمرين ورأس المال، الضرايب، والمحادثات",
+                "هيفضل: الترخيص والإعدادات والنسب",
+                "MK بتحتفظ بنسخة من كل حاجة قبل المسح وتقدر ترجّعها لو احتجت",
+                "كل الأجهزة بتاعة الشركة هتفضى وتبدأ من الأول",
+              ]
+            : ["هعمل نسخة احتياطية دلوقتي — هيسألك تحفظ الملف فين"],
+        });
+        return;
+      }
       const opens = r.actions.filter((a) => a.type === "open" && a.page);
       const sends = r.actions.filter((a) => a.type === "whatsapp" && a.text);
       const todo = r.actions.filter((a) => a.type !== "read" && a.type !== "open" && a.type !== "whatsapp" && a.type !== "sarki_photo");
@@ -376,6 +429,27 @@ export default function Assistant() {
 
   async function save(i: number) {
     const m = msgs[i];
+    if (m.role === "assistant" && m.shell) {
+      setBusy(true);
+      try {
+        if (m.shell === "resetCompany") {
+          if (!password) throw new Error("اكتب باسورد الشركة عشان تفضّي البرنامج");
+          const r = await shellApi.resetCompany(password);
+          setPassword("");
+          if (!r.ok) throw new Error(r.message);
+          update(i, { state: "saved", lines: ["البرنامج اتفضّى — هيقفل ويفتح على نضيف"] });
+        } else {
+          const f = await appApi.backupNow();
+          if (!f) throw new Error("النسخة الاحتياطية متعملتش (اتلغت أو الجهاز ده مش لاب توب)");
+          update(i, { state: "saved", lines: [`النسخة اتحفظت: ${f}`] });
+        }
+      } catch (e) {
+        update(i, { state: "error", problem: (e as Error).message });
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (m.role !== "assistant" || !m.actions) return;
     setBusy(true);
     try {
@@ -451,6 +525,23 @@ export default function Assistant() {
         </div>
       )}
 
+      {reminders.length > 0 && (
+        <div className="rounded-card border border-amber bg-amber-soft p-3 grid gap-2">
+          <b className="text-sm">🔔 محتاج تاخد بالك:</b>
+          {reminders.map((x) => (
+            <button
+              key={x.text}
+              onClick={() => {
+                setReminders((r) => r.filter((y) => y !== x));
+                send(x.ask);
+              }}
+              className="text-start text-sm rounded-xl border border-line bg-surface px-3 py-2 hover:border-amber"
+            >
+              {x.text} <span className="text-amber-deep font-bold">← خليني أظبطها</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="rounded-card border border-line bg-surface min-h-[55vh] max-h-[65vh] overflow-y-auto p-4 grid content-start gap-3">
         {!msgs.length && (
           <div className="grid gap-2 text-sm">
@@ -467,14 +558,21 @@ export default function Assistant() {
             <div key={i} className="justify-self-start max-w-[85%] grid gap-0.5">
               {m.who && <span className="text-xs font-bold text-amber-deep">{m.who === me ? `${m.who} (انت)` : m.who}</span>}
               <div className="rounded-2xl rounded-ss-sm bg-amber-soft px-4 py-2.5 whitespace-pre-wrap">
-                {m.photo && <span className="block text-xs font-bold text-amber-deep mb-1">📷 صورة سركي</span>}
+                {m.photo && <span className="block text-xs font-bold text-amber-deep mb-1">📷 صورة</span>}
                 {m.text}
               </div>
             </div>
           ) : (
             <div key={i} className="justify-self-end max-w-[90%] w-full sm:w-auto rounded-2xl rounded-se-sm border border-line bg-surface-2 px-4 py-3 grid gap-2">
               {m.looked && <div className="text-xs text-muted">قريت: {m.looked.join("، ")}</div>}
-              {m.text && <div className="whitespace-pre-wrap">{m.text}</div>}
+              {m.text && (
+                <div className="flex gap-2 items-start">
+                  <div className="whitespace-pre-wrap flex-1">{m.text}</div>
+                  <button onClick={() => speak(m.text)} title="اسمع الرد" className="shrink-0 text-lg leading-none opacity-70 hover:opacity-100">
+                    {speaking === m.text ? "⏹" : "🔊"}
+                  </button>
+                </div>
+              )}
               {m.cards && m.cards.length > 0 && <Cards cards={m.cards} />}
               {m.chart && <Chart chart={m.chart} />}
               {m.lines && m.lines.length > 0 && (
@@ -511,9 +609,9 @@ export default function Assistant() {
                   ))}
                 </div>
               )}
-              {m.state === "pending" && needsPassword(m.actions) && (
+              {m.state === "pending" && needsPassword(m.actions, m.shell) && (
                 <label className="grid gap-1 text-sm">
-                  <span className="font-semibold text-out">{isDelete(m.actions) ? "ده مسح" : "دي حاجة مبترجعش"} — اكتب باسورد الشركة:</span>
+                  <span className="font-semibold text-out">{m.shell === "resetCompany" ? "ده هيفضّي البرنامج كله" : isDelete(m.actions) ? "ده مسح" : "دي حاجة مبترجعش"} — اكتب باسورد الشركة:</span>
                   <TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" className="max-w-[220px]" />
                 </label>
               )}
@@ -522,11 +620,11 @@ export default function Assistant() {
               )}
               {m.state === "pending" && !m.sarki && (
                 <div className="flex gap-2 pt-1">
-                  <Button primary danger={needsPassword(m.actions)} onClick={() => save(i)} disabled={busy}>
-                    {isDelete(m.actions) ? "امسح" : "نفّذ"}
+                  <Button primary danger={needsPassword(m.actions, m.shell)} onClick={() => save(i)} disabled={busy}>
+                    {m.shell === "resetCompany" ? "أيوه، فضّي البرنامج" : isDelete(m.actions) ? "أيوه، امسح" : "أيوه، اعمل كده"}
                   </Button>
                   <Button onClick={() => update(i, { state: "cancelled" })} disabled={busy}>
-                    لأ
+                    لأ، متعملش
                   </Button>
                 </div>
               )}
@@ -542,22 +640,22 @@ export default function Assistant() {
 
       {(rec || hearing || voiceNote) && (
         <div className={`rounded-xl px-3 py-2 text-sm font-semibold ${voiceNote ? "bg-out-soft text-out" : "bg-amber-soft"}`}>
-          {voiceNote ?? (rec ? `🔴 بيسجل… اتكلم عادي ودوس ⏹ لما تخلص (لحد ${MAX_SECONDS} ثانية)` : "بيكتب اللي قلته…")}
+          {voiceNote ?? (rec ? `🔴 بيسجل… اتكلم عادي ودوس ⏹ لما تخلص (لحد ${MAX_SECONDS} ثانية)` : "بيسمعك…")}
         </div>
       )}
       {photo && (
         <div className="flex items-center gap-3 rounded-xl border border-amber bg-amber-soft px-3 py-2">
           <img src={photo.url} alt="صورة السركي" className="h-16 w-16 object-cover rounded-md" />
           <div className="text-sm flex-1">
-            <b>صورة سركي جاهزة</b>
-            <div className="text-muted">اكتب ده سركي أنهي معدة (وصاحبها والشركة أو مقاول الباطن) وابعت</div>
+            <b>الصورة جاهزة</b>
+            <div className="text-muted">سركي؟ قول أنهي معدة (وصاحبها والشركة). إيصال أو تحويل؟ ابعتها على طول وهو هيقرا المبلغ</div>
           </div>
           <Button onClick={() => setPhoto(null)}>شيلها</Button>
         </div>
       )}
       <div className="flex gap-2 items-end">
         <input ref={photoInput} type="file" accept="image/*" className="hidden" onChange={(e) => pickPhoto(e.target.files?.[0])} />
-        <Button onClick={() => photoInput.current?.click()} disabled={busy || !me || !!rec} title="صورة سركي">
+        <Button onClick={() => photoInput.current?.click()} disabled={busy || !me || !!rec} title="صورة (سركي، إيصال، تحويل)">
           📷
         </Button>
         <Button danger={!!rec} onClick={toggleVoice} disabled={(busy && !rec) || hearing || !me} title="اتكلم بدل ما تكتب">

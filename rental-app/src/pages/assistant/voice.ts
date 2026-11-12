@@ -97,3 +97,41 @@ function toBase64(bytes: Uint8Array) {
   for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(s);
 }
+
+// ---- الرد بالصوت ----
+// السيرفر بيرجّع PCM خام (audio/L16;rate=24000) — بنلفه WAV ونشغّله
+let playing: HTMLAudioElement | null = null;
+
+export function stopSpeech() {
+  if (playing) {
+    playing.pause();
+    playing = null;
+  }
+}
+
+export async function playSpeech(b64: string, mediaType: string) {
+  stopSpeech();
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  let blob: Blob;
+  if (/L16|pcm/i.test(mediaType)) {
+    const rate = Number(/rate=(\d+)/.exec(mediaType)?.[1] ?? 24000);
+    // PCM ١٦ بت little-endian جاي من السيرفر
+    const pcm = new Float32Array(bytes.length >> 1);
+    const v = new DataView(bytes.buffer);
+    for (let i = 0; i < pcm.length; i++) pcm[i] = v.getInt16(i * 2, true) / 0x8000;
+    blob = new Blob([encodeWav(pcm, rate)], { type: "audio/wav" });
+  } else blob = new Blob([bytes], { type: mediaType });
+  const url = URL.createObjectURL(blob);
+  const a = new Audio(url);
+  playing = a;
+  await new Promise<void>((resolve) => {
+    a.onended = a.onerror = a.onpause = () => {
+      URL.revokeObjectURL(url);
+      resolve();
+    };
+    a.play().catch(() => resolve());
+  });
+  if (playing === a) playing = null;
+}

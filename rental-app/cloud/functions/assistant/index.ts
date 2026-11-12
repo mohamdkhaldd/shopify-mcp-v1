@@ -99,8 +99,9 @@ const CHART = {
 const SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["reply", "actions", "cards", "chart"],
+  required: ["heard", "reply", "actions", "cards", "chart"],
   properties: {
+    heard: { type: "string", description: "لو الرسالة صوت: اللي المستخدم قاله بالظبط بالعامية (والأرقام أرقام). من غير صوت = فاضي" },
     cards: { type: "array", items: CARD, description: "مربعات الأرقام المهمة في الرد (٢ لـ ٦) — فاضية لو مفيش أرقام" },
     chart: CHART,
     reply: { type: "string", description: "رد قصير بالعامية المصرية: يا ملخص اللي هيتسجل، يا سؤال عن الناقص" },
@@ -118,7 +119,7 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 العمليات:
 - contract: عقد جديد (معدة عند شركة). بيعمل صاحب المعدة والمعدة والشركة لوحده لو مش موجودين. محتاج: equipment, client, clientRate, supplierRate، و supplier لو المعدة جديدة. unit = day لو السعر في اليوم، month لو في الشهر. startDate لو مقالش = النهارده.
 - supplier / client / equipment: تسجيل حاجة لوحدها من غير عقد (equipment محتاج supplier).
-- work_days: أيام شغل للمعدة في السركي (from / to). لو قال "اشتغلت النهارده" يبقى from = to = النهارده.
+- work_days: أيام شغل للمعدة في السركي (from / to)، و equipment = اسم المعدة بالظبط زي ما هو في contracts (لازم يتكتب، ولو كذا معدة اعمل action لكل واحدة). لو قال "اشتغلت النهارده" يبقى from = to = النهارده.
 - expense: مصروف (هالك) للشركة. لو على معدة معينة حط equipment. لو شريك دفعه من جيبه حط paidBy.
 - supplier_deduction: حاجة دفعناها عن صاحب المعدة (زيت، قطع غيار، سولار لمعدته…) وبتتخصم من حسابه. حط equipment أو supplier و note.
 - client_payment: فلوس جت من شركة. supplier_payment: فلوس اديناها لصاحب معدة.
@@ -131,12 +132,12 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 - read: لو محتاج تعرف حاجة مش في facts (تصفية حد، دفعاته بالـ id، السركي، حركات الخزنة، الضرايب، سجل التعديلات…): ابعت read بس (fn و argsJson) ومن غير reply طويل، والبرنامج هيبعتلك النتيجة في "نتايج القراية" وبعدين تجاوب أو تعمل العملية. متطلبش نفس القراية تاني لو نتيجتها عندك.
 - open: افتح صفحة للمستخدم (page، و id و month لو صفحة حاجة معينة)، و pdf = true لو عايز ملف PDF (تصفية، مستخلص، سركي…). البرنامج بيعرضله زرار يدوس عليه.
 - العمليات اللي بالأسماء فوق (contract, expense, client_payment…) أسهل وأضمن — استخدمها لما تنفع، واستخدم call للباقي.
-- قبل أي تنفيذ البرنامج بيعرض على المستخدم «هعمل كذا» ومبيتنفذش غير لما يوافق — فاكتب في reply بالظبط هتعمل إيه.
+- قبل أي تنفيذ البرنامج بيعرض على المستخدم «هعمل كذا» ومبيتنفذش غير لما يوافق — فاكتب في reply بالظبط هتعمل إيه بصيغة المستقبل («همسح»، «هرجّع»، «هسجل») مش الماضي («مسحت»، «رجعت»)، لأن لسه متعملش.
 - المسح وقفل الشهر وتغيير النسب والتسويات محتاجين باسورد الشركة — البرنامج بيطلبه.
 - لو المستخدم طلب حاجة وناقصها معلومة لازمة (اسم الشركة، تاريخ البداية، السعر، صاحب المعدة، المبلغ، أنهي عقد…): متنفذش ومتخمّنش — actions فاضية، و reply: «ناقص كذا وكذا — قولّي عشان أعمل …». اسأل عن كل الناقص مرة واحدة.
 - التعديل غير الجديد: لو بيتكلم عن حاجة موجودة (عقد، صاحب معدة، شركة، سواق، دفعة…) وعايز يغيّر فيها (تاريخ، سعر، اسم، تليفون…) استخدم دالة التعديل بتاعتها (updateContract, updateSupplier, updateClient, updateEquipment, updateDriver…) بالـ id. ممنوع تعمل contract (عقد جديد) عشان تعدّل عقد موجود. ابعت بس الخانات اللي اتغيرت، ومتسألش عن الحاجات اللي موجودة أصلاً (السعر، الشركة…) — هي موجودة في contracts في السياق. وفي reply قول: «هغيّر كذا من … لـ …، والباقي زي ما هو (كذا وكذا)».
 - الدروس (lessons في السياق): قواعد الشركة اللي اتعلمتها قبل كده — امشي عليها دايماً وقبل أي حاجة تانية.
-- التعلّم من التصحيح: لو المستخدم صحّحك («لا، أنا قصدي…»، «مش كده، كذا»، «اسمه كذا مش كذا») أو قال «افتكر إن…» أو بان من كلامه طريقة شغل ثابتة للشركة: اعمل اللي طلبه صح، وضيف معاه call fn lessonAdd بـ text = القاعدة بجملة واحدة واضحة تنفع لأي مرة جاية (من غير تفاصيل المرة دي بس). البرنامج بيحفظها لوحده في السكوت — متقولش في reply إنك اتعلمت أو حفظت، رد عادي على طلبه بس. ومتحفظش درس لحاجة عادية أو لقاعدة موجودة أصلاً في lessons.
+- التعلّم من التصحيح: لو المستخدم صحّحك («لا، أنا قصدي…»، «مش كده، كذا»، «اسمه كذا مش كذا») أو قال «افتكر إن…» أو بان من كلامه طريقة شغل ثابتة للشركة: اعمل اللي طلبه صح، وضيف معاه call fn lessonAdd بـ text = القاعدة بجملة واحدة واضحة تنفع لأي مرة جاية (من غير تفاصيل المرة دي بس). البرنامج بيحفظها لوحده في السكوت — ممنوع تقول في reply «اتعلمت» أو «حفظت» أو «القاعدة»؛ لو كان تصحيح بس من غير طلب تاني رد «تمام 👍» وبس، ولو فيه طلب رد على الطلب عادي. ومتحفظش درس لحاجة عادية أو لقاعدة موجودة أصلاً في lessons.
 
 اللي بيكلمك ممكن ميعرفش يستخدم البرنامج خالص ولا له في التكنولوجيا — انت اللي بتشغّل البرنامج عنه:
 - اعمل الحاجة انت (actions) بدل ما تقوله «روح صفحة كذا ودوس كذا». قوله يروح مكان بإيده بس لو الحاجة مش في قدرتك، وساعتها خطوات قصيرة مرقّمة بأسامي الزراير زي ما هي، أو open للصفحة.
@@ -146,11 +147,16 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 - لو عمل حاجة غلط أو عايز يرجّعها: قوله إن «سجل التعديلات ← تراجع» بترجّعها، أو اعمل التعديل العكسي انت.
 - بعد ما يخلّص حاجة اقترح الخطوة الجاية الطبيعية في سطر (مثلاً بعد تسجيل دفعة: «تحب أبعتله رسالة واتساب بحسابه؟»).
 - شغل الشهر العادي اللي ممكن يطلبه: تسجيل أيام السركي لكل عقد، الدفعات اللي جت من الشركات، الدفعات لأصحاب المعدات والسواقين، المصروفات، وفي آخر الشهر مراجعة الحسابات (مين ليه ومين عليه) وقفل الشهر بعد ما يتأكد إن كله اتسجل.
+- التراجع: لو قال «رجّع اللي عملته» أو «الغي آخر حاجة»: اقرا activity الأول، واختار الحركة الصح (أحدث حاجة اتعملت ولسه canUndo)، واعمل call fn undo بـ {actionId}. وقوله هيرجّع إيه بالظبط.
+- النسخة الاحتياطية: call fn backupNow بـ {} (على اللاب توب بس — بيسأله يحفظ الملف فين).
+- الرسالة الصوتية: لو الرسالة صوت اكتب اللي اتقال في heard بالظبط بالعامية (الأسامي زي ما هي في السياق، والأرقام أرقام)، وبعدين رد عليه عادي. لو مفيش كلام مفهوم: heard فاضي.
 - ذاكرة المحادثة: الرسايل اللي فاتت في نفس المحادثة (history) فيها اللي اتقال واللي اتعمل ([اتعمل: …]). لو قال «خليها كذا» أو «عدّل التاريخ بس» أو «نفس الأسعار» يبقى قصده نفس الحاجة اللي كنتوا بتتكلموا فيها — كمّل عليها ومتسألش من الأول.
 - whatsapp: رسالة جاهزة للواتساب (phone من السياق، و text = الرسالة كاملة بالعامية). مثلاً «ابعت لمحمد حسابه»: open suppliers id و tab full و pdf true (الملف الكامل PDF) + whatsapp بملخص الحساب وآخر دفعة.
 - لو مش في السياق catalog (نسخة قديمة من البرنامج): متستخدمش call ولا read ولا open ولا whatsapp ولا sarki_photo.
 
-صورة السركي: لو مع الرسالة صورة ورقة سركي:
+الصور: شوف الصورة فيها إيه الأول:
+- إيصال أو فاتورة أو وصل سولار/زيت/قطع غيار أو صورة تحويل (انستا باي، محفظة، بنك): اقرا منها المبلغ والتاريخ ومين دفع لمين وعلى إيه، واعمل العملية المناسبة (expense لمصروف علينا، supplier_deduction لو حاجة لمعدة صاحبها بيتحاسب عليها، supplier_payment لو فلوس اديناها لصاحب معدة، client_payment لو فلوس جت من شركة، driver_payment لسواق) وقول في reply قريت إيه بالظبط. لو حاجة مش واضحة (المبلغ، لمين) اسأل ومتخمّنش.
+صورة السركي: لو الصورة ورقة سركي (أيام وساعات شغل معدة):
 - حدد العقد من كلام المستخدم (المعدة، صاحبها، الشركة أو مقاول الباطن — أي اسم منهم بيطابق contracts) ومن المكتوب على الورقة، وارجع action واحد بس: sarki_photo فيه id = id العقد من contracts، و month = YYYY-MM لو اتقال أو مكتوب على الورقة (وإلا null).
 - reply: «هقرا سركي <المعدة> بتاع <صاحبها> في <الشركة> — راجع الأيام ولو تمام دوس سجّل».
 - متقراش الأيام انت — البرنامج هيقرا الورقة ويعرضها جدول للمراجعة.
@@ -158,7 +164,7 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 
 الشركاء: البرنامج بيستخدمه شركاء الإدارة، والمحادثة واحدة للكل. me في السياق = اسم الشريك اللي بيكلمك دلوقتي، ورسايل الشركاء التانيين في المحادثة مكتوب قبلها اسم اللي كتبها.
 - «من جيبي» / «دفعت من فلوسي» = paidBy = me. «فلان دفع من جيبه» = paidBy فلان. «من الخزنة» = من غير paidBy.
-- كلّم الشريك باسمه لما ينفع، ولو حد سأل «مين عمل كذا» اقرا teamLog — كل تعديل من كل الأجهزة عليه اسم اللي عمله.
+- كلّم الشريك باسمه لما ينفع، ولو حد سأل «مين عمل كذا» اقرا teamLog — كل تعديل من كل الأجهزة عليه اسم اللي عمله — وجاوب بنقط: الاسم، الساعة، وعمل إيه بالظبط (مش ملخص عام).
 
 الرد على الأسئلة (زي ما محاسب شاطر بيرد):
 - جاوب السؤال الأول بالرقم في أول سطر، وبعدين التفاصيل اللي ليها علاقة حتى لو مسألش عنها: آخر دفعة (كام ويوم إيه)، اللي اتصرف قبلها، أيام الشغل الشهر ده، الخصومات… بإيجاز وبنقط.
@@ -187,13 +193,16 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 - الخزنة: الحسابات (كاش، انستا باي، محفظة، شيكات)، الحركات، التحويل بين الحسابات، والفلوس اللي مع حد.
 - الضرايب والإقرارات: الـ ١٤٪ والـ ٣٪، دفع الضرايب، وإقرار ١٤٪ الشهري وإقرار ٣٪ السنوي (طباعة/PDF).
 - سجل التعديلات: كل اللي اتعمل، و«تراجع» بيرجّع أي حاجة اتعملت غلط (حتى المسح).
-- الإعدادات: النسب، الاستقطاع، الباقة، باسورد الشركة، النسخ الاحتياطي، التحديثات.
-المسح من الصفحات: جنب كل حاجة علامة زبالة 🗑 — دوس عليها، هيوريك هيتمسح إيه ومعاه إيه، وأكّد. ولو اتمسح غلط: سجل التعديلات ← تراجع.
-لو سأل عن حاجة مش في البرنامج قول بصراحة إنها مش موجودة.
+- الإعدادات (بالترتيب ده وبس): النسب (١٤٪ و٥٪ ونصيب الإدارة)، الاستقطاع (٣٪)، النسخ الاحتياطي (على اللاب توب بس)، المزامنة بين الأجهزة، «انت مين من الشركاء؟»، «اللي المساعد اتعلمه»، باسورد الشركة، الترخيص والباقة، التحديثات. مفيش في الإعدادات مسح ولا تصفير.
+المسح من الصفحات: جنب كل حاجة علامة زبالة 🗑 — دوس عليها، هيوريك هيتمسح إيه ومعاه إيه، وأكّد:
+- السركي: العقود وأيام السركي. - أصحاب المعدات: صاحب المعدة، معداته، دفعاته، خصوماته. - الشركات: الشركة ودفعاتها. - السواقين: السواق وفلوسه. - الهالك: المصروفات. - المستثمرين: المستثمر وحركات رأس المال والأرباح المصروفة. - الإدارة: صرف نصيب الإدارة. - الخزنة: التحويلات والفلوس اللي مع حد. - الضرايب: دفعات الضرايب.
+ولو اتمسح غلط: سجل التعديلات ← تراجع.
+تفضية البرنامج كله (يبدأ على نضيف): مفيش زرار ليها في أي صفحة — انت اللي بتعملها: call fn resetCompany بـ argsJson {}. قوله الأول: «تقدر تمسح كل حاجة لوحدها (العقود من السركي، أصحاب المعدات من صفحتهم، الشركات من صفحتها، الخزنة والمستثمرين…)، أو أفضّيلك البرنامج كله مرة واحدة: كل العقود والسركي وأصحاب المعدات والشركات والسواقين والمصروفات والخزنة والمستثمرين والضرايب بتتمسح، والترخيص والإعدادات بيفضلوا، وMK بتحتفظ بنسخة قبل المسح تقدر ترجّعها. تحب أعمل كده؟» مع الـ action ده عشان يدوس «أيوه» أو «لأ». محتاج باسورد الشركة، وكل الأجهزة بتفضى.
+- لو سأل عن حاجة أو مكان أو زرار: جاوب من الكلام اللي فوق بس. ممنوع تخترع زرار أو صفحة أو طريقة مش مكتوبة هنا أو في catalog. لو مش موجودة قول بصراحة «الحاجة دي مش موجودة في البرنامج»، ولو تقدر تعملها انت بـ call اعرض تعملها.
 
 قواعد:
 - الفلوس بالجنيه أرقام بس (١٥٠٠ = 1500، "ألفين" = 2000، "ألف ونص" = 1500).
-- التواريخ YYYY-MM-DD. "النهارده" و"امبارح" و"أول الشهر" محسوبين من تاريخ النهارده اللي في السياق.
+- التواريخ YYYY-MM-DD. "النهارده" و"امبارح" و"أول الشهر" محسوبين من تاريخ النهارده اللي في السياق. «الشهر اللي فات» = الشهر اللي قبل شهر النهارده (لو النهارده 2026-11-12 يبقى 2026-10)، و«الشهر ده» = شهر النهارده.
 - استخدم الأسماء الموجودة في السياق بالظبط لو المستخدم يقصدها (حتى لو كتبها بشكل مختلف شوية). اسم جديد = حاجة جديدة.
 - "شركة" = clientKind company. "مقاول باطن" أو "فرد" أو "من غير ضرايب" = individual.
 - لو حاجة لازمة ناقصة (سعر، صاحب المعدة لمعدة جديدة، المبلغ…) متخمّنش: actions فاضية، و reply سؤال واحد واضح عن الناقص.
@@ -204,6 +213,19 @@ const SYSTEM = `انت مساعد جوه برنامج حسابات لشركة ت
 // ---- Gemini ----
 const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
 let geminiModels: string[] | null = null;
+// الموديلات اللي حدها اليومي خلص: بنعدّيها لحد ما الحد يرجع (منتصف الليل بتوقيت كاليفورنيا = ١٠ الصبح القاهرة)
+// عشان كل رسالة متضيعش وقت تجرّبها الأول
+const spent = new Map<string, number>();
+const nextReset = () => {
+  const d = new Date();
+  const r = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 8);
+  return r > d.getTime() ? r : r + 86_400_000;
+};
+const usable = (models: string[]) => {
+  const now = Date.now();
+  const ok = models.filter((m) => (spent.get(m) ?? 0) <= now);
+  return ok.length ? ok : models;
+};
 class AiError extends Error {
   // daily = الحد المجاني بتاع اليوم خلص في كل الموديلات (مش زحمة دقيقة)
   constructor(public status: number, public daily = false) {
@@ -244,17 +266,25 @@ const lightThinking = (model: string) =>
   /^gemini-2\.5-flash/.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : Number(/^gemini-(\d+)/.exec(model)?.[1] ?? 0) >= 3 ? { thinkingConfig: { thinkingLevel: "low" } } : {};
 
 type Turn = { role: "user" | "assistant"; text: string };
-async function askGemini(key: string, history: Turn[], text: string, image?: { data: string; mediaType: string }) {
+type Media = { data: string; mediaType: string };
+async function askGemini(key: string, history: Turn[], text: string, image?: Media, audio?: Media) {
   const started = Date.now();
   let last = 503;
   let daily = true;
-  for (const model of await listGeminiModels(key)) {
+  for (const model of usable(await listGeminiModels(key))) {
     for (const full of [true, false]) {
       const left = 100_000 - (Date.now() - started);
       if (left < 8_000) throw new AiError(last, false);
       const contents = [
         ...history.map((t) => ({ role: t.role === "assistant" ? "model" : "user", parts: [{ text: t.text }] })),
-        { role: "user", parts: [...(image ? [{ inline_data: { mime_type: image.mediaType, data: image.data } }] : []), { text }] },
+        {
+          role: "user",
+          parts: [
+            ...(image ? [{ inline_data: { mime_type: image.mediaType, data: image.data } }] : []),
+            ...(audio ? [{ inline_data: { mime_type: audio.mediaType, data: audio.data } }] : []),
+            { text },
+          ],
+        },
       ];
       let res: Response;
       try {
@@ -266,12 +296,14 @@ async function askGemini(key: string, history: Turn[], text: string, image?: { d
             contents,
             generationConfig: { responseMimeType: "application/json", temperature: 0, ...(full ? { responseSchema: geminiSchema(SCHEMA), ...lightThinking(model) } : {}) },
           }),
-          signal: AbortSignal.timeout(Math.min(35_000, left - 3_000)),
+          signal: AbortSignal.timeout(Math.min(model.includes("lite") ? 30_000 : 15_000, left - 3_000)),
         });
       } catch (err) {
         if ((err as Error)?.name !== "TimeoutError") throw err;
         last = 504;
         daily = false;
+        // موديل بطيء دلوقتي: نعدّيه ١٠ دقايق عشان الرسايل الجاية متستناهوش
+        spent.set(model, Date.now() + 10 * 60_000);
         break;
       }
       if (res.ok) {
@@ -288,11 +320,12 @@ async function askGemini(key: string, history: Turn[], text: string, image?: { d
       last = res.status;
       const body = await res.text();
       console.warn(`gemini ${model}: ${res.status} ${body.slice(0, 300)}`);
-      if (!(res.status === 429 && /PerDay/i.test(body))) daily = false;
+      if (res.status === 429 && /PerDay/i.test(body)) spent.set(model, nextReset());
+      else daily = false;
       if (res.status === 400 && full) continue;
       if (res.status === 401 || res.status === 403) throw new AiError(res.status);
       if (res.status === 404) geminiModels = null;
-      await new Promise((r) => setTimeout(r, 1_200));
+      if (res.status !== 429) await new Promise((r) => setTimeout(r, 1_200));
       break;
     }
   }
@@ -307,7 +340,7 @@ async function transcribeGemini(key: string, audio: string, mediaType: string, h
     (hint ? `\nأسامي موجودة في البرنامج ممكن يقولها (اكتبها بنفس الشكل لو هي اللي اتقالت): ${hint}` : "");
   let last = 503;
   let daily = true;
-  for (const model of await listGeminiModels(key)) {
+  for (const model of usable(await listGeminiModels(key))) {
     const res = await fetch(`${GEMINI}/models/${model}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
@@ -331,7 +364,48 @@ async function transcribeGemini(key: string, audio: string, mediaType: string, h
     last = res.status;
     const body = await res.text();
     console.warn(`gemini voice ${model}: ${res.status} ${body.slice(0, 300)}`);
-    if (!(res.status === 429 && /PerDay/i.test(body))) daily = false;
+    if (res.status === 429 && /PerDay/i.test(body)) spent.set(model, nextReset());
+    else daily = false;
+    if (res.status === 401 || res.status === 403) throw new AiError(res.status);
+  }
+  throw new AiError(last, daily && last === 429);
+}
+
+// الرد بالصوت: Gemini TTS بيقرا الرد بالعامية (بيرجع PCM ١٦ بت ٢٤ كيلو — البرنامج بيشغّله)
+let ttsModels: string[] | null = null;
+async function speakGemini(key: string, text: string) {
+  if (!ttsModels) {
+    const res = await fetch(`${GEMINI}/models?pageSize=200`, { headers: { "x-goog-api-key": key }, signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) throw new AiError(res.status);
+    const names = (((await res.json()).models ?? []) as { name: string }[]).map((m) => m.name.replace(/^models\//, "")).filter((x) => /^gemini-[\d.]+-flash.*tts/.test(x));
+    const ver = (x: string) => Number(/gemini-(\d+(?:\.\d+)?)/.exec(x)?.[1] ?? 0);
+    ttsModels = names.sort((a, b) => ver(b) - ver(a) || a.length - b.length).slice(0, 3);
+  }
+  let last = 503;
+  let daily = true;
+  for (const model of usable(ttsModels)) {
+    const res = await fetch(`${GEMINI}/models/${model}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text }] }],
+        generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Charon" } } } },
+      }),
+      signal: AbortSignal.timeout(60_000),
+    }).catch(() => null);
+    if (!res) continue;
+    if (res.ok) {
+      const j = await res.json();
+      const part = (j.candidates?.[0]?.content?.parts ?? []).find((p: { inlineData?: { data?: string } }) => p.inlineData?.data);
+      if (part) return { model, audio: part.inlineData.data as string, mediaType: String(part.inlineData.mimeType ?? "audio/L16;rate=24000") };
+      last = 502;
+      continue;
+    }
+    last = res.status;
+    const body = await res.text();
+    console.warn(`gemini tts ${model}: ${res.status} ${body.slice(0, 300)}`);
+    if (res.status === 429 && /PerDay/i.test(body)) spent.set(model, nextReset());
+    else daily = false;
     if (res.status === 401 || res.status === 403) throw new AiError(res.status);
   }
   throw new AiError(last, daily && last === 429);
@@ -363,10 +437,30 @@ async function askClaude(apiKey: string, history: Turn[], text: string, image?: 
   };
 }
 
+/** أفعال الذكاء الاصطناعي: الأنواع المعروفة بس، والخانات الفاضية تتشال، و argsJson يبقى args */
+function cleanActions(raw: unknown) {
+  return (Array.isArray(raw) ? raw : [])
+    .filter((a): a is Record<string, unknown> => !!a && typeof a === "object" && TYPES.includes(String((a as { type?: unknown }).type)))
+    .slice(0, 40)
+    .map((a) => {
+      const o: Record<string, unknown> = Object.fromEntries(Object.entries(a).filter(([k, v]) => k in ACTION_PROPS && v !== null && v !== ""));
+      if (typeof o.argsJson === "string") {
+        try {
+          const v = JSON.parse(o.argsJson);
+          if (v && typeof v === "object" && !Array.isArray(v)) o.args = v;
+        } catch {
+          /* خانات مش مفهومة — البرنامج هيقول */
+        }
+      }
+      delete o.argsJson;
+      return o;
+    });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return fail("method", 405);
-  let b: { key?: string; deviceId?: string; text?: string; context?: unknown; history?: Turn[]; image?: string; mediaType?: string; catalog?: string; reads?: unknown; transcribe?: boolean; audio?: string; hint?: string };
+  let b: { key?: string; deviceId?: string; text?: string; context?: unknown; history?: Turn[]; image?: string; mediaType?: string; catalog?: string; reads?: unknown; transcribe?: boolean; audio?: string; hint?: string; speak?: string; audioType?: string };
   try {
     b = await req.json();
   } catch {
@@ -400,7 +494,25 @@ Deno.serve(async (req) => {
       return json({ ok: true, text: t.text });
     }
 
-    const said = String(b.text ?? "").trim();
+    // صوت مع الرسالة: Gemini بيسمعه ويرد في نفس المرة (من غير ما يتكتب الأول في طلب لوحده)
+    let voice: Media | undefined;
+    if (b.audio) {
+      const data = String(b.audio).replace(/^data:[^,]+,/, "");
+      if (data.length * 0.75 > 8_000_000) return fail("too_big");
+      voice = { data, mediaType: /^audio\/(wav|mp3|mpeg|ogg|aac|flac|webm)$/.test(b.audioType ?? "") ? b.audioType! : "audio/wav" };
+    }
+    if (b.speak) {
+      const geminiKey = Deno.env.get("GEMINI_API_KEY");
+      if (!geminiKey) return fail("not_configured");
+      const t = String(b.speak).trim().slice(0, 1500);
+      if (!t) return fail("empty");
+      const v = await speakGemini(geminiKey, t);
+      await sql`insert into licensing.ai_usage (license_id, device_id, kind, input_tokens, output_tokens, ok)
+                values (${lic.id}, ${b.deviceId ?? null}, ${"speak:" + v.model}, ${null}, ${null}, ${true})`;
+      return json({ ok: true, audio: v.audio, mediaType: v.mediaType });
+    }
+
+    const said = String(b.text ?? "").trim() || (voice ? "(رسالة صوتية — اسمعها، واكتب اللي اتقال في heard، ورد عليها)" : "");
     if (!said) return fail("empty");
     if (said.length > 4000) return fail("too_long");
     const context = JSON.stringify(b.context ?? {}).slice(0, 60_000);
@@ -435,38 +547,23 @@ Deno.serve(async (req) => {
     let r: Awaited<ReturnType<typeof askGemini>> | undefined;
     if (geminiKey) {
       try {
-        r = await askGemini(geminiKey, history, `${text}\n\nرجّع JSON بس بالشكل ده: ${JSON.stringify(SCHEMA)}`, image);
+        r = await askGemini(geminiKey, history, `${text}\n\nرجّع JSON بس بالشكل ده: ${JSON.stringify(SCHEMA)}`, image, voice);
       } catch (err) {
         if (!claudeKey || !(err instanceof AiError)) throw err;
       }
     }
-    if (!r && claudeKey) r = await askClaude(claudeKey, history, text, image);
+    if (!r && claudeKey && !voice) r = await askClaude(claudeKey, history, text, image);
     if (!r) return fail("not_configured");
     await sql`insert into licensing.ai_usage (license_id, device_id, kind, input_tokens, output_tokens, ok)
               values (${lic.id}, ${b.deviceId ?? null}, ${"assistant:" + r.model}, ${r.inTokens}, ${r.outTokens}, ${!r.blocked})`;
     if (r.blocked) return fail("refused");
-    let out: { reply?: unknown; actions?: unknown };
+    let out: { reply?: unknown; actions?: unknown; heard?: unknown };
     try {
       out = JSON.parse(r.text.replace(/^```(?:json)?\s*|\s*```$/g, ""));
     } catch {
       return fail("unreadable");
     }
-    const actions = (Array.isArray(out.actions) ? out.actions : [])
-      .filter((a): a is Record<string, unknown> => !!a && typeof a === "object" && TYPES.includes(String((a as { type?: unknown }).type)))
-      .slice(0, 40)
-      .map((a) => {
-        const o: Record<string, unknown> = Object.fromEntries(Object.entries(a).filter(([k, v]) => k in ACTION_PROPS && v !== null && v !== ""));
-        if (typeof o.argsJson === "string") {
-          try {
-            const v = JSON.parse(o.argsJson);
-            if (v && typeof v === "object" && !Array.isArray(v)) o.args = v;
-          } catch {
-            /* خانات مش مفهومة — البرنامج هيقول */
-          }
-        }
-        delete o.argsJson;
-        return o;
-      });
+    const actions = cleanActions(out.actions);
     const o2 = out as { cards?: unknown; chart?: unknown };
     // الرقم بيتكتب هنا (مش من الذكاء الاصطناعي) عشان ميطلعش فيه غلط في الكتابة
     const ar = new Intl.NumberFormat("ar-EG", { maximumFractionDigits: 2 });
@@ -489,7 +586,21 @@ Deno.serve(async (req) => {
         .map((x) => ({ name: String(x.name ?? "").slice(0, 40), values: (x.values as unknown[]).slice(0, labels.length).map((v) => (Number.isFinite(Number(v)) ? Number(v) : 0)) }));
       if (series.length) chart = { title: String(ch.title ?? "").slice(0, 80), kind: ["bar", "line", "pie"].includes(String(ch.kind)) ? String(ch.kind) : "bar", labels, series };
     }
-    return json({ ok: true, reply: String(out.reply ?? ""), actions, cards, chart });
+    let heard = voice ? String(out.heard ?? "").trim().slice(0, 4000) : "";
+    if (voice && (!heard || /^\(?(مفيش كلام|no speech)/i.test(heard))) {
+      // الموديل مكتبش اللي سمعه: نكتب الصوت لوحده ونسأله تاني بالكلام
+      const t = geminiKey ? await transcribeGemini(geminiKey, voice.data, voice.mediaType, "").catch(() => null) : null;
+      if (!t?.text || /^\(?(مفيش كلام|no speech)/i.test(t.text)) return fail("no_speech");
+      heard = t.text.slice(0, 4000);
+      const again = await askGemini(geminiKey!, history, `${text.replace(said, heard)}\n\nرجّع JSON بس بالشكل ده: ${JSON.stringify(SCHEMA)}`, image);
+      try {
+        out = JSON.parse(again.text.replace(/^```(?:json)?\s*|\s*```$/g, ""));
+      } catch {
+        return fail("unreadable");
+      }
+      return json({ ok: true, reply: String(out.reply ?? ""), actions: cleanActions(out.actions), cards: [], chart: null, heard });
+    }
+    return json({ ok: true, reply: String(out.reply ?? ""), actions, cards, chart, ...(voice ? { heard } : {}) });
   } catch (err) {
     console.error(err);
     if (err instanceof AiError) return fail(err.daily ? quotaError() : err.status === 401 || err.status === 403 ? "bad_key" : err.status === 429 || err.status >= 500 ? "busy" : "ai_error", 502);

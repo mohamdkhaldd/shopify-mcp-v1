@@ -186,6 +186,7 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
       return r;
     },
     "shell:transcribe": (r: { audio: string; mediaType: string; hint?: string }) => (unlocked ? license.transcribe(r) : { ok: false, message: "ادخل الأول" }),
+    "shell:speak": ({ text }: { text: string }) => (unlocked ? license.speak(text) : { ok: false, message: "ادخل الأول" }),
     "shell:askAssistant": (r: AssistantRequest) => (unlocked ? license.askAssistant(r) : { ok: false, message: "ادخل الأول" }),
     "shell:setPassword": async ({ current, next }: { current: string; next: string }) => {
       if (!unlocked) return { ok: false, message: "ادخل الأول" };

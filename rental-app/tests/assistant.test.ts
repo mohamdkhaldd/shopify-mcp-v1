@@ -155,3 +155,42 @@ describe("المساعد", () => {
 function recordClientPaymentFor(db: any, clientId: number) {
   makeRegistry(db).clientPayment({ clientId, date: "2026-10-05", amountPt: egp(5000) });
 }
+
+describe("المساعد بيرجّع اللي اتعمل بنفسه", () => {
+  it("undo من المساعد بيرجّع الدفعة وبيبان في سجل التعديلات", () => {
+    const db = freshDb({ withholding: true });
+    const reg = makeRegistry(db);
+    assistantApply(db, [{ type: "contract", equipment: "لودر", supplier: "محمد", client: "النور", unit: "day", clientRate: 1500, supplierRate: 1200, startDate: "2026-10-01" }]);
+    const clientId = (db.prepare("SELECT id FROM clients").get() as { id: number }).id;
+    const paid = callCore(db, reg, "clientPayment", { clientId, date: "2026-10-05", amountPt: egp(5000) }) as { ok: boolean; actionId: string };
+    expect(paid.ok).toBe(true);
+    expect(count(db, "client_payments")).toBe(1);
+    const r = callCore(db, reg, "assistantApply", { actions: [{ type: "call", fn: "undo", args: { actionId: paid.actionId } }] }) as { ok: boolean; message?: string };
+    expect(r).toMatchObject({ ok: true });
+    expect(count(db, "client_payments")).toBe(0);
+  });
+});
+
+describe("تذكيرات المساعد", () => {
+  it("سركي مش متسجل من أيام + شهر فات مفتوح", async () => {
+    const { assistantReminders } = await import("../core/ai/reminders");
+    const db = freshDb({ withholding: true });
+    assistantApply(db, [
+      { type: "contract", equipment: "لودر", supplier: "محمد", client: "النور", unit: "day", clientRate: 1500, supplierRate: 1200, startDate: "2026-10-01" },
+      { type: "work_days", equipment: "لودر", from: "2026-10-01", to: "2026-11-02" },
+    ]);
+    const r = assistantReminders(db, "2026-11-10");
+    expect(r.map((x) => x.text).join("\n")).toMatch(/سركي لودر عند النور آخر يوم متسجل فيه 2\/11 \(من 8 يوم\)/);
+    expect(r.map((x) => x.text).join("\n")).toMatch(/شهر أكتوبر 2026 لسه متقفلش/);
+    expect(assistantReminders(db, "2026-11-03").length).toBe(0);
+  });
+});
+
+describe("أيام الشغل من غير اسم المعدة", () => {
+  it("بيلاقي المعدة من صاحبها لو عنده عقد واحد شغال", () => {
+    const db = freshDb({ withholding: true });
+    assistantApply(db, [{ type: "contract", equipment: "لودر", supplier: "محمد", client: "النور", unit: "day", clientRate: 1500, supplierRate: 1200, startDate: "2026-10-01" }]);
+    const lines = assistantApply(db, [{ type: "work_days", supplier: "محمد", from: "2026-10-02", to: "2026-10-04" }]);
+    expect(lines.join("\n")).toMatch(/أيام شغل للمعدة لودر: من 2026-10-02 لحد 2026-10-04/);
+  });
+});

@@ -60,6 +60,10 @@ export const WRITE_CATALOG: Record<string, string> = {
   // الإعدادات
   setRates: "النسب من تاريخ (مبيترجعش): {effectiveFrom, vat (بالمية، ١٤), tax5 (بالمية، ٥), management (نصيب الإدارة بالمية)}",
   setWithholding: "الاستقطاع من تاريخ (مبيترجعش): {effectiveFrom, bp (بالمية)}",
+  // التراجع والتصفير والنسخة الاحتياطية
+  undo: "رجّع حاجة اتعملت (زي زرار تراجع في سجل التعديلات): {actionId} — الـ id من قراية activity (اللي canUndo بس)",
+  resetCompany: "فضّي البرنامج كله ويبدأ على نضيف (كل العقود والسركي وأصحاب المعدات والشركات والسواقين والمصروفات والخزنة والمستثمرين والضرايب). الترخيص والإعدادات بيفضلوا، وMK بتحتفظ بنسخة قبل المسح: {}",
+  backupNow: "نسخة احتياطية دلوقتي في ملف (اللاب توب بس): {}",
   // التعلّم
   lessonAdd: "احفظ درس/قاعدة للشركة عشان تمشي عليها كل مرة بعد كده (بيتحفظ لوحده من غير ما المستخدم يوافق أو يشوفه): {text} — جملة واضحة (مثلاً «لما حد يقول (الكبير) يقصد لودر 950 بتاع محمد علي»)",
   // المسح
@@ -88,9 +92,11 @@ export const READ_CATALOG: Record<string, string> = {
 };
 
 /** الحاجات دي محتاجة باسورد الشركة (مسح، أو حاجة مبترجعش). */
-export const PASSWORD_CALLS = new Set(["delete", "closeMonth", "setRates", "setWithholding", "adjustment"]);
+export const PASSWORD_CALLS = new Set(["delete", "closeMonth", "setRates", "setWithholding", "adjustment", "resetCompany"]);
 /** ومبتترجعش من سجل التعديلات */
-export const NOT_UNDOABLE_CALLS = new Set(["closeMonth", "adjustment", "setRates", "setWithholding"]);
+export const NOT_UNDOABLE_CALLS = new Set(["closeMonth", "adjustment", "setRates", "setWithholding", "resetCompany"]);
+/** دول البرنامج نفسه بيعملهم (مش دوال البيانات): التصفير والنسخة الاحتياطية — كل واحدة لوحدها */
+export const SHELL_CALLS = new Set(["resetCompany", "backupNow"]);
 
 /** الصفحات اللي المساعد يقدر يفتحها (ويطلع منها PDF). */
 export const PAGES = ["home", "sarki", "suppliers", "drivers", "clients", "management", "expenses", "investors", "treasury", "tax", "activity", "settings"] as const;

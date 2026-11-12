@@ -217,6 +217,7 @@ app.whenReady().then(async () => {
   // واتساب بس (رسالة جاهزة لصاحب المعدة / الشركة) — أي رابط تاني مرفوض
   ipcMain.handle("shell:whatsapp", (_e, { url }: { url: string }) => (isWhatsappUrl(url) ? shell.openExternal(url).then(() => true) : false));
   ipcMain.handle("shell:transcribe", (_e, r: { audio: string; mediaType: string; hint?: string }) => (unlocked ? license.transcribe(r) : { ok: false, message: "ادخل الأول" }));
+  ipcMain.handle("shell:speak", (_e, { text }: { text: string }) => (unlocked ? license.speak(text) : { ok: false, message: "ادخل الأول" }));
   ipcMain.handle("shell:askAssistant", (_e, r: AssistantRequest) => (unlocked ? license.askAssistant(r) : { ok: false, message: "ادخل الأول" }));
   ipcMain.handle("shell:setPassword", (_e, { current, next }: { current: string; next: string }) =>
     unlocked ? license.setPassword(current, next) : { ok: false, message: "ادخل الأول" },

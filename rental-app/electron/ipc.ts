@@ -1,3 +1,4 @@
+import { assistantReminders } from "../core/ai/reminders";
 import { Db, UserError } from "../core/db";
 import { clientsView, contractOptions, dashboardView, investorsView, managementView, sarkiView, settingsView, suppliersView, taxView, TreasuryFilters, treasuryView } from "../core/services/views";
 import { activityView, runAction, undoAction } from "../core/services/activity";
@@ -61,6 +62,7 @@ export function makeRegistry(db: Db) {
     chatConversations: () => chatConversations(db),
     lessons: () => lessonsList(db),
     lessonAdd: (a: { text: string }) => lessonAdd(db, a.text),
+    reminders: () => assistantReminders(db),
     lessonDelete: (a: { id: number }) => lessonDelete(db, a.id),
     chatAdd: (a: { role: "user" | "assistant"; text: string; extra?: unknown; conv?: string }) => chatAdd(db, a),
     chatUpdate: (a: { id: number; extra: unknown }) => chatUpdate(db, a.id, a.extra),
@@ -197,6 +199,10 @@ function labelFor(db: Db, fn: string, a: any): string | null {
       if (a.siteName !== undefined) parts.push(`الموقع ← ${a.siteName || "من غير"}`);
       return `تعديل عقد ${c.eq} مع ${c.cl}: ${parts.join("، ") || "مفيش تغيير"}${keep.length ? ` — وزي ما هو: ${keep.join("، ")}` : ""}`;
     }
+    case "undo": {
+      const row = db.prepare("SELECT label FROM actions WHERE id = ?").get(String(a.actionId ?? "")) as { label: string } | undefined;
+      return `تراجع عن: ${row?.label ?? "تعديل"}`;
+    }
     case "lessonAdd":
       return `المساعد اتعلم: ${String(a.text ?? "").slice(0, 120)}`;
     case "renameContract":
@@ -285,7 +291,7 @@ function labelFor(db: Db, fn: string, a: any): string | null {
 }
 
 /** الحاجات اللي بتعرض بس (من غير تعديل) — دي بس اللي بتشتغل والاشتراك خالص */
-const READ_CALLS = new Set(["me", "teamNames", "teamLog", "chatList", "chatConversations", "lessons", "assistantContext", "assistantFacts", "assistantPreview", "assistantRead", "drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
+const READ_CALLS = new Set(["reminders", "me", "teamNames", "teamLog", "chatList", "chatConversations", "lessons", "assistantContext", "assistantFacts", "assistantPreview", "assistantRead", "drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
 export const isReadCall = (fn: string) => READ_CALLS.has(fn);
 
 /** التشغيل: أي قناة بتعدّل أو بتضيف (create / delete / update / set …) — بتتقفل والاشتراك خالص */

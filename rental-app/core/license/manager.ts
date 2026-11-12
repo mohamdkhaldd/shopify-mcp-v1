@@ -14,10 +14,13 @@ export interface AssistantRequest {
   catalog?: string;
   /** نتايج القراية اللي المساعد طلبها في نفس السؤال */
   reads?: { fn: string; args?: unknown; result: unknown }[];
+  /** رسالة صوتية (WAV base64): بتتسمع وتترد في نفس الطلب */
+  audio?: string;
+  audioType?: string;
 }
 export type AssistantCard = { label: string; value: string; tone: "in" | "out" | "tax" | "plain" };
 export type AssistantChart = { title: string; kind: "bar" | "line" | "pie"; labels: string[]; series: { name: string; values: number[] }[] };
-export type AssistantReply = { ok: true; reply: string; actions: AssistantAction[]; cards: AssistantCard[]; chart: AssistantChart | null } | { ok: false; message: string };
+export type AssistantReply = { ok: true; reply: string; actions: AssistantAction[]; cards: AssistantCard[]; chart: AssistantChart | null; heard?: string } | { ok: false; message: string };
 const ASSISTANT_ERRORS: Record<string, string> = {
   empty: "اكتب اللي عايز تسجله",
   too_long: "الرسالة طويلة أوي — قسّمها على كذا رسالة",
@@ -444,20 +447,31 @@ export function createLicenseManager(o: LicenseOptions) {
   async function askAssistant(r: AssistantRequest): Promise<AssistantReply> {
     const key = get("license_key");
     if (!key) return { ok: false, message: "البرنامج مش متفعّل" };
-    const a = await call<{ ok: true; reply: string; actions: unknown[]; cards?: unknown; chart?: unknown } | { ok: false; error: string }>(
-      { key, text: r.text, context: r.context, history: r.history ?? [], image: r.image, mediaType: r.mediaType, catalog: r.catalog, reads: r.reads },
+    const a = await call<{ ok: true; reply: string; actions: unknown[]; cards?: unknown; chart?: unknown; heard?: string } | { ok: false; error: string }>(
+      { key, text: r.text, context: r.context, history: r.history ?? [], image: r.image, mediaType: r.mediaType, catalog: r.catalog, reads: r.reads, audio: r.audio, audioType: r.audioType },
       120_000,
       o.url.replace(/\/license$/, "/assistant"),
     );
     if (!a) return { ok: false, message: OFFLINE };
-    if (!a.ok) return { ok: false, message: ASSISTANT_ERRORS[a.error] ?? READ_ERRORS[a.error] ?? READ_ERRORS.server };
+    if (!a.ok) return { ok: false, message: a.error === "no_speech" ? "مسمعتش كلام — قرّب من المايك وجرّب تاني" : (ASSISTANT_ERRORS[a.error] ?? READ_ERRORS[a.error] ?? READ_ERRORS.server) };
     return {
       ok: true,
+      ...(typeof a.heard === "string" ? { heard: a.heard } : {}),
       reply: String(a.reply ?? ""),
       actions: Array.isArray(a.actions) ? (a.actions as AssistantAction[]) : [],
       cards: Array.isArray(a.cards) ? (a.cards as AssistantCard[]) : [],
       chart: a.chart && typeof a.chart === "object" ? (a.chart as AssistantChart) : null,
     };
+  }
+
+  /** الرد بالصوت: السيرفر بيرجّع الكلام مقري (PCM) */
+  async function speak(text: string): Promise<{ ok: true; audio: string; mediaType: string } | { ok: false; message: string }> {
+    const key = get("license_key");
+    if (!key) return { ok: false, message: "البرنامج مش متفعّل" };
+    const a = await call<{ ok: true; audio: string; mediaType: string } | { ok: false; error: string }>({ key, speak: text }, 90_000, o.url.replace(/\/license$/, "/assistant"));
+    if (!a) return { ok: false, message: OFFLINE };
+    if (!a.ok) return { ok: false, message: ASSISTANT_ERRORS[a.error] ?? READ_ERRORS[a.error] ?? READ_ERRORS.server };
+    return { ok: true, audio: a.audio, mediaType: a.mediaType };
   }
 
   /** صوت → كلام (Gemini بيكتب اللي اتقال بالعامية). hint = أسامي ممكن تيجي في الكلام */
@@ -474,7 +488,7 @@ export function createLicenseManager(o: LicenseOptions) {
     return { ok: true, text: String(a.text ?? "").trim() };
   }
 
-  return { status, activate, refresh, credentials, setPassword, checkPassword, signOut, readSarki, askAssistant, transcribe, resetCompany, savedKey: () => get("license_key") };
+  return { status, activate, refresh, credentials, setPassword, checkPassword, signOut, readSarki, askAssistant, transcribe, speak, resetCompany, savedKey: () => get("license_key") };
 }
 
 export type LicenseManager = ReturnType<typeof createLicenseManager>;
