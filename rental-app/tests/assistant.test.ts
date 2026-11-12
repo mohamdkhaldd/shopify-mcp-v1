@@ -210,3 +210,26 @@ describe("صاحبين معدة عندهم نفس النوع", () => {
     expect(assistantApply(db, [{ type: "work_days", equipment: "مان لفت 36", supplier: "محمد", from: "2026-11-05", to: "2026-11-06" }]).join()).toMatch(/مان لفت 36/);
   });
 });
+
+describe("المساعد: حاجة جديدة وبعدها عملية عليها في نفس الرد", () => {
+  it("مستثمر جديد + إيداع من غير تاريخ ولا id صح → الإيداع لسامي النهارده", async () => {
+    const { freshDb } = await import("./helpers");
+    const { createInvestor } = await import("../core/services/master");
+    const { callCore, makeRegistry } = await import("../electron/ipc");
+    const db = freshDb();
+    createInvestor(db, { name: "محمد خالد" });
+    const reg = makeRegistry(db);
+    const actions = [
+      { type: "call", fn: "createInvestor", args: { name: "سامي" } },
+      { type: "call", fn: "capital", args: { investorId: 1, kind: "deposit", amountPt: 100000 } },
+    ];
+    const p = callCore(db, reg, "assistantPreview", { actions }) as { ok: boolean; value?: { ok: boolean } };
+    expect(p.ok && p.value?.ok).toBe(true);
+    const r = callCore(db, reg, "assistantApply", { actions, summary: "x" }) as { ok: boolean };
+    expect(r.ok).toBe(true);
+    const row = db.prepare("SELECT i.name, c.amount_pt, c.date FROM capital_movements c JOIN investors i ON i.id = c.investor_id").get() as { name: string; amount_pt: number; date: string };
+    expect(row.name).toBe("سامي");
+    expect(row.amount_pt).toBe(10_000_000);
+    expect(row.date).toBeTruthy();
+  });
+});

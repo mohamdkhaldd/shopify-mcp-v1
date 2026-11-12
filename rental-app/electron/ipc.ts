@@ -316,18 +316,25 @@ export function assistantDeletesRegistry(db: Db) {
  * المساعد بينفذ أي دالة تعديل من القايمة (core/ai/catalog.ts) بنفس دوال الشاشات.
  * الفلوس جاية بالجنيه وبتتحوّل هنا. withPassword = الباسورد اتأكد (أو معاينة بس).
  */
+const CREATED_ID: Record<string, string> = { createSupplier: "supplierId", createEquipment: "equipmentId", createDriver: "driverId", createClient: "clientId", createInvestor: "investorId", createExpenseCategory: "categoryId" };
 function assistantCalls(db: Db, withPassword: boolean): CallRunner {
+  // اللي اتعمل جديد في نفس الرد: «ضيف مستثمر سامي وحط ١٠٠ ألف» → الإيداع يروح لسامي الجديد (المساعد ميعرفش الـ id بتاعه)
+  const created: Record<string, number> = {};
   return (fn, raw) => {
     if (!Object.prototype.hasOwnProperty.call(WRITE_CATALOG, fn)) throw new UserError(`المساعد ميعرفش يعمل «${fn}»`);
     if (PASSWORD_CALLS.has(fn) && !withPassword) throw new UserError("دي محتاجة باسورد الشركة");
     const args: Record<string, unknown> = { ...(toInternal(raw, fn) as Record<string, unknown>), confirmNegative: true };
+    for (const [k, id] of Object.entries(created)) if (k in args) args[k] = id;
+    // التاريخ مش متقال = النهارده
+    if (!args.date && /\bdate\b/.test(WRITE_CATALOG[fn as keyof typeof WRITE_CATALOG])) args.date = today();
     const label = labelFor(db, fn, args) ?? fn;
     if (fn === "delete") {
       const p = deletePreview(db, args.entity as Parameters<typeof deletePreview>[1], Number(args.id));
       if (p.blocked) throw new UserError(p.blocked);
     }
     const f = (makeRegistry(db) as unknown as Record<string, (x: unknown) => unknown>)[fn];
-    f(args);
+    const out = f(args);
+    if (CREATED_ID[fn] && typeof out === "number") created[CREATED_ID[fn]] = out;
     return label;
   };
 }
@@ -347,6 +354,7 @@ export function callCore(db: Db, registry: Registry, fn: string, args: unknown) 
     const msg = String((err as Error)?.message ?? err);
     if (/[؀-ۿ]/.test(msg)) return { ok: false, message: msg, code: "db" };
     if (msg.includes("UNIQUE")) return { ok: false, message: "فيه حاجة متسجلة بنفس الاسم قبل كده", code: "unique" };
+    if (msg.includes("NOT NULL")) return { ok: false, message: `ناقص معلومة (${msg.split(".").pop()}) — قولها وأنا أكمّل`, code: "missing" };
     console.error(err);
     return { ok: false, message: "حصلت مشكلة غير متوقعة — جرّب تاني", code: "internal" };
   }

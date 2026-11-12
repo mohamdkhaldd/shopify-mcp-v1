@@ -44,7 +44,7 @@ export const WRITE_CATALOG: Record<string, string> = {
   managementPayout: "صرف من نصيب الإدارة: {date, amountPt, note?, managerName?, account?}",
   closeMonth: 'قفل الشهر (مبيترجعش): {month:"YYYY-MM"}',
   // المستثمرين
-  createInvestor: "مستثمر جديد: {name, phone?}",
+  createInvestor: "مستثمر جديد: {name, phone?} — ولو قال إنه حط فلوس: ابعت بعدها في نفس الرد capital {investorId, kind:\"deposit\", date, amountPt}",
   updateInvestor: "تعديل مستثمر: {id, name, phone?}",
   capital: 'رأس مال: {investorId, kind:"deposit"|"withdrawal", date, amountPt, note?, account?}',
   investorPayout: "صرف أرباح لمستثمر: {investorId, date, amountPt, note?, account?}",
@@ -112,7 +112,7 @@ export function catalogText() {
   const r = Object.entries(READ_CATALOG)
     .map(([k, v]) => `${k}: ${v}`)
     .join("\n");
-  return `دوال التعديل (type "call" و fn = الاسم و args):\n${w}\n\nدوال القراءة (type "read" و fn = الاسم و args):\n${r}\n\nالصفحات (type "open" و page): ${PAGES.join(", ")} — suppliers مع id و tab "full" = الملف الكامل لصاحب المعدة (التصفية + الدفعات + الخصومات + السركي) ولو pdf = true يطلع PDF`;
+  return `دوال التعديل (type "call" و fn = الاسم و args):\n${w}\n(حاجة جديدة بتعملها في نفس الرد — مستثمر/صاحب معدة/شركة/معدة/سواق — وبعدها عملية عليها: حط أي رقم في الـ id بتاعها والبرنامج بيربطه بالجديدة. واعمل كل اللي قاله، ومتقولش في reply حاجة مش في actions.)\n\nدوال القراءة (type "read" و fn = الاسم و args):\n${r}\n\nالصفحات (type "open" و page): ${PAGES.join(", ")} — suppliers مع id و tab "full" = الملف الكامل لصاحب المعدة (التصفية + الدفعات + الخصومات + السركي) ولو pdf = true يطلع PDF`;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
