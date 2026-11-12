@@ -194,3 +194,19 @@ describe("أيام الشغل من غير اسم المعدة", () => {
     expect(lines.join("\n")).toMatch(/أيام شغل للمعدة لودر: من 2026-10-02 لحد 2026-10-04/);
   });
 });
+
+describe("صاحبين معدة عندهم نفس النوع", () => {
+  it("مان لفت 36 من أحمد = معدة جديدة لأحمد، مش معدة محمد", () => {
+    const db = freshDb({ withholding: true });
+    assistantApply(db, [{ type: "contract", equipment: "مان لفت 36", supplier: "محمد", client: "شركة سمير", unit: "day", clientRate: 3500, supplierRate: 3000, startDate: "2026-11-01" }]);
+    const lines = assistantApply(db, [{ type: "contract", equipment: "مان لفت 36", supplier: "أحمد", client: "المقاولين", unit: "day", clientRate: 3500, supplierRate: 3000, startDate: "2026-11-12" }]);
+    expect(lines.join("\n")).toMatch(/صاحب معدة جديد: أحمد[\s\S]*معدة جديدة: مان لفت 36 — صاحبها أحمد/);
+    const owners = db.prepare("SELECT s.name FROM contracts c JOIN suppliers s ON s.id = c.supplier_id ORDER BY c.id").all() as { name: string }[];
+    expect(owners.map((o) => o.name)).toEqual(["محمد", "أحمد"]);
+    // من غير ما يتقال بتاع مين: بيسأل بدل ما يخمّن
+    expect(() => assistantApply(db, [{ type: "work_days", equipment: "مان لفت 36", from: "2026-11-12", to: "2026-11-12" }])).toThrow(/فيه أكتر من «مان لفت 36»: بتاع محمد، بتاع أحمد/);
+    // بالشركة أو بصاحبها بيلاقيها
+    expect(assistantApply(db, [{ type: "work_days", equipment: "مان لفت 36", client: "المقاولين", from: "2026-11-12", to: "2026-11-12" }]).join()).toMatch(/مان لفت 36/);
+    expect(assistantApply(db, [{ type: "work_days", equipment: "مان لفت 36", supplier: "محمد", from: "2026-11-05", to: "2026-11-06" }]).join()).toMatch(/مان لفت 36/);
+  });
+});

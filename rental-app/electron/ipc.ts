@@ -11,7 +11,7 @@ import { ManagerShare, setContractManagers } from "../core/services/managers";
 import { markDelivered, Money, recordHold, recordTransfer, returnHold, saveAccount } from "../core/services/ledger";
 import { recordCapital, recordClientPayment, recordExpense, recordPayout, recordSupplierDeduction, recordSupplierPayment, recordTaxPayment, reinvestProfit } from "../core/services/ledger";
 import { assistantApply, AssistantAction, assistantContext, assistantFacts, assistantPreview, CallRunner, hasDelete, hasNotUndoable } from "../core/ai/assistant";
-import { chatAdd, chatConversations, chatList, chatUpdate, lessonAdd, lessonDelete, lessonsList, myName, setMyName, teamLogView, teamNames } from "../core/services/team";
+import { chatAdd, chatConversations, chatDelete, chatList, chatTitle, chatUpdate, lessonAdd, lessonDelete, lessonsList, myName, reminderAdd, reminderDone, remindersList, setMyName, teamLogView, teamNames } from "../core/services/team";
 import { PASSWORD_CALLS, READ_CATALOG, toHuman, toInternal, WRITE_CATALOG } from "../core/ai/catalog";
 import { createDriver, DriverInput, driversView, recordDriverPayment, updateDriver } from "../core/services/drivers";
 import { applyOvertime, clearRange, DayPatch, fillRange, getPartySheet, setSupplierRate, Side, upsertDay } from "../core/services/sarki";
@@ -63,6 +63,11 @@ export function makeRegistry(db: Db) {
     lessons: () => lessonsList(db),
     lessonAdd: (a: { text: string }) => lessonAdd(db, a.text),
     reminders: () => assistantReminders(db),
+    myReminders: () => remindersList(db),
+    reminderAdd: (a: { date: string; text: string }) => reminderAdd(db, a),
+    reminderDone: (a: { id: number }) => reminderDone(db, a.id),
+    chatTitle: (a: { conv: string; title: string }) => chatTitle(db, a.conv, a.title),
+    chatDelete: (a: { conv: string }) => chatDelete(db, a.conv),
     lessonDelete: (a: { id: number }) => lessonDelete(db, a.id),
     chatAdd: (a: { role: "user" | "assistant"; text: string; extra?: unknown; conv?: string }) => chatAdd(db, a),
     chatUpdate: (a: { id: number; extra: unknown }) => chatUpdate(db, a.id, a.extra),
@@ -199,6 +204,10 @@ function labelFor(db: Db, fn: string, a: any): string | null {
       if (a.siteName !== undefined) parts.push(`الموقع ← ${a.siteName || "من غير"}`);
       return `تعديل عقد ${c.eq} مع ${c.cl}: ${parts.join("، ") || "مفيش تغيير"}${keep.length ? ` — وزي ما هو: ${keep.join("، ")}` : ""}`;
     }
+    case "reminderAdd":
+      return `تذكير يوم ${String(a.date ?? "")}: ${String(a.text ?? "").slice(0, 100)}`;
+    case "reminderDone":
+      return "تذكير خلص";
     case "undo": {
       const row = db.prepare("SELECT label FROM actions WHERE id = ?").get(String(a.actionId ?? "")) as { label: string } | undefined;
       return `تراجع عن: ${row?.label ?? "تعديل"}`;
@@ -291,7 +300,7 @@ function labelFor(db: Db, fn: string, a: any): string | null {
 }
 
 /** الحاجات اللي بتعرض بس (من غير تعديل) — دي بس اللي بتشتغل والاشتراك خالص */
-const READ_CALLS = new Set(["reminders", "me", "teamNames", "teamLog", "chatList", "chatConversations", "lessons", "assistantContext", "assistantFacts", "assistantPreview", "assistantRead", "drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
+const READ_CALLS = new Set(["reminders", "myReminders", "me", "teamNames", "teamLog", "chatList", "chatConversations", "lessons", "assistantContext", "assistantFacts", "assistantPreview", "assistantRead", "drivers", "dashboard", "sarki", "contractOptions", "suppliers", "partySheet", "clients", "management", "investors", "treasury", "accounts", "tax", "activity", "settings", "deletePreview"]);
 export const isReadCall = (fn: string) => READ_CALLS.has(fn);
 
 /** التشغيل: أي قناة بتعدّل أو بتضيف (create / delete / update / set …) — بتتقفل والاشتراك خالص */

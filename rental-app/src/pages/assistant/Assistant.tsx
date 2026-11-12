@@ -14,6 +14,7 @@ import { ReadPhoto } from "../sarki/ReadPhoto";
 import type { OpenSarki } from "../../api/client";
 import { MAX_SECONDS, playSpeech, Recording, startRecording, stopSpeech } from "./voice";
 import { SHELL_CALLS } from "../../../core/ai/catalog";
+import { takePendingAsk } from "./handoff";
 
 // المساعد: تكتب اللي حصل بالعامية، والذكاء الاصطناعي يفهمه ويقولك هيسجل إيه.
 // مفيش حاجة بتتسجل غير لما تدوس «سجّل»، والتسجيل بيتعمل بنفس دوال البرنامج
@@ -267,6 +268,14 @@ export default function Assistant() {
     setShowList(false);
     load();
   };
+  // الرئيسية بعتت سؤال (تذكير): محادثة جديدة تتفتح وتتسأل أول ما الاسم يتحمّل
+  const [handoff] = useState(() => takePendingAsk());
+  useEffect(() => {
+    if (!handoff || !me) return;
+    openConv(newConv());
+    setTimeout(() => send(handoff, undefined, true), 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handoff, me]);
   useEffect(() => {
     api.me().then(setMe, () => setMe(null));
     api.teamNames().then(setNames, () => {});
@@ -305,14 +314,24 @@ export default function Assistant() {
       }),
     );
 
-  async function send(said = text, voice?: { data: string; mediaType: string }) {
+  /** fresh = محادثة جديدة لسه فاتحينها (الرسايل القديمة متتبعتش معاها) */
+  async function send(said = text, voice?: { data: string; mediaType: string }, fresh = false) {
     const pic = photo;
     let t = said.trim() || (pic && !voice ? "اقرا الصورة دي" : "");
     if ((!t && !voice) || busyRef.current || !me) return;
+    // كتب الباسورد في الشات بدل الخانة: ميتبعتش (الشات بيظهر لكل الشركاء) — يتحط في الخانة على طول
+    const waiting = [...msgs].reverse().find((m) => m.role === "assistant");
+    if (!voice && !pic && waiting?.role === "assistant" && waiting.state === "pending" && needsPassword(waiting.actions, waiting.shell) && /^\S{3,40}$/.test(t) && !/[\u0600-\u06FF]{4,}/.test(t)) {
+      setText("");
+      setPassword(t);
+      setVoiceNote("حطيت الباسورد في الخانة اللي تحت الرسالة — دوس «أيوه» عشان يتنفذ");
+      return;
+    }
     setText("");
+    const firstInConv = fresh || !msgs.some((m) => m.role === "user");
     // الرسايل القديمة باسم اللي كتبها (المحادثة مشتركة بين الشركاء)
     // ذاكرة المحادثة: المحادثة كلها (لحد ١٠٠ رسالة / حوالي ٨٠ ألف حرف)، ومعاها اللي اتعمل فعلاً
-    const all = msgs.slice(-100).map((m) => ({ role: m.role, text: memoryOf(m).slice(0, 3000) }));
+    const all = (fresh ? [] : msgs).slice(-100).map((m) => ({ role: m.role, text: memoryOf(m).slice(0, 3000) }));
     let size = 0;
     const history = all.reverse().filter((m) => (size += m.text.length) <= 80_000).reverse();
     setBusy(true);
@@ -383,6 +402,8 @@ export default function Assistant() {
       }
       r = { ...r, actions: r.actions.filter((a) => !isLesson(a)) };
       if (voice && r.reply) speak(r.reply);
+      // أول رد في المحادثة: المساعد بيسمّيها بكلمتين تلاتة
+      if (firstInConv && r.title) api.chatTitle(convRef.current, r.title).then(() => api.chatConversations().then(setConvs, () => {}), () => {});
       // التصفير والنسخة الاحتياطية: البرنامج نفسه بيعملهم — كل واحدة لوحدها بزرار أيوه / لأ
       const sh = r.actions.find((a) => a.type === "call" && SHELL_CALLS.has(String(a.fn)));
       if (sh) {
@@ -480,17 +501,28 @@ export default function Assistant() {
         <div className="rounded-card border border-line bg-surface p-2 grid gap-1 max-h-[40vh] overflow-y-auto">
           {convs.length === 0 && <div className="text-sm text-muted p-2">لسه مفيش محادثات.</div>}
           {convs.map((c) => (
-            <button
-              key={c.conv}
-              onClick={() => openConv(c.conv)}
-              className={`text-start rounded-xl px-3 py-2 hover:bg-amber-soft ${c.conv === conv ? "bg-amber-soft font-bold" : ""}`}
-            >
-              <div className="truncate">{c.title ?? "محادثة"}</div>
-              <div className="text-xs text-muted">
-                {c.who ? `${c.who} · ` : ""}
-                {new Date(c.last).toLocaleString("ar-EG", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} · {c.count} رسالة
-              </div>
-            </button>
+            <div key={c.conv} className={`flex items-center gap-1 rounded-xl hover:bg-amber-soft ${c.conv === conv ? "bg-amber-soft font-bold" : ""}`}>
+              <button onClick={() => openConv(c.conv)} className="text-start flex-1 min-w-0 px-3 py-2">
+                <div className="truncate">{c.title ?? "محادثة"}</div>
+                <div className="text-xs text-muted font-normal">
+                  {c.who ? `${c.who} · ` : ""}
+                  {new Date(c.last).toLocaleString("ar-EG", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} · {c.count} رسالة
+                </div>
+              </button>
+              {/* المسح بيمسح المحادثة من كل الأجهزة — اللي المساعد اتعلمه منها بيفضل */}
+              <button
+                title="امسح المحادثة"
+                className="px-3 py-2 text-lg opacity-60 hover:opacity-100"
+                onClick={async () => {
+                  if (!confirm(`تمسح محادثة «${c.title ?? "محادثة"}»؟ (اللي المساعد اتعلمه منها هيفضل)`)) return;
+                  await api.chatDelete(c.conv).catch(() => {});
+                  if (c.conv === conv) openConv(newConv());
+                  else api.chatConversations().then(setConvs, () => {});
+                }}
+              >
+                🗑
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -533,7 +565,9 @@ export default function Assistant() {
               key={x.text}
               onClick={() => {
                 setReminders((r) => r.filter((y) => y !== x));
-                send(x.ask);
+                // كل تذكير في محادثة جديدة لوحده
+                openConv(newConv());
+                setTimeout(() => send(x.ask, undefined, true), 0);
               }}
               className="text-start text-sm rounded-xl border border-line bg-surface px-3 py-2 hover:border-amber"
             >
@@ -612,7 +646,7 @@ export default function Assistant() {
               {m.state === "pending" && needsPassword(m.actions, m.shell) && (
                 <label className="grid gap-1 text-sm">
                   <span className="font-semibold text-out">{m.shell === "resetCompany" ? "ده هيفضّي البرنامج كله" : isDelete(m.actions) ? "ده مسح" : "دي حاجة مبترجعش"} — اكتب باسورد الشركة:</span>
-                  <TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" className="max-w-[220px]" />
+                  <TextInput autoFocus type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" className="max-w-[220px]" />
                 </label>
               )}
               {m.sarki && m.state === "pending" && (

@@ -555,7 +555,7 @@ export function setupDatabase(db: Db): Db {
   // الشركاء: مين عمل إيه + محادثة المساعد (بيتزامنوا، بس برا الحمايات وسجل التعديلات)
   ensureTeamTables(db);
   const business = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'sync_%' AND name NOT IN ('audit_log', 'app_settings', 'actions', 'activity_log', 'team_log', 'team_chat', 'team_lessons')")
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'sync_%' AND name NOT IN ('audit_log', 'app_settings', 'actions', 'activity_log', 'team_log', 'team_chat', 'team_lessons', 'team_convs', 'team_reminders')")
     .all()
     .map((r: any) => r.name as string);
   installGuards(db);

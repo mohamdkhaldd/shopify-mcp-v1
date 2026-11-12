@@ -1,5 +1,6 @@
 import { Db, today } from "../db";
 import { computeBooks } from "../services/books";
+import { remindersList } from "../services/team";
 
 // التذكيرات اللي المساعد بيقولها لوحده أول ما الصفحة تفتح (من غير ذكاء اصطناعي — من الأرقام بس):
 // سركي مش متسجل، شهر فات ومتقفلش، شركة متأخرة في الدفع، الخزنة بالسالب.
@@ -47,5 +48,15 @@ export function assistantReminders(db: Db, now = today()): Reminder[] {
     out.push({ text: `شهر ${monthName(prev)} لسه متقفلش`, ask: `راجع معايا حسابات ${monthName(prev)} (مين ليه ومين عليه) وقولّي لو كله تمام نقفله` });
   // ٣) الخزنة بالسالب
   if (computeBooks(db, now).treasury.balancePt < 0) out.push({ text: "الخزنة بالسالب — فيه فلوس طلعت أكتر من اللي دخل", ask: "الخزنة بالسالب ليه؟ وريني آخر الحركات" });
-  return out.slice(0, 6);
+  // ٤) اللي الشركاء طلبوا يتفكروا بيه («فكّرني يوم كذا»): من قبلها بـ ٣ أيام ولحد ما تخلص
+  for (const r of remindersList(db)) {
+    const left = daysBetween(now, r.due);
+    if (left > 3) continue;
+    const when = left < 0 ? `فات ميعاده من ${-left} يوم` : left === 0 ? "النهارده" : `فاضل ${left} ${left === 1 ? "يوم" : "أيام"}`;
+    out.unshift({
+      text: `${when}: ${r.text}`,
+      ask: `${r.who ? `${r.who} قالّك` : "انت قلتلي"} يوم ${dm(r.at.slice(0, 10))} تفكّرني يوم ${dm(r.due)} إن: «${r.text}». قولّي كل التفاصيل والأرقام اللي ليها علاقة دلوقتي (ولو حاجة فلوس اقرا الحساب)، وإيه المطلوب أعمله — ولو اتعملت قولّي أعلّم عليها إنها خلصت (التذكير رقم ${r.id})`,
+    });
+  }
+  return out.slice(0, 8);
 }

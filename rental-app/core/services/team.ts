@@ -1,4 +1,4 @@
-import { Db } from "../db";
+import { Db, UserError } from "../db";
 
 // الشركاء في الإدارة: كل جهاز عليه اسم الشريك اللي بيستخدمه (app_settings — على
 // الجهاز ده بس). وجدولين بيتزامنوا لكل الأجهزة:
@@ -34,12 +34,28 @@ export function ensureTeamTables(db: Db) {
     who TEXT,
     text TEXT NOT NULL
   )`);
+  // عنوان كل محادثة (كلمتين تلاتة) — المساعد بيقترحه من أول رسالة
+  db.exec(`CREATE TABLE IF NOT EXISTS team_convs (
+    id INTEGER PRIMARY KEY,
+    at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    conv TEXT NOT NULL,
+    title TEXT NOT NULL
+  )`);
+  // «فكّرني يوم كذا إن عليا كذا» — بتظهر في الرئيسية وصفحة المساعد لما ميعادها يقرب
+  db.exec(`CREATE TABLE IF NOT EXISTS team_reminders (
+    id INTEGER PRIMARY KEY,
+    at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    who TEXT,
+    due TEXT NOT NULL,
+    text TEXT NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0
+  )`);
 }
 
 /** المحادثات القديمة (من قبل ما يبقى فيه أكتر من محادثة) ليها الرقم ده */
 export const OLD_CONV = "old";
 
-export const TEAM_TABLES = ["team_log", "team_chat", "team_lessons"];
+export const TEAM_TABLES = ["team_log", "team_chat", "team_lessons", "team_convs", "team_reminders"];
 
 export function myName(db: Db): string | null {
   const r = db.prepare("SELECT value FROM app_settings WHERE key = 'partner_name'").get() as { value: string } | undefined;
@@ -119,16 +135,47 @@ export function chatUpdate(db: Db, id: number, extra: unknown) {
   db.prepare("UPDATE team_chat SET extra = ? WHERE id = ?").run(extra == null ? null : JSON.stringify(extra).slice(0, 200_000), id);
 }
 
-/** قايمة المحادثات: العنوان = أول رسالة فيها، والأحدث فوق */
+/** قايمة المحادثات: العنوان = اللي المساعد سمّاها بيه (كلمتين تلاتة)، وإلا أول رسالة — والأحدث فوق */
 export function chatConversations(db: Db, limit = 60) {
   return db
     .prepare(
       `SELECT COALESCE(conv, 'old') AS conv, MIN(at) AS started, MAX(at) AS last, COUNT(*) AS count,
-         (SELECT t.text FROM team_chat t WHERE COALESCE(t.conv, 'old') = COALESCE(c.conv, 'old') AND t.role = 'user' ORDER BY t.at, t.id LIMIT 1) AS title,
+         COALESCE((SELECT v.title FROM team_convs v WHERE v.conv = COALESCE(c.conv, 'old') ORDER BY v.at DESC, v.id DESC LIMIT 1),
+                  (SELECT substr(t.text, 1, 40) FROM team_chat t WHERE COALESCE(t.conv, 'old') = COALESCE(c.conv, 'old') AND t.role = 'user' ORDER BY t.at, t.id LIMIT 1)) AS title,
          (SELECT t.who FROM team_chat t WHERE COALESCE(t.conv, 'old') = COALESCE(c.conv, 'old') AND t.role = 'user' ORDER BY t.at, t.id LIMIT 1) AS who
        FROM team_chat c GROUP BY COALESCE(conv, 'old') ORDER BY last DESC LIMIT ?`,
     )
     .all(limit) as { conv: string; started: string; last: string; count: number; title: string | null; who: string | null }[];
+}
+
+export function chatTitle(db: Db, conv: string, title: string) {
+  const t = String(title ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
+  if (!t || !conv) return;
+  db.prepare("INSERT INTO team_convs (conv, title) VALUES (?, ?)").run(String(conv).slice(0, 64), t);
+}
+export const hasChatTitle = (db: Db, conv: string) => !!db.prepare("SELECT 1 FROM team_convs WHERE conv = ?").get(conv);
+
+/** مسح محادثة (من كل الأجهزة). اللي المساعد اتعلمه منها بيفضل (team_lessons جدول لوحده). */
+export function chatDelete(db: Db, conv: string) {
+  db.prepare("DELETE FROM team_chat WHERE COALESCE(conv, 'old') = ?").run(conv);
+  db.prepare("DELETE FROM team_convs WHERE conv = ?").run(conv);
+}
+
+/** التذكيرات اللي الشركاء طلبوها («فكّرني يوم كذا») */
+export function remindersList(db: Db, includeDone = false) {
+  return db
+    .prepare(`SELECT id, at, who, due, text, done FROM team_reminders ${includeDone ? "" : "WHERE done = 0"} ORDER BY due, id`)
+    .all() as { id: number; at: string; who: string | null; due: string; text: string; done: number }[];
+}
+export function reminderAdd(db: Db, a: { date: string; text: string }) {
+  const due = String(a.date ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) throw new UserError("التذكير محتاج تاريخ (يوم كام)");
+  const t = String(a.text ?? "").trim().slice(0, 400);
+  if (!t) throw new UserError("التذكير: افكّرك بإيه؟");
+  return Number(db.prepare("INSERT INTO team_reminders (who, due, text) VALUES (?, ?, ?)").run(myName(db), due, t).lastInsertRowid);
+}
+export function reminderDone(db: Db, id: number) {
+  db.prepare("UPDATE team_reminders SET done = 1 WHERE id = ?").run(id);
 }
 
 /** الدروس: قواعد الشركة اللي المساعد بيمشي عليها (الأحدث الأول) */

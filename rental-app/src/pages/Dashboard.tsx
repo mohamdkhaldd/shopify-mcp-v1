@@ -5,6 +5,7 @@ import { PrintButtons, PrintHeader } from "../components/Print";
 import { Blurrable, EyeAllButton, PrivacyProvider } from "../components/Privacy";
 import { monthLabel, percentFromBp, pounds, unitLabel } from "../utils/format";
 import type { SectionId } from "../nav";
+import { askAssistantLater } from "./assistant/handoff";
 
 // One scale (0 → the client amount) for every bar on the ladder.
 function Rung({ label, valuePt, fromPt, scalePt, color, tone, total }: { label: string; valuePt: number; fromPt: number; scalePt: number; color: string; tone?: string; total?: boolean }) {
@@ -86,6 +87,11 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: SectionId) 
   const [month, setMonth] = useState<string | undefined>(undefined);
   const [v, setV] = useState<DashboardView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // رسايل المساعد: سركي متأخر، شهر مفتوح، «فكّرني يوم كذا»… — دوسة بتفتح محادثة جديدة فيها التفاصيل
+  const [notes, setNotes] = useState<{ text: string; ask: string }[]>([]);
+  useEffect(() => {
+    api.reminders().then(setNotes, () => {});
+  }, []);
 
   useEffect(() => {
     api.dashboard(month).then(setV, (e) => setError(e.message));
@@ -117,6 +123,24 @@ export default function Dashboard({ onNavigate }: { onNavigate: (id: SectionId) 
           <EyeAllButton />
           <PrintButtons pdfName={`ملخص ${monthLabel(v.month)}`} />
         </PageHeader>
+
+        {notes.length > 0 && (
+          <div className="no-print rounded-card border border-amber bg-amber-soft p-3 grid gap-2">
+            <b className="text-sm">🤖 رسايل من المساعد:</b>
+            {notes.map((x) => (
+              <button
+                key={x.text}
+                onClick={() => {
+                  askAssistantLater(x.ask);
+                  onNavigate("assistant");
+                }}
+                className="text-start text-sm rounded-xl border border-line bg-surface px-3 py-2 hover:border-amber"
+              >
+                {x.text} <span className="text-amber-deep font-bold whitespace-nowrap">← ادخل شوف التفاصيل</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="grid gap-3.5 grid-cols-3 max-[900px]:grid-cols-2">
           <Blurrable id="balance">

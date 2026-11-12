@@ -9,7 +9,7 @@ import { managersReport } from "../services/managers";
 import { clientStatement, supplierStatement } from "../services/reports";
 import { Deletable, deleteEntity, deletePreview } from "../services/deletion";
 import { NOT_UNDOABLE_CALLS, PASSWORD_CALLS } from "./catalog";
-import { lessonsList, myName, teamNames } from "../services/team";
+import { lessonsList, myName, remindersList, teamNames } from "../services/team";
 
 // المساعد: المستخدم بيكتب بالعامية ("دخلت لودر صاحبه محمد لشركة النور بـ ١٥٠٠
 // وصاحبه ياخد ١٢٠٠")، والذكاء الاصطناعي (على السيرفر) بيحوّل الكلام لقايمة
@@ -74,7 +74,9 @@ export interface AssistantAction {
   rate?: number | null;
   overtimeRate?: number | null;
   /** delete: إيه اللي يتمسح (supplier / client / equipment / driver / contract) */
-  target?: "supplier" | "client" | "equipment" | "driver" | "contract" | null;
+  target?: "supplier" | "client" | "equipment" | "driver" | "contract" | "investor" | null;
+  /** delete investor: اسم المستثمر */
+  investor?: string | null;
   /** call / read: اسم الدالة، و args بالجنيه/بالمية/بالساعات */
   fn?: string | null;
   args?: Record<string, unknown> | null;
@@ -133,6 +135,48 @@ function finder(db: Db, table: string, label: string) {
   return { find, must };
 }
 
+/**
+ * المعدة بالاسم — بس عادي يبقى فيه كذا صاحب معدة عندهم نفس النوع (مان لفت 36 بتاع محمد وبتاع أحمد).
+ * لو صاحبها اتقال بندوّر على بتاعته هو بس؛ ولو فيه أكتر من واحدة ومش واضح بنسأل بدل ما نخمّن.
+ * mustExist = false: يرجّع undefined لو مش موجودة (أو موجودة بس لصاحب تاني) — العقد الجديد بيعمل واحدة.
+ */
+export function pickEquipment(db: Db, name: string | null | undefined, hint: { supplier?: string | null; client?: string | null; date?: string } = {}, mustExist = true) {
+  if (!name?.trim()) {
+    if (mustExist) throw new UserError("المعدة: الاسم مش مكتوب");
+    return undefined;
+  }
+  const n = normalizeName(name);
+  const rows = db
+    .prepare("SELECT e.id, e.name, s.name AS supplier FROM equipment e JOIN suppliers s ON s.id = e.supplier_id WHERE e.deleted_at IS NULL")
+    .all() as { id: number; name: string; supplier: string }[];
+  let match = rows.filter((r) => normalizeName(r.name) === n);
+  if (!match.length) match = rows.filter((r) => normalizeName(r.name).includes(n));
+  if (hint.supplier?.trim()) {
+    const s = normalizeName(hint.supplier);
+    const his = match.filter((r) => normalizeName(r.supplier) === s);
+    if (!his.length) {
+      if (mustExist) throw new UserError(`مش لاقي «${name.trim()}» بتاعة ${hint.supplier.trim()}${match.length ? ` — الموجودة بتاعة ${[...new Set(match.map((r) => r.supplier))].join(" و")}` : ""}`);
+      return undefined;
+    }
+    match = his;
+  }
+  if (match.length > 1 && hint.client?.trim()) {
+    const d = hint.date ?? today();
+    const onContract = db.prepare(
+      "SELECT 1 FROM contracts c JOIN clients cl ON cl.id = c.client_id WHERE c.equipment_id = ? AND c.deleted_at IS NULL AND c.start_date <= ? AND (c.end_date IS NULL OR c.end_date >= ?) AND cl.name = ?",
+    );
+    const clientName = (db.prepare("SELECT name FROM clients WHERE deleted_at IS NULL").all() as { name: string }[]).find((c) => normalizeName(c.name) === normalizeName(hint.client!))?.name;
+    const withClient = clientName ? match.filter((r) => onContract.get(r.id, d, d, clientName)) : [];
+    if (withClient.length) match = withClient;
+  }
+  if (match.length > 1) throw new UserError(`فيه أكتر من «${match[0].name}»: ${match.map((r) => `بتاع ${r.supplier}`).join("، ")} — قول بتاع مين`);
+  if (!match.length) {
+    if (mustExist) throw new UserError(`مش لاقي معدة باسم «${name.trim()}»`);
+    return undefined;
+  }
+  return match[0];
+}
+
 /** الأسماء الموجودة في البرنامج — بتتبعت للذكاء الاصطناعي مع رسالة المستخدم. */
 export function assistantContext(db: Db) {
   const q = <T>(sql: string) => db.prepare(sql).all() as T[];
@@ -159,6 +203,8 @@ export function assistantContext(db: Db) {
     partners: teamNames(db),
     /** قواعد الشركة اللي المساعد اتعلمها من التصحيح — لازم يمشي عليها */
     lessons: lessonsList(db).map((l) => l.text),
+    /** التذكيرات اللي لسه مخلصتش («فكّرني يوم كذا») */
+    reminders: remindersList(db).map((r) => ({ id: r.id, due: r.due, text: r.text, by: r.who, addedOn: r.at.slice(0, 10) })),
   };
 }
 export type AssistantContext = ReturnType<typeof assistantContext>;
@@ -251,7 +297,6 @@ function run(db: Db, actions: AssistantAction[], call?: CallRunner): string[] {
   if (actions.length > 40) throw new UserError("الطلب فيه حاجات كتير أوي — قسّمه على كذا رسالة");
   const suppliers = finder(db, "suppliers", "صاحب معدة");
   const clients = finder(db, "clients", "شركة");
-  const equipment = finder(db, "equipment", "معدة");
   const drivers = finder(db, "drivers", "سواق");
   const lines: string[] = [];
 
@@ -285,7 +330,7 @@ function run(db: Db, actions: AssistantAction[], call?: CallRunner): string[] {
         equipmentName = row.name;
       }
     }
-    const e = equipment.must(equipmentName);
+    const e = pickEquipment(db, equipmentName, { supplier: hint?.supplier, client: hint?.client, date })!;
     const c = db
       .prepare(
         `SELECT id FROM contracts WHERE equipment_id = ? AND deleted_at IS NULL AND start_date <= ? AND (end_date IS NULL OR end_date >= ?)
@@ -314,7 +359,7 @@ function run(db: Db, actions: AssistantAction[], call?: CallRunner): string[] {
       }
       case "equipment": {
         if (!a.equipment?.trim()) throw new UserError("اسم المعدة مش مكتوب");
-        if (equipment.find(a.equipment)) lines.push(`المعدة ${a.equipment} موجودة قبل كده`);
+        if (pickEquipment(db, a.equipment, { supplier: a.supplier }, false)) lines.push(`المعدة ${a.equipment} بتاعة ${a.supplier ?? ""} موجودة قبل كده`);
         else {
           const supplierId = supplierOrNew(a.supplier, a.phone);
           createEquipment(db, { name: a.equipment.trim(), supplierId, siteName: a.site?.trim() || undefined });
@@ -329,7 +374,8 @@ function run(db: Db, actions: AssistantAction[], call?: CallRunner): string[] {
         const clientRatePt = pt(a.clientRate, "سعر الشركة");
         const supplierRatePt = pt(a.supplierRate, "سعر صاحب المعدة");
         const startDate = day(a.startDate);
-        const eq = equipment.find(a.equipment);
+        // لو صاحب المعدة اتقال: معدته هو بس (لو عنده نفس النوع بتاع حد تاني دي معدة جديدة بتاعته)
+        const eq = pickEquipment(db, a.equipment, { supplier: a.supplier }, false);
         const cl = clients.find(a.client);
         if (!eq && !a.supplier?.trim()) throw new UserError(`المعدة «${a.equipment}» جديدة — قول صاحبها مين`);
         const sup = eq ? null : suppliers.find(a.supplier);
@@ -364,7 +410,7 @@ function run(db: Db, actions: AssistantAction[], call?: CallRunner): string[] {
       case "expense": {
         const amountPt = pt(a.amount, "المصروف");
         const date = day(a.date);
-        const onEquipment = a.equipment?.trim() ? contractOf(a.equipment, date) : null;
+        const onEquipment = a.equipment?.trim() ? contractOf(a.equipment, date, a) : null;
         let categoryId: number | null = null;
         if (a.category?.trim()) {
           const found = finder(db, "expense_categories", "بند").find(a.category);
@@ -396,7 +442,7 @@ function run(db: Db, actions: AssistantAction[], call?: CallRunner): string[] {
       case "supplier_deduction": {
         // حاجة دفعناها عن صاحب المعدة (زيت، قطع غيار…): بتطلع من الخزنة وبتتخصم من حسابه
         const date = day(a.date);
-        const onEquipment = a.equipment?.trim() ? equipment.must(a.equipment) : null;
+        const onEquipment = a.equipment?.trim() ? pickEquipment(db, a.equipment, { supplier: a.supplier, client: a.client, date }) : null;
         const owner = a.supplier?.trim()
           ? suppliers.must(a.supplier)
           : onEquipment
@@ -420,7 +466,7 @@ function run(db: Db, actions: AssistantAction[], call?: CallRunner): string[] {
           lines.push(`السواق ${a.driver} موجود قبل كده`);
           break;
         }
-        const e = equipment.must(a.equipment);
+        const e = pickEquipment(db, a.equipment, { supplier: a.supplier, client: a.client })!;
         const owner = db.prepare("SELECT supplier_id FROM equipment WHERE id = ?").get(e.id) as { supplier_id: number };
         const payKind = a.payKind ?? "month";
         createDriver(db, {
@@ -479,15 +525,21 @@ function deleteTarget(db: Db, a: AssistantAction): { entity: Deletable; id: numb
       return { entity: "clients", id: r.id, label: `${r.name}` };
     }
     case "equipment": {
-      const r = finder(db, "equipment", "معدة").must(a.equipment);
-      return { entity: "equipment", id: r.id, label: `المعدة ${r.name}` };
+      const r = pickEquipment(db, a.equipment, { supplier: a.supplier, client: a.client })!;
+      return { entity: "equipment", id: r.id, label: `المعدة ${r.name} بتاعة ${r.supplier}` };
     }
     case "driver": {
       const r = finder(db, "drivers", "سواق").must(a.driver);
       return { entity: "drivers", id: r.id, label: `السواق ${r.name}` };
     }
+    case "investor": {
+      const name = a.investor ?? a.supplier ?? a.client ?? a.note;
+      if (!name?.trim()) throw new UserError("قول اسم المستثمر اللي عايز تمسحه");
+      const r = finder(db, "investors", "مستثمر").must(name);
+      return { entity: "investors", id: r.id, label: `المستثمر ${r.name}` };
+    }
     case "contract": {
-      const e = finder(db, "equipment", "معدة").must(a.equipment);
+      const e = pickEquipment(db, a.equipment, { supplier: a.supplier, client: a.client })!;
       const rows = db.prepare("SELECT c.id, cl.name AS client FROM contracts c JOIN clients cl ON cl.id = c.client_id WHERE c.equipment_id = ? AND c.deleted_at IS NULL ORDER BY c.start_date DESC").all(e.id) as {
         id: number;
         client: string;

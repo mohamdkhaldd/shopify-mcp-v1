@@ -20,7 +20,7 @@ export interface AssistantRequest {
 }
 export type AssistantCard = { label: string; value: string; tone: "in" | "out" | "tax" | "plain" };
 export type AssistantChart = { title: string; kind: "bar" | "line" | "pie"; labels: string[]; series: { name: string; values: number[] }[] };
-export type AssistantReply = { ok: true; reply: string; actions: AssistantAction[]; cards: AssistantCard[]; chart: AssistantChart | null; heard?: string } | { ok: false; message: string };
+export type AssistantReply = { ok: true; reply: string; actions: AssistantAction[]; cards: AssistantCard[]; chart: AssistantChart | null; heard?: string; title?: string } | { ok: false; message: string };
 const ASSISTANT_ERRORS: Record<string, string> = {
   empty: "اكتب اللي عايز تسجله",
   too_long: "الرسالة طويلة أوي — قسّمها على كذا رسالة",
@@ -447,7 +447,7 @@ export function createLicenseManager(o: LicenseOptions) {
   async function askAssistant(r: AssistantRequest): Promise<AssistantReply> {
     const key = get("license_key");
     if (!key) return { ok: false, message: "البرنامج مش متفعّل" };
-    const a = await call<{ ok: true; reply: string; actions: unknown[]; cards?: unknown; chart?: unknown; heard?: string } | { ok: false; error: string }>(
+    const a = await call<{ ok: true; reply: string; actions: unknown[]; cards?: unknown; chart?: unknown; heard?: string; title?: string } | { ok: false; error: string }>(
       { key, text: r.text, context: r.context, history: r.history ?? [], image: r.image, mediaType: r.mediaType, catalog: r.catalog, reads: r.reads, audio: r.audio, audioType: r.audioType },
       120_000,
       o.url.replace(/\/license$/, "/assistant"),
@@ -457,6 +457,7 @@ export function createLicenseManager(o: LicenseOptions) {
     return {
       ok: true,
       ...(typeof a.heard === "string" ? { heard: a.heard } : {}),
+      ...(typeof a.title === "string" && a.title.trim() ? { title: a.title.trim().slice(0, 40) } : {}),
       reply: String(a.reply ?? ""),
       actions: Array.isArray(a.actions) ? (a.actions as AssistantAction[]) : [],
       cards: Array.isArray(a.cards) ? (a.cards as AssistantCard[]) : [],
