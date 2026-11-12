@@ -169,8 +169,8 @@ const Space3D = (() => {
     }
     geo.setAttribute("color", new T.Float32BufferAttribute(col, 3)); geo.computeVertexNormals();
     s.add(new T.Mesh(geo, new T.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, flatShading: true })));
-    const rocks = new T.InstancedMesh(new T.DodecahedronGeometry(1, 0), new T.MeshStandardMaterial({ color: 0x5c3b2a, roughness: 1, flatShading: true }), crater ? 700 : 150);
-    const mtx = new T.Matrix4(); for (let i = 0; i < rocks.count; i++) { const a = Math.random() * 6.28, r = 8 + Math.random() * 300, sc = .3 + Math.random() * (crater ? 3 : 1.2); mtx.compose(V(Math.cos(a) * r, -.2, Math.sin(a) * r), new T.Quaternion().setFromEuler(new T.Euler(Math.random(), Math.random(), Math.random())), V(sc, sc * .7, sc)); rocks.setMatrixAt(i, mtx); }
+    const rocks = new T.InstancedMesh(rockGeometry(1, 1, .5, 4), new T.MeshStandardMaterial({ color: 0x6a4431, roughness: 1, flatShading: true }), crater ? 900 : 200);
+    const mtx = new T.Matrix4(); for (let i = 0; i < rocks.count; i++) { const a = Math.random() * 6.28, r = 6 + Math.pow(Math.random(), .7) * 320, sc = .12 + Math.pow(Math.random(), 3) * (crater ? 1.6 : .8); mtx.compose(V(Math.cos(a) * r, -.2, Math.sin(a) * r), new T.Quaternion().setFromEuler(new T.Euler(Math.random(), Math.random(), Math.random())), V(sc, sc * .7, sc)); rocks.setMatrixAt(i, mtx); }
     s.add(rocks);
     return { scene: s, mpu: 1, surface: true, focus: { ground: V(0, 0, 0) } };
   }
@@ -380,6 +380,31 @@ const Space3D = (() => {
     g.userData.radius = (top + 8) * .55; g.traverse(o => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; o.receiveShadow = true; } });
     return g;
   }
+  /* ---------- real NASA 3D models (NASA 3D Resources, public domain) ---------- */
+  const MODELS = { landsat8: 10, goes: 12, lro: 5.5, jwst: 21, hubble: 13.3, perseverance: 3.0, saturnv: 110.6, astronaut: 1.9 };
+  const modelCache = {};
+  function loadModel(key) {
+    if (!T.GLTFLoader) return Promise.reject("no loader");
+    if (!modelCache[key]) modelCache[key] = new Promise((res, rej) => new T.GLTFLoader().load("models/" + key + ".json", g => {
+      const o = g.scene; const b = new T.Box3().setFromObject(o); const sz = b.getSize(new T.Vector3()); const k = MODELS[key] / Math.max(sz.x, sz.y, sz.z);
+      o.scale.setScalar(k); const b2 = new T.Box3().setFromObject(o); const c = b2.getCenter(new T.Vector3());
+      const base = key === "saturnv" || key === "perseverance";
+      o.position.sub(base ? new T.Vector3(c.x, b2.min.y, c.z) : c);
+      o.traverse(x => { if (x.isMesh) { x.castShadow = x.receiveShadow = true; x.frustumCulled = false; const ms = Array.isArray(x.material) ? x.material : [x.material]; ms.forEach(mt => { if (mt && mt.isMeshStandardMaterial) { mt.envMap = skybox(); mt.envMapIntensity = .9; mt.needsUpdate = true; } }); } });
+      const wrap = new T.Group(); wrap.add(o); res(wrap);
+    }, undefined, rej));
+    return modelCache[key].then(w => w.clone(true));
+  }
+  function realKey(m, d) {
+    if (m.id === "delta") return "landsat8"; if (m.id === "storm") return "goes"; if (m.id === "moon") return "lro";
+    if (m.id === "telescope") return d.instr.includes("sunshield") && d.orbit === "l2" ? "jwst" : "hubble";
+    if (m.id === "mars") return "perseverance"; return null;
+  }
+  function realRocket(lv) {
+    return loadModel("saturnv").then(sv => { MAT = MAT || mats(); const g = new T.Group(); g.add(sv);
+      for (let k = 0; k < 5; k++) { const a = k * Math.PI / 2, rr = k === 4 ? 0 : 2.9; const f = flame(1.9, 34); f.position.set(Math.cos(a) * rr, -3.5, Math.sin(a) * rr); g.add(f); }
+      const sm = smokeTrail(7); g.add(sm); g.userData.smoke = sm; g.userData.radius = 60; return g; });
+  }
   /* ---------- trajectories ---------- */
   function orbitFn(center, radius, axis, startDir, period) {
     const n = axis.clone().normalize(); const u = startDir.clone().sub(n.clone().multiplyScalar(startDir.dot(n))).normalize(); const v = new T.Vector3().crossVectors(n, u);
@@ -456,7 +481,7 @@ const Space3D = (() => {
     renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
     const wcam = new T.PerspectiveCamera(50, 1, 1e-4, 4e8), scam = new T.PerspectiveCamera(50, 1, .05, 1e5);
     const shipScene = new T.Scene(); const sl = lights(shipScene, .2); sl.castShadow = true; sl.shadow.mapSize.set(2048, 2048); sl.shadow.bias = -.0004; sl.shadow.normalBias = .02; shipScene.add(new T.HemisphereLight(0xbfd2ff, 0x3a3028, .55)); const earthShine = new T.DirectionalLight(0x6f9cff, 0); shipScene.add(earthShine);
-    const st = { m: null, d: null, c: null, p: 0, view: "ship", worlds: {}, track: null, ship: null, rocket: null, yaw: .9, pitch: .25, dist: null, flags: {}, t0: performance.now(), alive: true, preview: !!opts.preview, lastPos: null };
+    const st = { m: null, d: null, c: null, p: 0, view: "ship", worlds: {}, track: null, ship: null, rocket: null, yaw: .9, pitch: .25, dist: null, flags: {}, t0: performance.now(), alive: true, preview: !!opts.preview, lastPos: null, real: !opts.preview };
     // input: drag to orbit, wheel to zoom
     let drag = null;
     canvas.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); });
@@ -472,6 +497,12 @@ const Space3D = (() => {
       if (st.ship) shipScene.remove(st.ship); st.ship = buildShip(m, d, c); shipScene.add(st.ship);
       if (st.rocket) shipScene.remove(st.rocket); st.rocket = st.preview ? null : buildRocket(d.lv); if (st.rocket) shipScene.add(st.rocket);
       fitShadow(st.ship.userData.radius);
+      const token = st.token = (st.token || 0) + 1; const key = (st.real !== false) ? realKey(m, d) : null;
+      if (key) loadModel(key).then(obj => { if (token !== st.token) return;
+        if (m.id === "mars") { const ro = st.ship.userData.rover; if (ro) st.ship.remove(ro); obj.position.y = -.9; st.ship.add(obj); st.ship.userData.rover = obj; }
+        else { shipScene.remove(st.ship); const g = new T.Group(); g.add(obj); const b = new T.Box3().setFromObject(g); g.userData.radius = Math.max(1.5, b.getSize(new T.Vector3()).length() / 2); st.ship = g; shipScene.add(g); fitShadow(g.userData.radius); }
+        st.shadowFor = null; }).catch(() => {});
+      if (!st.preview && d.lv === "superheavy" && !m.crew) realRocket(d.lv).then(r => { if (token !== st.token) return; shipScene.remove(st.rocket); st.rocket = r; shipScene.add(r); st.shadowFor = null; }).catch(() => {});
       if (st.worlds.surface) delete st.worlds.surface;
       st.flags = {}; st.p = 0;
     }
@@ -583,7 +614,7 @@ const Space3D = (() => {
       setMission, setProgress(p) { st.p = Math.max(0, Math.min(1, p)); }, get progress() { return st.p; },
       setView(v) { st.view = v; st.zoom = 1; }, get view() { return st.view; },
       flag(k, v = true) { st.flags[k] = v; if (k === "fall") st.flags.fallT = (performance.now() - st.t0) / 1000; },
-      marks: () => st.track ? st.track.marks : {}, info: () => st.info || {}, dispose
+      marks: () => st.track ? st.track.marks : {}, info: () => st.info || {}, setReal(v) { st.real = v; if (st.m) setMission(st.m, st.d, st.c); }, hasReal: () => !!(st.m && realKey(st.m, st.d)), dispose
     };
   }
   return { ok: webgl, createView, setQuality(q) { quality = q; }, get quality() { return quality; } };

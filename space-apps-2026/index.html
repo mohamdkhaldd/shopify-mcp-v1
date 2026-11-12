@@ -227,6 +227,8 @@ html[lang=ar] h1{line-height:1.25}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>window.THREE||document.write('<script src="three.min.js"><\/script>')</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>(window.THREE&&THREE.GLTFLoader)||document.write('<script src="GLTFLoader.js"><\/script>')</script>
 <script>
 /* ================= DATA ================= */
 const VE = 3.138; // km/s, chemical engine exhaust velocity (Isp 320 s)
@@ -763,6 +765,7 @@ const AR = {
 "NASA's Artemis II flies four astronauts around the Moon in the Orion capsule on a free-return path of about # days, launched by the SLS super-heavy rocket. Apollo # first carried people around the Moon in December #. In # Apollo #'s crew got home thanks to a free-return path and a CO₂ filter adapter built from spare parts.":"مهمة أرتميس 2 بتاعة ناسا بتطيّر أربع رواد حوالين القمر في كبسولة أوريون في مسار رجوع حر حوالي # أيام، بالصاروخ العملاق SLS. أبولو # كانت أول مرة بشر يلفوا حوالين القمر في ديسمبر #. وسنة # رواد أبولو # رجعوا بفضل مسار الرجوع الحر ووصلة فلتر CO₂ اتعملت من قطع غيار.",
 "Physics in this game is simplified for learning: Tsiolkovsky rocket equation (chemical engines, Isp # s), sunlight of # W per m² of panel at Earth's distance falling with distance squared, batteries sized for shadow time. Real-mission facts come from NASA and ESA mission pages. Textures: NASA, and the three.js example textures (NASA Blue Marble imagery). Portraits are AI-generated, fictional people. References:":"الفيزيا في اللعبة متبسطة للتعليم: معادلة الصاروخ لتسيولكوفسكي (محركات كيميائية، Isp # ث)، والشمس بتدي # وات لكل م² من الألواح عند بعد الأرض وبتقل مع مربع المسافة، والبطاريات على قد وقت الضل. معلومات المهمات الحقيقية من صفحات ناسا ووكالة الفضاء الأوروبية. صور الكواكب: ناسا، وصور أمثلة three.js (صور Blue Marble من ناسا). صور الأشخاص معمولة بالذكاء الاصطناعي ولأشخاص خياليين. المراجع:",
 /* units and short pieces */
+"Show my design":"اعرض تصميمي","Show the real NASA spacecraft":"اعرض المركبة الحقيقية بتاعة ناسا","Real NASA 3D model (NASA 3D Resources). In flight you always see the real spacecraft.":"موديل 3D حقيقي من ناسا (NASA 3D Resources). في الرحلة هتشوف المركبة الحقيقية على طول.",
 "# / # kg":"# / # كجم","# / # W":"# / # وات","Fuel # kg · dry # kg":"الوقود # كجم · الناشف # كجم",
 "Sun–Earth L#":"نقطة L# بين الشمس والأرض","# Mbit/s":"# ميجابت/ث","# kbit/s":"# كيلوبت/ث","crewed":"فيها رواد","# kg and $#M per m².":"# كجم و# مليون لكل م².",
 
@@ -1049,8 +1052,8 @@ const Space3D = (() => {
     }
     geo.setAttribute("color", new T.Float32BufferAttribute(col, 3)); geo.computeVertexNormals();
     s.add(new T.Mesh(geo, new T.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, flatShading: true })));
-    const rocks = new T.InstancedMesh(new T.DodecahedronGeometry(1, 0), new T.MeshStandardMaterial({ color: 0x5c3b2a, roughness: 1, flatShading: true }), crater ? 700 : 150);
-    const mtx = new T.Matrix4(); for (let i = 0; i < rocks.count; i++) { const a = Math.random() * 6.28, r = 8 + Math.random() * 300, sc = .3 + Math.random() * (crater ? 3 : 1.2); mtx.compose(V(Math.cos(a) * r, -.2, Math.sin(a) * r), new T.Quaternion().setFromEuler(new T.Euler(Math.random(), Math.random(), Math.random())), V(sc, sc * .7, sc)); rocks.setMatrixAt(i, mtx); }
+    const rocks = new T.InstancedMesh(rockGeometry(1, 1, .5, 4), new T.MeshStandardMaterial({ color: 0x6a4431, roughness: 1, flatShading: true }), crater ? 900 : 200);
+    const mtx = new T.Matrix4(); for (let i = 0; i < rocks.count; i++) { const a = Math.random() * 6.28, r = 6 + Math.pow(Math.random(), .7) * 320, sc = .12 + Math.pow(Math.random(), 3) * (crater ? 1.6 : .8); mtx.compose(V(Math.cos(a) * r, -.2, Math.sin(a) * r), new T.Quaternion().setFromEuler(new T.Euler(Math.random(), Math.random(), Math.random())), V(sc, sc * .7, sc)); rocks.setMatrixAt(i, mtx); }
     s.add(rocks);
     return { scene: s, mpu: 1, surface: true, focus: { ground: V(0, 0, 0) } };
   }
@@ -1260,6 +1263,31 @@ const Space3D = (() => {
     g.userData.radius = (top + 8) * .55; g.traverse(o => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; o.receiveShadow = true; } });
     return g;
   }
+  /* ---------- real NASA 3D models (NASA 3D Resources, public domain) ---------- */
+  const MODELS = { landsat8: 10, goes: 12, lro: 5.5, jwst: 21, hubble: 13.3, perseverance: 3.0, saturnv: 110.6, astronaut: 1.9 };
+  const modelCache = {};
+  function loadModel(key) {
+    if (!T.GLTFLoader) return Promise.reject("no loader");
+    if (!modelCache[key]) modelCache[key] = new Promise((res, rej) => new T.GLTFLoader().load("models/" + key + ".json", g => {
+      const o = g.scene; const b = new T.Box3().setFromObject(o); const sz = b.getSize(new T.Vector3()); const k = MODELS[key] / Math.max(sz.x, sz.y, sz.z);
+      o.scale.setScalar(k); const b2 = new T.Box3().setFromObject(o); const c = b2.getCenter(new T.Vector3());
+      const base = key === "saturnv" || key === "perseverance";
+      o.position.sub(base ? new T.Vector3(c.x, b2.min.y, c.z) : c);
+      o.traverse(x => { if (x.isMesh) { x.castShadow = x.receiveShadow = true; x.frustumCulled = false; const ms = Array.isArray(x.material) ? x.material : [x.material]; ms.forEach(mt => { if (mt && mt.isMeshStandardMaterial) { mt.envMap = skybox(); mt.envMapIntensity = .9; mt.needsUpdate = true; } }); } });
+      const wrap = new T.Group(); wrap.add(o); res(wrap);
+    }, undefined, rej));
+    return modelCache[key].then(w => w.clone(true));
+  }
+  function realKey(m, d) {
+    if (m.id === "delta") return "landsat8"; if (m.id === "storm") return "goes"; if (m.id === "moon") return "lro";
+    if (m.id === "telescope") return d.instr.includes("sunshield") && d.orbit === "l2" ? "jwst" : "hubble";
+    if (m.id === "mars") return "perseverance"; return null;
+  }
+  function realRocket(lv) {
+    return loadModel("saturnv").then(sv => { MAT = MAT || mats(); const g = new T.Group(); g.add(sv);
+      for (let k = 0; k < 5; k++) { const a = k * Math.PI / 2, rr = k === 4 ? 0 : 2.9; const f = flame(1.9, 34); f.position.set(Math.cos(a) * rr, -3.5, Math.sin(a) * rr); g.add(f); }
+      const sm = smokeTrail(7); g.add(sm); g.userData.smoke = sm; g.userData.radius = 60; return g; });
+  }
   /* ---------- trajectories ---------- */
   function orbitFn(center, radius, axis, startDir, period) {
     const n = axis.clone().normalize(); const u = startDir.clone().sub(n.clone().multiplyScalar(startDir.dot(n))).normalize(); const v = new T.Vector3().crossVectors(n, u);
@@ -1336,7 +1364,7 @@ const Space3D = (() => {
     renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
     const wcam = new T.PerspectiveCamera(50, 1, 1e-4, 4e8), scam = new T.PerspectiveCamera(50, 1, .05, 1e5);
     const shipScene = new T.Scene(); const sl = lights(shipScene, .2); sl.castShadow = true; sl.shadow.mapSize.set(2048, 2048); sl.shadow.bias = -.0004; sl.shadow.normalBias = .02; shipScene.add(new T.HemisphereLight(0xbfd2ff, 0x3a3028, .55)); const earthShine = new T.DirectionalLight(0x6f9cff, 0); shipScene.add(earthShine);
-    const st = { m: null, d: null, c: null, p: 0, view: "ship", worlds: {}, track: null, ship: null, rocket: null, yaw: .9, pitch: .25, dist: null, flags: {}, t0: performance.now(), alive: true, preview: !!opts.preview, lastPos: null };
+    const st = { m: null, d: null, c: null, p: 0, view: "ship", worlds: {}, track: null, ship: null, rocket: null, yaw: .9, pitch: .25, dist: null, flags: {}, t0: performance.now(), alive: true, preview: !!opts.preview, lastPos: null, real: !opts.preview };
     // input: drag to orbit, wheel to zoom
     let drag = null;
     canvas.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); });
@@ -1352,6 +1380,12 @@ const Space3D = (() => {
       if (st.ship) shipScene.remove(st.ship); st.ship = buildShip(m, d, c); shipScene.add(st.ship);
       if (st.rocket) shipScene.remove(st.rocket); st.rocket = st.preview ? null : buildRocket(d.lv); if (st.rocket) shipScene.add(st.rocket);
       fitShadow(st.ship.userData.radius);
+      const token = st.token = (st.token || 0) + 1; const key = (st.real !== false) ? realKey(m, d) : null;
+      if (key) loadModel(key).then(obj => { if (token !== st.token) return;
+        if (m.id === "mars") { const ro = st.ship.userData.rover; if (ro) st.ship.remove(ro); obj.position.y = -.9; st.ship.add(obj); st.ship.userData.rover = obj; }
+        else { shipScene.remove(st.ship); const g = new T.Group(); g.add(obj); const b = new T.Box3().setFromObject(g); g.userData.radius = Math.max(1.5, b.getSize(new T.Vector3()).length() / 2); st.ship = g; shipScene.add(g); fitShadow(g.userData.radius); }
+        st.shadowFor = null; }).catch(() => {});
+      if (!st.preview && d.lv === "superheavy" && !m.crew) realRocket(d.lv).then(r => { if (token !== st.token) return; shipScene.remove(st.rocket); st.rocket = r; shipScene.add(r); st.shadowFor = null; }).catch(() => {});
       if (st.worlds.surface) delete st.worlds.surface;
       st.flags = {}; st.p = 0;
     }
@@ -1463,7 +1497,7 @@ const Space3D = (() => {
       setMission, setProgress(p) { st.p = Math.max(0, Math.min(1, p)); }, get progress() { return st.p; },
       setView(v) { st.view = v; st.zoom = 1; }, get view() { return st.view; },
       flag(k, v = true) { st.flags[k] = v; if (k === "fall") st.flags.fallT = (performance.now() - st.t0) / 1000; },
-      marks: () => st.track ? st.track.marks : {}, info: () => st.info || {}, dispose
+      marks: () => st.track ? st.track.marks : {}, info: () => st.info || {}, setReal(v) { st.real = v; if (st.m) setMission(st.m, st.d, st.c); }, hasReal: () => !!(st.m && realKey(st.m, st.d)), dispose
     };
   }
   return { ok: webgl, createView, setQuality(q) { quality = q; }, get quality() { return quality; } };
@@ -1482,6 +1516,7 @@ const ROLE_IMG = {planner:1, engineer:2, science:3, comms:4};
 const portrait = (role,m) => `img/${m&&m.crew?"crew":"ctrl"}_${ROLE_IMG[role]}.jpg`;
 function playerFor(role){ if(A.mode==="solo") return A.players[0]; const n=A.players.length; return A.players[(ROLE_IDS.indexOf(role)+A.flights)%n]; }
 const DECIDE = {Easy:60, Medium:45, Hard:30};
+const REAL_IDS = ["delta","storm","moon","telescope","mars"];
 
 /* ================= VOICE (browser speech) ================= */
 const Voice = (()=>{
@@ -1770,7 +1805,7 @@ function design(){
    <ul class="goals" id="goals"></ul></section>
   <div class="cols">
    <section class="panel" style="gap:16px"><div class="tabs" role="tablist">${tabs}</div><div id="tabBody" style="display:flex;flex-direction:column;gap:16px">${designTab()}</div></section>
-   <aside class="rail"><section class="panel"><h3>Your spacecraft</h3>${Space3D.ok?`<canvas class="craft" id="craft3d" aria-label="Your spacecraft in 3D. Drag to turn it."></canvas><p class="help">Drag to turn it, scroll to zoom. It changes with every choice.</p>`:`<p class="help">3D view needs WebGL, which this browser doesn't offer.</p>`}<h3>Mission resources</h3><div id="meters"></div></section>
+   <aside class="rail"><section class="panel"><h3>Your spacecraft</h3>${Space3D.ok?`<canvas class="craft" id="craft3d" aria-label="Your spacecraft in 3D. Drag to turn it."></canvas><p class="help">Drag to turn it, scroll to zoom. It changes with every choice.</p>${REAL_IDS.includes(m.id)?`<button class="btn ghost" type="button" data-act="real" id="realBtn">${A.previewReal?"Show my design":"Show the real NASA spacecraft"}</button>${A.previewReal?`<p class="help">Real NASA 3D model (NASA 3D Resources). In flight you always see the real spacecraft.</p>`:""}`:""}`:`<p class="help">3D view needs WebGL, which this browser doesn't offer.</p>`}<h3>Mission resources</h3><div id="meters"></div></section>
     <section class="panel"><h3>Design review</h3><ul class="issues" id="issues"></ul><button class="btn big" data-act="launch" type="button">Launch</button>
     <p class="help">You can launch even with problems. The flight will show you what goes wrong.</p></section></aside>
   </div>`;
@@ -1794,7 +1829,7 @@ function refresh(){
   else $("#issues").innerHTML = c.issues.length ? c.issues.map(([s,t,w])=>`<li class="${s}">${t}<small>${w}</small></li>`).join("") : `<li class="ok">Design closes: mass, power, data and budget all work.</li>`;
   if(previewView) previewView.setMission(m,A.d,c);
 }
-after.design = () => { previewView = Space3D.ok && $("#craft3d") ? Space3D.createView($("#craft3d"),{preview:true}) : null; refresh(); };
+after.design = () => { previewView = Space3D.ok && $("#craft3d") ? Space3D.createView($("#craft3d"),{preview:true}) : null; if(previewView&&A.previewReal) previewView.setReal(true); refresh(); };
 
 /* ---------- flight ---------- */
 const CAPSULE_SVG = `<svg viewBox="0 0 1600 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="cab" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1f2b"/><stop offset=".6" stop-color="#0c0f16"/><stop offset="1" stop-color="#05070b"/></linearGradient><radialGradient id="glw" cx=".5" cy=".9" r=".6"><stop offset="0" stop-color="#f2a93b" stop-opacity=".18"/><stop offset="1" stop-color="#f2a93b" stop-opacity="0"/></radialGradient></defs>
@@ -1955,10 +1990,11 @@ function finish(){
     const b=P.best[m.id]||[]; b.push({team:A.team,score:total,stars,date:new Date().toISOString().slice(0,10)}); b.sort((x,y)=>y.score-x.score); P.best[m.id]=b.slice(0,5); store.set("ma.progress3",P);
   }
   const btn=document.createElement("div"); btn.className="row"; btn.innerHTML=`<button class="btn big" type="button" data-go="report">See mission report</button>`; const L=$("#log"); if(L) L.parentNode.appendChild(btn);
-  setTimeout(()=>{ if(A.screen==="flight") go("report"); }, 9000);
+  setTimeout(()=>{ if(A.screen==="flight" && A.flight===F) go("report"); }, 9000);
 }
 
 function report(){
+  if(!A.flight||!A.flight.result) return select();
   const F=A.flight, R=F.result, c=F.c, m=c.m; const prev=A.lastScore[m.id];
   if(!F.reported){ F.prevShown=prev; A.lastScore[m.id]=R.total; F.reported=true; }
   const lessons=[...F.lessons];
@@ -1998,6 +2034,7 @@ document.addEventListener("click",e=>{
   if(t.dataset.tab){ A.tab=t.dataset.tab; document.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===A.tab)); $("#tabBody").innerHTML=designTab(); refresh(); return; }
   if(t.dataset.trole){ A.trainRole=t.dataset.trole; return render(); }
   const a=t.dataset.act;
+  if(a==="real"){ A.previewReal=!A.previewReal; return render(); }
   if(a==="lang"){ setLang(LANG==="ar"?"en":"ar"); return render(); }
   if(a==="voice"){ A.voice=!A.voice; if(!A.voice) Voice.stop(); return render(); }
   if(a==="gfx"){ Space3D.setQuality(Space3D.quality==="high"?"low":"high"); if(A.screen!=="flight") return render(); return; }

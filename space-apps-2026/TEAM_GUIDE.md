@@ -34,3 +34,6 @@
 - [ ] رفع اللعبة على GitHub Pages أو Netlify علشان يبقى فيه لينك عام.
 - [ ] فيديو التسليم النهائي (30 ثانية) وصفحة التسليم.
 - [ ] الإفصاح عن استخدام الذكاء الاصطناعي (الكود والصوت).
+
+## 3D models
+Spacecraft and rocket models come from NASA 3D Resources (https://github.com/nasa/NASA-3D-Resources), free to use. They were decompressed and converted to glTF JSON in `models/` so they load anywhere.

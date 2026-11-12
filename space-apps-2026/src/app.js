@@ -11,6 +11,7 @@ const ROLE_IMG = {planner:1, engineer:2, science:3, comms:4};
 const portrait = (role,m) => `img/${m&&m.crew?"crew":"ctrl"}_${ROLE_IMG[role]}.jpg`;
 function playerFor(role){ if(A.mode==="solo") return A.players[0]; const n=A.players.length; return A.players[(ROLE_IDS.indexOf(role)+A.flights)%n]; }
 const DECIDE = {Easy:60, Medium:45, Hard:30};
+const REAL_IDS = ["delta","storm","moon","telescope","mars"];
 
 /* ================= VOICE (browser speech) ================= */
 const Voice = (()=>{
@@ -299,7 +300,7 @@ function design(){
    <ul class="goals" id="goals"></ul></section>
   <div class="cols">
    <section class="panel" style="gap:16px"><div class="tabs" role="tablist">${tabs}</div><div id="tabBody" style="display:flex;flex-direction:column;gap:16px">${designTab()}</div></section>
-   <aside class="rail"><section class="panel"><h3>Your spacecraft</h3>${Space3D.ok?`<canvas class="craft" id="craft3d" aria-label="Your spacecraft in 3D. Drag to turn it."></canvas><p class="help">Drag to turn it, scroll to zoom. It changes with every choice.</p>`:`<p class="help">3D view needs WebGL, which this browser doesn't offer.</p>`}<h3>Mission resources</h3><div id="meters"></div></section>
+   <aside class="rail"><section class="panel"><h3>Your spacecraft</h3>${Space3D.ok?`<canvas class="craft" id="craft3d" aria-label="Your spacecraft in 3D. Drag to turn it."></canvas><p class="help">Drag to turn it, scroll to zoom. It changes with every choice.</p>${REAL_IDS.includes(m.id)?`<button class="btn ghost" type="button" data-act="real" id="realBtn">${A.previewReal?"Show my design":"Show the real NASA spacecraft"}</button>${A.previewReal?`<p class="help">Real NASA 3D model (NASA 3D Resources). In flight you always see the real spacecraft.</p>`:""}`:""}`:`<p class="help">3D view needs WebGL, which this browser doesn't offer.</p>`}<h3>Mission resources</h3><div id="meters"></div></section>
     <section class="panel"><h3>Design review</h3><ul class="issues" id="issues"></ul><button class="btn big" data-act="launch" type="button">Launch</button>
     <p class="help">You can launch even with problems. The flight will show you what goes wrong.</p></section></aside>
   </div>`;
@@ -323,7 +324,7 @@ function refresh(){
   else $("#issues").innerHTML = c.issues.length ? c.issues.map(([s,t,w])=>`<li class="${s}">${t}<small>${w}</small></li>`).join("") : `<li class="ok">Design closes: mass, power, data and budget all work.</li>`;
   if(previewView) previewView.setMission(m,A.d,c);
 }
-after.design = () => { previewView = Space3D.ok && $("#craft3d") ? Space3D.createView($("#craft3d"),{preview:true}) : null; refresh(); };
+after.design = () => { previewView = Space3D.ok && $("#craft3d") ? Space3D.createView($("#craft3d"),{preview:true}) : null; if(previewView&&A.previewReal) previewView.setReal(true); refresh(); };
 
 /* ---------- flight ---------- */
 const CAPSULE_SVG = `<svg viewBox="0 0 1600 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="cab" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1f2b"/><stop offset=".6" stop-color="#0c0f16"/><stop offset="1" stop-color="#05070b"/></linearGradient><radialGradient id="glw" cx=".5" cy=".9" r=".6"><stop offset="0" stop-color="#f2a93b" stop-opacity=".18"/><stop offset="1" stop-color="#f2a93b" stop-opacity="0"/></radialGradient></defs>
@@ -484,10 +485,11 @@ function finish(){
     const b=P.best[m.id]||[]; b.push({team:A.team,score:total,stars,date:new Date().toISOString().slice(0,10)}); b.sort((x,y)=>y.score-x.score); P.best[m.id]=b.slice(0,5); store.set("ma.progress3",P);
   }
   const btn=document.createElement("div"); btn.className="row"; btn.innerHTML=`<button class="btn big" type="button" data-go="report">See mission report</button>`; const L=$("#log"); if(L) L.parentNode.appendChild(btn);
-  setTimeout(()=>{ if(A.screen==="flight") go("report"); }, 9000);
+  setTimeout(()=>{ if(A.screen==="flight" && A.flight===F) go("report"); }, 9000);
 }
 
 function report(){
+  if(!A.flight||!A.flight.result) return select();
   const F=A.flight, R=F.result, c=F.c, m=c.m; const prev=A.lastScore[m.id];
   if(!F.reported){ F.prevShown=prev; A.lastScore[m.id]=R.total; F.reported=true; }
   const lessons=[...F.lessons];
@@ -527,6 +529,7 @@ document.addEventListener("click",e=>{
   if(t.dataset.tab){ A.tab=t.dataset.tab; document.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===A.tab)); $("#tabBody").innerHTML=designTab(); refresh(); return; }
   if(t.dataset.trole){ A.trainRole=t.dataset.trole; return render(); }
   const a=t.dataset.act;
+  if(a==="real"){ A.previewReal=!A.previewReal; return render(); }
   if(a==="lang"){ setLang(LANG==="ar"?"en":"ar"); return render(); }
   if(a==="voice"){ A.voice=!A.voice; if(!A.voice) Voice.stop(); return render(); }
   if(a==="gfx"){ Space3D.setQuality(Space3D.quality==="high"?"low":"high"); if(A.screen!=="flight") return render(); return; }
