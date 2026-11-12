@@ -487,7 +487,8 @@ export default function Assistant() {
   }
 
   return (
-    <div className="grid gap-4">
+    // minmax(0,1fr): العمود ميكبرش عن الشاشة لو حاجة جواه عريضة (كان بيقص الشمال على الموبايل)
+    <div className="grid gap-4 grid-cols-[minmax(0,1fr)]">
       <PageHeader title="المساعد" subtitle="اكتب اللي حصل بالعامية، أو اسأله عن أي رقم أو إزاي تعمل حاجة">
         <Button onClick={() => setShowList((x) => !x)}>المحادثات{convs.length > 1 ? ` (${convs.length})` : ""}</Button>
         {msgs.length > 0 && (
@@ -687,7 +688,7 @@ export default function Assistant() {
           <Button onClick={() => setPhoto(null)}>شيلها</Button>
         </div>
       )}
-      <div className="flex gap-2 items-end">
+      <div className="flex gap-2 items-end max-[640px]:gap-1.5">
         <input ref={photoInput} type="file" accept="image/*" className="hidden" onChange={(e) => pickPhoto(e.target.files?.[0])} />
         <Button onClick={() => photoInput.current?.click()} disabled={busy || !me || !!rec} title="صورة (سركي، إيصال، تحويل)">
           📷
@@ -706,7 +707,7 @@ export default function Assistant() {
           }}
           rows={2}
           placeholder={photo ? "مثلاً: ده سركي اللودر بتاع محمد علي في شركة النور" : "مثلاً: صرفت ٥٠٠ سولار للبوكلين النهارده"}
-          className="flex-1 resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-[15px] focus:outline-none focus:border-amber"
+          className="flex-1 min-w-0 w-0 resize-none rounded-xl border border-line bg-surface px-3 py-2.5 text-[15px] focus:outline-none focus:border-amber"
         />
         <Button primary onClick={() => send()} disabled={busy || (!text.trim() && !photo) || !me}>
           ابعت
