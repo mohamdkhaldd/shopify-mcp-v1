@@ -1,6 +1,6 @@
 /* ================= STATE ================= */
 const store = {get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const A = {screen:"home", mode:"solo", players:["Player 1"], team:"StellarOps", mi:0, d:null, sandbox:false, unlockAll:false, tab:"planner",
+const A = {screen:"shome", simple:true, mode:"solo", players:["Player 1"], team:"StellarOps", mi:0, d:null, sandbox:false, unlockAll:false, tab:"planner",
   trainRole:"planner", trainIdx:{planner:0,engineer:0,science:0,comms:0}, trained:{}, flight:null, lastScore:{}, voice:true,
   progress: store.get("ma.progress3",{stars:{},best:{}}), flights:0};
 const $ = s => document.querySelector(s);
@@ -105,25 +105,28 @@ function compute(m,d){
 
 /* ================= RENDER ================= */
 let flightView=null, previewView=null;
-function go(screen){ if(screen!=="flight"){ Voice.stop(); if(A.screen==="flight") SEQ++; } A.screen=screen; render(); window.scrollTo({top:0}); }
+function go(screen){ if(screen!=="flight"&&screen!=="sfly"){ Voice.stop(); if(FLY()) SEQ++; } A.screen=screen; render(); window.scrollTo({top:0}); }
 function render(){
   const navBtns = [];
-  if(!["home","setup"].includes(A.screen)){
+  const simpleScr = A.screen in SIMPLE;
+  if(simpleScr) navBtns.push(`<button class="btn ghost" data-act="expert" type="button">${L({en:"Expert mode",ar:"وضع الخبراء"})}</button>`);
+  else navBtns.push(`<button class="btn ghost" data-act="easy" type="button">${L({en:"Easy mode",ar:"الوضع السهل"})}</button>`);
+  if(!simpleScr && !["home","setup"].includes(A.screen)){
     navBtns.push(`<button class="btn ghost" data-go="select" type="button">Missions</button>`);
     navBtns.push(`<button class="btn ghost" data-go="training" type="button">Training</button>`);
   }
-  if(A.screen!=="flight") navBtns.push(`<button class="btn ghost langbtn" data-act="lang" type="button">${LANG==="ar"?"English":"عربي"}</button>`);
+  if(!FLY()) navBtns.push(`<button class="btn ghost langbtn" data-act="lang" type="button">${LANG==="ar"?"English":"عربي"}</button>`);
   navBtns.push(`<button class="btn ghost" data-act="voice" type="button" aria-pressed="${A.voice}">Voice: ${A.voice?"on":"off"}</button>`);
   if(Space3D.ok) navBtns.push(`<button class="btn ghost" data-act="gfx" type="button">Graphics: ${Space3D.quality}</button>`);
   $("#nav").innerHTML = navBtns.join("");
-  const fn = {home,setup,training,select,briefing,design,flight,report}[A.screen];
+  const fn = ({home,setup,training,select,briefing,design,flight,report,...SIMPLE})[A.screen];
   $("#app").innerHTML = fn();
-  after[A.screen]?.();
+  (after[A.screen]||SIMPLE_AFTER[A.screen])?.();
 }
 const after = {};
 
 function home(){
-  return `<section class="hero">
+  return `<div class="row" style="justify-content:space-between"><span class="eyebrow">Expert mode · all 8 missions, every number</span></div><section class="hero">
    <canvas id="heroView" class="herocanvas" aria-label="Earth from orbit"></canvas>
    <div class="herotext">
     <div class="eyebrow">NASA Space Apps 2026 · Space Mission Design Game</div>
@@ -153,7 +156,7 @@ function setup(){
    <div class="field"><span class="flabel">Players</span>
     <div class="row">${[2,3,4].map(k=>`<button class="btn ghost" data-act="np" data-n="${k}" type="button" ${k===n?'style="border-color:var(--amber)"':""}>${k} players</button>`).join("")}</div></div>
    <div class="cols2">${A.players.map((p,i)=>`<div class="field"><label for="pl${i}">Player ${i+1} · starts as ${ROLES[ROLE_IDS[i%4]].name}${n<4&&i<4-n?" + "+ROLES[ROLE_IDS[i+n]].name:""}</label><input type="text" id="pl${i}" data-pl="${i}" value="${esc(p)}" maxlength="16"></div>`).join("")}</div>
-   <div class="row"><button class="btn" data-go="training" type="button">Start training</button><button class="btn ghost" data-go="select" type="button">Skip to missions</button></div>
+   <div class="row">${A.simple?`<button class="btn" data-go="spick" type="button">${L({en:"Choose a mission",ar:"اختار مهمة"})}</button>`:`<button class="btn" data-go="training" type="button">Start training</button><button class="btn ghost" data-go="select" type="button">Skip to missions</button>`}</div>
   </section>`;
 }
 
@@ -353,10 +356,11 @@ function flight(){
   <div id="modal"></div>`;
 }
 let SEQ=0;
-const wait = ms => { const my=SEQ; return new Promise((r,j)=>setTimeout(()=> my===SEQ&&A.screen==="flight"?r():j("abort"), matchMedia("(prefers-reduced-motion: reduce)").matches?ms/3:ms)); };
+const FLY = () => A.screen==="flight"||A.screen==="sfly";
+const wait = ms => { const my=SEQ; return new Promise((r,j)=>setTimeout(()=> my===SEQ&&FLY()?r():j("abort"), matchMedia("(prefers-reduced-motion: reduce)").matches?ms/3:ms)); };
 let curP=0;
 function skyLoop(){ const el=$("#sky"); if(!el||!flightView) return; const i=flightView.info(); const a=i.world==="earth"&&i.seg==="ascent"&&i.alt>=0?Math.max(0,Math.min(1,1-i.alt/110)):0; el.style.opacity=(a*a*.9).toFixed(3); requestAnimationFrame(skyLoop); }
-function animTo(to,ms){ const my=SEQ; return new Promise((res,rej)=>{ const from=curP, t0=performance.now(); const step=n=>{ if(A.screen!=="flight"||my!==SEQ) return rej("abort"); const k=Math.min(1,(n-t0)/ms); const e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2; curP=from+(to-from)*e; flightView&&flightView.setProgress(curP); updateClock(); k<1?requestAnimationFrame(step):res(); }; requestAnimationFrame(step); }); }
+function animTo(to,ms){ const my=SEQ; return new Promise((res,rej)=>{ const from=curP, t0=performance.now(); const step=n=>{ if(!FLY()||my!==SEQ) return rej("abort"); const k=Math.min(1,(n-t0)/ms); const e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2; curP=from+(to-from)*e; flightView&&flightView.setProgress(curP); updateClock(); k<1?requestAnimationFrame(step):res(); }; requestAnimationFrame(step); }); }
 let totalDays=1;
 let ascentEnd=.12;
 function updateClock(){ const el=$("#clock"); if(!el) return; if(curP<=ascentEnd){ el.textContent=`T+${fmt(curP/ascentEnd*9,0)} min`; return; } const d=(curP-ascentEnd)/(1-ascentEnd)*totalDays; el.textContent = d<1/24? `T+${Math.round(d*1440)} min` : d<2? `T+${fmt(d*24,0)} h` : `T+${fmt(d,0)} days`; }
@@ -522,7 +526,8 @@ function report(){
 /* ================= WIRING ================= */
 function startMission(i){ A.mi=i; const m=MISSIONS[i]; A.d=structuredClone(m.def); A.d.compress=!!A.d.compress; A.d.relay=!!A.d.relay; A.d.shelter=!!A.d.shelter; A.d.abort=!!A.d.abort; A.tab="planner"; go("briefing"); }
 document.addEventListener("click",e=>{
-  const t=e.target.closest("[data-go],[data-act],[data-mi],[data-tab],[data-trole],[data-view]"); if(!t) return;
+  const t=e.target.closest("[data-go],[data-act],[data-mi],[data-tab],[data-trole],[data-view],[data-smi],[data-sstep],[data-scard]"); if(!t) return;
+  if(!t.dataset.go && !t.dataset.view && sClick(t)) return;
   if(t.dataset.view){ flightView&&flightView.setView(t.dataset.view); document.querySelectorAll("[data-view]").forEach(b=>b.setAttribute("aria-pressed",b===t)); $("#screen").dataset.view=t.dataset.view; return; }
   if(t.dataset.go){ if(t.dataset.go==="design"&&!A.d) return go("select"); return go(t.dataset.go); }
   if(t.dataset.mi!==undefined) return startMission(+t.dataset.mi);
@@ -567,4 +572,3 @@ document.addEventListener("change",e=>{
 });
 new MutationObserver(()=>{ Object.keys(SLIDERS).forEach(id=>{const i=document.getElementById(id), o=document.getElementById(id+"o"); if(i&&o&&!o.textContent) o.textContent=i.value+SLIDERS[id];}); }).observe(document.getElementById("app"),{childList:true,subtree:true});
 window.MA = {A, compute, MISSIONS, startMission, go};
-render(); applyLang();
