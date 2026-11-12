@@ -1,0 +1,42 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1280
+PlayResY: 720
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Sub,DejaVu Sans,30,&H00FFFFFF,&H00FFFFFF,&H00000000,&H50201008,0,0,0,0,100,100,0,0,3,14,0,2,120,120,34,1
+Style: Tag,DejaVu Sans,22,&H003BA9F2,&H00FFFFFF,&H00000000,&HB0201008,1,0,0,0,100,100,2,0,3,10,0,7,40,40,96,1
+Style: Big,DejaVu Sans,66,&H00F7EBE6,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,1,0,1,0,3,7,90,90,0,1
+Style: Mid,DejaVu Sans,30,&H00BB9B8F,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,2,7,90,90,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:04.97,0:00:07.07,Sub,,0,0,0,,{\fad(120,120)}This is Mission Architect.
+Dialogue: 0,0:00:07.31,0:00:11.80,Sub,,0,0,0,,{\fad(120,120)}A game for one to four players, where your team becomes a real mission team.
+Dialogue: 0,0:00:12.33,0:00:13.06,Sub,,0,0,0,,{\fad(120,120)}Pick a mission.
+Dialogue: 0,0:00:13.36,0:00:18.88,Sub,,0,0,0,,{\fad(120,120)}Watch Egypt's farms from orbit, hunt for ice on the Moon, or land a rover on Mars.
+Dialogue: 0,0:00:19.31,0:00:23.67,Sub,,0,0,0,,{\fad(120,120)}First, every player learns their role, with short, hands-on lessons.
+Dialogue: 0,0:00:23.93,0:00:26.31,Sub,,0,0,0,,{\fad(120,120)}Then you build the spacecraft together.
+Dialogue: 0,0:00:26.57,0:00:30.29,Sub,,0,0,0,,{\fad(120,120)}Every choice costs mass, power, money, or data.
+Dialogue: 0,0:00:30.52,0:00:34.09,Sub,,0,0,0,,{\fad(120,120)}Live meters show how one decision changes everything else.
+Dialogue: 0,0:00:34.47,0:00:36.73,Sub,,0,0,0,,{\fad(120,120)}You can launch, even with mistakes.
+Dialogue: 0,0:00:36.95,0:00:40.17,Sub,,0,0,0,,{\fad(120,120)}The flight shows you exactly what goes wrong, and why.
+Dialogue: 0,0:00:40.57,0:00:42.64,Sub,,0,0,0,,{\fad(120,120)}In space, surprises happen.
+Dialogue: 0,0:00:43.03,0:00:45.53,Sub,,0,0,0,,{\fad(120,120)}You get thirty seconds and four choices.
+Dialogue: 0,0:00:45.75,0:00:48.69,Sub,,0,0,0,,{\fad(120,120)}Every choice works, but each one has a price.
+Dialogue: 0,0:00:48.93,0:00:50.87,Sub,,0,0,0,,{\fad(120,120)}A good design keeps you safe.
+Dialogue: 0,0:00:51.21,0:00:55.96,Sub,,0,0,0,,{\fad(120,120)}At the end, your report scores the mission, and compares it with the real NASA mission.
+Dialogue: 1,0:00:04.90,0:00:12.40,Tag,,0,0,0,,{\fad(250,200)\move(10,96,40,96,0,350)\pos(40,96)}1–4 PLAYERS  ·  ONE MISSION TEAM
+Dialogue: 1,0:00:12.75,0:00:18.80,Tag,,0,0,0,,{\fad(250,200)\move(10,96,40,96,0,350)\pos(40,96)}6 MISSIONS  ·  EASY → HARD
+Dialogue: 1,0:00:19.15,0:00:23.50,Tag,,0,0,0,,{\fad(250,200)\move(10,96,40,96,0,350)\pos(40,96)}STEP 1  ·  LEARN YOUR ROLE
+Dialogue: 1,0:00:23.85,0:00:34.00,Tag,,0,0,0,,{\fad(250,200)\move(10,96,40,96,0,350)\pos(40,96)}STEP 2  ·  DESIGN TOGETHER
+Dialogue: 1,0:00:34.35,0:00:40.10,Tag,,0,0,0,,{\fad(250,200)\move(10,96,40,96,0,350)\pos(40,96)}MISTAKES SHOW UP IN FLIGHT
+Dialogue: 1,0:00:40.45,0:00:50.75,Tag,,0,0,0,,{\fad(250,200)\move(10,96,40,96,0,350)\pos(40,96)}STEP 3  ·  30 SECONDS  ·  4 CHOICES
+Dialogue: 1,0:00:51.10,0:00:55.90,Tag,,0,0,0,,{\fad(250,200)\move(10,96,40,96,0,350)\pos(40,96)}STEP 4  ·  SCORE + REAL NASA MISSION
+Dialogue: 2,0:00:00.20,0:00:04.60,Mid,,0,0,0,,{\fad(300,250)\move(90,250,90,230,0,600)\c&H003BA9F2&}NASA SPACE APPS 2026
+Dialogue: 2,0:00:00.40,0:00:04.60,Big,,0,0,0,,{\fad(300,250)\move(90,320,90,290,0,700)}What if you could design
+Dialogue: 2,0:00:01.40,0:00:04.60,Big,,0,0,0,,{\fad(300,250)\move(90,410,90,380,0,700)\c&H003BA9F2&}a real space mission?
+Dialogue: 2,0:00:56.30,0:01:01.00,Big,,0,0,0,,{\an8\fad(350,0)\move(640,560,640,520,0,700)}MISSION ARCHITECT
+Dialogue: 2,0:00:57.60,0:01:01.00,Mid,,0,0,0,,{\an8\fad(300,0)\pos(640,605)\c&H00F7EBE6&}Learn space engineering by doing it.
+Dialogue: 2,0:00:58.60,0:01:01.00,Mid,,0,0,0,,{\an8\fad(300,0)\pos(640,650)\fs22}NASA Space Apps 2026  ·  Space Mission Design Challenge
