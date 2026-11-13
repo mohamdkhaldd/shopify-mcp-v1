@@ -397,9 +397,14 @@ function ldesign() {
         ${m.decisions[r].map(d => `<div class="dec"><h3>${L(d.t)}</h3><div class="cards3 ${d.o.length === 2 ? "two" : ""}">${d.o.map(o => lCard(r, d, o, picks, canEdit)).join("")}</div></div>`).join("")}
         <div class="nav2"><button class="hbtn ghost" type="button" data-act="rewatch">${L(ok("Rewatch my guide (−20 points)", "اتفرج على المرشد تاني (−20 نقطة)"))}</button></div></div></div>
     <div class="reviewbar"><button class="hbtn ghost" type="button" data-act="review">${L(ok("Design review", "مراجعة التصميم"))} ${reviews ? L(ok("(−30 points)", "(−30 نقطة)")) : L(ok("(first one free)", "(أول مرة ببلاش)"))}</button>
-      ${lLaunchBtn(picks)}</div>
+      <div class="row lnav">${lStepBtns()}${lLaunchBtn(picks)}</div></div>
     <div id="reviewbox">${lReviewHtml()}</div>
   </section>${lBoard()}${lChatBox()}`;
+}
+function lStepBtns() {
+  if (LB.mode === "online") return "";
+  const i = TEAM_ROLES.indexOf(LB.tab), prev = TEAM_ROLES[i - 1], next = TEAM_ROLES[i + 1];
+  return (prev ? `<button class="hbtn ghost" type="button" data-act="ltabprev">← ${L(CREW[prev].title)}</button>` : "") + (next ? `<button class="hbtn" type="button" data-act="ltabnext">${L(ok("Next", "التالي"))}: ${L(CREW[next].title)} →</button>` : "");
 }
 function lLaunchBtn(picks) {
   const done = allChosen(picks, TEAM_ROLES);
@@ -420,7 +425,7 @@ function lPartial() {
     document.querySelectorAll("[data-lpick]").forEach(b => { const [r, k, o] = b.dataset.lpick.split("."); b.classList.toggle("sel", picks[r + "." + k] === o); });
     document.querySelectorAll(".ccard[disabled]").forEach(b => { /* teammates' cards are shown via tabs */ });
     document.querySelectorAll(".stp[data-ltab]").forEach(b => b.classList.toggle("done", decisionsFor([b.dataset.ltab]).every(({ role, d }) => picks[role + "." + d.k])));
-    const rb = document.querySelector(".reviewbar"); if (rb) rb.lastElementChild.outerHTML = lLaunchBtn(picks);
+    const rb = document.querySelector(".reviewbar .lnav"); if (rb) rb.lastElementChild.outerHTML = lLaunchBtn(picks);
     const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); lHolo(); }
 }
 let holoL = null;
@@ -531,6 +536,7 @@ function lClick(t) {
   if (t.dataset.lmode) { LB.mode = t.dataset.lmode; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.watched = {}; go(LB.mode === "online" ? "lonline" : "llevel"); return true; }
   if (t.dataset.llevel) { LB.level = +t.dataset.llevel; LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
   if (t.dataset.ltab) { LB.tab = t.dataset.ltab; render(); return true; }
+  if (a === "ltabnext" || a === "ltabprev") { const i = TEAM_ROLES.indexOf(LB.tab) + (a === "ltabnext" ? 1 : -1); if (TEAM_ROLES[i]) { LB.tab = TEAM_ROLES[i]; LB.lastPart = null; render(); window.scrollTo({ top: 0 }); } return true; }
   if (t.dataset.lpick) { const [r, k, o] = t.dataset.lpick.split("."); if (LB.mode === "online") { const p = Object.assign({}, (LB.me.data && LB.me.data.picks) || {}); p[r + "." + k] = o; LB.me.data.picks = p; myData({ picks: p, ready: false }); } else LB.picks[r + "." + k] = o; const dd = LM().decisions[r].find(x => x.k === k), oo = dd && dd.o.find(x => x.k === o); LB.lastPart = oo ? L(oo.n) : null; lPartial(); return true; }
   if (a === "vnext") { LB.vi = (LB.vi || 0) + 1; render(); return true; }
   if (a === "vdone") { if (LB.mode === "online") myData({ watched: true }); lStartDesign(); return true; }
