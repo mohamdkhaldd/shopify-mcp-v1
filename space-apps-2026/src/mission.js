@@ -305,6 +305,9 @@ async function myData(patch) { const sb = sbClient(); const d = Object.assign({}
 async function sendChat(body) { const sb = sbClient(); body = body.trim().slice(0, 300); if (!body) return; await sb.from("messages").insert({ room: LB.room.code, name: LB.me.name, role: LB.myRole, body }); }
 function onRoomChange() {
   if (!LB.room) return; const ph = LB.room.state.phase;
+  if (ph === "video" && LB.room.state.videoAt && LB.gameAt && LB.room.state.videoAt !== LB.gameAt && A.screen !== "lvideo") { LB.gameAt = LB.room.state.videoAt; lResetGame(); LB.backInRoom = false; go("lvideo"); return; }
+  if (ph === "video" && LB.room.state.videoAt) LB.gameAt = LB.room.state.videoAt;
+  if (LB.backInRoom && ph === "flight") { if (["lroom", "ldesign", "lvideo"].includes(A.screen)) lPartial(); lChatPaint(); return; }
   if (ph === "lobby" && !['lroom', 'lonline'].includes(A.screen)) { lResetGame(); go("lroom"); return; }
   const RANK = { lonline: 0, lroom: 1, lvideo: 2, ldesign: 3, lfly: 4, lusers: 5, lreport: 6 }, target = { lobby: "lroom", video: "lvideo", flight: "lfly" }[ph];
   if (target && (RANK[A.screen] ?? 0) < RANK[target]) { if (target === "lvideo") LB.vi = 0; go(target); if (target === "lfly") lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return; }
@@ -427,7 +430,7 @@ function lvideo() {
   return lRoomBar() + `<section class="hpanel notr"><div class="kick">${L(LM().name)} · ${L(ok("Briefing", "الشرح"))} ${i + 1}/${list.length}</div>
     <h2 class="hh">${CREW[r].name} · ${who}</h2>
     <p class="needline">${L(ok("Watch carefully and write on the team board. The cards later show names only.", "اتفرج كويس واكتب على السبورة، علشان الكروت بعد كده عليها أسامي بس."))}</p>
-    ${LB.mode === "online" && LB.room && LB.room.state.videoAt ? `<p class="timer">⏱️ ${L(ok("Time to watch", "وقت الفرجة"))}: <b id="vtimer">--:--</b> · ${L(ok("When time is up, everyone moves on to the design.", "لما الوقت يخلص، الكل بيروح على التصميم."))}</p>` : ""}
+    ${LB.mode === "online" && LB.room && LB.room.state.videoAt && LB.level > 1 ? `<p class="timer">⏱️ ${L(ok("Time to watch", "وقت الفرجة"))}: <b id="vtimer">--:--</b> · ${L(ok("Watch your videos and write your notes. When time is up, everyone moves on to the design.", "اتفرج على الفيديوهات واكتب النوتس بتاعتك. ولما الوقت يخلص، الكل بيروح على التصميم."))}</p>` : ""}
     <video id="brief" class="briefvid" src="video/${LM().id}_${r}.mp4" controls playsinline preload="auto"></video>
     <div class="row">${i < list.length - 1 ? `<button class="hbtn" type="button" data-act="vnext" id="vnext" ${LB.watched[LM().id + r] ? "" : "disabled"}>${L(ok("Next briefing", "الشرح اللي بعده"))}</button>`
       : `<button class="hbtn" type="button" data-act="vdone" id="vnext" ${LB.watched[LM().id + r] ? "" : "disabled"}>${L(ok("I'm ready to decide", "أنا جاهز أقرر"))}</button>`}
@@ -622,14 +625,14 @@ function lreport() {
       ${m.real.photos ? `<div class="realgal">${m.real.photos.map(([id, cap]) => `<figure><img src="img/real/${id}.jpg" alt="" loading="lazy"><figcaption>${L(cap)} <span class="psub">· NASA</span></figcaption></figure>`).join("")}</div>` : ""}
       <p class="psub">${L(ok("Sources", "المصادر"))}: ${m.real.links.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join(" · ")} · <a href="https://nasa.github.io/mission-viz/" target="_blank" rel="noopener">NASA Mission Viz</a></p></div>
     ${LB.level < 4 ? `<p class="needline">${R.stars >= 1 ? `🔓 ${L(ok("Next level unlocked! You need at least 1 star to move on. Come back any time for 3 stars.", "المستوى اللي بعده اتفتح! محتاج نجمة واحدة على الأقل علشان تكمّل، وتقدر ترجع في أي وقت علشان الـ 3 نجوم."))}` : `🔒 ${L(ok("Get at least 1 star to unlock the next level: the spacecraft must work and meet at least one need.", "محتاج نجمة واحدة على الأقل علشان المستوى اللي بعده يتفتح: المركبة لازم تشتغل وتحقق طلب واحد على الأقل."))}`}</p>` : ""}
-    <div class="row">${LB.mode === "online" ? (isHost() ? `<button class="hbtn" type="button" data-act="oagain">🔁 ${L(ok("Back to the room: choose the next level", "ارجع للغرفة واختار المستوى الجاي"))}</button>` : `<p class="psub">${L(ok("The room creator will take everyone back to the room for the next game.", "اللي عامل الغرفة هيرجّع الكل للغرفة علشان الجولة الجاية."))}</p>`) : ""}${LB.mode !== "online" && LB.level < 4 && R.stars >= 1 ? `<button class="hbtn" type="button" data-act="nextlvl">${L(ok("Next level", "المستوى اللي بعده"))} → CML ${LB.level + 1}</button>` : ""}<button class="hbtn ${R.stars >= 1 && LB.level < 4 ? "ghost" : ""}" type="button" data-act="redesign">${L(ok("Change the design and fly again", "غيّر التصميم وطير تاني"))}</button><button class="hbtn ghost" type="button" data-go="llevel">${L(ok("Levels", "المستويات"))}</button></div></section>`;
+    <div class="row">${LB.mode === "online" ? `<button class="hbtn" type="button" data-act="oagain">🔁 ${L(ok("Back to the room (next game)", "ارجع للغرفة (الجولة الجاية)"))}</button><button class="hbtn ghost" type="button" data-act="oleave">🚪 ${L(ok("Leave this room", "اخرج من الغرفة دي"))}</button>` : ""}${LB.mode !== "online" && LB.level < 4 && R.stars >= 1 ? `<button class="hbtn" type="button" data-act="nextlvl">${L(ok("Next level", "المستوى اللي بعده"))} → CML ${LB.level + 1}</button>` : ""}<button class="hbtn ${R.stars >= 1 && LB.level < 4 ? "ghost" : ""}" type="button" data-act="redesign">${L(ok("Change the design and fly again", "غيّر التصميم وطير تاني"))}</button><button class="hbtn ghost" type="button" data-go="llevel">${L(ok("Levels", "المستويات"))}</button></div></section>`;
 }
 Object.assign(SIMPLE, { lhome, llevel, lonline, lroom, lvideo, ldesign, lfly, lusers, lreport });
 Object.assign(SIMPLE_AFTER, {
   lhome() { const cv = $("#holoHome"); if (!Space3D.ok || !cv) return; const h = Space3D.createHolo(cv); h && h.setModel("landsat8"); },
   lonline() { onlineAvailable().then(okk => { const el = $("#olstat"); if (!el) return; el.innerHTML = okk ? L(ok("Connected. Write your name, then create or join a room.", "متوصل. اكتب اسمك، وبعدين اعمل غرفة أو ادخل واحدة.")) : L(ok("Online play can't connect here. Open the public game link (GitHub Pages), or play on one computer.", "اللعب الأونلاين مش قادر يتوصل هنا. افتح لينك اللعبة العام (GitHub Pages)، أو العبوا على جهاز واحد.")); if (!okk) document.querySelectorAll("[data-act=ocreate],[data-act=ojoin]").forEach(b => b.disabled = true); }); },
   lroom() { lChatPaint(); },
-  lvideo() { clearInterval(LB.vt); if (LB.mode === "online" && LB.room && LB.room.state.videoAt) { const lim = ({ 1: 5, 2: 7, 3: 8, 4: 8 })[LB.level] * 60000, end = LB.room.state.videoAt + lim;
+  lvideo() { clearInterval(LB.vt); if (LB.mode === "online" && LB.room && LB.room.state.videoAt && LB.level > 1) { const lim = 7 * 60000, end = LB.room.state.videoAt + lim;
       const tick = () => { const el = $("#vtimer"); if (A.screen !== "lvideo") return clearInterval(LB.vt); const ms = end - Date.now(); if (ms <= 0) { clearInterval(LB.vt); myData({ watched: true }); lStartDesign(); return; } if (el) el.textContent = Math.floor(ms / 60000) + ":" + String(Math.floor(ms / 1000) % 60).padStart(2, "0"); };
       tick(); LB.vt = setInterval(tick, 1000); }
     const v = $("#brief"); const list = lVideoList(), r = list[Math.min(LB.vi || 0, list.length - 1)]; if (v) v.onended = () => { LB.watched[LM().id + r] = true; const b = $("#vnext"); if (b) b.disabled = false; }; },
@@ -657,10 +660,10 @@ function lClick(t) {
     if (!name) { err.textContent = L(ok("Write your name first.", "اكتب اسمك الأول.")); return true; } A.lastName = name;
     if (a === "ocreate") LB.level = +$("#olevel").value;
     (a === "ocreate" ? roomCreate(name, (document.querySelector("input[name=rmode]:checked") || {}).value) : roomJoin($("#ocode").value, name)).then(() => go("lroom")).catch(e => { err.textContent = e.message || String(e); }); return true; }
-  if (a === "ostart" || a === "ostartnow") { roomState({ phase: "video", videoAt: Date.now(), reviews: 0, lastReview: null }); return true; }
+  if (a === "ostart" || a === "ostartnow") { const at = Date.now(); LB.gameAt = at; LB.backInRoom = false; lResetGame(); roomState({ phase: "video", videoAt: at, reviews: 0, lastReview: null }).then(() => go("lvideo")); return true; }
   if (a === "oready0") { myData({ lobbyReady: !(LB.me.data && LB.me.data.lobbyReady) }).then(() => roomRefresh()); return true; }
   if (a === "olevel") { if (isHost()) { const n = +t.dataset.n; LB.level = n; sbClient().from("rooms").update({ level: n, mission: CML[n - 1].m }).eq("code", LB.room.code).then(() => roomRefresh()); } return true; }
-  if (a === "oagain") { if (isHost()) roomState({ phase: "lobby", reviews: 0, lastReview: null }); go("lroom"); return true; }
+  if (a === "oagain") { lResetGame(); LB.backInRoom = true; go("lroom"); return true; }
   if (a === "omode") { if (isHost()) roomState({ roleMode: t.dataset.m }).then(() => render()); return true; }
   if (t.dataset.orole) { lSwitchRole(t.dataset.orole); return true; }
   if (a === "ocopy") { const c = LB.room ? LB.room.code : ""; try { navigator.clipboard.writeText(c).then(() => { t.textContent = L(ok("Copied!", "اتنسخ!")); }, () => { t.textContent = c; }); } catch (e) { t.textContent = c; } return true; }
