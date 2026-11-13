@@ -768,7 +768,7 @@ function lClick(t) {
   if (a === "review") { const n = LB.mode === "online" ? (LB.room.state.reviews || 0) : LB.reviews; if (LB.mode === "online") roomState({ reviews: n + 1, lastReview: Date.now() }); else { LB.reviews = n + 1; LB.revealed = Date.now(); } const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); lPtsPaint(); return true; }
   if (a === "llaunch") { go("lfly"); lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return true; }
   if (a === "redesign") { lStartDesign(); return true; }
-  if (a === "signin") { const sb = sbClient(); if (sb) sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.href.split("#")[0] } }).then(r => { if (r && r.error) alert(r.error.message); }); return true; }
+  if (a === "signin") { const sb = sbClient(); if (sb) sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.href.split("#")[0], queryParams: { prompt: "select_account" } } }).then(r => { if (r && r.error) alert(r.error.message); }); return true; }
   if (a === "signout") { const sb = sbClient(); if (sb) sb.auth.signOut().then(() => { A.user = null; render(); }); return true; }
   if (a === "cert") { A.certNames = $("#certnames").value; lCert(); return true; }
   if (a === "nextlvl") { if (LB.mode === "online") { go("llevel"); return true; } LB.level = Math.min(4, LB.level + 1); LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
