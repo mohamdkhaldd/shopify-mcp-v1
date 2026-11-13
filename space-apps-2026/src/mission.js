@@ -324,9 +324,11 @@ function sbClient() { if (LB.sb) return LB.sb; if (!window.supabase || !window.s
 async function lAuthInit() {
   const sb = sbClient(); if (!sb || LB.authInit) return; LB.authInit = true;
   const apply = async session => {
-    A.user = session && session.user ? { id: session.user.id, name: (session.user.user_metadata && (session.user.user_metadata.full_name || session.user.user_metadata.name)) || session.user.email || "Player", email: session.user.email } : null;
-    if (A.user) { if (!A.lastName) A.lastName = A.user.name.split(" ")[0];
-      const { data } = await sb.from("profiles").select("progress").eq("user_id", A.user.id).maybeSingle();
+    const um = (session && session.user && session.user.user_metadata) || {};
+    A.user = session && session.user ? { id: session.user.id, name: um.display_name || "", email: session.user.email } : null;
+    if (A.user) {
+      const { data } = await sb.from("profiles").select("progress,name").eq("user_id", A.user.id).maybeSingle();
+      A.needName = !A.user.name; if (A.user.name) A.lastName = A.user.name;
       const pr = (data && data.progress) || {}; CML.forEach(c => { const k = "cml" + c.n; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, pr[k] || 0); }); store.set("ma.progress3", A.progress); lSaveProgress(); }
     if (["lhome", "llevel", "lonline"].includes(A.screen)) render();
   };
@@ -334,12 +336,26 @@ async function lAuthInit() {
   sb.auth.onAuthStateChange((ev, session) => { if (ev === "SIGNED_IN" || ev === "SIGNED_OUT") apply(session); });
 }
 async function lSaveProgress() { const sb = sbClient(); if (!sb || !A.user) return; const pr = {}; CML.forEach(c => { pr["cml" + c.n] = A.progress.stars["cml" + c.n] || 0; });
-  try { await sb.from("profiles").upsert({ user_id: A.user.id, name: A.user.name, progress: pr, updated_at: new Date().toISOString() }); } catch (e) { } }
+  try { await sb.from("profiles").upsert(Object.assign({ user_id: A.user.id, progress: pr, updated_at: new Date().toISOString() }, A.user.name ? { name: A.user.name } : {})); } catch (e) { } }
+async function lSaveName(name) {
+  const sb = sbClient(); name = (name || "").trim().slice(0, 24); if (!sb || !A.user || !name) return false;
+  const { error } = await sb.auth.updateUser({ data: { display_name: name } }); if (error) { alert(error.message); return false; }
+  A.user.name = name; A.lastName = name; A.needName = false; A.editName = false; await lSaveProgress(); return true;
+}
 function lAuthBox() {
   if (!window.supabase) return "";
-  return A.user ? `<div class="authbox">👤 <b>${esc(A.user.name)}</b> · ${L(ok("your levels are saved to your account", "المستويات بتاعتك محفوظة على حسابك"))} <button class="linkbtn" type="button" data-act="signout">${L(ok("Sign out", "اخرج"))}</button></div>`
-    : `<div class="authbox"><button class="hbtn ghost" type="button" data-act="signin">🔐 ${L(ok("Sign in with Google", "سجّل دخول بجوجل"))}</button> <span class="psub">${L(ok("so your finished levels follow you to any device (optional)", "علشان المستويات اللي خلّصتها تفضل معاك على أي جهاز (اختياري)"))}</span></div>`;
+  if (A.user && (A.needName || A.editName)) return `<div class="authbox col"><b>✏️ ${L(ok("Choose your display name", "اختار الاسم اللي هيظهر"))}</b>
+    <span class="psub">${L(ok("This name shows in rooms, chat and certificates. Use a first name or nickname.", "الاسم ده هيظهر في الغرف والشات والشهادات. استخدم اسمك الأول أو اسم شهرة."))}</span>
+    <div class="row"><input type="text" id="dname" maxlength="24" value="${esc(A.user.name || "")}" placeholder="${L(ok("Display name", "الاسم"))}"><button class="hbtn" type="button" data-act="savename">${L(ok("Save", "احفظ"))}</button>${A.editName && !A.needName ? `<button class="linkbtn" type="button" data-act="cancelname">${L(ok("Cancel", "إلغاء"))}</button>` : ""}</div><span class="bad" id="namemsg"></span></div>`;
+  if (A.user) return `<div class="authbox">👤 <b>${esc(A.user.name)}</b> · ${L(ok("your levels are saved to your account", "المستويات بتاعتك محفوظة على حسابك"))} <button class="linkbtn" type="button" data-act="editname">${L(ok("Edit name", "غيّر الاسم"))}</button> · <button class="linkbtn" type="button" data-act="signout">${L(ok("Sign out", "اخرج"))}</button></div>`;
+  return `<div class="authbox col"><div class="row"><button class="hbtn ghost" type="button" data-act="signin">🔐 ${L(ok("Sign in with Google", "سجّل دخول بجوجل"))}</button>
+      <span class="psub">${L(ok("Optional: sign in so your finished levels follow you to any device.", "اختياري: سجّل دخول علشان المستويات اللي خلّصتها تفضل معاك على أي جهاز."))}</span></div>
+    <details class="emailauth"><summary>${L(ok("Or use email and password", "أو استخدم الإيميل والباسورد"))}</summary>
+      <div class="row"><input type="email" id="aemail" autocomplete="email" placeholder="${L(ok("Email", "الإيميل"))}"><input type="password" id="apass" autocomplete="current-password" placeholder="${L(ok("Password (6+ characters)", "الباسورد (6 حروف أو أكتر)"))}"></div>
+      <div class="row"><button class="hbtn" type="button" data-act="esignin">${L(ok("Sign in", "ادخل"))}</button><button class="hbtn ghost" type="button" data-act="esignup">${L(ok("Create account", "اعمل حساب"))}</button></div>
+      <span class="psub" id="authmsg"></span></details></div>`;
 }
+
 async function onlineAvailable() { const sb = sbClient(); if (!sb) return false; try { const { error } = await sb.from("rooms").select("code").limit(1); return !error; } catch (e) { return false; } }
 const newCode = () => "SO-" + Math.random().toString(36).slice(2, 6).toUpperCase().replace(/[^A-Z0-9]/g, "X");
 async function roomCreate(name, roleMode) {
@@ -442,7 +458,7 @@ function llevel() {
 function lonline() {
   return `<section class="hpanel notr"><div class="kick">${L(ok("Online team", "تيم أونلاين"))}</div><h2 class="hh">${L(ok("Create or join a mission room", "اعمل أو ادخل غرفة مهمة"))}</h2>
     ${A.resumeMsg ? `<p class="needline">🔄 ${L(ok("Reconnecting to room", "بنرجّعك للغرفة"))} <b class="code">${esc(A.resumeMsg)}</b>…</p>` : ""}${A.kickedMsg ? `<p class="bad">${L(ok("The room creator removed you from the room.", "اللي عامل الغرفة طلّعك من الغرفة."))}</p>` : ""}<div id="olstat" class="needline">${L(ok("Checking the connection…", "بنشيك على الاتصال…"))}</div>
-    <div class="cols2"><div class="hcard"><h3>${L(ok("Your name", "اسمك"))}</h3><input type="text" id="oname" maxlength="24" value="${esc(A.lastName || "")}">
+    <div class="cols2"><div class="hcard"><h3>${L(ok("Your name", "اسمك"))}</h3><input type="text" id="oname" maxlength="24" value="${esc((A.user && A.user.name) || A.lastName || "")}">
       <div class="needline">🎲 ${L(ok("The room creator decides: roles are drawn by luck, or each player picks a free role in the room.", "اللي بيعمل الغرفة هو اللي بيقرر: الأدوار تتوزع بالحظ، أو كل لاعب يختار دور فاضي جوه الغرفة."))}</div><div class="rolepick">${TEAM_ROLES.map(r => `<div class="rolecard" style="--sc:${CREW[r].col}">${crewImg(r)}<b>${L(CREW[r].title)}</b><span>?</span></div>`).join("")}</div></div>
     <div class="hcard"><h3>${L(ok("Start a new room", "ابدأ غرفة جديدة"))}</h3><p class="psub">${L(ok("You choose the level. Share the code with your team.", "إنت اللي هتختار المستوى. ابعت الكود للتيم."))}</p>
       <h3>${L(ok("How are roles given?", "الأدوار هتتوزع إزاي؟"))}</h3>
@@ -769,6 +785,17 @@ function lClick(t) {
   if (a === "llaunch") { go("lfly"); lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return true; }
   if (a === "redesign") { lStartDesign(); return true; }
   if (a === "signin") { const sb = sbClient(); if (sb) sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.href.split("#")[0], queryParams: { prompt: "select_account" } } }).then(r => { if (r && r.error) alert(r.error.message); }); return true; }
+  if (a === "esignin" || a === "esignup") { const sb = sbClient(), em = ($("#aemail").value || "").trim(), pw = $("#apass").value || "", msg = $("#authmsg");
+    const say = (t, bad) => { if (msg) { msg.textContent = t; msg.className = bad ? "bad" : "psub"; } };
+    if (!sb) return true; if (!em || pw.length < 6) { say(L(ok("Write your email and a password of at least 6 characters.", "اكتب الإيميل وباسورد 6 حروف على الأقل.")), true); return true; }
+    say(L(ok("Please wait…", "استنى شوية…")));
+    (a === "esignin" ? sb.auth.signInWithPassword({ email: em, password: pw }) : sb.auth.signUp({ email: em, password: pw, options: { emailRedirectTo: location.href.split("#")[0] } })).then(({ data, error }) => {
+      if (error) return say(error.message, true);
+      if (a === "esignup" && !data.session) return say(L(ok("Account created. Check your email and click the link to confirm, then sign in.", "الحساب اتعمل. افتح الإيميل بتاعك ودوس على اللينك علشان تأكد، وبعدين ادخل.")));
+      say(""); }); return true; }
+  if (a === "savename") { const v = $("#dname").value; if (!v.trim()) { const m = $("#namemsg"); if (m) m.textContent = L(ok("Write a name first.", "اكتب اسم الأول.")); return true; } lSaveName(v).then(okk => { if (okk) render(); }); return true; }
+  if (a === "editname") { A.editName = true; render(); return true; }
+  if (a === "cancelname") { A.editName = false; render(); return true; }
   if (a === "signout") { const sb = sbClient(); if (sb) sb.auth.signOut().then(() => { A.user = null; render(); }); return true; }
   if (a === "cert") { A.certNames = $("#certnames").value; lCert(); return true; }
   if (a === "nextlvl") { if (LB.mode === "online") { go("llevel"); return true; } LB.level = Math.min(4, LB.level + 1); LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
