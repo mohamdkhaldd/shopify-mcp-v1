@@ -4,11 +4,11 @@
 # RTGs power NASA's Curiosity and Perseverance; their plutonium-238 fuel is rare.
 TITLE = "MISSION BRIEFING  ·  KHAMSIN STORM WATCH"
 PREFIX = "storm"
-V = {"director": ("Mohamed", "Mission Director", "en-US-ChristopherNeural", "ctrl_2.jpg", "#ffc26b"),
-     "science": ("Ayat", "Science Lead guide", "en-US-EmmaNeural", "crew_1.jpg", "#5fd8ff"),
-     "comms": ("Adham", "Communications Lead guide", "en-US-BrianNeural", "crew_4.jpg", "#c79bff"),
-     "engineer": ("Abdelrahman", "Spacecraft Engineer guide", "en-US-AndrewNeural", "crew_2.jpg", "#ffb35f"),
-     "planner": ("Ahmed", "Mission Planner guide", "en-US-EricNeural", "ctrl_4.jpg", "#7dffb0")}
+V = {"director": ("Mohamed", "Mission Director", "en-US-AndrewMultilingualNeural", "mohamed_wide.jpg", "#ffc26b"),
+     "science": ("Ayat", "Science Lead guide", "en-US-AvaMultilingualNeural", "ayat_wide.jpg", "#5fd8ff"),
+     "comms": ("Adham", "Communications Lead guide", "en-US-BrianMultilingualNeural", "adham_wide.jpg", "#c79bff"),
+     "engineer": ("Abdelrahman", "Spacecraft Engineer guide", "en-AU-WilliamMultilingualNeural", "abdelrahman_wide.jpg", "#ffb35f"),
+     "planner": ("Ahmed", "Mission Planner guide", "de-DE-FlorianMultilingualNeural", "ahmed_wide.jpg", "#7dffb0")}
 SEG = {
  "director": [
    ("Hello, team! I am Mohamed, your Mission Director.", None),

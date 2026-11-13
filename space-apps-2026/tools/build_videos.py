@@ -47,12 +47,12 @@ def run(c): subprocess.run(c, check=True, stdout=subprocess.DEVNULL, stderr=subp
 def dur(f): return float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f]).decode())
 TTS = os.path.join(HERE, "venv", "bin", "edge-tts")
 for role in (sys.argv[2:] or ROLES.keys()):
-    R = ROLES[role]; tmp = os.path.join(HERE, "work", SC.PREFIX, role); os.makedirs(tmp, exist_ok=True); parts = []
+    R = ROLES[role]; tmp = os.path.join(HERE, "work2", SC.PREFIX, role); os.makedirs(tmp, exist_ok=True); parts = []
     for i, (text, card) in enumerate(R["seg"]):
         a = os.path.join(tmp, f"{i:02d}.mp3"); png = os.path.join(tmp, f"{i:02d}.png"); mp4 = os.path.join(tmp, f"{i:02d}.mp4")
-        for attempt in range(4):
-            if os.path.exists(a) and os.path.getsize(a) > 1000: break
-            try: run([TTS, "--voice", R["voice"], "--rate=-10%", "--text", text, "--write-media", a])
+        for attempt in range(6):
+            if os.path.exists(a) and os.path.getsize(a) > 1000 and subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", a], capture_output=True).returncode == 0: break
+            try: run([TTS, "--voice", R["voice"], "--text", text, "--write-media", a])
             except subprocess.CalledProcessError: import time; time.sleep(3)
         slide(role, text, card).save(png)
         t = dur(a) + .45
