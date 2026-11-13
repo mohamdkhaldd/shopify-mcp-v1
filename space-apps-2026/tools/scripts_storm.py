@@ -20,7 +20,8 @@ SEG = {
    ("Two: see the storms in the day, and at night.", {"t": "NEED 2", "h": "See storms day and night"}),
    ("Three: send a new picture to Earth very often, every fifteen minutes.", {"t": "NEED 3", "h": "New picture every 15 minutes"}),
    ("On your screen there is a team board. Write on it what you learn in your video. Your team will see it, even from far away.", {"t": "TEAM BOARD", "h": "Write what you learn"}),
-   ("Nobody knows everything alone. Listen, write, then talk together. Good luck!", None)],
+   ("Nobody knows everything alone. Listen, write, then talk together. Good luck!", None),
+   ("One more thing. Your team starts with one thousand points. Every need you miss, every part that is bigger than you need, every bit of damage, and every extra review costs points. Keep as many as you can!", {"t": "1,000 POINTS", "h": "Start with 1,000 · don't lose them"})],
  "science": [
    ("Hi! I am Ayat. In this mission, you are the Science Lead. Let me show you your job.", None),
    ("The Science Lead chooses what the satellite sees. Your choice: the camera.", None),

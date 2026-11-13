@@ -24,7 +24,8 @@ SEG = {
    ("Three: fly over the south pole.", {"t": "NEED 3", "h": "Fly over the south pole"}),
    ("Four: send at least one hundred megabits of maps every second.", {"t": "NEED 4", "h": "Send 100 Mbit/s"}),
    ("Five: survive the cold shadow. And six: our launch budget is one hundred fifty million dollars.", {"t": "NEED 5 AND 6", "h": "Survive the shadow · $150 million"}),
-   ("Each guide will give you numbers. Compare each number with what we need. Write them on the team board. Good luck!", {"t": "TEAM BOARD", "h": "Compare with what we need"})],
+   ("Each guide will give you numbers. Compare each number with what we need. Write them on the team board. Good luck!", {"t": "TEAM BOARD", "h": "Compare with what we need"}),
+   ("One more thing. Your team starts with one thousand points. Every need you miss, every part that is bigger than you need, every bit of damage, and every extra review costs points. Keep as many as you can!", {"t": "1,000 POINTS", "h": "Start with 1,000 · don't lose them"})],
  "science": [
    ("Hi! I am Ayat. You are the Science Lead again. Your choices: the camera, and how to see inside dark craters.", None),
    ("Remember: a pixel is one tiny square in the picture. To see a rock two meters wide, each pixel must be one meter or smaller.", {"t": "PIXEL", "h": "1 meter or smaller"}),

@@ -24,7 +24,8 @@ SEG = {
    ("Three: keep working for years, even in dust storms and cold winters.", {"t": "MUST 3", "h": "Work for years"}),
    ("Four: send our data home every Martian day. Five: drive safely, even though messages are slow. Six: launch at the right time.", {"t": "MUST 4 · 5 · 6", "h": "Data home · drive safely · launch on time"}),
    ("This time, choices depend on each other. One person's choice can break another person's plan. Write everything on the team board, and add up the kilograms and the energy together.", {"t": "TEAM BOARD", "h": "Kilograms · energy · who depends on whom"}),
-   ("Good luck, team.", None)],
+   ("Good luck, team.", None),
+   ("One more thing. Your team starts with one thousand points. Every need you miss, every part that is bigger than you need, every bit of damage, and every extra review costs points. Keep as many as you can!", {"t": "1,000 POINTS", "h": "Start with 1,000 · don't lose them"})],
  "science": [
    ("Hi! I am Ayat. You are the Science Lead. Your choices: where to land, and which science tool to carry.", None),
    ("Signs of ancient life are most likely where water once was.", {"t": "LIFE NEEDS WATER", "h": "Look where water was"}),

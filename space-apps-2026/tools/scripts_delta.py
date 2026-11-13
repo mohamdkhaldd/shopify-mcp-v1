@@ -22,7 +22,8 @@ SEG = {
    ("Four: keep working for five years.", {"t": "MUST 4", "h": "Work for 5 years"}),
    ("And one goal: don't waste. Every extra kilogram and every extra watt costs money. The best team uses just what it needs.", {"t": "GOAL", "h": "Don't waste"}),
    ("This time there are many numbers. Write every number on the team board. You will need to add them up together.", {"t": "TEAM BOARD", "h": "Write every number"}),
-   ("Nobody can solve this alone. Good luck!", None)],
+   ("Nobody can solve this alone. Good luck!", None),
+   ("One more thing. Your team starts with one thousand points. Every need you miss, every part that is bigger than you need, every bit of damage, and every extra review costs points. Keep as many as you can!", {"t": "1,000 POINTS", "h": "Start with 1,000 · don't lose them"})],
  "science": [
    ("Hi! I am Ayat. In this mission, you are the Science Lead. Your choices: the camera, and when it takes pictures.", None),
    ("A picture is made of tiny squares called pixels. For small fields, each pixel must be fifty meters or smaller.", {"t": "PIXEL", "h": "50 meters or smaller"}),

@@ -376,3 +376,8 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 @keyframes drawin{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
 .rb-kick{background:none;border:0;color:#ff7a85;cursor:pointer;font:inherit;padding:0 0 0 6px}.rb-kick:hover{color:#ff4d5e}
 .rolecard.free{cursor:pointer;font:inherit;text-align:start;color:inherit}.rolecard.free:hover{border-color:var(--sc);transform:translateY(-2px)}
+.pts{border:1px solid #ffc26b55;background:rgba(30,22,8,.45);border-radius:8px;padding:8px 12px;margin:6px 0 10px;display:grid;gap:4px}
+.pts b{color:#ffc26b}.ptsnow{font-size:20px}
+.losses{border:1px solid var(--edge);border-radius:8px;padding:8px 12px;margin-top:8px;max-width:520px}
+.lrow{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed var(--edge);font-size:14px}
+.lrow.start b,.lrow.end b{color:#ffc26b}.lrow.end{border-bottom:0;font-size:16px}.lrow .bad{color:#ff7a85}

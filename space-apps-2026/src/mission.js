@@ -436,6 +436,7 @@ function ldesign() {
   return lRoomBar() + `<section class="build notr">
     <div class="buildhead"><div><div class="kick">${L(m.name)} · ${L(lvl().t)}</div>
       <div class="rulesrow">${m.rules.map(x => `<span class="rulechip">${L(x)}</span>`).join("")}</div>
+      ${lPtsHtml()}
       <div class="stepper">${tabs}</div></div></div>
     <div class="buildgrid"><div class="holowrap"><canvas id="holoBuild" class="holo"></canvas><div class="holotag">${L(ok("Your satellite", "القمر بتاعك"))}</div></div>
       <div class="choose"><div class="steptitle" style="--sc:${CREW[r].col}">${roleTag(r)}<span class="psub">${L(SEGMENT[r])} · ${L(ok("Guide", "المرشد"))}: ${CREW[r].name}</span></div>
@@ -447,6 +448,12 @@ function ldesign() {
     <div id="reviewbox">${lReviewHtml()}</div>
   </section>${lBoard()}${lChatBox()}`;
 }
+function lPenNow() { const reviews = LB.mode === "online" && LB.room ? LB.room.state.reviews || 0 : LB.reviews; return Math.max(0, reviews - 1) * 30 + LB.rewatch * 20; }
+function lPtsHtml() {
+  return `<div class="pts" id="ptsbox"><div><span class="psub">${L(ok("Your team starts with", "التيم بيبدأ بـ"))}</span> <b>1,000</b> · ${L(ok("now", "دلوقتي"))} <b class="ptsnow" id="ptsNow">${nf(1000 - lPenNow())}</b> ${L(ok("points", "نقطة"))}</div>
+    <div class="psub">${L(ok("You lose points for: each need not met · each wasted part (−70) · damage in flight · space junk (−100) · extra design reviews (−30) · rewatching a video (−20). Keep as many as you can!", "بتخسر نقط لو: طلب متحققش · كل قطعة زيادة عن اللزوم (−70) · أي ضرر وإنتوا طايرين · زبالة فضائية (−100) · مراجعة تصميم زيادة (−30) · تتفرج على فيديو تاني (−20). حافظوا على أكبر عدد نقط!"))}</div></div>`;
+}
+function lPtsPaint() { const el = $("#ptsNow"); if (el) el.textContent = nf(1000 - lPenNow()); }
 function lStepBtns() {
   if (LB.mode === "online") return "";
   const i = TEAM_ROLES.indexOf(LB.tab), prev = TEAM_ROLES[i - 1], next = TEAM_ROLES[i + 1];
@@ -472,14 +479,14 @@ function lPartial() {
     document.querySelectorAll(".ccard[disabled]").forEach(b => { /* teammates' cards are shown via tabs */ });
     document.querySelectorAll(".stp[data-ltab]").forEach(b => b.classList.toggle("done", decisionsFor([b.dataset.ltab]).every(({ role, d }) => picks[role + "." + d.k])));
     const rb = document.querySelector(".reviewbar .lnav"); if (rb) rb.lastElementChild.outerHTML = lLaunchBtn(picks);
-    const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); lHolo(); }
+    const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); lHolo(); lPtsPaint(); }
 }
 let holoL = null;
 function lEngineDesign(c) { const m = LM(), base = MISSIONS.find(x => x.id === m.base); return { base, d: Object.assign(structuredClone(base.def), m.engine(c, base)) }; }
 function lHolo() { const tg = document.querySelector(".holowrap .holotag"); if (tg) tg.textContent = LB.lastPart ? L(ok("Added: ", "اتضاف: ")) + LB.lastPart : L(ok("Your satellite", "القمر بتاعك")); if (!holoL) return; const c = lCompute(allPicks()); try { const { base, d } = lEngineDesign(c); holoL.setDesign(base, d, { dry: 400 }); } catch (e) { } }
 
 /* ---- flight (3D engine with real NASA models) ---- */
-function lfly() { return sfly(); }
+function lfly() { return sfly().replace('<b id="hp">100%</b></div>', `<b id="hp">100%</b></div><div class="fb-h"><span>${L(ok("Points left", "النقط اللي فاضلة"))}</span><b id="ptsFly">${nf(1000 - lPenNow())}</b></div>`); }
 function lSay(role, text) { const el = $("#subt"); if (el) { el.innerHTML = `<b style="color:${CREW[role].col}">${CREW[role].name}:</b> ${text}`; el.classList.add("on"); } }
 async function lRunFlight() {
   SEQ++; const m = LM(), picks = allPicks(), c = lCompute(picks); const { base, d } = lEngineDesign(c);
@@ -521,7 +528,7 @@ function lVoteCheck() {
 }
 function lEventResolve(j, F) {
   const i = LB.evI, e = F.m.events[i], r = e.o[j].f(F.c), res = LB.evRes; if (!res) return; LB.evRes = null;
-  F.health = Math.max(5, F.health + r.h); F.sci *= 1 + r.sci; F.cost += r.cost || 0; setHealth(F.health); F.events.push({ e, j, r });
+  F.health = Math.max(5, F.health + r.h); F.sci *= 1 + r.sci; F.cost += r.cost || 0; setHealth(F.health); { const el = $("#ptsFly"); if (el) el.textContent = nf(1000 - lPenNow() - Math.round(100 - F.health) - Math.round(F.cost * 10)); } F.events.push({ e, j, r });
   const el = $("#modal"), good = !r.h && !r.sci;
   el.querySelector(".hmodal").innerHTML = `<div class="evhead">${crewImg(e.role)}<div><div class="kick">${L(e.t)} · ${L(ok("the team chose", "التيم اختار"))} ${"ABC"[j]}</div><h2 class="hh">${good ? L(ok("Good call!", "قرار صح!")) : L(ok("Here's what happened", "ده اللي حصل"))}</h2></div></div>
     <p class="evx">${L(r.w)}</p><div class="row"><button class="hbtn" type="button" id="levok">${L(ok("Continue", "كمّل"))}</button></div>`;
@@ -536,6 +543,18 @@ function lFinish(F) {
   F.result = { alive, rules, met, nR, stars, parts, total, sciPct: alive ? Math.round(Math.min(1, c.sci * F.sci * (F.health / 100)) * 100) : 0 };
   if (alive) { const k = "cml" + LB.level; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, stars); store.set("ma.progress3", A.progress); }
   setTimeout(() => { if (A.screen === "lfly" && LB.flight === F) go("lusers"); }, 800);
+}
+function lLossHtml(R) {
+  const P = R.parts, rows = [
+    [ok("Mission did not work, or met no need", "المهمة مااشتغلتش، أو محققتش ولا طلب"), 300 - P.success],
+    [ok("Needs not met", "طلبات متحققتش"), (R.alive ? 300 : 300) - P.rules],
+    [ok("Wasted parts (too big or too much)", "قطع زيادة عن اللزوم"), 200 - P.efficiency],
+    [ok("Damage in flight", "ضرر وإنتوا طايرين"), 100 - P.health],
+    [ok("Space junk at the end", "زبالة فضائية في الآخر"), 100 - P.cleanup],
+    [ok("Extra reviews, rewatched videos, rented stations", "مراجعات زيادة، وفيديوهات اتشافت تاني، ومحطات متأجرة"), -P.penalties]].filter(r => r[1] > 0);
+  return `<div class="losses"><div class="lrow start"><span>${L(ok("You started with", "بدأتوا بـ"))}</span><b>1,000</b></div>
+    ${rows.map(([t, v]) => `<div class="lrow"><span>${L(t)}</span><b class="bad">−${nf(v)}</b></div>`).join("")}
+    <div class="lrow end"><span>${L(ok("You kept", "فضل معاكم"))}</span><b>${nf(R.total)}</b></div></div>`;
 }
 function lusers() {
   const F = LB.flight; if (!F || !F.result) return lhome(); const R = F.result;
@@ -557,7 +576,7 @@ function lreport() {
       <h2 class="hh">${!R.alive ? L(ok("Mission lost", "المهمة فشلت")) : R.stars ? L(ok("Mission complete", "المهمة نجحت")) : L(ok("It worked, but met no need", "اشتغلت، بس محققتش ولا طلب"))} · ${R.total} ${L(ok("points", "نقطة"))}</h2>
       <p class="sciline">${L(ok("Needs met", "الطلبات المتحققة"))}: <b>${R.met}/${R.nR}</b> · ${L(ok("Health", "الصحة"))}: <b>${Math.round(F.health)}%</b>${c.mass ? ` · ${L(ok("Mass", "الوزن"))}: <b>${nf(Math.round(c.mass))} kg</b>` : ""}${c.need ? ` · ${L(ok("Power", "الكهربا"))}: <b>${nf(c.need)} / ${nf(c.supply)} ${m.unit || "W"}</b>` : ""}</p>
       <ul class="starkey"><li class="${R.stars >= 1 ? "on" : ""}">★ ${L(ok("It worked and met at least one need", "اشتغلت وحققت طلب واحد على الأقل"))}</li><li class="${R.stars >= 2 ? "on" : ""}">★ ${L(ok("Every need was met", "كل الطلبات اتحققت"))}</li><li class="${R.stars >= 3 ? "on" : ""}">★ ${L(ok("Nothing wasted, healthy, clean end", "مفيش تضييع، وصحة كويسة، ونهاية نضيفة"))}</li></ul>
-      <p class="psub">${L(ok("Points", "النقط"))}: ${Object.entries(R.parts).map(([k, v]) => `${k} ${v}`).join(" · ")}</p></div>
+      ${lLossHtml(R)}</div>
     <div class="resholo"><canvas id="holoRes" class="holo"></canvas><div class="holotag">NASA 3D model · ${({ goes: "GOES", lro: "LRO", landsat8: "Landsat 8", perseverance: "Perseverance" })[m.model]}</div></div></div>
     <div class="cols2"><div class="hcard"><h3>${L(ok("What you did well", "اللي عملته صح"))}</h3><ul>${(good.length ? good : [ok("You tried. Every NASA team learns from its first design.", "إنت جرّبت، وكل تيم في ناسا بيتعلم من أول تصميم.")]).slice(0, 6).map(x => `<li>${L(x)}</li>`).join("")}</ul></div>
       <div class="hcard"><h3>${L(ok("Fix next time", "صلّحه المرة الجاية"))}</h3><ul>${(fix.length ? fix : [ok("Nothing! Try the next level.", "ولا حاجة! جرّب المستوى اللي بعده.")]).slice(0, 6).map(x => `<li>${L(x)}</li>`).join("")}</ul></div></div>
@@ -587,7 +606,7 @@ function lClick(t) {
   if (a === "vnext") { LB.vi = (LB.vi || 0) + 1; render(); return true; }
   if (a === "vdone") { if (LB.mode === "online") myData({ watched: true }); lStartDesign(); return true; }
   if (a === "rewatch") { LB.rewatch++; LB.vi = lVideoList().length - 1; go("lvideo"); return true; }
-  if (a === "review") { const n = LB.mode === "online" ? (LB.room.state.reviews || 0) : LB.reviews; if (LB.mode === "online") roomState({ reviews: n + 1, lastReview: Date.now() }); else { LB.reviews = n + 1; LB.revealed = Date.now(); } const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); return true; }
+  if (a === "review") { const n = LB.mode === "online" ? (LB.room.state.reviews || 0) : LB.reviews; if (LB.mode === "online") roomState({ reviews: n + 1, lastReview: Date.now() }); else { LB.reviews = n + 1; LB.revealed = Date.now(); } const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); lPtsPaint(); return true; }
   if (a === "llaunch") { go("lfly"); lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return true; }
   if (a === "redesign") { lStartDesign(); return true; }
   if (a === "nextlvl") { if (LB.mode === "online") { go("llevel"); return true; } LB.level = Math.min(4, LB.level + 1); LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
