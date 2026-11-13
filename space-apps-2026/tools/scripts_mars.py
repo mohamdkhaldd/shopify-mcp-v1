@@ -59,14 +59,13 @@ SEG = {
    ("Add up the energy on the board. Make sure we make more than we use, every day.", None)],
  "planner": [
    ("Hi! I am Ahmed. You are the Mission Planner. Your choices: how we land, how we avoid danger, and when we launch.", None),
-   ("Landing on Mars takes about seven minutes, from the top of the air to the ground. Engineers call it seven minutes of terror.", {"t": "LANDING", "h": "About 7 minutes"}),
    ("Our rover body weighs 800 kilograms. Add the science tool, the power and the heat on the board.", {"t": "ROVER WEIGHT", "h": "Body 800 kg + parts"}),
    ("Landing A: airbags. The rover bounces on giant balloons. It worked for rovers of about 180 kilograms.", {"t": "LANDING A · AIRBAGS", "h": "Rovers of about 180 kg"}),
    ("Landing B: a sky crane. A rocket platform hovers, and lowers the rover on ropes, right onto its wheels. It worked for a rover of about 1,000 kilograms.", {"t": "LANDING B · SKY CRANE", "h": "Rovers up to about 1,000 kg"}),
    ("Landing C: legs and rockets, like a lander. Safe and simple, but a lander stays where it lands. The rover cannot drive off.", {"t": "LANDING C · LEGS", "h": "Cannot drive off"}),
    ("Danger A: a smart camera compares the ground with a map while we fall, and steers away from rocks. It adds a little weight.", {"t": "DANGER A · SMART CAMERA", "h": "Steers away from rocks"}),
    ("Danger B: no steering. We land wherever we land. It is fine on flat ground, but dangerous near rocks and cliffs.", {"t": "DANGER B · NO STEERING", "h": "OK on flat ground only"}),
-   ("Launch time. Earth and Mars line up for a short trip once every 26 months. That is called a launch window.", {"t": "LAUNCH WINDOW", "h": "Every 26 months"}),
+   ("Launch time. We can only reach Mars with the fuel we have during a short time called a launch window. It comes once every 26 months.", {"t": "LAUNCH WINDOW", "h": "Once every 26 months"}),
    ("Launch A: right now, any day. Launch B: in the next launch window. Launch C: when Mars is farthest from Earth.", {"t": "WHEN?", "h": "Any day · next window · Mars farthest"}),
    ("Ask Ayat where she wants to land. Your landing must match her site.", {"t": "TALK", "h": "Ask Ayat about the site"})]}
 ROLES = {k: {"name": v[0], "title": v[1], "voice": v[2], "img": v[3], "color": v[4], "seg": SEG[k]} for k, v in V.items()}

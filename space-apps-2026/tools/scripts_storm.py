@@ -43,7 +43,7 @@ SEG = {
  "planner": [
    ("Hi! I am Ahmed. In this mission, you are the Mission Planner. Let me show you your job.", None),
    ("The Mission Planner chooses the path. Your choice: the orbit. An orbit is the path the satellite flies around Earth.", None),
-   ("Orbit A is low, at 700 kilometers. The satellite goes around Earth in about an hour and a half. It is close, so pictures are sharp. But it flies over Egypt for only a few minutes each time. Then it is gone.", {"t": "ORBIT A · 700 km", "h": "Sharp · over Egypt a few minutes"}),
-   ("Orbit B is geostationary, at about 36,000 kilometers. Up there, one trip around Earth takes one full day, the same as Earth's spin. So the satellite seems to stay above the same place, all the time. But it is very far, so pictures are less sharp.", {"t": "ORBIT B · 36,000 km", "h": "Stays over one place · less sharp"}),
+   ("Orbit A is low, at 700 kilometers. It is close, so pictures are sharp. But it can see Egypt for only a few minutes at a time, a few times a day. The rest of the day, Egypt is out of sight.", {"t": "ORBIT A · 700 km", "h": "Sharp · sees Egypt only a few minutes"}),
+   ("Orbit B is geostationary, at about 36,000 kilometers. The satellite stays above the same place all the time, so it can photograph Egypt again and again, every few minutes, day and night. But it is very far, so pictures are less sharp.", {"t": "ORBIT B · 36,000 km", "h": "Always above Egypt · less sharp"}),
    ("Write it down. Then ask: does Mohamed need sharp pictures, or does he need to watch all the time?", {"t": "THINK", "h": "Sharp, or all the time?"})]}
 ROLES = {k: {"name": v[0], "title": v[1], "voice": v[2], "img": v[3], "color": v[4], "seg": SEG[k]} for k, v in V.items()}

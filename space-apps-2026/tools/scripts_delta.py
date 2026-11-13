@@ -46,7 +46,7 @@ SEG = {
    ("Our satellite body, with its computer, uses 1,400 watts. The camera and the antenna use more. Add them all up on the board.", {"t": "POWER", "h": "Body 1,400 W + camera + antenna"}),
    ("Panel A makes 2,600 watts, and weighs 200 kilograms. Panel B makes 3,200 watts, and weighs 300 kilograms. Panel C makes 2,000 watts, and weighs 120 kilograms.", {"t": "SOLAR PANELS", "h": "A 2,600 W · B 3,200 W · C 2,000 W"}),
    ("The panel must make more than the total. Engineers keep a small extra, called margin. Too little is dangerous. Too much is heavy, and wasted.", {"t": "MARGIN", "h": "A little extra, not a lot"}),
-   ("One trip around Earth takes about 99 minutes. For up to 35 minutes, the satellite is in Earth's shadow. Then only the battery works.", {"t": "SHADOW", "h": "Up to 35 minutes"}),
+   ("Many times every day, the satellite flies into Earth's shadow. No sunlight. Each shadow lasts up to 35 minutes, and only the battery works.", {"t": "SHADOW", "h": "Up to 35 minutes"}),
    ("Battery A lasts 60 minutes, and weighs 150 kilograms. Battery B lasts 40 minutes, and weighs 70 kilograms. Battery C lasts 25 minutes, and weighs 40 kilograms.", {"t": "BATTERY", "h": "A 60 min · B 40 min · C 25 min"}),
    ("Write the weight of your panel and battery on the board. Every kilogram goes on the rocket.", {"t": "TEAM BOARD", "h": "Panel and battery weight"})],
  "planner": [
