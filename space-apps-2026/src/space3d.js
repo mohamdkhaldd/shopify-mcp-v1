@@ -300,7 +300,7 @@ const Space3D = (() => {
   }
   function buildShip(m, d, c) {
     MAT = MAT || mats();
-    if (d.lab) { const g = labShip(d.lab); g.traverse(o => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; o.receiveShadow = true; } }); const b = new T.Box3().setFromObject(g); g.userData.radius = Math.max(1.2, b.getSize(new T.Vector3()).length() / 2); return g; }
+    if (d.lab && !d.lab.rover) { const g = labShip(d.lab); g.traverse(o => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; o.receiveShadow = true; } }); const b = new T.Box3().setFromObject(g); g.userData.radius = Math.max(1.2, b.getSize(new T.Vector3()).length() / 2); return g; }
     const g = new T.Group(); const dry = c ? c.dry : 500; const id = m.id;
     const foilM = d.shield === "none" ? MAT.silver : MAT.gold;
     const addWings = (body, area, n = 2, rad = .6) => {
@@ -330,8 +330,8 @@ const Space3D = (() => {
       for (const x of [-1.15, 0, 1.15]) for (const z of [-1.2, 1.2]) { const wh = cyl(.26, .26, .4, MAT.dark, 20); wh.rotation.x = Math.PI / 2; wh.position.set(x, -.62, z); rover.add(wh); }
       const mast = cyl(.07, .07, 1.6, MAT.white, 10); mast.position.set(1.1, 1.15, .7); rover.add(mast); const head = box(.5, .3, .35, MAT.white); head.position.set(1.15, 2, .7); rover.add(head);
       if (d.instr.includes("drill")) { const arm = box(1.6, .1, .1, MAT.grey); arm.position.set(2.1, .1, -.4); rover.add(arm); const tur = cyl(.2, .2, .4, MAT.silver, 12); tur.position.set(2.9, -.1, -.4); rover.add(tur); }
-      if (d.power === "solar") { const area = Math.max(1, d.panel); const s = box(Math.sqrt(area * 1.4), .05, area / Math.sqrt(area * 1.4), MAT.cells); s.position.y = .46; rover.add(s); }
-      else { const r = rtg(); r.rotation.z = Math.PI / 2.6; r.position.set(-1.8, .4, 0); rover.add(r); }
+      if (d.power === "solar" || d.power === "both") { const area = Math.max(1, d.panel); const s = box(Math.sqrt(area * 1.4), .05, area / Math.sqrt(area * 1.4), MAT.cells); s.position.y = .46; rover.add(s); }
+      if (d.power !== "solar" && d.power !== "none") { const r = rtg(); r.rotation.z = Math.PI / 2.6; r.position.set(-1.8, .4, 0); rover.add(r); }
       const dd = dish(.3); dd.position.set(-.6, .6, -.6); rover.add(dd);
       g.add(rover); g.userData.rover = rover;
       const aero = new T.Group(); const shell = cyl(.4, 2.25, 1.8, MAT.white, 48); shell.position.y = .9; aero.add(shell); const hs = cyl(2.25, 2.25, .2, MAT.heat, 48); aero.add(hs); aero.visible = false; g.add(aero); g.userData.aero = aero;

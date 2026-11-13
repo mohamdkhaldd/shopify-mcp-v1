@@ -167,12 +167,81 @@ const M_MOON = {
     facts: ok("Your mission is NASA's Lunar Reconnaissance Orbiter. Since 2009 it has mapped the Moon from a polar orbit. Its narrow cameras see half-meter pixels, its LOLA laser measures height in dark craters, and it sends 100 Mbit/s home. Its maps help choose Artemis landing sites. (It launched on an Atlas V rocket.)", "مهمتك هي LRO بتاع ناسا. من 2009 وهو بيعمل خرايط للقمر من أوربت قطبي. كاميراته الضيقة البيكسل بتاعها نص متر، والليزر LOLA بيقيس الارتفاع جوه الحفر الضلمة، وبيبعت 100 ميجابت في الثانية. وخرايطه بتساعد في اختيار أماكن هبوط Artemis. (واتطلق على صاروخ Atlas V.)"),
     links: [["NASA LRO", "https://science.nasa.gov/mission/lro/"], ["NASA Deep Space Network", "https://www.nasa.gov/communicating-with-missions/dsn/"], ["NASA LLCD laser link", "https://www.nasa.gov/directorates/somd/space-communications-navigation-program/lunar-laser-communication-demonstration/"]] }
 };
-const LAB_M = { storm: M_STORM, moon: M_MOON, delta: M_DELTA };
+
+/* ---------- CML 4: Mars Life Hunter (add up kilograms and energy; choices depend on each other) ---------- */
+const M_MARS = {
+  id: "mars", base: "mars", model: "perseverance", days: 365 * 3, unit: "Wh/day", cruise: true,
+  name: ok("Mars Life Hunter", "صياد الحياة على المريخ"),
+  user: ok("Scientists around the world asking: was there ever life on Mars?", "العلماء في العالم كله اللي بيسألوا: هل كان فيه حياة على المريخ؟"),
+  rules: [{ k: "life", en: "Find signs of ancient life", ar: "يدوّر على علامات حياة قديمة" }, { k: "land", en: "Land safely, then drive", ar: "ينزل بأمان ويقدر يمشي" }, { k: "years", en: "Work for years", ar: "يشتغل سنين" }, { k: "data", en: "Send data home every day", ar: "يبعت الداتا كل يوم" }, { k: "drive", en: "Drive safely despite the delay", ar: "يسوق بأمان رغم التأخير" }, { k: "launch", en: "Launch at the right time", ar: "يتطلق في الوقت الصح" }],
+  decisions: {
+    science: [
+      { k: "site", t: ok("Where do we land?", "هننزل فين؟"), o: [lopt("A", "ice", "Jezero Crater", "Jezero Crater", { water: true, hazard: true, eng: "jezero" }), lopt("B", "radar", "Utopia Planitia", "Utopia Planitia", { water: false, eng: "plain" }), lopt("C", "rocket3", "Olympus Mons", "Olympus Mons", { water: false, thin: true, eng: "plain" })] },
+      { k: "tool", t: ok("Which science tool?", "أنهي أداة علمية؟"), o: [lopt("A", "drill", "Drill + sample tubes", "دريل + أنابيب عينات", { mass: 80, wh: 500, life: .6, instr: ["drill"] }), lopt("B", "weather", "Weather station", "محطة طقس", { mass: 5, wh: 50, life: .15, instr: [] }), lopt("C", "leaf", "Rock scanner", "سكانر صخور", { mass: 40, wh: 300, life: 1, scan: true, instr: ["drill"] })] }],
+    comms: [
+      { k: "path", t: ok("How does data get home?", "الداتا هتوصل الأرض إزاي؟"), o: [lopt("A", "dish2", "Direct to Earth", "على الأرض على طول", { relay: false, direct: true }), lopt("B", "relay", "Through an orbiter", "عن طريق أوربيتر", { relay: true }), lopt("C", "dish3", "Both", "الاتنين", { relay: true, direct: true, mass: 5 })] },
+      { k: "drive", t: ok("How do we drive?", "هنسوق إزاي؟"), o: [lopt("A", "radar", "Joystick from Earth", "جويستيك من الأرض", { ok: false, move: true }), lopt("B", "cam3", "Daily plan, rover drives itself", "خطة كل يوم، والروڤر بيسوق لوحده", { ok: true, move: true }), lopt("C", "ice", "Don't drive", "منسوقش خالص", { ok: false, move: false })] }],
+    engineer: [
+      { k: "power", t: ok("Which power?", "أنهي باور؟"), o: [lopt("A", "panel2", "Solar panels", "سولار بانلز", { mass: 70, make: 2000, solar: true }), lopt("B", "rtg", "RTG", "RTG", { mass: 45, make: 2700, rtg: true }), lopt("C", "panel3", "Both", "الاتنين", { mass: 115, make: 4700, solar: true, rtg: true })] },
+      { k: "heat", t: ok("How do we stay warm?", "هنفضل دافيين إزاي؟"), o: [lopt("A", "rtg", "RTG heat pipes", "مواسير حرارة الـ RTG", { mass: 10, wh: 0, pipes: true }), lopt("B", "panel1", "Electric heaters", "هيترز كهربا", { mass: 15, wh: 1000 }), lopt("C", "radar", "Nothing", "ولا حاجة", { mass: 0, wh: 0, none: true })] }],
+    planner: [
+      { k: "land", t: ok("How do we land?", "هننزل إزاي؟"), o: [lopt("A", "relay", "Airbags", "إيرباجز", { max: 180, drive: true }), lopt("B", "rocket2", "Sky crane", "سكاي كرين", { max: 1000, drive: true }), lopt("C", "rocket1", "Legs and rockets", "رجول وصواريخ", { max: 1000, drive: false })] },
+      { k: "danger", t: ok("How do we avoid danger?", "هنتفادى الخطر إزاي؟"), o: [lopt("A", "cam3", "Smart camera steers", "كاميرا ذكية بتوجّه", { trn: true, mass: 10 }), lopt("B", "radar", "No steering", "من غير توجيه", { trn: false })] },
+      { k: "launch", t: ok("When do we launch?", "هنطلق إمتى؟"), o: [lopt("A", "rocket1", "Right now, any day", "دلوقتي، أي يوم", { win: false }), lopt("B", "rocket2", "In the next launch window", "في اللانش ويندو الجاية", { win: true }), lopt("C", "rocket3", "When Mars is farthest", "لما المريخ يبقى أبعد حاجة", { win: false })] }] },
+  compute(p) {
+    const g = (r, k) => pickOpt(this, p, r, k) || {};
+    const site = g("science", "site"), tool = g("science", "tool"), path = g("comms", "path"), drv = g("comms", "drive"), pow = g("engineer", "power"), heat = g("engineer", "heat"), land = g("planner", "land"), dang = g("planner", "danger"), launch = g("planner", "launch");
+    const mass = 800 + (tool.mass || 0) + (path.mass || 0) + (pow.mass || 0) + (heat.mass || 0) + (dang.mass || 0);
+    const need = 1200 + (drv.move === false ? 0 : 600) + (tool.wh || 0) + (heat.wh || 0), supply = pow.make || 0;
+    const cold = heat.k && (heat.none || (heat.pipes && !pow.rtg));
+    const fatal = launch.k && !launch.win ? "window" : site.thin ? "air" : land.k && mass > land.max ? "land" : site.hazard && dang.k && !dang.trn ? "rocks" : cold ? "cold" : null;
+    const energyOK = !!pow.k && need <= supply;
+    const rules = { life: !!site.water && !!tool.scan, land: !!land.k && !!land.drive && !["air", "land", "rocks"].includes(fatal), years: !!pow.rtg && energyOK && !cold && !!heat.k, data: !!path.relay, drive: !!drv.ok, launch: !!launch.win };
+    const sci = (site.water ? 1 : .3) * (tool.life || .1) * (path.relay ? 1 : .35) * (drv.ok ? 1 : drv.move ? .7 : .4) * (land.drive === false ? .4 : 1) * (energyOK ? 1 : .6);
+    const waste = [];
+    if (pow.rtg && pow.solar && need <= 2700) waste.push({ en: `Power: the RTG alone makes 2,700 Wh a day and you use ${nf(need)}. The solar panels add 70 kg for nothing.`, ar: `الباور: الـ RTG لوحده بيطلّع 2,700 وات-ساعة في اليوم، وإنت بتستخدم ${nf(need)}. فالسولار بانلز بيزوّدوا 70 كيلو على الفاضي.` });
+    if (pow.rtg && heat.k && !heat.pipes && !heat.none) waste.push(ok("Heat: your RTG already makes free heat. Electric heaters burn 1,000 Wh every day.", "التدفية: الـ RTG بتاعك بيطلّع حرارة ببلاش أصلاً، والهيترز الكهربا بتحرق 1,000 وات-ساعة كل يوم."));
+    const issues = [];
+    if (fatal === "window") issues.push(ok("Launch: Earth and Mars are not lined up. The rocket cannot carry enough fuel to get there.", "الإطلاق: الأرض والمريخ مش في الوضع الصح، والصاروخ مش هيقدر يشيل وقود كفاية علشان يوصل."));
+    if (fatal === "air") issues.push(ok("Landing: the air on top of Olympus Mons is too thin for the parachute.", "الهبوط: الهوا فوق Olympus Mons خفيف أوي على البراشوت."));
+    if (fatal === "land") issues.push({ en: `Landing: the rover weighs ${nf(mass)} kg. Airbags only worked for about 180 kg.`, ar: `الهبوط: الروڤر وزنه ${nf(mass)} كيلو، والإيرباجز اشتغلت مع حوالي 180 كيلو بس.` });
+    if (fatal === "rocks") issues.push(ok("Landing: this site has rocks and cliffs, and nothing steers the rover away from them.", "الهبوط: المكان ده فيه صخور وجروف، ومفيش حاجة بتبعّد الروڤر عنهم."));
+    if (fatal === "cold") issues.push(ok(heat.none ? "Heat: with no heating, the electronics freeze on the first night." : "Heat: RTG heat pipes need an RTG. Without one, they carry no heat.", heat.none ? "التدفية: من غير تدفية، الإلكترونيات هتتجمد أول ليلة." : "التدفية: مواسير الحرارة محتاجة RTG، ومن غيره مش هتنقل أي حرارة."));
+    if (pow.k && !energyOK) issues.push({ en: `Energy: the rover uses ${nf(need)} Wh a day, but makes only ${nf(supply)}.`, ar: `الطاقة: الروڤر بيستخدم ${nf(need)} وات-ساعة في اليوم، وبيطلّع ${nf(supply)} بس.` });
+    if (pow.k && !pow.rtg) issues.push(ok("Power: solar panels make almost nothing in a dust storm.", "الباور: السولار بانلز تقريباً مبتطلّعش حاجة في العاصفة الترابية."));
+    this.rules.forEach(r => { if (!rules[r.k]) issues.push({ en: `Not met: ${r.en}.`, ar: `شرط متحققش: ${r.ar}.` }); });
+    return { mass, need, supply, rules, fatal, sci, issues, waste, efficient: !waste.length, clean: true, site, tool, path, drv, pow, heat, land, dang, launch, ring: null };
+  },
+  engine(c) { return { orbit: c.site.eng || "jezero", lv: "medium", power: c.pow.k ? (c.pow.rtg && c.pow.solar ? "both" : c.pow.rtg ? "rtg1" : "solar") : "none", panel: 4, instr: c.tool.instr || [], antenna: "medium", lab: { rover: true } }; },
+  fatalAt: { window: "cruise", air: "landing", land: "landing", rocks: "landing", cold: "landing" },
+  fatalMsg: {
+    window: ok("Earth and Mars were not lined up. Halfway there, the fuel ran out, and the spacecraft drifted past Mars forever.", "الأرض والمريخ مكانوش في الوضع الصح. وفي نص الطريق الوقود خلص، والمركبة عدّت جنب المريخ وتاهت للأبد."),
+    air: ok("On top of Olympus Mons the air is so thin that the parachute barely opened. The rover hit the ground too fast.", "فوق Olympus Mons الهوا خفيف أوي، فالبراشوت بالعافية فتح، والروڤر خبط في الأرض بسرعة كبيرة."),
+    land: ok("The airbags burst under the heavy rover. Airbags only worked for rovers of about 180 kg.", "الإيرباجز فرقعت تحت الروڤر التقيل. الإيرباجز اشتغلت بس مع روڤرز وزنها حوالي 180 كيلو."),
+    rocks: ok("With no steering, the rover came down on a field of boulders near a cliff, and tipped over.", "من غير توجيه، الروڤر نزل على حتة مليانة صخور جنب جرف، واتقلب."),
+    cold: ok("The first Martian night dropped below minus 80 degrees. The electronics froze, and the rover never woke up.", "أول ليلة على المريخ الحرارة نزلت تحت سالب 80. الإلكترونيات اتجمدت، والروڤر مصحيش تاني.") },
+  orbitLine: ok("We are on the way to Mars! Seven months to go.", "إحنا في الطريق للمريخ! فاضل سبع شهور."),
+  events: [
+    { role: "engineer", t: ok("Planet-wide dust storm!", "عاصفة ترابية على الكوكب كله!"), x: ok("A dust storm covers the whole planet. The sky stays dark for weeks.", "عاصفة ترابية غطّت الكوكب كله، والسما هتفضل ضلمة أسابيع."),
+      o: [{ t: ok("Sleep and wait", "نام واستنى"), f: c => c.pow.rtg ? { h: 0, sci: -.02, w: ok("Your RTG did not need the Sun. You slept anyway, and lost a few days.", "الـ RTG بتاعك مكانش محتاج شمس، بس إنت نمت برضه وخسرت كام يوم.") } : { h: -25, sci: -.1, w: ok("The panels made almost nothing. The rover barely survived the cold. A real solar rover was lost in a storm like this in 2018.", "البانلز تقريباً مطلّعتش حاجة، والروڤر بالعافية عدّى البرد. وروڤر حقيقي شغال بالطاقة الشمسية ضاع في عاصفة زي دي سنة 2018.") } },
+          { t: ok("Keep working", "كمّل شغل"), f: c => c.pow.rtg ? { h: 0, sci: 0, w: ok("The RTG kept everything running. The storm did not stop you.", "الـ RTG شغّل كل حاجة، والعاصفة موقفتكش.") } : { h: -60, sci: -.1, w: ok("The battery went empty in the dark. The cold damaged many parts.", "البطارية فضيت في الضلمة، والبرد بوّظ قطع كتير.") } },
+          { t: ok("Study the storm with cameras", "ادرس العاصفة بالكاميرات"), f: c => c.pow.rtg ? { h: 0, sci: .04, w: ok("Great science! You measured how a Martian dust storm grows.", "علم جامد! إنت قست العاصفة الترابية على المريخ بتكبر إزاي.") } : { h: -40, sci: 0, w: ok("The cameras drained the battery. The rover got badly cold.", "الكاميرات سحبت البطارية، والروڤر برد جامد.") } }] },
+    { role: "comms", t: ok("Stuck in sand!", "غرزان في الرملة!"), x: ok("The wheels are stuck in soft sand. Each message takes 15 minutes to arrive.", "العجل غرزان في رملة طرية، وكل رسالة بتاخد 15 دقيقة علشان توصل."),
+      o: [{ t: ok("Spin the wheels hard by joystick", "لف العجل جامد بالجويستيك"), f: c => ({ h: -20, sci: -.05, w: ok("By the time each command arrived, the wheels had dug deeper. One wheel was damaged.", "لحد ما كل أمر يوصل، كان العجل غرز أكتر، وعجلة باظت.") }) },
+          { t: ok("Test on a twin rover on Earth, then send a careful plan", "جرّب على روڤر توأم على الأرض، وبعدين ابعت خطة بالراحة"), f: c => ({ h: 0, sci: -.01, w: ok("NASA really does this: engineers rebuild the trap on Earth, test, then send the plan. The rover rolled free.", "ناسا بتعمل كده فعلاً: المهندسين بيعملوا نفس الحتة على الأرض، ويجرّبوا، وبعدين يبعتوا الخطة. والروڤر طلع.") }) },
+          { t: ok("Give up and leave this area", "سيب المنطقة دي وامشي"), f: c => ({ h: -5, sci: -.1, w: ok("You backed out slowly, but lost the rocks you came for.", "رجعت لورا بالراحة، بس خسرت الصخور اللي إنت جاي علشانها.") }) }] }],
+  userMsg(R) { const r = R.rules; return r.life ? { en: `Scientists received ${R.sciPct}% of the planned data. Your rock scanner found the kind of chemicals that ancient life can leave behind, in an old lake bed. The question is still open, but now we know where to look.`, ar: `العلماء استلموا ${R.sciPct}% من الداتا المطلوبة. السكانر بتاعك لقى نوع الكيماويات اللي الحياة القديمة ممكن تسيبها، في قاع بحيرة قديمة. السؤال لسه مفتوح، بس دلوقتي عرفنا ندوّر فين.` }
+    : ok("The rover worked, but it could not look for signs of life where water once was. The big question is still unanswered.", "الروڤر اشتغل، بس مقدرش يدوّر على علامات حياة في مكان كان فيه مية. والسؤال الكبير لسه ملوش إجابة."); },
+  real: { name: "Perseverance (NASA, 2021)", picks: ok("Jezero Crater · rock scanners and a sample drill · orbiter relay + direct link · daily plans with self-driving · RTG with its heat piped around · sky crane · smart-camera landing · 2020 launch window", "Jezero Crater · سكانرز صخور ودريل عينات · أوربيتر + لينك مباشر · خطة كل يوم وسواقة ذاتية · RTG وحرارته متوزعة · سكاي كرين · هبوط بكاميرا ذكية · لانش ويندو 2020"),
+    facts: ok("Your mission is NASA's Perseverance rover. It launched in the July 2020 window and landed in Jezero Crater in February 2021 with a sky crane, steering away from danger with Terrain Relative Navigation. An RTG powers and warms it. It scans rocks for signs of ancient life and stores samples for a future return to Earth.", "مهمتك هي الروڤر Perseverance بتاع ناسا. اتطلق في لانش ويندو يوليو 2020، ونزل في Jezero Crater في فبراير 2021 بالسكاي كرين، وكان بيبعد عن الخطر بنظام Terrain Relative Navigation. والـ RTG بيشغّله ويدفّيه. وهو بيعمل سكان للصخور يدوّر على علامات حياة قديمة، وبيخزّن عينات علشان ترجع الأرض في مهمة جاية."),
+    links: [["NASA Perseverance", "https://science.nasa.gov/mission/mars-2020-perseverance/"], ["NASA: Mars dust storms", "https://science.nasa.gov/mars/"], ["NASA RTG", "https://science.nasa.gov/planetary-science/programs/radioisotope-power-systems/"]] }
+};
+const LAB_M = { storm: M_STORM, moon: M_MOON, delta: M_DELTA, mars: M_MARS };
 const CML = [
   { n: 1, m: "storm", t: ok("CML 1 · The idea", "CML 1 · الفكرة"), d: ok("Khamsin Storm Watch. One choice each, two options. Just words, no numbers.", "رادار الخماسين. كل واحد اختيار واحد من اتنين. كلام بس، مفيش أرقام.") },
   { n: 2, m: "moon", t: ok("CML 2 · Can it work?", "CML 2 · هل تنفع؟"), d: ok("Moon Landing Map. Two choices each. Compare each number with what is needed, no adding.", "خريطة الهبوط على القمر. كل واحد اختيارين. قارن كل رقم باللي مطلوب، من غير جمع.") },
   { n: 3, m: "delta", t: ok("CML 3 · Add it up", "CML 3 · اجمع"), d: ok("Nile Delta Crop Watch. Add up watts and kilograms. Many designs work; the smartest wastes nothing.", "مراقب محاصيل الدلتا. اجمع الوات والكيلوهات. تصميمات كتير بتنجح، والأذكى اللي مبيضيّعش حاجة.") },
-  { n: 4, m: null, t: ok("CML 4 · Every detail", "CML 4 · كل التفاصيل"), d: ok("Expert mode: every part and real number, for advanced players.", "وضع الخبراء: كل القطع والأرقام الحقيقية، للاعبين المتقدمين.") }];
+  { n: 4, m: "mars", t: ok("CML 4 · Everything connects", "CML 4 · كل حاجة مربوطة ببعض"), d: ok("Mars Life Hunter. Add up kilograms and energy, and every choice depends on another role.", "صياد الحياة على المريخ. اجمع الكيلوهات والطاقة، وكل اختيار مربوط بدور تاني.") }];
 
 /* ---- lab state ---- */
 const LB = { mode: "solo", level: 1, room: null, me: null, myRole: null, picks: {}, reviews: 0, rewatch: 0, watched: {}, players: [], chat: [], online: false, sb: null, chan: null, flight: null, revealed: null, notes: "" };
@@ -253,7 +322,7 @@ function llevel() {
   return `<section class="hpanel notr"><div class="kick">${L(ok("Choose a level", "اختار المستوى"))}</div>
     <h2 class="hh">${L(ok("How mature is your mission idea?", "فكرة مهمتك ناضجة لحد فين؟"))}</h2>
     <p class="needline">${L(ok("NASA's JPL rates mission ideas with Concept Maturity Levels (CML). Each level here is a different mission, and each one is harder.", "معمل JPL بتاع ناسا بيقيّم أفكار المهمات بمستويات اسمها CML. هنا كل مستوى مهمة مختلفة، وكل واحدة أصعب من اللي قبلها."))}</p>
-    <div class="planets">${CML.map(c => { const m = LAB_M[c.m]; const soon = m && m.soon; const locked = !soon && c.n > 1 && c.n < 4 && !A.unlockAll && !cmlDone(c.n - 1);
+    <div class="planets">${CML.map(c => { const m = LAB_M[c.m]; const soon = m && m.soon; const locked = !soon && c.n > 1 && !A.unlockAll && !cmlDone(c.n - 1);
       const st = A.progress.stars["cml" + c.n] || 0;
       return `<button class="pcard" type="button" data-llevel="${c.n}" ${locked || soon ? "disabled" : ""}><span class="cmlnum">CML ${c.n}</span><b>${L(c.t)}</b>${m ? `<span class="psub"><b>${L(m.name)}</b></span>` : ""}<span class="psub">${L(c.d)}</span>${st ? `<span class="pstars">${"★".repeat(st)}</span>` : ""}${soon ? `<span class="psub">⏳ ${L(ok("Coming next", "جاي قريب"))}</span>` : locked ? `<span class="psub">🔒 ${L(ok("Finish the level before", "خلّص المستوى اللي قبله"))}</span>` : ""}</button>`; }).join("")}</div>
     <label class="opt inline"><input type="checkbox" id="ula2" ${A.unlockAll ? "checked" : ""}> ${L(ok("Unlock all levels (judges and teachers)", "افتح كل المستويات (للحكام والمدرسين)"))}</label></section>`;
@@ -370,12 +439,13 @@ async function lRunFlight() {
   lSay("planner", L(ok("Three, two, one... liftoff!", "تلاتة، اتنين، واحد... انطلقنا!"))); await wait(2600); setPhase(L(ok("LIFTOFF", "الإطلاق")));
   if (c.fatal === "mass") { await animTo(.045, 3500); flightView && flightView.flag("fall"); F.lost = { en: `The ${c.rkt.n.en} could not lift a ${nf(Math.round(c.mass))} kg satellite. It ran out of fuel before space and fell into the ocean.`, ar: `صاروخ ${c.rkt.n.ar} مقدرش يشيل قمر وزنه ${nf(Math.round(c.mass))} كيلو. الوقود خلص قبل ما يوصل الفضاء ووقع في المحيط.` }; lSay("planner", L(F.lost)); await wait(4500); return lFinish(F); }
   await animTo(ascentEnd, 6500); flightView && flightView.flag("separated"); setPhase(L(ok("IN ORBIT", "في الأوربت")));
-  lSay("engineer", L(ok("We are in orbit! Opening the solar panels.", "إحنا في الأوربت! بنفتح السولار بانلز."))); await wait(2400);
-  if (c.fatal === "cold") { await animTo(ascentEnd + .05, 3000); flightView && flightView.flag("tumble"); F.lost = m.fatalMsg.cold; lSay("engineer", L(F.lost)); await wait(4500); return lFinish(F); }
+  lSay("engineer", L(m.orbitLine || ok("We are in orbit! Opening the solar panels.", "إحنا في الأوربت! بنفتح السولار بانلز."))); await wait(2400);
+  if (c.fatal && m.fatalMsg && m.fatalMsg[c.fatal]) { const at = (m.fatalAt || {})[c.fatal] || "orbit"; await animTo(at === "landing" && marks.landing ? marks.landing - .005 : ascentEnd + .06, at === "landing" ? 9000 : 3500); flightView && flightView.flag(at === "landing" ? "crash" : "tumble"); F.lost = m.fatalMsg[c.fatal]; lSay(at === "landing" ? "planner" : "engineer", L(F.lost)); await wait(5000); return lFinish(F); }
+  if (marks.landing) { setPhase(L(ok("LANDING", "الهبوط"))); lSay("planner", L(ok("Seven minutes of terror... we are landing!", "سبع دقايق رعب... إحنا بننزل!"))); await animTo(marks.landing + .01, 9000); flightView && flightView.flag("landed"); setPhase(L(ok("ON MARS", "على المريخ"))); lSay("planner", L(ok("Touchdown! We are on Mars!", "نزلنا! إحنا على المريخ!"))); await wait(2500); }
   if (c.fatal === "power") { await animTo(ascentEnd + .03, 2500); flightView && flightView.flag("tumble"); F.lost = { en: `The satellite needed ${nf(c.need)} W, but the panel made only ${nf(c.supply)} W. It went silent.`, ar: `القمر كان محتاج ${nf(c.need)} وات، والبانل كان بيطلّع ${nf(c.supply)} بس، فالقمر سكت.` }; lSay("engineer", L(F.lost)); await wait(4500); return lFinish(F); }
   if (c.bat && c.bat.min < 35) { lSay("engineer", L(ok("First shadow... the battery is empty before sunrise. We shut down every orbit.", "أول ضل... البطارية فضيت قبل الشمس ما تطلع، فهنطفي في كل لفة."))); await wait(3500); }
-  await animTo(.5, 5000); for (let i = 0; i < m.events.length; i++) { await lEvent(i, F); await animTo(.5 + (i + 1) * (.45 / m.events.length), 3500); }
-  lSay("comms", L(ok("Five years later... the mission is complete.", "بعد 5 سنين... المهمة خلصت."))); setPhase(L(ok("MISSION COMPLETE", "المهمة خلصت"))); await animTo(1, 2500); await wait(1500);
+  const ev0 = Math.max(.5, (marks.landing || 0) + .02); if (curP < ev0) await animTo(ev0, 5000); for (let i = 0; i < m.events.length; i++) { await lEvent(i, F); await animTo(ev0 + (i + 1) * ((.97 - ev0) / m.events.length), 3500); }
+  lSay("comms", L(ok("Years later... the mission is complete.", "بعد سنين... المهمة خلصت."))); setPhase(L(ok("MISSION COMPLETE", "المهمة خلصت"))); await animTo(1, 2500); await wait(1500);
   return lFinish(F);
 }
 function lEvent(i, F) {
@@ -434,10 +504,10 @@ function lreport() {
   return `<section class="hpanel notr result"><div class="kick">${L(ok("Mission report", "تقرير المهمة"))} · ${L(lvl().t)} · ${L(m.name)}</div>
     <div class="resgrid"><div><div class="bigstars">${"★".repeat(R.stars)}<span>${"★".repeat(3 - R.stars)}</span></div>
       <h2 class="hh">${R.alive ? L(ok("Mission complete", "المهمة نجحت")) : L(ok("Mission lost", "المهمة فشلت"))} · ${R.total} ${L(ok("points", "نقطة"))}</h2>
-      <p class="sciline">${L(ok("Needs met", "الطلبات المتحققة"))}: <b>${R.met}/${R.nR}</b> · ${L(ok("Health", "الصحة"))}: <b>${Math.round(F.health)}%</b>${c.mass ? ` · ${L(ok("Mass", "الوزن"))}: <b>${nf(Math.round(c.mass))} kg</b>` : ""}${c.need ? ` · ${L(ok("Power", "الكهربا"))}: <b>${nf(c.need)} / ${nf(c.supply)} W</b>` : ""}</p>
-      <ul class="starkey"><li class="${R.stars >= 1 ? "on" : ""}">★ ${L(ok("The satellite reached orbit and worked", "القمر وصل الأوربت واشتغل"))}</li><li class="${R.stars >= 2 ? "on" : ""}">★ ${L(ok("Every need was met", "كل الطلبات اتحققت"))}</li><li class="${R.stars >= 3 ? "on" : ""}">★ ${L(ok("Nothing wasted, healthy, clean end", "مفيش تضييع، وصحة كويسة، ونهاية نضيفة"))}</li></ul>
+      <p class="sciline">${L(ok("Needs met", "الطلبات المتحققة"))}: <b>${R.met}/${R.nR}</b> · ${L(ok("Health", "الصحة"))}: <b>${Math.round(F.health)}%</b>${c.mass ? ` · ${L(ok("Mass", "الوزن"))}: <b>${nf(Math.round(c.mass))} kg</b>` : ""}${c.need ? ` · ${L(ok("Power", "الكهربا"))}: <b>${nf(c.need)} / ${nf(c.supply)} ${m.unit || "W"}</b>` : ""}</p>
+      <ul class="starkey"><li class="${R.stars >= 1 ? "on" : ""}">★ ${L(ok("The spacecraft got there and worked", "المركبة وصلت واشتغلت"))}</li><li class="${R.stars >= 2 ? "on" : ""}">★ ${L(ok("Every need was met", "كل الطلبات اتحققت"))}</li><li class="${R.stars >= 3 ? "on" : ""}">★ ${L(ok("Nothing wasted, healthy, clean end", "مفيش تضييع، وصحة كويسة، ونهاية نضيفة"))}</li></ul>
       <p class="psub">${L(ok("Points", "النقط"))}: ${Object.entries(R.parts).map(([k, v]) => `${k} ${v}`).join(" · ")}</p></div>
-    <div class="resholo"><canvas id="holoRes" class="holo"></canvas><div class="holotag">NASA 3D model · ${({ goes: "GOES", lro: "LRO", landsat8: "Landsat 8" })[m.model]}</div></div></div>
+    <div class="resholo"><canvas id="holoRes" class="holo"></canvas><div class="holotag">NASA 3D model · ${({ goes: "GOES", lro: "LRO", landsat8: "Landsat 8", perseverance: "Perseverance" })[m.model]}</div></div></div>
     <div class="cols2"><div class="hcard"><h3>${L(ok("What you did well", "اللي عملته صح"))}</h3><ul>${(good.length ? good : [ok("You tried. Every NASA team learns from its first design.", "إنت جرّبت، وكل تيم في ناسا بيتعلم من أول تصميم.")]).slice(0, 6).map(x => `<li>${L(x)}</li>`).join("")}</ul></div>
       <div class="hcard"><h3>${L(ok("Fix next time", "صلّحه المرة الجاية"))}</h3><ul>${(fix.length ? fix : [ok("Nothing! Try the next level.", "ولا حاجة! جرّب المستوى اللي بعده.")]).slice(0, 6).map(x => `<li>${L(x)}</li>`).join("")}</ul></div></div>
     <div class="hcard fact"><h3>${L(ok("The real mission", "المهمة الحقيقية"))}: ${esc(m.real.name)}</h3><p>${L(m.real.facts)}</p>
@@ -458,7 +528,7 @@ function lStartDesign() { LB.tab = myRoles()[0] || "science"; LB.revealed = null
 function lClick(t) {
   const a = t.dataset.act;
   if (t.dataset.lmode) { LB.mode = t.dataset.lmode; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.watched = {}; go(LB.mode === "online" ? "lonline" : "llevel"); return true; }
-  if (t.dataset.llevel) { LB.level = +t.dataset.llevel; if (LB.level === 4) { A.simple = false; go("home"); return true; } LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
+  if (t.dataset.llevel) { LB.level = +t.dataset.llevel; LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
   if (t.dataset.ltab) { LB.tab = t.dataset.ltab; render(); return true; }
   if (t.dataset.lpick) { const [r, k, o] = t.dataset.lpick.split("."); if (LB.mode === "online") { const p = Object.assign({}, (LB.me.data && LB.me.data.picks) || {}); p[r + "." + k] = o; LB.me.data.picks = p; myData({ picks: p, ready: false }); } else LB.picks[r + "." + k] = o; const dd = LM().decisions[r].find(x => x.k === k), oo = dd && dd.o.find(x => x.k === o); LB.lastPart = oo ? L(oo.n) : null; lPartial(); return true; }
   if (a === "vnext") { LB.vi = (LB.vi || 0) + 1; render(); return true; }

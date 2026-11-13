@@ -109,8 +109,6 @@ function go(screen){ if(screen!=="flight"&&screen!=="sfly"&&screen!=="lfly"){ Vo
 function render(){
   const navBtns = [];
   const simpleScr = A.screen in SIMPLE;
-  if(simpleScr) navBtns.push(`<button class="btn ghost" data-act="expert" type="button">${L({en:"Expert mode",ar:"وضع الخبراء"})}</button>`);
-  else navBtns.push(`<button class="btn ghost" data-act="easy" type="button">${L({en:"Easy mode",ar:"الوضع السهل"})}</button>`);
   if(!simpleScr && !["home","setup"].includes(A.screen)){
     navBtns.push(`<button class="btn ghost" data-go="select" type="button">Missions</button>`);
     navBtns.push(`<button class="btn ghost" data-go="training" type="button">Training</button>`);
