@@ -45,7 +45,7 @@ const M_STORM = {
     : !r.always ? ok("The satellite saw Egypt for only a few minutes at a time. Most storms started while it was somewhere else.", "القمر كان بيشوف مصر كام دقيقة بس كل مرة، وأغلب العواصف بدأت وهو في مكان تاني.")
     : !r.night ? ok("The satellite saw storms in the day, but the ones that started at night surprised everyone.", "القمر شاف العواصف اللي بالنهار، بس اللي بدأت بالليل فاجئت الكل.")
     : ok("The satellite saw the storms, but the pictures arrived too slowly to warn people in time.", "القمر شاف العواصف، بس الصور كانت بتوصل ببطء، فملحقناش نحذّر الناس في الوقت المناسب."); },
-  real: { name: "Meteosat (EUMETSAT)", picks: ok("Infrared camera · fast antenna · solar panels · geostationary orbit", "كاميرا إنفرا ريد · أنتينا سريعة · سولار بانلز · أوربت جيوستيشنري"),
+  real: { name: "Meteosat (EUMETSAT)", photos: [["GSFC_20171208_Archive_e002123", ok("A geostationary weather satellite (NASA/NOAA GOES) sees a whole side of Earth at once", "قمر طقس جيوستيشنري (GOES بتاع ناسا و NOAA) بيشوف نص الأرض مرة واحدة")], ["KSC-20161109-PH_JBS01_0076", ok("NASA's GOES-R weather satellite on its way to the launch pad, 2016", "قمر الطقس GOES-R بتاع ناسا وهو رايح منصة الإطلاق، 2016")]], picks: ok("Infrared camera · fast antenna · solar panels · geostationary orbit", "كاميرا إنفرا ريد · أنتينا سريعة · سولار بانلز · أوربت جيوستيشنري"),
     facts: ok("Europe's Meteosat satellites watch Egypt from geostationary orbit, 35,786 km up. Their infrared channels see dust and clouds day and night, and they send a new picture of Africa and Europe every 15 minutes. NASA and NOAA's GOES satellites do the same over the Americas.", "أقمار Meteosat الأوروبية بتراقب مصر من الأوربت الجيوستيشنري، على ارتفاع 35,786 كم. قنوات الإنفرا ريد بتاعتها بتشوف التراب والسحاب بالليل والنهار، وبتبعت صورة جديدة لأفريقيا وأوروبا كل ربع ساعة. وأقمار GOES بتاعة ناسا و NOAA بتعمل نفس الحكاية فوق أمريكا."),
     links: [["EUMETSAT Meteosat", "https://www.eumetsat.int/our-satellites/meteosat-series"], ["NASA GOES", "https://science.nasa.gov/mission/goes/"]] }
 };
@@ -108,7 +108,7 @@ const M_DELTA = {
   userMsg(R) { const r = R.rules; return r.health && r.fields ? { en: `The Ministry of Agriculture received ${R.sciPct}% of the planned pictures. Farmers saw which fields were thirsty, and watered them before the crops were damaged.`, ar: `وزارة الزراعة استلمت ${R.sciPct}% من الصور المطلوبة. والفلاحين شافوا أنهي أرض عطشانة وسقوها قبل ما المحصول يتضرر.` }
     : r.health ? ok("The pictures showed plant health, but only for big areas. Farmers knew a region was thirsty, but not which field.", "الصور بيّنت صحة الزرع، بس لمناطق كبيرة. الفلاحين عرفوا إن المنطقة عطشانة، بس مش أنهي أرض بالظبط.")
     : ok("The pictures could not show plant health. The Ministry could not use them for crops.", "الصور مكانتش بتبيّن صحة الزرع، والوزارة مقدرتش تستخدمها للمحاصيل."); },
-  real: { name: "Landsat 8 (NASA + USGS)", picks: ok("OLI camera · about 10 a.m. · X-band · 705 km sun-synchronous orbit", "كاميرا OLI · حوالي الساعة 10 · X-band · أوربت 705 كم صن سينكرونس"),
+  real: { name: "Landsat 8 (NASA + USGS)", photos: [["2013-1436", ok("An Atlas V rocket launches Landsat 8, 11 February 2013", "صاروخ Atlas V بيطلق Landsat 8، يوم 11 فبراير 2013")], ["KSC-2013-1127", ok("Engineers prepare Landsat 8 before launch", "المهندسين بيجهزوا Landsat 8 قبل الإطلاق")], ["iss072e905240", ok("Egypt's Nile Delta seen from the International Space Station", "دلتا النيل في مصر من محطة الفضاء الدولية")]], picks: ok("OLI camera · about 10 a.m. · X-band · 705 km sun-synchronous orbit", "كاميرا OLI · حوالي الساعة 10 · X-band · أوربت 705 كم صن سينكرونس"),
     facts: ok("Your mission is the real Landsat 8. It has flown since 2013 at 705 km, crossing the equator at about 10 a.m. Its OLI camera sees near-infrared with 30 m pixels, and it sends data on X-band at 384 Mbit/s. (It launched on an Atlas V rocket.)", "مهمتك هي Landsat 8 الحقيقي. بيطير من 2013 على ارتفاع 705 كم، وبيعدّي خط الاستوا حوالي الساعة 10 الصبح. كاميرته OLI بتشوف النير إنفرا ريد ببيكسل 30 متر، وبيبعت الداتا على X-band بسرعة 384 ميجابت في الثانية. (واتطلق على صاروخ Atlas V.)"),
     links: [["USGS Landsat 8", "https://www.usgs.gov/landsat-missions/landsat-8"], ["NASA MODIS", "https://modis.gsfc.nasa.gov/about/specifications.php"], ["ESA Vega C", "https://www.esa.int/Enabling_Support/Space_Transportation/Vega/Vega_capabilities"]] }
 };
@@ -163,7 +163,7 @@ const M_MOON = {
     : !r.pole ? ok("The maps never showed the south pole. The landing planners still don't know where it is safe.", "الخرايط عمرها ما وصلت للقطب الجنوبي، ومخططين الهبوط لسه مش عارفين فين المكان الآمن.")
     : !r.rocks ? ok("The maps showed the area, but not rocks two meters wide. A lander could still tip over.", "الخرايط بيّنت المنطقة، بس مش الصخور اللي عرضها 2 متر، فالمركبة لسه ممكن تتقلب.")
     : ok("The maps showed rocks in sunlight, but the dark craters stayed a mystery.", "الخرايط بيّنت الصخور اللي في الشمس، بس الحفر الضلمة فضلت لغز."); },
-  real: { name: "LRO (NASA, 2009)", picks: ok("Narrow cameras with 0.5 m pixels · LOLA laser altimeter · Ka-band 100 Mbit/s · polar orbit about 50 km", "كاميرات ضيقة ببيكسل نص متر · ليزر ألتيميتر LOLA · Ka-band بـ 100 ميجابت · أوربت قطبي حوالي 50 كم"),
+  real: { name: "LRO (NASA, 2009)", photos: [["KSC-2009-3299", ok("LRO is prepared for launch, 2009", "LRO وهو بيتجهز للإطلاق، 2009")], ["PIA18163", ok("Artist's view of LRO flying over the Moon", "رسمة لـ LRO وهو بيطير فوق القمر")], ["PIA12893", ok("A real LRO photo: a fresh crater with bright boulders", "صورة حقيقية من LRO: حفرة جديدة حواليها صخور")]], picks: ok("Narrow cameras with 0.5 m pixels · LOLA laser altimeter · Ka-band 100 Mbit/s · polar orbit about 50 km", "كاميرات ضيقة ببيكسل نص متر · ليزر ألتيميتر LOLA · Ka-band بـ 100 ميجابت · أوربت قطبي حوالي 50 كم"),
     facts: ok("Your mission is NASA's Lunar Reconnaissance Orbiter. Since 2009 it has mapped the Moon from a polar orbit. Its narrow cameras see half-meter pixels, its LOLA laser measures height in dark craters, and it sends 100 Mbit/s home. Its maps help choose Artemis landing sites. (It launched on an Atlas V rocket.)", "مهمتك هي LRO بتاع ناسا. من 2009 وهو بيعمل خرايط للقمر من أوربت قطبي. كاميراته الضيقة البيكسل بتاعها نص متر، والليزر LOLA بيقيس الارتفاع جوه الحفر الضلمة، وبيبعت 100 ميجابت في الثانية. وخرايطه بتساعد في اختيار أماكن هبوط Artemis. (واتطلق على صاروخ Atlas V.)"),
     links: [["NASA LRO", "https://science.nasa.gov/mission/lro/"], ["NASA Deep Space Network", "https://www.nasa.gov/communicating-with-missions/dsn/"], ["NASA LLCD laser link", "https://www.nasa.gov/directorates/somd/space-communications-navigation-program/lunar-laser-communication-demonstration/"]] }
 };
@@ -232,7 +232,7 @@ const M_MARS = {
           { t: ok("Give up and leave this area", "سيب المنطقة دي وامشي"), f: c => ({ h: -5, sci: -.1, w: ok("You backed out slowly, but lost the rocks you came for.", "رجعت لورا بالراحة، بس خسرت الصخور اللي إنت جاي علشانها.") }) }] }],
   userMsg(R) { const r = R.rules; return r.life ? { en: `Scientists received ${R.sciPct}% of the planned data. Your rock scanner found the kind of chemicals that ancient life can leave behind, in an old lake bed. The question is still open, but now we know where to look.`, ar: `العلماء استلموا ${R.sciPct}% من الداتا المطلوبة. السكانر بتاعك لقى نوع الكيماويات اللي الحياة القديمة ممكن تسيبها، في قاع بحيرة قديمة. السؤال لسه مفتوح، بس دلوقتي عرفنا ندوّر فين.` }
     : ok("The rover worked, but it could not look for signs of life where water once was. The big question is still unanswered.", "الروڤر اشتغل، بس مقدرش يدوّر على علامات حياة في مكان كان فيه مية. والسؤال الكبير لسه ملوش إجابة."); },
-  real: { name: "Perseverance (NASA, 2021)", picks: ok("Jezero Crater · rock scanners and a sample drill · orbiter relay + direct link · daily plans with self-driving · RTG with its heat piped around · sky crane · smart-camera landing · 2020 launch window", "Jezero Crater · سكانرز صخور ودريل عينات · أوربيتر + لينك مباشر · خطة كل يوم وسواقة ذاتية · RTG وحرارته متوزعة · سكاي كرين · هبوط بكاميرا ذكية · لانش ويندو 2020"),
+  real: { name: "Perseverance (NASA, 2021)", photos: [["NHQ202007300018", ok("Perseverance launches on an Atlas V, 30 July 2020", "Perseverance بيتطلق على Atlas V، يوم 30 يوليو 2020")], ["PIA23386", ok("Jezero Crater's ancient river delta, seen from orbit", "دلتا النهر القديم في Jezero Crater من الأوربت")], ["PIA24542", ok("Perseverance's selfie on Mars, with the Ingenuity helicopter", "سيلفي Perseverance على المريخ، ومعاه الهليكوبتر Ingenuity")]], picks: ok("Jezero Crater · rock scanners and a sample drill · orbiter relay + direct link · daily plans with self-driving · RTG with its heat piped around · sky crane · smart-camera landing · 2020 launch window", "Jezero Crater · سكانرز صخور ودريل عينات · أوربيتر + لينك مباشر · خطة كل يوم وسواقة ذاتية · RTG وحرارته متوزعة · سكاي كرين · هبوط بكاميرا ذكية · لانش ويندو 2020"),
     facts: ok("Your mission is NASA's Perseverance rover. It launched in the July 2020 window and landed in Jezero Crater in February 2021 with a sky crane, steering away from danger with Terrain Relative Navigation. An RTG powers and warms it. It scans rocks for signs of ancient life and stores samples for a future return to Earth.", "مهمتك هي الروڤر Perseverance بتاع ناسا. اتطلق في لانش ويندو يوليو 2020، ونزل في Jezero Crater في فبراير 2021 بالسكاي كرين، وكان بيبعد عن الخطر بنظام Terrain Relative Navigation. والـ RTG بيشغّله ويدفّيه. وهو بيعمل سكان للصخور يدوّر على علامات حياة قديمة، وبيخزّن عينات علشان ترجع الأرض في مهمة جاية."),
     links: [["NASA Perseverance", "https://science.nasa.gov/mission/mars-2020-perseverance/"], ["NASA: Mars dust storms", "https://science.nasa.gov/mars/"], ["NASA RTG", "https://science.nasa.gov/planetary-science/programs/radioisotope-power-systems/"]] }
 };
@@ -288,7 +288,7 @@ async function roomJoin(code, name) {
 async function roomRefresh() {
   const sb = sbClient(); if (!sb || !LB.room) return;
   const [r, p, m] = await Promise.all([sb.from("rooms").select("*").eq("code", LB.room.code).single(), sb.from("players").select("*").eq("room", LB.room.code), sb.from("messages").select("*").eq("room", LB.room.code).order("id").limit(200)]);
-  if (!LB.room) return; if (p.data && LB.me) { const meRow = p.data.find(x => x.id === LB.me.id); if (meRow && meRow.data && meRow.data.kicked) { lLeave(); A.kickedMsg = true; go("lonline"); return; } } if (r.data) LB.room = r.data; if (p.data) { LB.players = p.data.filter(x => !(x.data && x.data.left)); const mr = LB.me && p.data.find(x => x.id === LB.me.id); if (mr) { LB.me = mr; LB.myRole = mr.role; } } if (m.data) LB.chat = m.data; onRoomChange(); lRoomBarPaint();
+  if (!LB.room) return; if (p.data && LB.me) { const meRow = p.data.find(x => x.id === LB.me.id); if (meRow && meRow.data && meRow.data.kicked) { lLeave(); A.kickedMsg = true; go("lonline"); return; } } if (r.data) { LB.room = r.data; if (r.data.level && r.data.level !== LB.level) { LB.level = r.data.level; LB.picks = {}; } } if (p.data) { LB.players = p.data.filter(x => !(x.data && x.data.left)); const mr = LB.me && p.data.find(x => x.id === LB.me.id); if (mr) { LB.me = mr; LB.myRole = mr.role; } } if (m.data) LB.chat = m.data; onRoomChange(); lRoomBarPaint();
 }
 let pollT = null;
 function roomSubscribe() {
@@ -305,7 +305,7 @@ async function myData(patch) { const sb = sbClient(); const d = Object.assign({}
 async function sendChat(body) { const sb = sbClient(); body = body.trim().slice(0, 300); if (!body) return; await sb.from("messages").insert({ room: LB.room.code, name: LB.me.name, role: LB.myRole, body }); }
 function onRoomChange() {
   if (!LB.room) return; const ph = LB.room.state.phase;
-  if (ph === "lobby" && !['lroom', 'lonline'].includes(A.screen)) { LB.flight = null; go("lroom"); return; }
+  if (ph === "lobby" && !['lroom', 'lonline'].includes(A.screen)) { lResetGame(); go("lroom"); return; }
   const RANK = { lonline: 0, lroom: 1, lvideo: 2, ldesign: 3, lfly: 4, lusers: 5, lreport: 6 }, target = { lobby: "lroom", video: "lvideo", flight: "lfly" }[ph];
   if (target && (RANK[A.screen] ?? 0) < RANK[target]) { if (target === "lvideo") LB.vi = 0; go(target); if (target === "lfly") lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return; }
   if (isHost() && ph !== "flight" && LB.players.length && LB.players.every(p => p.data && p.data.ready) && allChosen(allPicks(), rolesInPlay())) { roomState({ phase: "flight", at: Date.now() }); }
@@ -362,8 +362,15 @@ function lroom() {
     <p class="needline">${LB.room.state.roleMode === "pick" ? L(ok("Send this code to your team. Each player joins from their own laptop and picks a free role below. The room creator also covers empty roles.", "ابعت الكود ده للتيم. كل لاعب يدخل من اللابتوب بتاعه ويختار دور فاضي من تحت. واللي عمل الغرفة بيمسك الأدوار الفاضية.")) : L(ok("Send this code to your team. Each player joins from their own laptop and gets a role by luck. The room creator also covers empty roles.", "ابعت الكود ده للتيم. كل لاعب يدخل من اللابتوب بتاعه وبيطلعله دور بالحظ. واللي عمل الغرفة بيمسك الأدوار الفاضية."))}</p>
     ${host ? `<div class="row"><span class="psub">${L(ok("Roles", "الأدوار"))}:</span> <button class="hbtn ${LB.room.state.roleMode !== "pick" ? "" : "ghost"}" type="button" data-act="omode" data-m="random">🎲 ${L(ok("By luck", "بالحظ"))}</button><button class="hbtn ${LB.room.state.roleMode === "pick" ? "" : "ghost"}" type="button" data-act="omode" data-m="pick">✋ ${L(ok("Players pick", "اللاعبين يختاروا"))}</button></div>` : ""}
     <div id="lroomlist" class="rolepick">${lRoomList()}</div>
-    ${host ? `<button class="hbtn" type="button" data-act="ostart">${L(ok("Start the briefing for everyone", "ابدأ الشرح للكل"))}</button>` : `<p class="psub">${L(ok("Waiting for the room creator to start…", "مستنيين اللي عمل الغرفة يبدأ…"))}</p>`}
+    ${lLobbyCtl()}
+    ${host ? `<div class="row"><button class="hbtn" type="button" data-act="ostart" ${LB.players.every(p => p.data && p.data.lobbyReady) ? "" : "disabled"}>${L(ok("Start the game for everyone", "ابدأ اللعبة للكل"))} (${LB.players.filter(p => p.data && p.data.lobbyReady).length}/${LB.players.length} ${L(ok("ready", "جاهزين"))})</button><button class="linkbtn" type="button" data-act="ostartnow">${L(ok("Start anyway", "ابدأ برضه"))}</button></div>` : `<p class="psub">${L(ok("Waiting for the room creator to start…", "مستنيين اللي عمل الغرفة يبدأ…"))}</p>`}
   </section>${lChatBox()}`;
+}
+function lLobbyCtl() {
+  const host = isHost(), meReady = LB.me && LB.me.data && LB.me.data.lobbyReady;
+  return `${host ? `<div class="row lvlpick"><span class="psub">${L(ok("Level for this game", "مستوى الجولة دي"))}:</span>${CML.map(c => `<button type="button" class="hbtn ${LB.level === c.n ? "" : "ghost"}" data-act="olevel" data-n="${c.n}">CML ${c.n} · ${L(LAB_M[c.m].name)}</button>`).join("")}</div>` : `<p class="needline">${L(ok("Level", "المستوى"))}: <b class="hl">${L(lvl().t)} · ${L(LM().name)}</b></p>`}
+    <div class="row"><button class="hbtn ${meReady ? "ghost" : ""}" type="button" data-act="oready0">${meReady ? "✅ " + L(ok("I'm ready (click to cancel)", "أنا جاهز (دوس علشان تلغي)")) : "✋ " + L(ok("I'm ready", "أنا جاهز"))}</button>
+    <span class="psub">${L(ok("The game starts when everyone is ready.", "اللعبة بتبدأ لما الكل يبقى جاهز."))}</span></div>`;
 }
 function lRoomBar() {
   if (LB.mode !== "online" || !LB.room) return "";
@@ -386,6 +393,7 @@ async function lSwitchRole(r) {
   LB.me = res.data; LB.myRole = r; await roomRefresh(); render();
 }
 function lSave() { try { if (LB.room && LB.me) sessionStorage.setItem("ma.room", JSON.stringify({ code: LB.room.code, name: LB.me.name })); else sessionStorage.removeItem("ma.room"); } catch (e) { } }
+function lResetGame() { LB.flight = null; LB.watched = {}; LB.reviews = 0; LB.rewatch = 0; LB.vi = 0; LB.revealed = null; const m = $("#modal"); if (m) m.innerHTML = ""; if (LB.me) myData({ picks: {}, ready: false, watched: false, votes: {}, lobbyReady: false }); }
 function lLeave() { try { sessionStorage.removeItem("ma.room"); } catch (e) { } const sb = sbClient(); if (sb && LB.chan) sb.removeChannel(LB.chan); clearInterval(pollT); LB.chan = null; LB.room = null; LB.me = null; LB.myRole = null; LB.players = []; LB.chat = []; LB.flight = null; LB.mode = "solo"; const m = $("#modal"); if (m) m.innerHTML = ""; }
 function lRoomBarPaint() { const el = $("#roombar"); if (el && LB.room) el.innerHTML = lRoomBarInner(); }
 function lRoomList() {
@@ -419,6 +427,7 @@ function lvideo() {
   return lRoomBar() + `<section class="hpanel notr"><div class="kick">${L(LM().name)} · ${L(ok("Briefing", "الشرح"))} ${i + 1}/${list.length}</div>
     <h2 class="hh">${CREW[r].name} · ${who}</h2>
     <p class="needline">${L(ok("Watch carefully and write on the team board. The cards later show names only.", "اتفرج كويس واكتب على السبورة، علشان الكروت بعد كده عليها أسامي بس."))}</p>
+    ${LB.mode === "online" && LB.room && LB.room.state.videoAt ? `<p class="timer">⏱️ ${L(ok("Time to watch", "وقت الفرجة"))}: <b id="vtimer">--:--</b> · ${L(ok("When time is up, everyone moves on to the design.", "لما الوقت يخلص، الكل بيروح على التصميم."))}</p>` : ""}
     <video id="brief" class="briefvid" src="video/${LM().id}_${r}.mp4" controls playsinline preload="auto"></video>
     <div class="row">${i < list.length - 1 ? `<button class="hbtn" type="button" data-act="vnext" id="vnext" ${LB.watched[LM().id + r] ? "" : "disabled"}>${L(ok("Next briefing", "الشرح اللي بعده"))}</button>`
       : `<button class="hbtn" type="button" data-act="vdone" id="vnext" ${LB.watched[LM().id + r] ? "" : "disabled"}>${L(ok("I'm ready to decide", "أنا جاهز أقرر"))}</button>`}
@@ -472,7 +481,7 @@ function lReviewHtml() {
   return `${c.ring ? ringsRow({ ring: c.ring }) : ""}<div class="hcard"><h3>${L(ok("Review findings", "نتايج المراجعة"))}</h3><ul>${(list.length ? list : [ok("No problems found. The design closes, with nothing wasted.", "مفيش مشاكل. التصميم مظبوط ومفيهوش تضييع.")]).map(x => `<li>${L(x)}</li>`).join("")}</ul><p class="psub">${L(ok("The review tells you what is wrong, not how to fix it.", "المراجعة بتقولك إيه الغلط، مش بتقولك تصلّحه إزاي."))}</p></div>`;
 }
 function lPartial() {
-  if (A.screen === "lroom") { if (LB._mode !== LB.room.state.roleMode || LB._role !== LB.myRole) { LB._mode = LB.room.state.roleMode; LB._role = LB.myRole; render(); return; } const el = $("#lroomlist"); if (el) el.innerHTML = lRoomList(); return; }
+  if (A.screen === "lroom") { const sig = [LB.room.state.roleMode, LB.myRole, LB.level, LB.players.length, LB.players.filter(p => p.data && p.data.lobbyReady).length].join("|"); if (LB._sig !== sig) { LB._sig = sig; const ci = $("#chatin"), cv = ci ? ci.value : ""; render(); const c2 = $("#chatin"); if (c2 && cv) c2.value = cv; return; } const el = $("#lroomlist"); if (el) el.innerHTML = lRoomList(); return; }
   const bo = $("#boardOthers"); if (bo) bo.innerHTML = lBoardOthers();
   if (A.screen === "ldesign") { const picks = allPicks();
     document.querySelectorAll("[data-lpick]").forEach(b => { const [r, k, o] = b.dataset.lpick.split("."); b.classList.toggle("sel", picks[r + "." + k] === o); });
@@ -523,7 +532,7 @@ function lEvent(i, F) {
 }
 function lVoteCheck() {
   const i = LB.evI; if (i == null || !LB.evRes || LB.mode !== "online" || !LB.flight) return; const votes = LB.players.map(p => p.data && p.data.votes ? p.data.votes[i] : undefined).filter(v => v !== undefined);
-  const vt = $("#votes"); if (vt) vt.textContent = `${L(ok("Votes", "الأصوات"))}: ${votes.length} / ${LB.players.length}`;
+  const vt = $("#votes"); if (vt) vt.innerHTML = `<b class="hl">${L(ok("Votes", "الأصوات"))}: ${votes.length} / ${LB.players.length}</b><div class="votelist">${LB.players.map(p => { const v = p.data && p.data.votes ? p.data.votes[i] : undefined; return `<span class="rb-p" style="--sc:${(CREW[p.role] || CREW.director).col}">${v !== undefined ? "✅" : "⏳"} ${esc(p.name)}${v !== undefined ? " · " + "ABC"[v] : " · " + L(ok("not voted yet", "لسه مصوّتش"))}</span>`; }).join("")}</div>`;
   if (votes.length >= LB.players.length) { const n = LB.flight.m.events[i].o.length, cnt = Array(n).fill(0); votes.forEach(v => cnt[v]++); const lead = LB.players.find(p => p.role === LB.flight.m.events[i].role); const lv = lead && lead.data.votes ? lead.data.votes[i] : 0; const max = Math.max(...cnt); lEventResolve(cnt[lv] === max ? lv : cnt.indexOf(max), LB.flight); }
 }
 function lEventResolve(j, F) {
@@ -536,25 +545,47 @@ function lEventResolve(j, F) {
 }
 function lFinish(F) {
   const c = F.c, m = F.m, alive = !F.lost, rules = c.rules, nR = m.rules.length, met = Object.values(rules).filter(Boolean).length;
-  let stars = alive && met >= 1 ? 1 : 0; if (alive && met === nR) stars = 2; if (stars === 2 && F.health >= 70 && c.clean && c.efficient) stars = 3;
+  let stars = alive && met >= 1 ? 1 : 0;
   const reviews = LB.mode === "online" ? LB.room.state.reviews || 0 : LB.reviews;
   const parts = { success: stars >= 1 ? 300 : 0, rules: alive ? Math.round(met * 300 / nR) : 0, efficiency: alive ? Math.max(0, 200 - c.waste.length * 70) : 0, health: alive ? Math.round(F.health) : 0, cleanup: alive && c.clean ? 100 : 0, penalties: -(Math.max(0, reviews - 1) * 30 + LB.rewatch * 20 + Math.round(F.cost * 10)) };
   const total = Math.max(0, Object.values(parts).reduce((a, b) => a + b, 0));
-  F.result = { alive, rules, met, nR, stars, parts, total, sciPct: alive ? Math.round(Math.min(1, c.sci * F.sci * (F.health / 100)) * 100) : 0 };
+  if (stars && met === nR && total >= 650) stars = 2; if (stars === 2 && total >= 900) stars = 3;
+  F.result = { alive, rules, met, nR, stars, parts, total, missed: m.rules.filter(r => !rules[r.k]), waste: c.waste, sciPct: alive ? Math.round(Math.min(1, c.sci * F.sci * (F.health / 100)) * 100) : 0 };
   if (alive) { const k = "cml" + LB.level; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, stars); store.set("ma.progress3", A.progress); }
   setTimeout(() => { if (A.screen === "lfly" && LB.flight === F) go("lusers"); }, 800);
 }
 function lLossHtml(R) {
   const P = R.parts, rows = [
     [ok("Mission did not work, or met no need", "المهمة مااشتغلتش، أو محققتش ولا طلب"), 300 - P.success],
-    [ok("Needs not met", "طلبات متحققتش"), (R.alive ? 300 : 300) - P.rules],
-    [ok("Wasted parts (too big or too much)", "قطع زيادة عن اللزوم"), 200 - P.efficiency],
+    [{ en: "Needs not met" + (R.missed && R.missed.length ? ": " + R.missed.map(x => x.en).join(", ") : ""), ar: "طلبات متحققتش" + (R.missed && R.missed.length ? ": " + R.missed.map(x => x.ar).join("، ") : "") }, 300 - P.rules],
+    [{ en: "Wasted parts" + (R.waste && R.waste.length ? ": " + R.waste.map(w => w.en.split(":")[0]).join(", ") : ""), ar: "قطع زيادة عن اللزوم" + (R.waste && R.waste.length ? ": " + R.waste.map(w => w.ar.split(":")[0]).join("، ") : "") }, 200 - P.efficiency],
     [ok("Damage in flight", "ضرر وإنتوا طايرين"), 100 - P.health],
     [ok("Space junk at the end", "زبالة فضائية في الآخر"), 100 - P.cleanup],
     [ok("Extra reviews, rewatched videos, rented stations", "مراجعات زيادة، وفيديوهات اتشافت تاني، ومحطات متأجرة"), -P.penalties]].filter(r => r[1] > 0);
   return `<div class="losses"><div class="lrow start"><span>${L(ok("You started with", "بدأتوا بـ"))}</span><b>1,000</b></div>
     ${rows.map(([t, v]) => `<div class="lrow"><span>${L(t)}</span><b class="bad">−${nf(v)}</b></div>`).join("")}
     <div class="lrow end"><span>${L(ok("You kept", "فضل معاكم"))}</span><b>${nf(R.total)}</b></div></div>`;
+}
+function lCert() {
+  const F = LB.flight; if (!F || !F.result) return; const R = F.result, m = F.m;
+  const cv = document.createElement("canvas"); cv.width = 1600; cv.height = 1130; const g = cv.getContext("2d");
+  const grd = g.createLinearGradient(0, 0, 1600, 1130); grd.addColorStop(0, "#050b18"); grd.addColorStop(1, "#0c1a33"); g.fillStyle = grd; g.fillRect(0, 0, 1600, 1130);
+  for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * .7})`; g.fillRect(Math.random() * 1600, Math.random() * 1130, 2, 2); }
+  g.strokeStyle = "#ffd84d"; g.lineWidth = 6; g.strokeRect(40, 40, 1520, 1050); g.strokeStyle = "#5fd8ff55"; g.lineWidth = 2; g.strokeRect(62, 62, 1476, 1006);
+  g.textAlign = "center"; g.fillStyle = "#5fd8ff"; g.font = "600 30px 'IBM Plex Mono', monospace"; g.fillText("NASA SPACE APPS 2026 · TEAM STELLAROPS · MISSION LAB", 800, 140);
+  g.fillStyle = "#ffd84d"; g.font = "700 76px 'Chakra Petch', sans-serif"; g.fillText("CERTIFICATE OF MISSION SUCCESS", 800, 250);
+  g.fillStyle = "#eaf6ff"; g.font = "400 34px 'IBM Plex Sans', sans-serif"; g.fillText("This certifies that the mission team", 800, 330);
+  g.fillStyle = "#ffffff"; g.font = "700 54px 'IBM Plex Sans', sans-serif"; const names = (A.certNames || "").trim() || "Mission Team"; g.fillText(names.length > 60 ? names.slice(0, 57) + "…" : names, 800, 420);
+  g.fillStyle = "#eaf6ff"; g.font = "400 34px 'IBM Plex Sans', sans-serif"; g.fillText("designed and flew the mission", 800, 490);
+  g.fillStyle = "#5fd8ff"; g.font = "700 60px 'Chakra Petch', sans-serif"; g.fillText(m.name.en.toUpperCase(), 800, 580);
+  g.fillStyle = "#eaf6ff"; g.font = "400 34px 'IBM Plex Sans', sans-serif"; g.fillText(lvl().t.en + "  ·  " + R.met + "/" + R.nR + " needs met  ·  " + R.total + " / 1000 points", 800, 650);
+  g.fillStyle = "#ffd84d"; g.font = "700 110px sans-serif"; g.fillText("★".repeat(R.stars) + "☆".repeat(3 - R.stars), 800, 790);
+  g.fillStyle = "#9fb8cd"; g.font = "400 28px 'IBM Plex Sans', sans-serif"; g.fillText("Real mission it is based on: " + m.real.name, 800, 860);
+  g.fillText(new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }), 800, 905);
+  g.fillStyle = "#ffc26b"; g.font = "italic 600 34px 'IBM Plex Sans', sans-serif"; g.fillText("Mohamed", 400, 1000); g.fillText("StellarOps Mission Control", 1200, 1000);
+  g.fillStyle = "#9fb8cd"; g.font = "400 22px 'IBM Plex Sans', sans-serif"; g.fillText("Mission Director", 400, 1035); g.fillText("Mission Lab", 1200, 1035);
+  g.strokeStyle = "#9fb8cd"; g.lineWidth = 1; g.beginPath(); g.moveTo(260, 965); g.lineTo(540, 965); g.moveTo(1060, 965); g.lineTo(1340, 965); g.stroke();
+  const a = document.createElement("a"); a.download = "StellarOps-certificate-CML" + LB.level + ".png"; a.href = cv.toDataURL("image/png"); document.body.appendChild(a); a.click(); a.remove();
 }
 function lusers() {
   const F = LB.flight; if (!F || !F.result) return lhome(); const R = F.result;
@@ -575,23 +606,29 @@ function lreport() {
     <div class="resgrid"><div><div class="bigstars">${"★".repeat(R.stars)}<span>${"★".repeat(3 - R.stars)}</span></div>
       <h2 class="hh">${!R.alive ? L(ok("Mission lost", "المهمة فشلت")) : R.stars ? L(ok("Mission complete", "المهمة نجحت")) : L(ok("It worked, but met no need", "اشتغلت، بس محققتش ولا طلب"))} · ${R.total} ${L(ok("points", "نقطة"))}</h2>
       <p class="sciline">${L(ok("Needs met", "الطلبات المتحققة"))}: <b>${R.met}/${R.nR}</b> · ${L(ok("Health", "الصحة"))}: <b>${Math.round(F.health)}%</b>${c.mass ? ` · ${L(ok("Mass", "الوزن"))}: <b>${nf(Math.round(c.mass))} kg</b>` : ""}${c.need ? ` · ${L(ok("Power", "الكهربا"))}: <b>${nf(c.need)} / ${nf(c.supply)} ${m.unit || "W"}</b>` : ""}</p>
-      <ul class="starkey"><li class="${R.stars >= 1 ? "on" : ""}">★ ${L(ok("It worked and met at least one need", "اشتغلت وحققت طلب واحد على الأقل"))}</li><li class="${R.stars >= 2 ? "on" : ""}">★ ${L(ok("Every need was met", "كل الطلبات اتحققت"))}</li><li class="${R.stars >= 3 ? "on" : ""}">★ ${L(ok("Nothing wasted, healthy, clean end", "مفيش تضييع، وصحة كويسة، ونهاية نضيفة"))}</li></ul>
+      <ul class="starkey"><li class="${R.stars >= 1 ? "on" : ""}">★ ${L(ok("It worked and met at least one need", "اشتغلت وحققت طلب واحد على الأقل"))}</li><li class="${R.stars >= 2 ? "on" : ""}">★ ${L(ok("Every need met, and 650+ points", "كل الطلبات اتحققت، و 650 نقطة أو أكتر"))}</li><li class="${R.stars >= 3 ? "on" : ""}">★ ${L(ok("900+ points: nothing wasted, little damage", "900 نقطة أو أكتر: مفيش تضييع، وضرر قليل"))}</li></ul>
       ${lLossHtml(R)}</div>
     <div class="resholo"><canvas id="holoRes" class="holo"></canvas><div class="holotag">NASA 3D model · ${({ goes: "GOES", lro: "LRO", landsat8: "Landsat 8", perseverance: "Perseverance" })[m.model]}</div></div></div>
     <div class="cols2"><div class="hcard"><h3>${L(ok("What you did well", "اللي عملته صح"))}</h3><ul>${(good.length ? good : [ok("You tried. Every NASA team learns from its first design.", "إنت جرّبت، وكل تيم في ناسا بيتعلم من أول تصميم.")]).slice(0, 6).map(x => `<li>${L(x)}</li>`).join("")}</ul></div>
       <div class="hcard"><h3>${L(ok("Fix next time", "صلّحه المرة الجاية"))}</h3><ul>${(fix.length ? fix : [ok("Nothing! Try the next level.", "ولا حاجة! جرّب المستوى اللي بعده.")]).slice(0, 6).map(x => `<li>${L(x)}</li>`).join("")}</ul></div></div>
+    ${R.stars >= 1 ? `<div class="hcard cert"><h3>🎓 ${L(ok("Your team certificate", "شهادة التيم"))}</h3><p class="psub">${L(ok("Write your names and download a certificate for this level.", "اكتبوا أساميكم ونزّلوا شهادة المستوى ده."))}</p>
+      <div class="row"><input type="text" id="certnames" maxlength="160" value="${esc(LB.mode === "online" ? LB.players.map(p => p.name).join(", ") : (A.certNames || ""))}" placeholder="${L(ok("Team member names", "أسامي أعضاء التيم"))}"><button class="hbtn" type="button" data-act="cert">⬇ ${L(ok("Download certificate", "نزّل الشهادة"))}</button></div></div>` : ""}
     <div class="hcard fact"><h3>${L(ok("The real mission", "المهمة الحقيقية"))}: ${esc(m.real.name)}</h3><p>${L(m.real.facts)}</p>
       <p class="psub"><b>${L(ok("The real mission chose", "المهمة الحقيقية اختارت"))}:</b> ${L(m.real.picks)}<br><b>${L(ok("Your team chose", "التيم بتاعك اختار"))}:</b> ${esc(mine)}</p>
+      ${m.real.photos ? `<div class="realgal">${m.real.photos.map(([id, cap]) => `<figure><img src="img/real/${id}.jpg" alt="" loading="lazy"><figcaption>${L(cap)} <span class="psub">· NASA</span></figcaption></figure>`).join("")}</div>` : ""}
       <p class="psub">${L(ok("Sources", "المصادر"))}: ${m.real.links.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join(" · ")} · <a href="https://nasa.github.io/mission-viz/" target="_blank" rel="noopener">NASA Mission Viz</a></p></div>
     ${LB.level < 4 ? `<p class="needline">${R.stars >= 1 ? `🔓 ${L(ok("Next level unlocked! You need at least 1 star to move on. Come back any time for 3 stars.", "المستوى اللي بعده اتفتح! محتاج نجمة واحدة على الأقل علشان تكمّل، وتقدر ترجع في أي وقت علشان الـ 3 نجوم."))}` : `🔒 ${L(ok("Get at least 1 star to unlock the next level: the spacecraft must work and meet at least one need.", "محتاج نجمة واحدة على الأقل علشان المستوى اللي بعده يتفتح: المركبة لازم تشتغل وتحقق طلب واحد على الأقل."))}`}</p>` : ""}
-    <div class="row">${LB.level < 4 && R.stars >= 1 ? `<button class="hbtn" type="button" data-act="nextlvl">${L(ok("Next level", "المستوى اللي بعده"))} → CML ${LB.level + 1}</button>` : ""}<button class="hbtn ${R.stars >= 1 && LB.level < 4 ? "ghost" : ""}" type="button" data-act="redesign">${L(ok("Change the design and fly again", "غيّر التصميم وطير تاني"))}</button><button class="hbtn ghost" type="button" data-go="llevel">${L(ok("Levels", "المستويات"))}</button></div></section>`;
+    <div class="row">${LB.mode === "online" ? (isHost() ? `<button class="hbtn" type="button" data-act="oagain">🔁 ${L(ok("Back to the room: choose the next level", "ارجع للغرفة واختار المستوى الجاي"))}</button>` : `<p class="psub">${L(ok("The room creator will take everyone back to the room for the next game.", "اللي عامل الغرفة هيرجّع الكل للغرفة علشان الجولة الجاية."))}</p>`) : ""}${LB.mode !== "online" && LB.level < 4 && R.stars >= 1 ? `<button class="hbtn" type="button" data-act="nextlvl">${L(ok("Next level", "المستوى اللي بعده"))} → CML ${LB.level + 1}</button>` : ""}<button class="hbtn ${R.stars >= 1 && LB.level < 4 ? "ghost" : ""}" type="button" data-act="redesign">${L(ok("Change the design and fly again", "غيّر التصميم وطير تاني"))}</button><button class="hbtn ghost" type="button" data-go="llevel">${L(ok("Levels", "المستويات"))}</button></div></section>`;
 }
 Object.assign(SIMPLE, { lhome, llevel, lonline, lroom, lvideo, ldesign, lfly, lusers, lreport });
 Object.assign(SIMPLE_AFTER, {
   lhome() { const cv = $("#holoHome"); if (!Space3D.ok || !cv) return; const h = Space3D.createHolo(cv); h && h.setModel("landsat8"); },
   lonline() { onlineAvailable().then(okk => { const el = $("#olstat"); if (!el) return; el.innerHTML = okk ? L(ok("Connected. Write your name, then create or join a room.", "متوصل. اكتب اسمك، وبعدين اعمل غرفة أو ادخل واحدة.")) : L(ok("Online play can't connect here. Open the public game link (GitHub Pages), or play on one computer.", "اللعب الأونلاين مش قادر يتوصل هنا. افتح لينك اللعبة العام (GitHub Pages)، أو العبوا على جهاز واحد.")); if (!okk) document.querySelectorAll("[data-act=ocreate],[data-act=ojoin]").forEach(b => b.disabled = true); }); },
   lroom() { lChatPaint(); },
-  lvideo() { const v = $("#brief"); const list = lVideoList(), r = list[Math.min(LB.vi || 0, list.length - 1)]; if (v) v.onended = () => { LB.watched[LM().id + r] = true; const b = $("#vnext"); if (b) b.disabled = false; }; },
+  lvideo() { clearInterval(LB.vt); if (LB.mode === "online" && LB.room && LB.room.state.videoAt) { const lim = ({ 1: 5, 2: 7, 3: 8, 4: 8 })[LB.level] * 60000, end = LB.room.state.videoAt + lim;
+      const tick = () => { const el = $("#vtimer"); if (A.screen !== "lvideo") return clearInterval(LB.vt); const ms = end - Date.now(); if (ms <= 0) { clearInterval(LB.vt); myData({ watched: true }); lStartDesign(); return; } if (el) el.textContent = Math.floor(ms / 60000) + ":" + String(Math.floor(ms / 1000) % 60).padStart(2, "0"); };
+      tick(); LB.vt = setInterval(tick, 1000); }
+    const v = $("#brief"); const list = lVideoList(), r = list[Math.min(LB.vi || 0, list.length - 1)]; if (v) v.onended = () => { LB.watched[LM().id + r] = true; const b = $("#vnext"); if (b) b.disabled = false; }; },
   ldesign() { const cv = $("#holoBuild"); holoL = Space3D.ok && cv ? Space3D.createHolo(cv) : null; lHolo(); lChatPaint(); },
   lreport() { const cv = $("#holoRes"); if (!Space3D.ok || !cv || !LB.flight) return; const h = Space3D.createHolo(cv); h && h.setModel(LB.flight.m.model); }
 });
@@ -609,17 +646,21 @@ function lClick(t) {
   if (a === "review") { const n = LB.mode === "online" ? (LB.room.state.reviews || 0) : LB.reviews; if (LB.mode === "online") roomState({ reviews: n + 1, lastReview: Date.now() }); else { LB.reviews = n + 1; LB.revealed = Date.now(); } const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); lPtsPaint(); return true; }
   if (a === "llaunch") { go("lfly"); lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return true; }
   if (a === "redesign") { lStartDesign(); return true; }
+  if (a === "cert") { A.certNames = $("#certnames").value; lCert(); return true; }
   if (a === "nextlvl") { if (LB.mode === "online") { go("llevel"); return true; } LB.level = Math.min(4, LB.level + 1); LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
   if (a === "oready") { myData({ ready: true }).then(() => { if (LB.players.every(p => p.data && (p.data.ready || p.id === LB.me.id))) roomState({ phase: "flight", at: Date.now() }); }); return true; }
   if (a === "ocreate" || a === "ojoin") { A.kickedMsg = false; const name = ($("#oname").value || "").trim(); const err = $("#oerr");
     if (!name) { err.textContent = L(ok("Write your name first.", "اكتب اسمك الأول.")); return true; } A.lastName = name;
     if (a === "ocreate") LB.level = +$("#olevel").value;
     (a === "ocreate" ? roomCreate(name, (document.querySelector("input[name=rmode]:checked") || {}).value) : roomJoin($("#ocode").value, name)).then(() => go("lroom")).catch(e => { err.textContent = e.message || String(e); }); return true; }
-  if (a === "ostart") { roomState({ phase: "video" }); return true; }
+  if (a === "ostart" || a === "ostartnow") { roomState({ phase: "video", videoAt: Date.now(), reviews: 0, lastReview: null }); return true; }
+  if (a === "oready0") { myData({ lobbyReady: !(LB.me.data && LB.me.data.lobbyReady) }).then(() => roomRefresh()); return true; }
+  if (a === "olevel") { if (isHost()) { const n = +t.dataset.n; LB.level = n; sbClient().from("rooms").update({ level: n, mission: CML[n - 1].m }).eq("code", LB.room.code).then(() => roomRefresh()); } return true; }
+  if (a === "oagain") { if (isHost()) roomState({ phase: "lobby", reviews: 0, lastReview: null }); go("lroom"); return true; }
   if (a === "omode") { if (isHost()) roomState({ roleMode: t.dataset.m }).then(() => render()); return true; }
   if (t.dataset.orole) { lSwitchRole(t.dataset.orole); return true; }
   if (a === "ocopy") { const c = LB.room ? LB.room.code : ""; try { navigator.clipboard.writeText(c).then(() => { t.textContent = L(ok("Copied!", "اتنسخ!")); }, () => { t.textContent = c; }); } catch (e) { t.textContent = c; } return true; }
-  if (a === "olobby") { if (isHost()) { LB.players.forEach(() => {}); roomState({ phase: "lobby", lastReview: null }); myData({ ready: false }); LB.flight = null; go("lroom"); } return true; }
+  if (a === "olobby") { if (isHost()) { roomState({ phase: "lobby", lastReview: null, reviews: 0 }); lResetGame(); go("lroom"); } return true; }
   if (a === "oleave") { if (LB.me) myData({ left: true, ready: false }); lLeave(); go("lhome"); return true; }
   if (t.dataset.kick) { const x = LB.players.find(p => String(p.id) === t.dataset.kick); if (x && isHost() && confirm(L({ en: `Remove ${x.name} from the room?`, ar: `تطلّع ${x.name} من الغرفة؟` }))) { sbClient().from("players").update({ data: Object.assign({}, x.data, { left: true, kicked: true, ready: false }) }).eq("id", x.id).then(() => roomRefresh()); } return true; }
   return false;

@@ -523,7 +523,7 @@ function report(){
 /* ================= WIRING ================= */
 function startMission(i){ A.mi=i; const m=MISSIONS[i]; A.d=structuredClone(m.def); A.d.compress=!!A.d.compress; A.d.relay=!!A.d.relay; A.d.shelter=!!A.d.shelter; A.d.abort=!!A.d.abort; A.tab="planner"; go("briefing"); }
 document.addEventListener("click",e=>{
-  const t=e.target.closest("[data-go],[data-act],[data-mi],[data-tab],[data-trole],[data-view],[data-smi],[data-sstep],[data-scard],[data-lmode],[data-llevel],[data-ltab],[data-lpick],[data-kick],[data-orole]"); if(!t) return;
+  const t=e.target.closest("[data-go],[data-act],[data-mi],[data-tab],[data-trole],[data-view],[data-smi],[data-sstep],[data-scard],[data-lmode],[data-llevel],[data-ltab],[data-lpick],[data-kick],[data-orole],[data-n]"); if(!t) return;
   if(!t.dataset.go && !t.dataset.view && sClick(t)) return;
   if(t.dataset.view){ flightView&&flightView.setView(t.dataset.view); document.querySelectorAll("[data-view]").forEach(b=>b.setAttribute("aria-pressed",b===t)); $("#screen").dataset.view=t.dataset.view; return; }
   if(t.dataset.go){ if(t.dataset.go==="design"&&!A.d) return go("select"); return go(t.dataset.go); }
