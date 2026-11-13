@@ -370,3 +370,7 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .rb-p{font-size:13px;border:1px solid var(--sc);border-radius:999px;padding:3px 10px;color:#eaf6ff}
 .rb-p i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--sc);margin-inline-end:6px}
 .rb-act{display:flex;gap:8px;flex-wrap:wrap}.rb-act .hbtn{padding:6px 12px;font-size:12px}
+.drawn{display:flex;gap:14px;align-items:center;border:1px solid var(--sc);border-radius:10px;padding:12px;margin:6px 0 14px;background:rgba(4,10,22,.75);box-shadow:0 0 24px color-mix(in srgb,var(--sc) 30%,transparent);animation:drawin .6s ease-out}
+.drawn img{width:120px;height:120px;object-fit:cover;border-radius:8px}
+.drawn b{display:block;font-size:24px;color:var(--sc);margin:2px 0}
+@keyframes drawin{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
