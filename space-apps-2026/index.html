@@ -3390,7 +3390,11 @@ function lCert() {
   g.fillStyle = "#ffc26b"; g.font = "italic 600 34px 'IBM Plex Sans', sans-serif"; g.fillText("Mohamed", 400, 1000); g.fillText("StellarOps Mission Control", 1200, 1000);
   g.fillStyle = "#9fb8cd"; g.font = "400 22px 'IBM Plex Sans', sans-serif"; g.fillText("Mission Director", 400, 1035); g.fillText("Mission Lab", 1200, 1035);
   g.strokeStyle = "#9fb8cd"; g.lineWidth = 1; g.beginPath(); g.moveTo(260, 965); g.lineTo(540, 965); g.moveTo(1060, 965); g.lineTo(1340, 965); g.stroke();
-  const a = document.createElement("a"); a.download = "StellarOps-certificate-CML" + LB.level + ".png"; a.href = cv.toDataURL("image/png"); document.body.appendChild(a); a.click(); a.remove();
+  const url = cv.toDataURL("image/png");
+  try { const a = document.createElement("a"); a.download = "StellarOps-certificate-CML" + LB.level + ".png"; a.href = url; document.body.appendChild(a); a.click(); a.remove(); } catch (e) { }
+  const md = $("#modal") || document.body.appendChild(Object.assign(document.createElement("div"), { id: "modal" }));
+  md.innerHTML = `<div class="overlay notr" role="dialog" aria-modal="true"><div class="hmodal certmodal"><h2 class="hh">🎓 ${L(ok("Your certificate", "الشهادة بتاعتكم"))}</h2><img src="${url}" alt="Certificate"><p class="psub">${L(ok("If it did not download, right-click the picture (or long-press on a phone) and choose Save image.", "لو مااتنزلتش، دوس كليك يمين على الصورة (أو دوسة طويلة على الموبايل) واختار Save image."))}</p><div class="row"><button class="hbtn" type="button" id="certclose">${L(ok("Close", "اقفل"))}</button></div></div></div>`;
+  $("#certclose").onclick = () => { md.innerHTML = ""; };
 }
 function lusers() {
   const F = LB.flight; if (!F || !F.result) return lhome(); const R = F.result;
