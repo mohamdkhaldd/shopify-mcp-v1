@@ -33,7 +33,7 @@ const M_STORM = {
     const sci = (orb.geo ? 1 : .1) * (cam.ir ? 1 : .55) * (ant.fast ? 1 : .1);
     return { rules, issues, waste, fatal: null, sci, clean: true, efficient: !pow.rtg, cam, ant, pow, orb, ring: null };
   },
-  engine(c, base) { return { orbit: c.orb.geo ? "geo" : "polar", lv: "medium", antenna: c.ant.fast ? "large" : "small", instr: [c.cam.ir ? "thermal" : "cam_med"], power: c.pow.rtg ? "rtg1" : "solar", panel: 3 }; },
+  engine(c) { return { orbit: c.orb.k ? (c.orb.geo ? "geo" : "polar") : "geo", lv: "medium", lab: { cam: c.cam.k ? (c.cam.ir ? "ir" : "color") : null, ant: c.ant.k ? (c.ant.fast ? "fast" : "slow") : null, rtg: !!c.pow.rtg, panelW: c.pow.k && !c.pow.rtg ? 2000 : 0, batMin: c.pow.k && !c.pow.rtg ? 40 : 0 } }; },
   events: [
     { role: "engineer", t: ok("Eclipse season", "موسم الكسوف"), x: ok("It is March. For about an hour each night, Earth's shadow covers the satellite. No sunlight.", "إحنا في مارس. كل يوم بالليل ضل الأرض بيغطي القمر حوالي ساعة، ومفيش شمس."),
       o: [{ t: ok("Run on the battery", "اشتغل على البطارية"), f: c => ({ h: 0, sci: 0, w: c.pow.rtg ? ok("The RTG doesn't need sunlight, so nothing changed.", "الـ RTG مش محتاجة شمس، فمفيش حاجة اتغيرت.") : ok("The battery kept everything running through the shadow. Real geostationary satellites do exactly this.", "البطارية شغّلت كل حاجة لحد ما الضل خلص. والأقمار الجيوستيشنري الحقيقية بتعمل كده بالظبط.") }) },
@@ -95,7 +95,7 @@ const M_DELTA = {
     return { mass, need, supply, made, down, res, rules, fatal, sci: Math.max(0, Math.min(1.1, sci)), issues, waste, efficient: !waste.length, clean: !!eom.clean,
       ring: { mass: rkt.lift ? mass / rkt.lift : 0, power: supply ? need / supply : 0, money: (rkt.cost || 0) / 100, data: down ? made / down : 0 }, cam, time, ant, st, pan, bat, orb, rkt, eom };
   },
-  engine(c) { return { orbit: "sso600", lv: c.rkt.lv || "medium", antenna: c.ant.eng || "medium", instr: [c.cam.instr || "multispec"], panel: (c.pan.supply || 2000) / 1000, shield: "light" }; },
+  engine(c) { return { orbit: "sso600", lv: c.rkt.lv || "medium", lab: { cam: { A: "modis", B: "tirs", C: "oli" }[c.cam.k], ant: { A: "Ka", B: "S", C: "X" }[c.ant.k], panelW: c.pan.supply || 0, batMin: c.bat.min || 0 } }; },
   events: [
     { role: "comms", t: ok("Ground station offline", "الجراوند ستيشن وقعت"), x: ok("A storm on Earth broke your main ground station for a week.", "عاصفة على الأرض وقّعت الجراوند ستيشن الرئيسية أسبوع."),
       o: [{ t: ok("Use another station", "استخدم محطة تانية"), f: c => c.st.n < 2 ? { h: 0, sci: -.15, w: ok("You built only one station, so there was no other one. A week of pictures was lost.", "إنت عامل محطة واحدة بس، فمكانش فيه غيرها. صور أسبوع ضاعت.") } : c.ant.few ? { h: 0, sci: -.1, w: ok("Your other station could not hear Ka-band. Only a few stations in the world can. Pictures were lost.", "المحطة التانية مقدرتش تسمع Ka-band، لأن محطات قليلة في العالم بس اللي بتسمعه. صور ضاعت.") } : { h: 0, sci: 0, w: ok("Your backup station took over. Nothing was lost.", "المحطة الاحتياطي استلمت، ومفيش حاجة ضاعت.") } },
@@ -112,11 +112,65 @@ const M_DELTA = {
     facts: ok("Your mission is the real Landsat 8. It has flown since 2013 at 705 km, crossing the equator at about 10 a.m. Its OLI camera sees near-infrared with 30 m pixels, and it sends data on X-band at 384 Mbit/s. (It launched on an Atlas V rocket.)", "مهمتك هي Landsat 8 الحقيقي. بيطير من 2013 على ارتفاع 705 كم، وبيعدّي خط الاستوا حوالي الساعة 10 الصبح. كاميرته OLI بتشوف النير إنفرا ريد ببيكسل 30 متر، وبيبعت الداتا على X-band بسرعة 384 ميجابت في الثانية. (واتطلق على صاروخ Atlas V.)"),
     links: [["USGS Landsat 8", "https://www.usgs.gov/landsat-missions/landsat-8"], ["NASA MODIS", "https://modis.gsfc.nasa.gov/about/specifications.php"], ["ESA Vega C", "https://www.esa.int/Enabling_Support/Space_Transportation/Vega/Vega_capabilities"]] }
 };
-const M_MOON = { id: "moon", soon: true, name: ok("Moon Landing Map", "خريطة الهبوط على القمر") };
+const M_MOON = {
+  id: "moon", base: "moon", model: "lro", days: 365 * 2,
+  name: ok("Moon Landing Map", "خريطة الهبوط على القمر"),
+  user: ok("NASA's Artemis landing planners and the astronauts who will land", "مخططين الهبوط في برنامج Artemis بتاع ناسا، والرواد اللي هينزلوا"),
+  rules: [{ k: "rocks", en: "See rocks 2 m wide", ar: "يشوف صخور عرضها 2 متر" }, { k: "dark", en: "Map inside dark craters", ar: "يعمل خريطة جوه الحفر الضلمة" }, { k: "pole", en: "Fly over the south pole", ar: "يعدّي فوق القطب الجنوبي" }, { k: "data", en: "Send 100 Mbit/s", ar: "يبعت 100 ميجابت في الثانية" }, { k: "survive", en: "Survive the cold shadow", ar: "يعدّي الضل البارد" }, { k: "budget", en: "Launch budget $150 million", ar: "ميزانية الإطلاق 150 مليون دولار" }],
+  decisions: {
+    science: [
+      { k: "cam", t: ok("Which camera?", "أنهي كاميرا؟"), o: [lopt("A", "cam1", "Wide camera · 100 m", "كاميرا واسعة · 100 متر", { res: 100, lab: "wac" }), lopt("B", "cam3", "Narrow camera · 0.5 m", "كاميرا ضيقة · نص متر", { res: .5, lab: "nac" }), lopt("C", "cam1", "Medium camera · 10 m", "كاميرا متوسطة · 10 متر", { res: 10, lab: "color" })] },
+      { k: "dark", t: ok("How do we see inside dark craters?", "إزاي نشوف جوه الحفر الضلمة؟"), o: [lopt("A", "weather", "Infrared camera", "كاميرا إنفرا ريد", { lab: "irdark", part: .5 }), lopt("B", "cam1", "Normal camera", "كاميرا عادية", { lab: "camdark", part: .2 }), lopt("C", "radar", "Laser altimeter", "ليزر ألتيميتر", { lab: "laser", laser: true })] }],
+    comms: [
+      { k: "ant", t: ok("Which antenna?", "أنهي أنتينا؟"), o: [lopt("A", "relay", "Laser link · 622 Mbit/s", "لينك ليزر · 622 ميجابت", { rate: 622, clouds: true, lab: "laser" }), lopt("B", "dish3", "Ka-band · 100 Mbit/s", "Ka-band · 100 ميجابت", { rate: 100, lab: "Ka" }), lopt("C", "dish1", "S-band · a few Mbit/s", "S-band · كام ميجابت", { rate: 2, lab: "S" })] },
+      { k: "st", t: ok("How many ground stations?", "كام جراوند ستيشن؟"), o: [lopt("A", "relay", "3 stations around the world", "3 محطات حوالين العالم", { n: 3 }), lopt("B", "relay", "1 station", "محطة واحدة", { n: 1 }), lopt("C", "relay", "6 stations", "6 محطات", { n: 6 })] }],
+    engineer: [
+      { k: "bat", t: ok("Which battery?", "أنهي بطارية؟"), o: [lopt("A", "rtg", "Battery A · 30 min", "البطارية A · 30 دقيقة", { min: 30 }), lopt("B", "rtg", "Battery B · 60 min", "البطارية B · 60 دقيقة", { min: 60 }), lopt("C", "rtg", "Battery C · 120 min", "البطارية C · 120 دقيقة", { min: 120 })] },
+      { k: "heat", t: ok("How do we stay warm?", "إزاي نفضل دافيين؟"), o: [lopt("A", "panel1", "Blanket + heaters", "بطانية حرارية + هيترز", { warm: true }), lopt("B", "radar", "No protection", "من غير حماية", { warm: false }), lopt("C", "rtg", "Extra RTG for heat", "RTG زيادة للتدفية", { warm: true, rtg: true })] }],
+    planner: [
+      { k: "orb", t: ok("Which orbit?", "أنهي أوربت؟"), o: [lopt("A", "ice", "Polar orbit · 50 km", "أوربت قطبي · 50 كم", { pole: true, resF: 1, eng: "polar50" }), lopt("B", "ice", "Equator orbit · 50 km", "أوربت خط الاستوا · 50 كم", { pole: false, resF: 1, eng: "eq100" }), lopt("C", "ice", "High polar orbit · 3,000 km", "أوربت قطبي عالي · 3,000 كم", { pole: true, resF: 60, eng: "polar100" })] },
+      { k: "rkt", t: ok("Which rocket?", "أنهي صاروخ؟"), o: [lopt("A", "rocket3", "SLS", "SLS", { lift: 27000, cost: 2000, lv: "superheavy" }), lopt("B", "rocket1", "Electron", "Electron", { lift: 25, cost: 10, lv: "small" }), lopt("C", "rocket2", "Falcon 9", "Falcon 9", { lift: 1900, cost: 69, lv: "medium" })] }] },
+  compute(p) {
+    const g = (r, k) => pickOpt(this, p, r, k) || {};
+    const cam = g("science", "cam"), dark = g("science", "dark"), ant = g("comms", "ant"), st = g("comms", "st"), bat = g("engineer", "bat"), heat = g("engineer", "heat"), orb = g("planner", "orb"), rkt = g("planner", "rkt");
+    const mass = 1900, res = (cam.res || 0) * (orb.resF || 1);
+    const rules = { rocks: !!cam.k && res <= 1, dark: !!dark.laser, pole: !!orb.pole, data: (ant.rate || 0) >= 100, survive: (bat.min || 0) >= 48 && heat.warm !== false && !!heat.k, budget: !!rkt.k && rkt.cost <= 150 };
+    const fatal = rkt.k && mass > rkt.lift ? "mass" : heat.k && heat.warm === false ? "cold" : null;
+    const sci = (rules.rocks ? 1 : .3) * (dark.laser ? 1 : dark.part || .2) * (orb.pole ? 1 : .1) * (rules.data ? 1 : .05) * ((bat.min || 0) >= 48 ? 1 : .6) * (st.n === 1 ? .5 : 1);
+    const waste = [];
+    if (bat.min >= 120) waste.push(ok("Battery: the shadow lasts up to 48 minutes, and the 60-minute battery is enough. The 120-minute one is heavy for nothing.", "البطارية: الضل بيقعد لحد 48 دقيقة، وبطارية الـ 60 دقيقة كفاية. بطارية الـ 120 دقيقة تقيلة على الفاضي."));
+    if (heat.rtg) waste.push(ok("Heat: a blanket and heaters keep it warm. An extra RTG uses very rare fuel for a job a blanket can do.", "التدفية: البطانية والهيترز كفاية. الـ RTG الزيادة بيصرف وقود نادر جداً في شغلانة البطانية تعملها."));
+    if (st.n >= 6) waste.push(ok("Ground stations: three stations already see the Moon all day. Six cost twice as much for the same thing.", "المحطات: 3 محطات بيشوفوا القمر طول اليوم أصلاً. والـ 6 بيكلّفوا الضعف على نفس الحاجة."));
+    const issues = [];
+    if (fatal === "mass") issues.push({ en: `Mass: the satellite weighs ${nf(mass)} kg. This rocket cannot send it to the Moon.`, ar: `الوزن: القمر وزنه ${nf(mass)} كيلو، والصاروخ ده مش هيقدر يوصّله للقمر.` });
+    if (fatal === "cold") issues.push(ok("Cold: with no protection, the electronics freeze in the first shadow.", "البرد: من غير حماية، الإلكترونيات هتتجمد في أول ضل."));
+    if (st.n === 1) issues.push(ok("Ground: one station sees the Moon only about half of each day.", "الأرض: محطة واحدة بتشوف القمر حوالي نص اليوم بس."));
+    this.rules.forEach(r => { if (!rules[r.k]) issues.push({ en: `Need not met: ${r.en}.`, ar: `طلب متحققش: ${r.ar}.` }); });
+    return { mass, res, rules, fatal, sci, issues, waste, efficient: !waste.length, clean: true, cam, dark, ant, st, bat, heat, orb, rkt, ring: null };
+  },
+  engine(c) { return { orbit: c.orb.eng || "polar50", lv: c.rkt.lv || "medium", lab: { cam: c.cam.lab, inst2: c.dark.lab, ant: c.ant.lab, batMin: c.bat.min, blanket: c.heat.k ? c.heat.warm !== false : undefined, rtg: !!c.heat.rtg, panelW: 1800 } }; },
+  fatalMsg: { cold: ok("In the first shadow the temperature dropped far below zero. With no protection, the electronics froze and the satellite went silent.", "في أول ضل الحرارة نزلت تحت الصفر بكتير. ومن غير حماية، الإلكترونيات اتجمدت والقمر سكت.") },
+  events: [
+    { role: "comms", t: ok("Clouds over the station", "سحاب فوق المحطة"), x: ok("Thick clouds cover your main ground station for two days.", "سحاب تقيل غطّى الجراوند ستيشن الرئيسية يومين."),
+      o: [{ t: ok("Wait for clear skies", "استنى لما السما تصفى"), f: c => c.ant.clouds ? { h: 0, sci: -.08, w: ok("Laser light cannot pass through clouds. Two days of maps were lost.", "ضوء الليزر مبيعدّيش من السحاب، فخرايط يومين ضاعت.") } : { h: 0, sci: 0, w: ok("Radio waves pass through clouds. Nothing was lost.", "موجات الراديو بتعدّي من السحاب، فمفيش حاجة ضاعت.") } },
+          { t: ok("Switch to another station", "حوّل على محطة تانية"), f: c => c.st.n >= 3 ? { h: 0, sci: 0, w: ok("Another station somewhere else on Earth took over. Nothing was lost.", "محطة تانية في مكان تاني على الأرض استلمت، ومفيش حاجة ضاعت.") } : { h: 0, sci: -.1, w: ok("You have only one station. There was nowhere to switch.", "إنت عندك محطة واحدة بس، فمكانش فيه حاجة تحوّل عليها.") } },
+          { t: ok("Store maps in memory", "خزّن الخرايط في الذاكرة"), f: c => ({ h: 0, sci: -.02, w: ok("The memory kept most maps, and sent them later. A few old ones were overwritten.", "الذاكرة حفظت أغلب الخرايط وبعتتها بعدين، وشوية قدام اتمسحوا.") }) }] },
+    { role: "engineer", t: ok("Lunar eclipse!", "خسوف القمر!"), x: ok("Earth passes between the Sun and the Moon. The satellite will be in darkness for hours, much longer than a normal shadow.", "الأرض هتعدّي بين الشمس والقمر، والقمر الصناعي هيفضل في الضلمة ساعات، أطول بكتير من الضل العادي."),
+      o: [{ t: ok("Turn off the science instruments", "اطفي أجهزة العلوم"), f: c => ({ h: 0, sci: -.01, w: ok("This is exactly what NASA's real Moon orbiter did in the 2014 eclipse. It saved power and survived.", "ده بالظبط اللي القمر الحقيقي بتاع ناسا عمله في خسوف 2014. وفّر كهربا وعدّاها.") }) },
+          { t: ok("Keep everything on", "سيب كل حاجة شغالة"), f: c => c.bat.min >= 120 ? { h: -5, sci: 0, w: ok("Your big battery just made it. A little damage from the cold.", "البطارية الكبيرة بتاعتك لحقت على الآخر، وفيه ضرر بسيط من البرد.") } : { h: -30, sci: 0, w: ok("The battery ran out in the dark, and the cold damaged some parts.", "البطارية خلصت في الضلمة، والبرد بوّظ شوية قطع.") } },
+          { t: ok("Turn on all heaters", "شغّل كل الهيترز"), f: c => ({ h: -15, sci: 0, w: ok("The heaters drained the battery fast. Some parts got too cold anyway.", "الهيترز سحبوا البطارية بسرعة، وبرضه شوية قطع بردت زيادة.") }) }] }],
+  userMsg(R) { const r = R.rules; return r.rocks && r.dark && r.pole ? { en: `The Artemis team got ${R.sciPct}% of the planned maps. They found flat ground with no big rocks near the south pole, and a dark crater nearby to explore for ice.`, ar: `تيم Artemis استلم ${R.sciPct}% من الخرايط المطلوبة. لقوا أرض مستوية مفيهاش صخور كبيرة جنب القطب الجنوبي، وجنبها حفرة ضلمة يدوروا فيها على تلج.` }
+    : !r.pole ? ok("The maps never showed the south pole. The landing planners still don't know where it is safe.", "الخرايط عمرها ما وصلت للقطب الجنوبي، ومخططين الهبوط لسه مش عارفين فين المكان الآمن.")
+    : !r.rocks ? ok("The maps showed the area, but not rocks two meters wide. A lander could still tip over.", "الخرايط بيّنت المنطقة، بس مش الصخور اللي عرضها 2 متر، فالمركبة لسه ممكن تتقلب.")
+    : ok("The maps showed rocks in sunlight, but the dark craters stayed a mystery.", "الخرايط بيّنت الصخور اللي في الشمس، بس الحفر الضلمة فضلت لغز."); },
+  real: { name: "LRO (NASA, 2009)", picks: ok("Narrow cameras with 0.5 m pixels · LOLA laser altimeter · Ka-band 100 Mbit/s · polar orbit about 50 km", "كاميرات ضيقة ببيكسل نص متر · ليزر ألتيميتر LOLA · Ka-band بـ 100 ميجابت · أوربت قطبي حوالي 50 كم"),
+    facts: ok("Your mission is NASA's Lunar Reconnaissance Orbiter. Since 2009 it has mapped the Moon from a polar orbit. Its narrow cameras see half-meter pixels, its LOLA laser measures height in dark craters, and it sends 100 Mbit/s home. Its maps help choose Artemis landing sites. (It launched on an Atlas V rocket.)", "مهمتك هي LRO بتاع ناسا. من 2009 وهو بيعمل خرايط للقمر من أوربت قطبي. كاميراته الضيقة البيكسل بتاعها نص متر، والليزر LOLA بيقيس الارتفاع جوه الحفر الضلمة، وبيبعت 100 ميجابت في الثانية. وخرايطه بتساعد في اختيار أماكن هبوط Artemis. (واتطلق على صاروخ Atlas V.)"),
+    links: [["NASA LRO", "https://science.nasa.gov/mission/lro/"], ["NASA Deep Space Network", "https://www.nasa.gov/communicating-with-missions/dsn/"], ["NASA LLCD laser link", "https://www.nasa.gov/directorates/somd/space-communications-navigation-program/lunar-laser-communication-demonstration/"]] }
+};
 const LAB_M = { storm: M_STORM, moon: M_MOON, delta: M_DELTA };
 const CML = [
   { n: 1, m: "storm", t: ok("CML 1 · The idea", "CML 1 · الفكرة"), d: ok("Khamsin Storm Watch. One choice each, two options. Just words, no numbers.", "رادار الخماسين. كل واحد اختيار واحد من اتنين. كلام بس، مفيش أرقام.") },
-  { n: 2, m: "moon", t: ok("CML 2 · Can it work?", "CML 2 · هل تنفع؟"), d: ok("Moon landing map. Compare each number with what is needed. Coming next.", "خريطة الهبوط على القمر. تقارن كل رقم باللي مطلوب. جاية قريب.") },
+  { n: 2, m: "moon", t: ok("CML 2 · Can it work?", "CML 2 · هل تنفع؟"), d: ok("Moon Landing Map. Two choices each. Compare each number with what is needed, no adding.", "خريطة الهبوط على القمر. كل واحد اختيارين. قارن كل رقم باللي مطلوب، من غير جمع.") },
   { n: 3, m: "delta", t: ok("CML 3 · Add it up", "CML 3 · اجمع"), d: ok("Nile Delta Crop Watch. Add up watts and kilograms. Many designs work; the smartest wastes nothing.", "مراقب محاصيل الدلتا. اجمع الوات والكيلوهات. تصميمات كتير بتنجح، والأذكى اللي مبيضيّعش حاجة.") },
   { n: 4, m: null, t: ok("CML 4 · Every detail", "CML 4 · كل التفاصيل"), d: ok("Expert mode: every part and real number, for advanced players.", "وضع الخبراء: كل القطع والأرقام الحقيقية، للاعبين المتقدمين.") }];
 
@@ -199,7 +253,7 @@ function llevel() {
   return `<section class="hpanel notr"><div class="kick">${L(ok("Choose a level", "اختار المستوى"))}</div>
     <h2 class="hh">${L(ok("How mature is your mission idea?", "فكرة مهمتك ناضجة لحد فين؟"))}</h2>
     <p class="needline">${L(ok("NASA's JPL rates mission ideas with Concept Maturity Levels (CML). Each level here is a different mission, and each one is harder.", "معمل JPL بتاع ناسا بيقيّم أفكار المهمات بمستويات اسمها CML. هنا كل مستوى مهمة مختلفة، وكل واحدة أصعب من اللي قبلها."))}</p>
-    <div class="planets">${CML.map(c => { const m = LAB_M[c.m]; const soon = m && m.soon; const locked = !soon && c.n > 1 && c.n < 4 && !A.unlockAll && !cmlDone(c.n === 3 ? 1 : c.n - 1);
+    <div class="planets">${CML.map(c => { const m = LAB_M[c.m]; const soon = m && m.soon; const locked = !soon && c.n > 1 && c.n < 4 && !A.unlockAll && !cmlDone(c.n - 1);
       const st = A.progress.stars["cml" + c.n] || 0;
       return `<button class="pcard" type="button" data-llevel="${c.n}" ${locked || soon ? "disabled" : ""}><span class="cmlnum">CML ${c.n}</span><b>${L(c.t)}</b>${m ? `<span class="psub"><b>${L(m.name)}</b></span>` : ""}<span class="psub">${L(c.d)}</span>${st ? `<span class="pstars">${"★".repeat(st)}</span>` : ""}${soon ? `<span class="psub">⏳ ${L(ok("Coming next", "جاي قريب"))}</span>` : locked ? `<span class="psub">🔒 ${L(ok("Finish the level before", "خلّص المستوى اللي قبله"))}</span>` : ""}</button>`; }).join("")}</div>
     <label class="opt inline"><input type="checkbox" id="ula2" ${A.unlockAll ? "checked" : ""}> ${L(ok("Unlock all levels (judges and teachers)", "افتح كل المستويات (للحكام والمدرسين)"))}</label></section>`;
@@ -302,7 +356,7 @@ function lPartial() {
 }
 let holoL = null;
 function lEngineDesign(c) { const m = LM(), base = MISSIONS.find(x => x.id === m.base); return { base, d: Object.assign(structuredClone(base.def), m.engine(c, base)) }; }
-function lHolo() { if (!holoL) return; const c = lCompute(allPicks()); try { const { base, d } = lEngineDesign(c); holoL.setDesign(base, d, { dry: 400 }); } catch (e) { } }
+function lHolo() { const tg = document.querySelector(".holowrap .holotag"); if (tg) tg.textContent = LB.lastPart ? L(ok("Added: ", "اتضاف: ")) + LB.lastPart : L(ok("Your satellite", "القمر بتاعك")); if (!holoL) return; const c = lCompute(allPicks()); try { const { base, d } = lEngineDesign(c); holoL.setDesign(base, d, { dry: 400 }); } catch (e) { } }
 
 /* ---- flight (3D engine with real NASA models) ---- */
 function lfly() { return sfly(); }
@@ -311,12 +365,13 @@ async function lRunFlight() {
   SEQ++; const m = LM(), picks = allPicks(), c = lCompute(picks); const { base, d } = lEngineDesign(c);
   const F = LB.flight = { health: 100, sci: 1, cost: 0, events: [], lost: null, c, m };
   curP = 0; totalDays = m.days;
-  if (Space3D.ok && $("#view3d")) { flightView = Space3D.createView($("#view3d"), {}); flightView.setMission(base, d, { dry: (c.mass || 1500), prop: 200 }); skyLoop(); }
+  if (Space3D.ok && $("#view3d")) { flightView = Space3D.createView($("#view3d"), {}); flightView.setReal && flightView.setReal(false); flightView.setMission(base, d, { dry: (c.mass || 1500), prop: 200 }); skyLoop(); }
   const marks = flightView ? flightView.marks() : { ascent: .12 }; ascentEnd = marks.ascent || .12;
   lSay("planner", L(ok("Three, two, one... liftoff!", "تلاتة، اتنين، واحد... انطلقنا!"))); await wait(2600); setPhase(L(ok("LIFTOFF", "الإطلاق")));
   if (c.fatal === "mass") { await animTo(.045, 3500); flightView && flightView.flag("fall"); F.lost = { en: `The ${c.rkt.n.en} could not lift a ${nf(Math.round(c.mass))} kg satellite. It ran out of fuel before space and fell into the ocean.`, ar: `صاروخ ${c.rkt.n.ar} مقدرش يشيل قمر وزنه ${nf(Math.round(c.mass))} كيلو. الوقود خلص قبل ما يوصل الفضاء ووقع في المحيط.` }; lSay("planner", L(F.lost)); await wait(4500); return lFinish(F); }
   await animTo(ascentEnd, 6500); flightView && flightView.flag("separated"); setPhase(L(ok("IN ORBIT", "في الأوربت")));
   lSay("engineer", L(ok("We are in orbit! Opening the solar panels.", "إحنا في الأوربت! بنفتح السولار بانلز."))); await wait(2400);
+  if (c.fatal === "cold") { await animTo(ascentEnd + .05, 3000); flightView && flightView.flag("tumble"); F.lost = m.fatalMsg.cold; lSay("engineer", L(F.lost)); await wait(4500); return lFinish(F); }
   if (c.fatal === "power") { await animTo(ascentEnd + .03, 2500); flightView && flightView.flag("tumble"); F.lost = { en: `The satellite needed ${nf(c.need)} W, but the panel made only ${nf(c.supply)} W. It went silent.`, ar: `القمر كان محتاج ${nf(c.need)} وات، والبانل كان بيطلّع ${nf(c.supply)} بس، فالقمر سكت.` }; lSay("engineer", L(F.lost)); await wait(4500); return lFinish(F); }
   if (c.bat && c.bat.min < 35) { lSay("engineer", L(ok("First shadow... the battery is empty before sunrise. We shut down every orbit.", "أول ضل... البطارية فضيت قبل الشمس ما تطلع، فهنطفي في كل لفة."))); await wait(3500); }
   await animTo(.5, 5000); for (let i = 0; i < m.events.length; i++) { await lEvent(i, F); await animTo(.5 + (i + 1) * (.45 / m.events.length), 3500); }
@@ -379,10 +434,10 @@ function lreport() {
   return `<section class="hpanel notr result"><div class="kick">${L(ok("Mission report", "تقرير المهمة"))} · ${L(lvl().t)} · ${L(m.name)}</div>
     <div class="resgrid"><div><div class="bigstars">${"★".repeat(R.stars)}<span>${"★".repeat(3 - R.stars)}</span></div>
       <h2 class="hh">${R.alive ? L(ok("Mission complete", "المهمة نجحت")) : L(ok("Mission lost", "المهمة فشلت"))} · ${R.total} ${L(ok("points", "نقطة"))}</h2>
-      <p class="sciline">${L(ok("Needs met", "الطلبات المتحققة"))}: <b>${R.met}/${R.nR}</b> · ${L(ok("Health", "الصحة"))}: <b>${Math.round(F.health)}%</b>${c.mass ? ` · ${L(ok("Mass", "الوزن"))}: <b>${nf(Math.round(c.mass))} kg</b> · ${L(ok("Power", "الكهربا"))}: <b>${nf(c.need)} / ${nf(c.supply)} W</b>` : ""}</p>
+      <p class="sciline">${L(ok("Needs met", "الطلبات المتحققة"))}: <b>${R.met}/${R.nR}</b> · ${L(ok("Health", "الصحة"))}: <b>${Math.round(F.health)}%</b>${c.mass ? ` · ${L(ok("Mass", "الوزن"))}: <b>${nf(Math.round(c.mass))} kg</b>` : ""}${c.need ? ` · ${L(ok("Power", "الكهربا"))}: <b>${nf(c.need)} / ${nf(c.supply)} W</b>` : ""}</p>
       <ul class="starkey"><li class="${R.stars >= 1 ? "on" : ""}">★ ${L(ok("The satellite reached orbit and worked", "القمر وصل الأوربت واشتغل"))}</li><li class="${R.stars >= 2 ? "on" : ""}">★ ${L(ok("Every need was met", "كل الطلبات اتحققت"))}</li><li class="${R.stars >= 3 ? "on" : ""}">★ ${L(ok("Nothing wasted, healthy, clean end", "مفيش تضييع، وصحة كويسة، ونهاية نضيفة"))}</li></ul>
       <p class="psub">${L(ok("Points", "النقط"))}: ${Object.entries(R.parts).map(([k, v]) => `${k} ${v}`).join(" · ")}</p></div>
-    <div class="resholo"><canvas id="holoRes" class="holo"></canvas><div class="holotag">NASA 3D model · ${m.model === "goes" ? "GOES" : "Landsat 8"}</div></div></div>
+    <div class="resholo"><canvas id="holoRes" class="holo"></canvas><div class="holotag">NASA 3D model · ${({ goes: "GOES", lro: "LRO", landsat8: "Landsat 8" })[m.model]}</div></div></div>
     <div class="cols2"><div class="hcard"><h3>${L(ok("What you did well", "اللي عملته صح"))}</h3><ul>${(good.length ? good : [ok("You tried. Every NASA team learns from its first design.", "إنت جرّبت، وكل تيم في ناسا بيتعلم من أول تصميم.")]).slice(0, 6).map(x => `<li>${L(x)}</li>`).join("")}</ul></div>
       <div class="hcard"><h3>${L(ok("Fix next time", "صلّحه المرة الجاية"))}</h3><ul>${(fix.length ? fix : [ok("Nothing! Try the next level.", "ولا حاجة! جرّب المستوى اللي بعده.")]).slice(0, 6).map(x => `<li>${L(x)}</li>`).join("")}</ul></div></div>
     <div class="hcard fact"><h3>${L(ok("The real mission", "المهمة الحقيقية"))}: ${esc(m.real.name)}</h3><p>${L(m.real.facts)}</p>
@@ -405,7 +460,7 @@ function lClick(t) {
   if (t.dataset.lmode) { LB.mode = t.dataset.lmode; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.watched = {}; go(LB.mode === "online" ? "lonline" : "llevel"); return true; }
   if (t.dataset.llevel) { LB.level = +t.dataset.llevel; if (LB.level === 4) { A.simple = false; go("home"); return true; } LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
   if (t.dataset.ltab) { LB.tab = t.dataset.ltab; render(); return true; }
-  if (t.dataset.lpick) { const [r, k, o] = t.dataset.lpick.split("."); if (LB.mode === "online") { const p = Object.assign({}, (LB.me.data && LB.me.data.picks) || {}); p[r + "." + k] = o; LB.me.data.picks = p; myData({ picks: p, ready: false }); } else LB.picks[r + "." + k] = o; lPartial(); return true; }
+  if (t.dataset.lpick) { const [r, k, o] = t.dataset.lpick.split("."); if (LB.mode === "online") { const p = Object.assign({}, (LB.me.data && LB.me.data.picks) || {}); p[r + "." + k] = o; LB.me.data.picks = p; myData({ picks: p, ready: false }); } else LB.picks[r + "." + k] = o; const dd = LM().decisions[r].find(x => x.k === k), oo = dd && dd.o.find(x => x.k === o); LB.lastPart = oo ? L(oo.n) : null; lPartial(); return true; }
   if (a === "vnext") { LB.vi = (LB.vi || 0) + 1; render(); return true; }
   if (a === "vdone") { if (LB.mode === "online") myData({ watched: true }); lStartDesign(); return true; }
   if (a === "rewatch") { LB.rewatch++; LB.vi = lVideoList().length - 1; go("lvideo"); return true; }

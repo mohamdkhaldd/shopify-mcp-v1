@@ -270,8 +270,37 @@ const Space3D = (() => {
     p.userData = { smoke: true, seed, r }; p.frustumCulled = false; return p;
   }
   /* ---------- spacecraft from the design ---------- */
+  /* Mission Lab: build the satellite from the team's picks, so every choice is visible */
+  function labShip(P) {
+    const g = new T.Group(), s = 1.6, glow = c => new T.MeshBasicMaterial({ color: c });
+    const core = box(s, s * 1.2, s, P.blanket === false ? MAT.silver : MAT.gold); g.add(core);
+    const band = box(s * 1.01, s * .12, s * 1.01, MAT.kapton); band.position.y = -s * .42; g.add(band);
+    const rad = box(s * .8, s * .8, .03, MAT.radiator); rad.position.set(0, .05, s / 2 + .02); g.add(rad);
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([x, z]) => { const th = cyl(.02, .06, .12, MAT.nozzle, 10); th.position.set(x * s * .42, -s * .62, z * s * .42); g.add(th); });
+    const under = new T.Group(); under.position.y = -s * .6; g.add(under);
+    const lens = (r, x, y, z) => { const l = cyl(r, r, .06, MAT.lens, 24); l.position.set(x, y, z); under.add(l); };
+    const C = P.cam;
+    if (C === "oli") { const b = box(1.25, .7, .9, MAT.white); b.position.set(0, -.35, 0); under.add(b); const fr = box(1.27, .05, .92, MAT.gold); fr.position.y = -.02; under.add(fr); const sh = box(.5, .25, .5, MAT.dark); sh.position.set(.3, -.8, 0); under.add(sh); lens(.18, .3, -.95, 0); }
+    else if (C === "modis") { const c = cyl(.34, .34, 1, MAT.silver, 28); c.rotation.z = Math.PI / 2; c.position.y = -.38; under.add(c); const sc = cyl(.12, .26, .3, MAT.dark, 20); sc.position.y = -.78; under.add(sc); const cone = cyl(.05, .3, .4, MAT.alu, 20); cone.rotation.z = Math.PI / 2; cone.position.set(.7, -.38, 0); under.add(cone); }
+    else if (C === "tirs" || C === "ir") { const b = box(.8, .55, .7, MAT.gold); b.position.y = -.3; under.add(b); for (let k = -2; k <= 2; k++) { const f = box(.04, .5, .7, MAT.radiator); f.position.set(.5 + k * .09 + .2, -.3, 0); under.add(f); } const cool = cyl(.12, .12, .4, MAT.white, 16); cool.position.set(-.25, -.55, 0); under.add(cool); lens(.14, 0, -.6, .1); }
+    else if (C === "color" || C === "wac") { const b = box(.45, .35, .4, MAT.white); b.position.y = -.2; under.add(b); lens(.13, 0, -.4, 0); }
+    else if (C === "nac") { [-.22, .22].forEach(z => { const t = cyl(.17, .17, 1.3, MAT.white, 24); t.position.set(0, -.65, z); under.add(t); lens(.15, 0, -1.31, z); }); }
+    if (P.inst2 === "laser") { const t = cyl(.1, .14, .5, MAT.silver, 16); t.position.set(-.55, -.3, .35); under.add(t); const tip = cyl(.06, .06, .03, glow(0xff3344), 12); tip.position.set(-.55, -.56, .35); under.add(tip); }
+    else if (P.inst2 === "irdark") { const b = box(.35, .3, .3, MAT.gold); b.position.set(-.55, -.2, .35); under.add(b); lens(.08, -.55, -.38, .35); }
+    else if (P.inst2 === "camdark") { const b = box(.3, .25, .3, MAT.white); b.position.set(-.55, -.18, .35); under.add(b); lens(.08, -.55, -.33, .35); }
+    const A = P.ant;
+    if (A === "S" || A === "slow") { const w = cyl(.02, .02, .9, MAT.alu, 8); w.position.set(.45, s * .6 + .45, .45); g.add(w); const k = cyl(.06, .06, .05, MAT.white, 12); k.position.set(.45, s * .6 + .9, .45); g.add(k); }
+    else if (A === "X" || A === "fast") { const m = cyl(.03, .03, .5, MAT.alu, 8); m.position.y = s * .6 + .25; g.add(m); const d = dish(.5); d.position.y = s * .6 + .5; g.add(d); }
+    else if (A === "Ka") { const m = cyl(.05, .05, .7, MAT.alu, 8); m.position.y = s * .6 + .35; g.add(m); const gim = box(.25, .12, .25, MAT.grey); gim.position.y = s * .6 + .72; g.add(gim); const d = dish(.85); d.position.y = s * .6 + .78; d.rotation.z = .35; g.add(d); }
+    else if (A === "laser") { const t = cyl(.16, .16, .55, MAT.white, 20); t.position.y = s * .6 + .3; g.add(t); const tip = cyl(.12, .12, .03, glow(0x44ff88), 16); tip.position.y = s * .6 + .58; g.add(tip); }
+    if (P.rtg) { const r = rtg(); r.rotation.z = Math.PI / 2; r.position.set(-s / 2 - .9, 0, 0); g.add(r); const b = box(.9, .05, .05, MAT.grey); b.position.set(-s / 2 - .4, 0, 0); g.add(b); }
+    if (P.panelW) { const area = P.panelW / 400, len = Math.sqrt(area * 2.6), wid = area / len; [0, Math.PI].forEach(a => { const w = wing(len, wid); w.rotation.y = a; w.position.set(Math.cos(a) * s / 2, 0, 0); g.add(w); }); }
+    if (P.batMin) { const h = .2 + P.batMin / 140; const b = box(.5, h, .4, MAT.dark); b.position.set(0, -s * .1, -s / 2 - .22); g.add(b); const c = box(.52, .04, .42, MAT.orange); c.position.set(0, -s * .1 + h / 2, -s / 2 - .22); g.add(c); }
+    return g;
+  }
   function buildShip(m, d, c) {
     MAT = MAT || mats();
+    if (d.lab) { const g = labShip(d.lab); g.traverse(o => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; o.receiveShadow = true; } }); const b = new T.Box3().setFromObject(g); g.userData.radius = Math.max(1.2, b.getSize(new T.Vector3()).length() / 2); return g; }
     const g = new T.Group(); const dry = c ? c.dry : 500; const id = m.id;
     const foilM = d.shield === "none" ? MAT.silver : MAT.gold;
     const addWings = (body, area, n = 2, rad = .6) => {
@@ -497,7 +526,7 @@ const Space3D = (() => {
       if (st.ship) shipScene.remove(st.ship); st.ship = buildShip(m, d, c); shipScene.add(st.ship);
       if (st.rocket) shipScene.remove(st.rocket); st.rocket = st.preview ? null : buildRocket(d.lv); if (st.rocket) shipScene.add(st.rocket);
       fitShadow(st.ship.userData.radius);
-      const token = st.token = (st.token || 0) + 1; const key = (st.real !== false) ? realKey(m, d) : null;
+      const token = st.token = (st.token || 0) + 1; const key = (st.real !== false && !d.lab) ? realKey(m, d) : null;
       if (key) loadModel(key).then(obj => { if (token !== st.token) return;
         if (m.id === "mars") { const ro = st.ship.userData.rover; if (ro) st.ship.remove(ro); obj.position.y = -.9; st.ship.add(obj); st.ship.userData.rover = obj; }
         else { shipScene.remove(st.ship); const g = new T.Group(); g.add(obj); const b = new T.Box3().setFromObject(g); g.userData.radius = Math.max(1.5, b.getSize(new T.Vector3()).length() / 2); st.ship = g; shipScene.add(g); fitShadow(g.userData.radius); }
