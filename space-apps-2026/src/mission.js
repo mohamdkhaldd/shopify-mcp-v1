@@ -268,15 +268,25 @@ async function roomCreate(name, role) {
 async function roomJoin(code, name, role) {
   const sb = sbClient(); code = code.trim().toUpperCase();
   const { data: room, error: e1 } = await sb.from("rooms").select("*").eq("code", code).maybeSingle(); if (e1 || !room) throw new Error(L({ en: "No room with that code.", ar: "مفيش غرفة بالكود ده." }));
-  const { data: me, error: e2 } = await sb.from("players").insert({ room: code, name, role, data: { cid: myId, picks: {} } }).select().single();
-  if (e2) throw new Error(L({ en: "That role is taken in this room. Pick another one.", ar: "الدور ده متاخد في الغرفة دي. اختار دور تاني." }));
+  // reuse my own old seat, or a seat someone left; otherwise take a new one
+  const { data: seat } = await sb.from("players").select("*").eq("room", code).eq("role", role).maybeSingle();
+  let me = null;
+  if (seat) {
+    if (!(seat.data && (seat.data.cid === myId || seat.data.left))) throw new Error(L({ en: "That role is taken in this room. Pick another one.", ar: "الدور ده متاخد في الغرفة دي. اختار دور تاني." }));
+    const { data: up, error: eu } = await sb.from("players").update({ name, data: { cid: myId, picks: (seat.data && seat.data.cid === myId && seat.data.picks) || {} }, last_seen: new Date().toISOString() }).eq("id", seat.id).select().single();
+    if (eu) throw eu; me = up;
+  } else {
+    const { data: ins, error: e2 } = await sb.from("players").insert({ room: code, name, role, data: { cid: myId, picks: {} } }).select().single();
+    if (e2) throw new Error(L({ en: "That role is taken in this room. Pick another one.", ar: "الدور ده متاخد في الغرفة دي. اختار دور تاني." }));
+    me = ins;
+  }
   LB.room = room; LB.me = me; LB.myRole = role; LB.level = room.level; LB.mode = "online"; LB.online = true;
   await roomRefresh(); roomSubscribe(); return code;
 }
 async function roomRefresh() {
   const sb = sbClient(); if (!sb || !LB.room) return;
   const [r, p, m] = await Promise.all([sb.from("rooms").select("*").eq("code", LB.room.code).single(), sb.from("players").select("*").eq("room", LB.room.code), sb.from("messages").select("*").eq("room", LB.room.code).order("id").limit(200)]);
-  if (r.data) LB.room = r.data; if (p.data) LB.players = p.data; if (m.data) LB.chat = m.data; onRoomChange();
+  if (!LB.room) return; if (r.data) LB.room = r.data; if (p.data) LB.players = p.data.filter(x => !(x.data && x.data.left)); if (m.data) LB.chat = m.data; onRoomChange(); lRoomBarPaint();
 }
 let pollT = null;
 function roomSubscribe() {
@@ -293,6 +303,7 @@ async function myData(patch) { const sb = sbClient(); const d = Object.assign({}
 async function sendChat(body) { const sb = sbClient(); body = body.trim().slice(0, 300); if (!body) return; await sb.from("messages").insert({ room: LB.room.code, name: LB.me.name, role: LB.myRole, body }); }
 function onRoomChange() {
   if (!LB.room) return; const ph = LB.room.state.phase;
+  if (ph === "lobby" && !['lroom', 'lonline'].includes(A.screen)) { LB.flight = null; go("lroom"); return; }
   const RANK = { lonline: 0, lroom: 1, lvideo: 2, ldesign: 3, lfly: 4, lusers: 5, lreport: 6 }, target = { lobby: "lroom", video: "lvideo", flight: "lfly" }[ph];
   if (target && (RANK[A.screen] ?? 0) < RANK[target]) { if (target === "lvideo") LB.vi = 0; go(target); if (target === "lfly") lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return; }
   if (isHost() && ph !== "flight" && LB.players.length && LB.players.every(p => p.data && p.data.ready) && allChosen(allPicks(), rolesInPlay())) { roomState({ phase: "flight", at: Date.now() }); }
@@ -340,13 +351,24 @@ function lonline() {
 }
 function lroom() {
   const host = LB.room.state.host === myId;
-  return `<section class="hpanel notr"><div class="kick">${L(ok("Mission room", "غرفة المهمة"))} · ${L(lvl().t)} · ${L(LM().name)}</div>
+  return lRoomBar() + `<section class="hpanel notr"><div class="kick">${L(ok("Mission room", "غرفة المهمة"))} · ${L(lvl().t)} · ${L(LM().name)}</div>
     <h2 class="hh">${L(ok("Room code", "كود الغرفة"))}: <span class="code">${LB.room.code}</span></h2>
     <p class="needline">${L(ok("Send this code to your team. Each player joins from their own laptop and takes one role. The room creator also covers empty roles.", "ابعت الكود ده للتيم. كل لاعب يدخل من اللابتوب بتاعه وياخد دور. واللي عمل الغرفة بيمسك الأدوار الفاضية."))}</p>
     <div id="lroomlist" class="rolepick">${lRoomList()}</div>
     ${host ? `<button class="hbtn" type="button" data-act="ostart">${L(ok("Start the briefing for everyone", "ابدأ الشرح للكل"))}</button>` : `<p class="psub">${L(ok("Waiting for the room creator to start…", "مستنيين اللي عمل الغرفة يبدأ…"))}</p>`}
   </section>${lChatBox()}`;
 }
+function lRoomBar() {
+  if (LB.mode !== "online" || !LB.room) return "";
+  return `<section class="roombar notr" id="roombar">${lRoomBarInner()}</section>`;
+}
+function lRoomBarInner() {
+  const host = isHost(), ph = LB.room.state.phase;
+  return `<div class="rb-code"><span class="psub">${L(ok("Room code", "كود الغرفة"))}</span> <b class="code">${LB.room.code}</b> <button class="linkbtn" type="button" data-act="ocopy">${L(ok("Copy", "انسخ"))}</button></div>
+    <div class="rb-who">${LB.players.map(p => `<span class="rb-p" style="--sc:${(CREW[p.role] || CREW.director).col}"><i></i>${esc(p.name)}${p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : ""} · ${L(CREW[p.role].title)}${p.data && p.data.ready ? " ✓" : ""}</span>`).join("")}</div>
+    <div class="rb-act">${host && ph !== "lobby" ? `<button class="hbtn ghost" type="button" data-act="olobby">${L(ok("Back to lobby (everyone)", "ارجع للوبي (للكل)"))}</button>` : ""}<button class="hbtn ghost" type="button" data-act="oleave">${L(ok("Leave room", "اخرج من الغرفة"))}</button></div>`;
+}
+function lRoomBarPaint() { const el = $("#roombar"); if (el && LB.room) el.innerHTML = lRoomBarInner(); }
 function lRoomList() { return TEAM_ROLES.map(r => { const p = LB.players.find(x => x.role === r); return `<div class="rolecard ${p ? "taken" : ""}" style="--sc:${CREW[r].col}">${crewImg(r)}<b>${L(CREW[r].title)}</b><span>${p ? esc(p.name) + (p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : "") : L(ok("empty", "فاضي"))}</span></div>`; }).join(""); }
 function lChatBox() { if (LB.mode !== "online") return ""; return `<section class="hpanel notr chat"><div class="kick">${L(ok("Team chat", "شات التيم"))}</div><div id="chatlog" class="chatlog"></div><form id="chatform" class="row"><input type="text" id="chatin" maxlength="300" placeholder="${L(ok("Tell your team what you found…", "قول للتيم إنت لقيت إيه…"))}"><button class="hbtn" type="submit">${L(ok("Send", "ابعت"))}</button></form></section>`; }
 function lChatPaint() { const el = $("#chatlog"); if (!el) return; el.innerHTML = LB.chat.map(m => `<div><b style="color:${(CREW[m.role] || CREW.director).col}">${esc(m.name)}</b> <span class="psub">${esc(L((CREW[m.role] || CREW.director).title))}</span><br>${esc(m.body)}</div>`).join(""); el.scrollTop = 1e9; }
@@ -370,7 +392,7 @@ function lVideoList() { return ["director", ...myRoles()]; }
 function lvideo() {
   const list = lVideoList(); const i = Math.min(LB.vi || 0, list.length - 1), r = list[i];
   const who = r === "director" ? L(ok("Your Mission Director", "مدير المهمة")) : `${L(ok("Guide for", "مرشد"))} ${L(CREW[r].title)}`;
-  return `<section class="hpanel notr"><div class="kick">${L(LM().name)} · ${L(ok("Briefing", "الشرح"))} ${i + 1}/${list.length}</div>
+  return lRoomBar() + `<section class="hpanel notr"><div class="kick">${L(LM().name)} · ${L(ok("Briefing", "الشرح"))} ${i + 1}/${list.length}</div>
     <h2 class="hh">${CREW[r].name} · ${who}</h2>
     <p class="needline">${L(ok("Watch carefully and write on the team board. The cards later show names only.", "اتفرج كويس واكتب على السبورة، علشان الكروت بعد كده عليها أسامي بس."))}</p>
     <video id="brief" class="briefvid" src="video/${LM().id}_${r}.mp4" controls playsinline preload="auto"></video>
@@ -387,7 +409,7 @@ function ldesign() {
   const tabs = TEAM_ROLES.map(r => `<button type="button" class="stp ${LB.tab === r ? "cur" : ""} ${decisionsFor([r]).every(({ role, d }) => picks[role + "." + d.k]) ? "done" : ""}" data-ltab="${r}" style="--sc:${CREW[r].col}"><span>${crewImg(r)}</span>${L(CREW[r].title)}</button>`).join("");
   const r = TEAM_ROLES.includes(LB.tab) ? LB.tab : (mine[0] || "science"); LB.tab = r; const canEdit = mine.includes(r);
   const reviews = LB.mode === "online" ? LB.room.state.reviews || 0 : LB.reviews;
-  return `<section class="build notr">
+  return lRoomBar() + `<section class="build notr">
     <div class="buildhead"><div><div class="kick">${L(m.name)} · ${L(lvl().t)}</div>
       <div class="rulesrow">${m.rules.map(x => `<span class="rulechip">${L(x)}</span>`).join("")}</div>
       <div class="stepper">${tabs}</div></div></div>
@@ -494,7 +516,7 @@ function lFinish(F) {
 function lusers() {
   const F = LB.flight; if (!F || !F.result) return lhome(); const R = F.result;
   const msg = !R.alive ? ok("The satellite never sent any data. Nobody on Earth was helped.", "القمر الصناعي مبعتش أي داتا، ومحدش على الأرض استفاد.") : F.m.userMsg(R);
-  return `<section class="hpanel notr result"><div class="kick">${L(ok("User segment", "جزء المستخدمين"))} · ${L(ok("who used your data?", "مين استخدم الداتا بتاعتك؟"))}</div>
+  return lRoomBar() + `<section class="hpanel notr result"><div class="kick">${L(ok("User segment", "جزء المستخدمين"))} · ${L(ok("who used your data?", "مين استخدم الداتا بتاعتك؟"))}</div>
     <h2 class="hh">${L(F.m.user)}</h2><p class="evx">${L(msg)}</p>
     <p class="needline">${L(ok("NASA splits every mission into four segments: launch, space, ground, and users. A mission only matters when its data helps people.", "ناسا بتقسم أي مهمة لأربع أجزاء: الإطلاق، والفضاء، والأرض، والمستخدمين. والمهمة بتبقى ليها قيمة لما الداتا بتاعتها تساعد الناس."))}</p>
     <div class="row"><button class="hbtn" type="button" data-go="lreport">${L(ok("See the mission report", "شوف تقرير المهمة"))}</button></div></section>`;
@@ -506,7 +528,7 @@ function lreport() {
   c.waste.forEach(w => fix.push(w)); if (!c.clean) fix.push(ok("Your satellite becomes space junk at the end. NASA plans how every mission ends.", "القمر بتاعك هيبقى زبالة فضائية في الآخر، وناسا بتخطط لنهاية كل مهمة."));
   const good = []; m.rules.forEach(r => { if (R.rules[r.k]) good.push(r); }); if (c.efficient && R.alive) good.push(ok("Nothing wasted: just what the mission needs.", "مفيش تضييع: على قد اللي المهمة محتاجاه بالظبط.")); F.events.forEach(ev => { if (!ev.r.h && !ev.r.sci) good.push({ en: `Smart decision: ${ev.e.t.en.replace(/[.!]+$/, "")}.`, ar: `قرار ذكي: ${ev.e.t.ar.replace(/[.!]+$/, "")}.` }); });
   const mine = TEAM_ROLES.flatMap(r => m.decisions[r].map(d => { const o = pickOpt(m, allPicks(), r, d.k); return o ? L(o.n) : "—"; })).join(" · ");
-  return `<section class="hpanel notr result"><div class="kick">${L(ok("Mission report", "تقرير المهمة"))} · ${L(lvl().t)} · ${L(m.name)}</div>
+  return lRoomBar() + `<section class="hpanel notr result"><div class="kick">${L(ok("Mission report", "تقرير المهمة"))} · ${L(lvl().t)} · ${L(m.name)}</div>
     <div class="resgrid"><div><div class="bigstars">${"★".repeat(R.stars)}<span>${"★".repeat(3 - R.stars)}</span></div>
       <h2 class="hh">${!R.alive ? L(ok("Mission lost", "المهمة فشلت")) : R.stars ? L(ok("Mission complete", "المهمة نجحت")) : L(ok("It worked, but met no need", "اشتغلت، بس محققتش ولا طلب"))} · ${R.total} ${L(ok("points", "نقطة"))}</h2>
       <p class="sciline">${L(ok("Needs met", "الطلبات المتحققة"))}: <b>${R.met}/${R.nR}</b> · ${L(ok("Health", "الصحة"))}: <b>${Math.round(F.health)}%</b>${c.mass ? ` · ${L(ok("Mass", "الوزن"))}: <b>${nf(Math.round(c.mass))} kg</b>` : ""}${c.need ? ` · ${L(ok("Power", "الكهربا"))}: <b>${nf(c.need)} / ${nf(c.supply)} ${m.unit || "W"}</b>` : ""}</p>
@@ -551,6 +573,9 @@ function lClick(t) {
     if (a === "ocreate") LB.level = +$("#olevel").value;
     (a === "ocreate" ? roomCreate(name, role) : roomJoin($("#ocode").value, name, role)).then(() => go("lroom")).catch(e => { err.textContent = e.message || String(e); }); return true; }
   if (a === "ostart") { roomState({ phase: "video" }); return true; }
+  if (a === "ocopy") { const c = LB.room ? LB.room.code : ""; try { navigator.clipboard.writeText(c).then(() => { t.textContent = L(ok("Copied!", "اتنسخ!")); }, () => { t.textContent = c; }); } catch (e) { t.textContent = c; } return true; }
+  if (a === "olobby") { if (isHost()) { LB.players.forEach(() => {}); roomState({ phase: "lobby", lastReview: null }); myData({ ready: false }); LB.flight = null; go("lroom"); } return true; }
+  if (a === "oleave") { const sb = sbClient(); if (LB.me) myData({ left: true, ready: false }); if (sb && LB.chan) sb.removeChannel(LB.chan); clearInterval(pollT); LB.chan = null; LB.room = null; LB.me = null; LB.players = []; LB.chat = []; LB.flight = null; LB.mode = "solo"; go("lhome"); return true; }
   return false;
 }
 document.addEventListener("submit", e => { if (e.target.id === "chatform") { e.preventDefault(); const i = $("#chatin"); sendChat(i.value); i.value = ""; } });
