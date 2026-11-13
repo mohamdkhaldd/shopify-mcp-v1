@@ -3283,7 +3283,8 @@ function lreport() {
     <div class="hcard fact"><h3>${L(ok("The real mission", "المهمة الحقيقية"))}: ${esc(m.real.name)}</h3><p>${L(m.real.facts)}</p>
       <p class="psub"><b>${L(ok("The real mission chose", "المهمة الحقيقية اختارت"))}:</b> ${L(m.real.picks)}<br><b>${L(ok("Your team chose", "التيم بتاعك اختار"))}:</b> ${esc(mine)}</p>
       <p class="psub">${L(ok("Sources", "المصادر"))}: ${m.real.links.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join(" · ")} · <a href="https://nasa.github.io/mission-viz/" target="_blank" rel="noopener">NASA Mission Viz</a></p></div>
-    <div class="row"><button class="hbtn" type="button" data-act="redesign">${L(ok("Change the design and fly again", "غيّر التصميم وطير تاني"))}</button><button class="hbtn ghost" type="button" data-go="llevel">${L(ok("Levels", "المستويات"))}</button></div></section>`;
+    ${LB.level < 4 ? `<p class="needline">${R.stars >= 1 ? `🔓 ${L(ok("Next level unlocked! You need at least 1 star to move on. Come back any time for 3 stars.", "المستوى اللي بعده اتفتح! محتاج نجمة واحدة على الأقل علشان تكمّل، وتقدر ترجع في أي وقت علشان الـ 3 نجوم."))}` : `🔒 ${L(ok("Get at least 1 star to unlock the next level.", "محتاج نجمة واحدة على الأقل علشان المستوى اللي بعده يتفتح."))}`}</p>` : ""}
+    <div class="row">${LB.level < 4 && R.stars >= 1 ? `<button class="hbtn" type="button" data-act="nextlvl">${L(ok("Next level", "المستوى اللي بعده"))} → CML ${LB.level + 1}</button>` : ""}<button class="hbtn ${R.stars >= 1 && LB.level < 4 ? "ghost" : ""}" type="button" data-act="redesign">${L(ok("Change the design and fly again", "غيّر التصميم وطير تاني"))}</button><button class="hbtn ghost" type="button" data-go="llevel">${L(ok("Levels", "المستويات"))}</button></div></section>`;
 }
 Object.assign(SIMPLE, { lhome, llevel, lonline, lroom, lvideo, ldesign, lfly, lusers, lreport });
 Object.assign(SIMPLE_AFTER, {
@@ -3307,6 +3308,7 @@ function lClick(t) {
   if (a === "review") { const n = LB.mode === "online" ? (LB.room.state.reviews || 0) : LB.reviews; if (LB.mode === "online") roomState({ reviews: n + 1, lastReview: Date.now() }); else { LB.reviews = n + 1; LB.revealed = Date.now(); } const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); return true; }
   if (a === "llaunch") { go("lfly"); lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return true; }
   if (a === "redesign") { lStartDesign(); return true; }
+  if (a === "nextlvl") { if (LB.mode === "online") { go("llevel"); return true; } LB.level = Math.min(4, LB.level + 1); LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
   if (a === "oready") { myData({ ready: true }).then(() => { if (LB.players.every(p => p.data && (p.data.ready || p.id === LB.me.id))) roomState({ phase: "flight", at: Date.now() }); }); return true; }
   if (a === "ocreate" || a === "ojoin") { const name = ($("#oname").value || "").trim(); const role = (document.querySelector("input[name=orole]:checked") || {}).value; const err = $("#oerr");
     if (!name) { err.textContent = L(ok("Write your name first.", "اكتب اسمك الأول.")); return true; } A.lastName = name;
