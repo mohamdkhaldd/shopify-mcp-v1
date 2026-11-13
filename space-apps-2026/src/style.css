@@ -330,3 +330,30 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .chain .link span{font-family:var(--f-mono);color:var(--sc);font-size:12px} .chain .link b{color:#fff} .chain .link em{font-style:normal;font-size:12px;color:#9fb8cd}
 .chain .arrow{color:var(--holo);font-size:20px} [dir=rtl] .chain .arrow{transform:scaleX(-1)}
 .rule{margin:0;font-size:16px;color:#ffe2b0;border-inline-start:3px solid #ffc26b;padding-inline-start:12px}
+/* ===== Mission Lab ===== */
+.cmlnum{font:600 13px "IBM Plex Mono",monospace;color:var(--holo);letter-spacing:.08em}
+.rulesrow{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.rulechip{font-size:12px;border:1px solid var(--edge);border-radius:999px;padding:3px 10px;color:#cfe6f5;background:rgba(4,10,22,.6)}
+.cols2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:14px}
+@media (max-width:760px){.cols2{grid-template-columns:minmax(0,1fr)}}
+.hcard{background:rgba(4,10,22,.7);border:1px solid var(--edge);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.hcard h3{margin:6px 0 0;font-size:15px;color:var(--holo)} .hcard ul{margin:0;padding-inline-start:18px;display:grid;gap:6px}
+.hcard input[type=text],.hcard select,.chat input{background:#050c18;border:1px solid var(--edge);border-radius:6px;color:#eaf6ff;padding:10px 12px;font:inherit;min-width:0}
+.rolepick{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:8px 0}
+.rolecard{position:relative;display:flex;flex-direction:column;gap:4px;padding:8px;border:1px solid var(--edge);border-radius:8px;background:rgba(4,10,22,.7);cursor:pointer}
+.rolecard img{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:4px}
+.rolecard b{color:var(--sc);font-size:14px} .rolecard span{font-size:12px;color:#9fb8cd}
+.rolecard input{position:absolute;opacity:0;pointer-events:none}
+.rolecard:has(input:checked),.rolecard.taken{border-color:var(--sc);box-shadow:0 0 18px color-mix(in srgb,var(--sc) 35%,transparent)}
+.code{font-family:"IBM Plex Mono",monospace;color:#ffc26b;letter-spacing:.1em}
+.briefvid{width:100%;max-width:960px;aspect-ratio:16/9;background:#000;border:1px solid var(--edge);border-radius:8px;display:block;margin:10px 0}
+.chat{margin-top:16px} .chatlog{max-height:220px;overflow:auto;display:grid;gap:8px;font-size:14px;padding:6px 0}
+.chat form input{flex:1}
+.dec{margin-bottom:18px} .dec h3{margin:0 0 8px;font-size:16px}
+.stp span img{width:28px;height:28px;border-radius:50%;object-fit:cover}
+.reviewbar{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;margin-top:16px}
+.tablewrap{overflow-x:auto} .tablewrap table{border-collapse:collapse;width:100%;min-width:420px}
+.tablewrap td,.tablewrap th{border-bottom:1px solid var(--edge);padding:10px;text-align:start}
+.evhead{display:flex;gap:12px;align-items:center}.evhead img{width:64px;height:64px;border-radius:50%;object-fit:cover}
+.hcard.fact a{color:var(--holo)}
+.opt.inline{display:flex;gap:8px;align-items:center;margin-top:14px}

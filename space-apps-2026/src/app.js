@@ -1,6 +1,6 @@
 /* ================= STATE ================= */
 const store = {get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const A = {screen:"shome", simple:true, mode:"solo", players:["Player 1"], team:"StellarOps", mi:0, d:null, sandbox:false, unlockAll:false, tab:"planner",
+const A = {screen:"lhome", simple:true, mode:"solo", players:["Player 1"], team:"StellarOps", mi:0, d:null, sandbox:false, unlockAll:false, tab:"planner",
   trainRole:"planner", trainIdx:{planner:0,engineer:0,science:0,comms:0}, trained:{}, flight:null, lastScore:{}, voice:true,
   progress: store.get("ma.progress3",{stars:{},best:{}}), flights:0};
 const $ = s => document.querySelector(s);
@@ -105,7 +105,7 @@ function compute(m,d){
 
 /* ================= RENDER ================= */
 let flightView=null, previewView=null;
-function go(screen){ if(screen!=="flight"&&screen!=="sfly"){ Voice.stop(); if(FLY()) SEQ++; } A.screen=screen; render(); window.scrollTo({top:0}); }
+function go(screen){ if(screen!=="flight"&&screen!=="sfly"&&screen!=="lfly"){ Voice.stop(); if(FLY()) SEQ++; } A.screen=screen; render(); window.scrollTo({top:0}); }
 function render(){
   const navBtns = [];
   const simpleScr = A.screen in SIMPLE;
@@ -355,7 +355,7 @@ function flight(){
   <div id="modal"></div>`;
 }
 let SEQ=0;
-const FLY = () => A.screen==="flight"||A.screen==="sfly";
+const FLY = () => A.screen==="flight"||A.screen==="sfly"||A.screen==="lfly";
 const wait = ms => { const my=SEQ; return new Promise((r,j)=>setTimeout(()=> my===SEQ&&FLY()?r():j("abort"), matchMedia("(prefers-reduced-motion: reduce)").matches?ms/3:ms)); };
 let curP=0;
 function skyLoop(){ const el=$("#sky"); if(!el||!flightView) return; const i=flightView.info(); const a=i.world==="earth"&&i.seg==="ascent"&&i.alt>=0?Math.max(0,Math.min(1,1-i.alt/110)):0; el.style.opacity=(a*a*.9).toFixed(3); requestAnimationFrame(skyLoop); }
@@ -525,7 +525,7 @@ function report(){
 /* ================= WIRING ================= */
 function startMission(i){ A.mi=i; const m=MISSIONS[i]; A.d=structuredClone(m.def); A.d.compress=!!A.d.compress; A.d.relay=!!A.d.relay; A.d.shelter=!!A.d.shelter; A.d.abort=!!A.d.abort; A.tab="planner"; go("briefing"); }
 document.addEventListener("click",e=>{
-  const t=e.target.closest("[data-go],[data-act],[data-mi],[data-tab],[data-trole],[data-view],[data-smi],[data-sstep],[data-scard]"); if(!t) return;
+  const t=e.target.closest("[data-go],[data-act],[data-mi],[data-tab],[data-trole],[data-view],[data-smi],[data-sstep],[data-scard],[data-lmode],[data-llevel],[data-ltab],[data-lpick]"); if(!t) return;
   if(!t.dataset.go && !t.dataset.view && sClick(t)) return;
   if(t.dataset.view){ flightView&&flightView.setView(t.dataset.view); document.querySelectorAll("[data-view]").forEach(b=>b.setAttribute("aria-pressed",b===t)); $("#screen").dataset.view=t.dataset.view; return; }
   if(t.dataset.go){ if(t.dataset.go==="design"&&!A.d) return go("select"); return go(t.dataset.go); }

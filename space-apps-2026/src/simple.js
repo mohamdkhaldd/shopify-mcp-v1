@@ -414,6 +414,7 @@ function sresult() {
 SIMPLE_AFTER.sresult = () => { const cv = $("#holoRes"); if (!Space3D.ok || !cv) return; const h = Space3D.createHolo(cv); h && h.setModel(SM().model); };
 const SIMPLE = { shome, spick, sbrief, sbuild, sfly, sresult };
 function sClick(t) {
+  if (typeof lClick === "function" && lClick(t)) return true;
   if (t.dataset.smi !== undefined) { SA.mi = +t.dataset.smi; SA.pick = {}; SA.step = 0; go("sbrief"); return true; }
   if (t.dataset.sstep !== undefined) { const i = +t.dataset.sstep; if (i <= Object.keys(SA.pick).length) { SA.step = i; SA.hover = null; render(); } return true; }
   if (t.dataset.scard) { const s = STEP_ORDER[SA.step]; SA.pick[s.k] = SM().steps[s.k].find(c => c.k === t.dataset.scard); SA.hover = null;
@@ -429,10 +430,10 @@ function sClick(t) {
   if (a === "snextm") { SA.mi++; SA.pick = {}; SA.step = 0; go("sbrief"); return true; }
   if (a === "steam") { A.mode = "team"; A.simple = true; if (A.players.length < 2) A.players = ["Player 1", "Player 2", "Player 3", "Player 4"]; go("setup"); return true; }
   if (a === "expert") { A.simple = false; go("home"); return true; }
-  if (a === "easy") { A.simple = true; go("shome"); return true; }
+  if (a === "easy") { A.simple = true; go("lhome"); return true; }
   return false;
 }
 document.addEventListener("pointerover", e => { const c = e.target.closest && e.target.closest(".ccard[data-scard]"); if (!c || A.screen !== "sbuild") return; const s = STEP_ORDER[SA.step]; const card = SM().steps[s.k].find(x => x.k === c.dataset.scard); if (SA.hover !== card) { SA.hover = card; sRenderBuildParts(); } });
 document.addEventListener("pointerout", e => { const c = e.target.closest && e.target.closest(".ccard[data-scard]"); if (!c || A.screen !== "sbuild") return; if (!e.relatedTarget || !c.contains(e.relatedTarget)) { SA.hover = null; sRenderBuildParts(); } });
 
-window.SA=SA; render(); applyLang();
+window.SA=SA;
