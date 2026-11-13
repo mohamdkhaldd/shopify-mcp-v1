@@ -271,6 +271,7 @@ async function roomJoin(code, name) {
   const { data: seats } = await sb.from("players").select("*").eq("room", code);
   const all = seats || [];
   let me = null, mine = all.find(x => x.data && x.data.cid === myId);
+  if (mine && mine.data && mine.data.kicked) throw new Error(L({ en: "The room creator removed you from this room.", ar: "اللي عامل الغرفة طلّعك منها." }));
   if (mine) { const { data: up } = await sb.from("players").update({ name, data: Object.assign({}, mine.data, { left: false }), last_seen: new Date().toISOString() }).eq("id", mine.id).select().single(); me = up; }
   // draw a role by luck: a free role, or a seat someone left
   const free = TEAM_ROLES.filter(r => { const x = all.find(y => y.role === r); return !x || (x.data && x.data.left); }).sort(() => Math.random() - .5);
@@ -287,7 +288,7 @@ async function roomJoin(code, name) {
 async function roomRefresh() {
   const sb = sbClient(); if (!sb || !LB.room) return;
   const [r, p, m] = await Promise.all([sb.from("rooms").select("*").eq("code", LB.room.code).single(), sb.from("players").select("*").eq("room", LB.room.code), sb.from("messages").select("*").eq("room", LB.room.code).order("id").limit(200)]);
-  if (!LB.room) return; if (r.data) LB.room = r.data; if (p.data) LB.players = p.data.filter(x => !(x.data && x.data.left)); if (m.data) LB.chat = m.data; onRoomChange(); lRoomBarPaint();
+  if (!LB.room) return; if (p.data && LB.me) { const meRow = p.data.find(x => x.id === LB.me.id); if (meRow && meRow.data && meRow.data.kicked) { lLeave(); A.kickedMsg = true; go("lonline"); return; } } if (r.data) LB.room = r.data; if (p.data) LB.players = p.data.filter(x => !(x.data && x.data.left)); if (m.data) LB.chat = m.data; onRoomChange(); lRoomBarPaint();
 }
 let pollT = null;
 function roomSubscribe() {
@@ -341,7 +342,7 @@ function llevel() {
 }
 function lonline() {
   return `<section class="hpanel notr"><div class="kick">${L(ok("Online team", "تيم أونلاين"))}</div><h2 class="hh">${L(ok("Create or join a mission room", "اعمل أو ادخل غرفة مهمة"))}</h2>
-    <div id="olstat" class="needline">${L(ok("Checking the connection…", "بنشيك على الاتصال…"))}</div>
+    ${A.kickedMsg ? `<p class="bad">${L(ok("The room creator removed you from the room.", "اللي عامل الغرفة طلّعك من الغرفة."))}</p>` : ""}<div id="olstat" class="needline">${L(ok("Checking the connection…", "بنشيك على الاتصال…"))}</div>
     <div class="cols2"><div class="hcard"><h3>${L(ok("Your name", "اسمك"))}</h3><input type="text" id="oname" maxlength="24" value="${esc(A.lastName || "")}">
       <div class="needline">🎲 ${L(ok("Nobody chooses a role. When you join, the game draws your role by luck: Science Lead, Communications Lead, Spacecraft Engineer or Mission Planner.", "محدش بيختار دوره. أول ما تدخل الغرفة، اللعبة بتسحبلك دور بالحظ: رئيس العلماء، أو مسؤول الاتصالات، أو مهندس المركبة، أو مخطط المهمة."))}</div><div class="rolepick">${TEAM_ROLES.map(r => `<div class="rolecard" style="--sc:${CREW[r].col}">${crewImg(r)}<b>${L(CREW[r].title)}</b><span>?</span></div>`).join("")}</div></div>
     <div class="hcard"><h3>${L(ok("Start a new room", "ابدأ غرفة جديدة"))}</h3><p class="psub">${L(ok("You choose the level. Share the code with your team.", "إنت اللي هتختار المستوى. ابعت الكود للتيم."))}</p>
@@ -367,9 +368,10 @@ function lRoomBar() {
 function lRoomBarInner() {
   const host = isHost(), ph = LB.room.state.phase;
   return `<div class="rb-code"><span class="psub">${L(ok("Room code", "كود الغرفة"))}</span> <b class="code">${LB.room.code}</b> <button class="linkbtn" type="button" data-act="ocopy">${L(ok("Copy", "انسخ"))}</button></div>
-    <div class="rb-who">${LB.players.map(p => `<span class="rb-p" style="--sc:${(CREW[p.role] || CREW.director).col}"><i></i>${esc(p.name)}${p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : ""} · ${L(CREW[p.role].title)}${p.data && p.data.ready ? " ✓" : ""}</span>`).join("")}</div>
+    <div class="rb-who">${LB.players.map(p => `<span class="rb-p" style="--sc:${(CREW[p.role] || CREW.director).col}"><i></i>${esc(p.name)}${p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : ""} · ${L(CREW[p.role].title)}${p.data && p.data.ready ? " ✓" : ""}${host && !(p.data && p.data.cid === myId) ? ` <button class="rb-kick" type="button" data-kick="${p.id}" title="${L(ok("Remove from the room", "طلّعه من الغرفة"))}">✕</button>` : ""}</span>`).join("")}</div>
     <div class="rb-act">${host && ph !== "lobby" ? `<button class="hbtn ghost" type="button" data-act="olobby">${L(ok("Back to lobby (everyone)", "ارجع للوبي (للكل)"))}</button>` : ""}<button class="hbtn ghost" type="button" data-act="oleave">${L(ok("Leave room", "اخرج من الغرفة"))}</button></div>`;
 }
+function lLeave() { const sb = sbClient(); if (sb && LB.chan) sb.removeChannel(LB.chan); clearInterval(pollT); LB.chan = null; LB.room = null; LB.me = null; LB.myRole = null; LB.players = []; LB.chat = []; LB.flight = null; LB.mode = "solo"; const m = $("#modal"); if (m) m.innerHTML = ""; }
 function lRoomBarPaint() { const el = $("#roombar"); if (el && LB.room) el.innerHTML = lRoomBarInner(); }
 function lRoomList() { return TEAM_ROLES.map(r => { const p = LB.players.find(x => x.role === r); return `<div class="rolecard ${p ? "taken" : ""}" style="--sc:${CREW[r].col}">${crewImg(r)}<b>${L(CREW[r].title)}</b><span>${p ? esc(p.name) + (p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : "") : L(ok("empty", "فاضي"))}</span></div>`; }).join(""); }
 function lChatBox() { if (LB.mode !== "online") return ""; return `<section class="hpanel notr chat"><div class="kick">${L(ok("Team chat", "شات التيم"))}</div><div id="chatlog" class="chatlog"></div><form id="chatform" class="row"><input type="text" id="chatin" maxlength="300" placeholder="${L(ok("Tell your team what you found…", "قول للتيم إنت لقيت إيه…"))}"><button class="hbtn" type="submit">${L(ok("Send", "ابعت"))}</button></form></section>`; }
@@ -548,7 +550,7 @@ function lreport() {
 Object.assign(SIMPLE, { lhome, llevel, lonline, lroom, lvideo, ldesign, lfly, lusers, lreport });
 Object.assign(SIMPLE_AFTER, {
   lhome() { const cv = $("#holoHome"); if (!Space3D.ok || !cv) return; const h = Space3D.createHolo(cv); h && h.setModel("landsat8"); },
-  lonline() { onlineAvailable().then(okk => { const el = $("#olstat"); if (!el) return; el.innerHTML = okk ? L(ok("Connected. Choose your name and role.", "متوصل. اختار اسمك ودورك.")) : L(ok("Online play can't connect here. Open the public game link (GitHub Pages), or play on one computer.", "اللعب الأونلاين مش قادر يتوصل هنا. افتح لينك اللعبة العام (GitHub Pages)، أو العبوا على جهاز واحد.")); if (!okk) document.querySelectorAll("[data-act=ocreate],[data-act=ojoin]").forEach(b => b.disabled = true); }); },
+  lonline() { onlineAvailable().then(okk => { const el = $("#olstat"); if (!el) return; el.innerHTML = okk ? L(ok("Connected. Write your name, then create or join a room.", "متوصل. اكتب اسمك، وبعدين اعمل غرفة أو ادخل واحدة.")) : L(ok("Online play can't connect here. Open the public game link (GitHub Pages), or play on one computer.", "اللعب الأونلاين مش قادر يتوصل هنا. افتح لينك اللعبة العام (GitHub Pages)، أو العبوا على جهاز واحد.")); if (!okk) document.querySelectorAll("[data-act=ocreate],[data-act=ojoin]").forEach(b => b.disabled = true); }); },
   lroom() { lChatPaint(); },
   lvideo() { const v = $("#brief"); const list = lVideoList(), r = list[Math.min(LB.vi || 0, list.length - 1)]; if (v) v.onended = () => { LB.watched[LM().id + r] = true; const b = $("#vnext"); if (b) b.disabled = false; }; },
   ldesign() { const cv = $("#holoBuild"); holoL = Space3D.ok && cv ? Space3D.createHolo(cv) : null; lHolo(); lChatPaint(); },
@@ -570,14 +572,15 @@ function lClick(t) {
   if (a === "redesign") { lStartDesign(); return true; }
   if (a === "nextlvl") { if (LB.mode === "online") { go("llevel"); return true; } LB.level = Math.min(4, LB.level + 1); LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
   if (a === "oready") { myData({ ready: true }).then(() => { if (LB.players.every(p => p.data && (p.data.ready || p.id === LB.me.id))) roomState({ phase: "flight", at: Date.now() }); }); return true; }
-  if (a === "ocreate" || a === "ojoin") { const name = ($("#oname").value || "").trim(); const err = $("#oerr");
+  if (a === "ocreate" || a === "ojoin") { A.kickedMsg = false; const name = ($("#oname").value || "").trim(); const err = $("#oerr");
     if (!name) { err.textContent = L(ok("Write your name first.", "اكتب اسمك الأول.")); return true; } A.lastName = name;
     if (a === "ocreate") LB.level = +$("#olevel").value;
     (a === "ocreate" ? roomCreate(name) : roomJoin($("#ocode").value, name)).then(() => go("lroom")).catch(e => { err.textContent = e.message || String(e); }); return true; }
   if (a === "ostart") { roomState({ phase: "video" }); return true; }
   if (a === "ocopy") { const c = LB.room ? LB.room.code : ""; try { navigator.clipboard.writeText(c).then(() => { t.textContent = L(ok("Copied!", "اتنسخ!")); }, () => { t.textContent = c; }); } catch (e) { t.textContent = c; } return true; }
   if (a === "olobby") { if (isHost()) { LB.players.forEach(() => {}); roomState({ phase: "lobby", lastReview: null }); myData({ ready: false }); LB.flight = null; go("lroom"); } return true; }
-  if (a === "oleave") { const sb = sbClient(); if (LB.me) myData({ left: true, ready: false }); if (sb && LB.chan) sb.removeChannel(LB.chan); clearInterval(pollT); LB.chan = null; LB.room = null; LB.me = null; LB.players = []; LB.chat = []; LB.flight = null; LB.mode = "solo"; go("lhome"); return true; }
+  if (a === "oleave") { if (LB.me) myData({ left: true, ready: false }); lLeave(); go("lhome"); return true; }
+  if (t.dataset.kick) { const x = LB.players.find(p => String(p.id) === t.dataset.kick); if (x && isHost() && confirm(L({ en: `Remove ${x.name} from the room?`, ar: `تطلّع ${x.name} من الغرفة؟` }))) { sbClient().from("players").update({ data: Object.assign({}, x.data, { left: true, kicked: true, ready: false }) }).eq("id", x.id).then(() => roomRefresh()); } return true; }
   return false;
 }
 document.addEventListener("submit", e => { if (e.target.id === "chatform") { e.preventDefault(); const i = $("#chatin"); sendChat(i.value); i.value = ""; } });
