@@ -399,3 +399,12 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .realgal img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
 .realgal figcaption{font-size:13px;padding:8px 10px;color:#dfeaf5}
 .cert input{flex:1;min-width:0;background:#050c18;border:1px solid var(--edge);border-radius:6px;color:#eaf6ff;padding:10px 12px;font:inherit}
+.vcount{font-size:12px;color:var(--hl);font-weight:700}.ccard.myvote{outline:2px dashed var(--hl);outline-offset:2px}
+.dash{border:1px solid var(--edge);border-radius:8px;padding:10px 12px;margin-top:8px}
+.dtab{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}.dtab th{text-align:start;color:var(--hl);font-weight:600;padding:6px;border-bottom:1px solid var(--edge)}
+.dtab td{padding:6px;border-bottom:1px dashed var(--edge);vertical-align:top}.dtab tr.lost td{background:rgba(255,77,94,.06)}.dtab .good{color:#7dffb0}
+.rdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--sc);margin-inline-end:6px}
+.lpname{background:#050c18;border:1px solid var(--edge);border-radius:6px;color:#eaf6ff;padding:10px 12px;font:inherit}
+@media (max-width:700px){.dtab td:nth-child(4),.dtab th:nth-child(4){display:none}}
+.authbox{margin:10px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.authbox b{color:var(--hl)}
+.dtab .bad{color:#ff7a85}

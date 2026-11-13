@@ -408,6 +408,15 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .realgal img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
 .realgal figcaption{font-size:13px;padding:8px 10px;color:#dfeaf5}
 .cert input{flex:1;min-width:0;background:#050c18;border:1px solid var(--edge);border-radius:6px;color:#eaf6ff;padding:10px 12px;font:inherit}
+.vcount{font-size:12px;color:var(--hl);font-weight:700}.ccard.myvote{outline:2px dashed var(--hl);outline-offset:2px}
+.dash{border:1px solid var(--edge);border-radius:8px;padding:10px 12px;margin-top:8px}
+.dtab{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}.dtab th{text-align:start;color:var(--hl);font-weight:600;padding:6px;border-bottom:1px solid var(--edge)}
+.dtab td{padding:6px;border-bottom:1px dashed var(--edge);vertical-align:top}.dtab tr.lost td{background:rgba(255,77,94,.06)}.dtab .good{color:#7dffb0}
+.rdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--sc);margin-inline-end:6px}
+.lpname{background:#050c18;border:1px solid var(--edge);border-radius:6px;color:#eaf6ff;padding:10px 12px;font:inherit}
+@media (max-width:700px){.dtab td:nth-child(4),.dtab th:nth-child(4){display:none}}
+.authbox{margin:10px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.authbox b{color:var(--hl)}
+.dtab .bad{color:#ff7a85}
 </style>
 </head>
 <body>
@@ -3042,6 +3051,55 @@ const M_MARS = {
     links: [["NASA Perseverance", "https://science.nasa.gov/mission/mars-2020-perseverance/"], ["NASA: Mars dust storms", "https://science.nasa.gov/mars/"], ["NASA RTG", "https://science.nasa.gov/planetary-science/programs/radioisotope-power-systems/"]] }
 };
 const LAB_M = { storm: M_STORM, moon: M_MOON, delta: M_DELTA, mars: M_MARS };
+/* ===== Points lost for each decision (every wrong choice costs points; stars come only from points) ===== */
+const W = (p, en, ar) => [p, en, ar];
+M_STORM.lose = {
+  "science.cam": { A: W(250, "A color camera sees almost nothing at night, and many storms start at night.", "كاميرا الألوان تقريباً مش بتشوف حاجة بالليل، وعواصف كتير بتبدأ بالليل.") },
+  "comms.ant": { A: W(250, "The slow antenna cannot send a new picture every 15 minutes.", "الأنتينا البطيئة مش هتقدر تبعت صورة جديدة كل ربع ساعة.") },
+  "engineer.pow": { B: W(100, "An RTG works, but it uses very rare fuel where sunlight is strong.", "الـ RTG شغالة، بس بتصرف وقود نادر جداً في مكان الشمس فيه قوية.") },
+  "planner.orb": { A: W(250, "A low orbit sees Egypt only a few minutes at a time.", "الأوربت الواطي بيشوف مصر كام دقيقة بس كل مرة.") } };
+M_MOON.lose = {
+  "science.cam": { A: W(150, "100 m pixels cannot show rocks 2 m wide.", "بيكسل 100 متر مش هيبيّن صخور عرضها 2 متر."), C: W(120, "10 m pixels are still too big for rocks 2 m wide.", "بيكسل 10 متر لسه أكبر من صخور عرضها 2 متر.") },
+  "science.dark": { A: W(80, "An infrared camera finds cold places, but not the shape of the ground.", "كاميرا الإنفرا ريد بتلاقي الأماكن الباردة، بس مش بتقيس شكل الأرض."), B: W(150, "A normal camera needs light, and the dark craters have none.", "الكاميرا العادية محتاجة نور، والحفر الضلمة مفيهاش.") },
+  "comms.ant": { A: W(40, "The laser link is fast, but clouds over the station can block it.", "لينك الليزر سريع، بس السحاب فوق المحطة ممكن يوقفه."), C: W(150, "A few Mbit/s is much less than the 100 Mbit/s we need.", "كام ميجابت أقل بكتير من الـ 100 ميجابت اللي محتاجينها.") },
+  "comms.st": { B: W(100, "One station sees the Moon only about half of each day.", "محطة واحدة بتشوف القمر حوالي نص اليوم بس."), C: W(50, "Six stations cost twice as much as three, for the same coverage.", "6 محطات بيكلّفوا ضعف التلاتة، على نفس التغطية.") },
+  "engineer.bat": { A: W(150, "30 minutes is shorter than the 48-minute shadow.", "30 دقيقة أقل من ضل الـ 48 دقيقة."), C: W(50, "60 minutes was enough; 120 minutes is heavy for nothing.", "60 دقيقة كانت كفاية، والـ 120 تقيلة على الفاضي.") },
+  "engineer.heat": { B: W(300, "With no protection, the electronics freeze.", "من غير حماية، الإلكترونيات بتتجمد."), C: W(60, "An extra RTG uses rare fuel for a job a blanket can do.", "الـ RTG الزيادة بيصرف وقود نادر في شغلانة البطانية تعملها.") },
+  "planner.orb": { B: W(200, "An equator orbit never flies over the south pole.", "أوربت خط الاستوا عمره ما بيعدّي فوق القطب الجنوبي."), C: W(150, "At 3,000 km every pixel is 60 times bigger.", "على 3,000 كم كل بيكسل بيبقى أكبر 60 مرة.") },
+  "planner.rkt": { A: W(150, "SLS costs more than 2 billion dollars, far over our $150 million.", "SLS بيكلّف أكتر من 2 مليار دولار، أكتر بكتير من الـ 150 مليون بتوعنا."), B: W(300, "Electron can carry only about 25 kg to the Moon.", "Electron بيشيل حوالي 25 كيلو بس للقمر.") } };
+M_DELTA.lose = {
+  "science.cam": { A: W(150, "MODIS pixels are 250 m, too big for small fields.", "بيكسل MODIS 250 متر، أكبر من الأراضي الصغيرة."), B: W(150, "TIRS cannot see near-infrared, and its pixels are 100 m.", "TIRS مش بتشوف النير إنفرا ريد، والبيكسل بتاعها 100 متر.") },
+  "science.time": { A: W(150, "At night there is no sunlight, so no plant health.", "بالليل مفيش شمس، فمش هنشوف صحة الزرع."), C: W(80, "At any time of day the light changes, so the pictures can't be compared.", "في أي وقت الإضاءة بتتغير، فالصور مش هتتقارن ببعض.") },
+  "comms.ant": { A: W(50, "Ka-band is much faster than the camera needs, and uses 200 W more.", "Ka-band أسرع بكتير من اللي الكاميرا محتاجاه، وبياكل 200 وات زيادة."), B: W(150, "S-band is far too slow for the camera's data.", "S-band بطيء جداً على داتا الكاميرا.") },
+  "comms.st": { A: W(60, "With one station, pictures must wait when it stops.", "بمحطة واحدة، الصور بتستنى لما تقف."), C: W(20, "Three stations cost more every year; two were enough.", "3 محطات بيكلّفوا أكتر كل سنة، واتنين كانوا كفاية.") },
+  "engineer.pan": c => { if (!c.pan.k) return 0; if (c.need > c.supply) return W(300, `The panel makes ${nf(c.supply)} W, less than the ${nf(c.need)} W the satellite uses.`, `البانل بيطلّع ${nf(c.supply)} وات، أقل من الـ ${nf(c.need)} اللي القمر بياكلهم.`);
+    if (c.supply / c.need > 1.3) return W(70, `${nf(c.supply)} W is much more than the ${nf(c.need)} W you need.`, `${nf(c.supply)} وات أكتر بكتير من الـ ${nf(c.need)} اللي محتاجهم.`);
+    const smaller = M_DELTA.decisions.engineer[0].o.some(o => o.supply < c.supply && o.supply >= c.need); return smaller ? W(30, "A smaller panel would have been enough.", "بانل أصغر كان هيكفي.") : 0; },
+  "engineer.bat": { A: W(40, "40 minutes was enough; 60 minutes adds 80 kg.", "40 دقيقة كانت كفاية، والـ 60 بتزوّد 80 كيلو."), C: W(150, "25 minutes is shorter than the 35-minute shadow.", "25 دقيقة أقل من ضل الـ 35 دقيقة.") },
+  "planner.orb": { A: W(150, "At 400 km the satellite falls in a few years, and the time changes every day.", "على 400 كم القمر بيقع في كام سنة، والساعة بتتغير كل يوم."), C: W(120, "At 1,500 km the pixels are twice as big, and the time changes every day.", "على 1,500 كم البيكسل بيبقى الضعف، والساعة بتتغير كل يوم.") },
+  "planner.rkt": c => { if (!c.rkt.k) return 0; if (c.mass > c.rkt.lift) return W(300, `This rocket cannot lift your ${nf(Math.round(c.mass))} kg satellite.`, `الصاروخ ده مش هيقدر يشيل القمر بتاعك اللي وزنه ${nf(Math.round(c.mass))} كيلو.`);
+    const ok2 = M_DELTA.decisions.planner[1].o.filter(o => o.lift >= c.mass); const cheap = Math.min(...ok2.map(o => o.cost)); return c.rkt.cost > cheap ? W(40, `A cheaper rocket could lift ${nf(Math.round(c.mass))} kg.`, `كان فيه صاروخ أرخص يقدر يشيل ${nf(Math.round(c.mass))} كيلو.`) : 0; },
+  "planner.eom": { A: W(100, "It stays up as space junk.", "هيفضل فوق زبالة فضائية."), B: W(100, "Using all the fuel leaves it up there as space junk.", "لما تصرف الوقود كله، بيفضل فوق زبالة فضائية.") } };
+M_MARS.lose = {
+  "science.site": { B: W(150, "Utopia Planitia has few clues of old water.", "Utopia Planitia فيها علامات قليلة لمية قديمة."), C: W(300, "On Olympus Mons the air is too thin to land, and there was no lake.", "فوق Olympus Mons الهوا خفيف أوي على الهبوط، ومكانش فيه بحيرة.") },
+  "science.tool": { A: W(120, "The drill saves samples, but does not look for life's chemicals.", "الدريل بيحفظ عينات، بس مش بيدوّر على كيماويات الحياة."), B: W(150, "A weather station does not study rocks.", "محطة الطقس مش بتدرس الصخور.") },
+  "comms.path": { A: W(120, "Direct to Earth is too slow for many big pictures.", "على الأرض على طول بطيء على صور كبيرة كتير.") },
+  "comms.drive": { A: W(120, "Messages take 4 to 24 minutes, so live driving is dangerous.", "الرسالة بتاخد من 4 لـ 24 دقيقة، فالسواقة المباشرة خطر."), C: W(150, "Staying in one spot means seeing only one place.", "لو فضلت مكانك هتشوف مكان واحد بس.") },
+  "engineer.power": { A: W(200, "Solar panels make almost nothing in dust storms.", "السولار بانلز تقريباً مبتطلّعش حاجة في العواصف الترابية."), C: W(70, "The RTG alone was enough; the solar panels add 70 kg.", "الـ RTG لوحده كان كفاية، والسولار بانلز بيزوّدوا 70 كيلو.") },
+  "engineer.heat": c => { if (!c.heat.k) return 0; if (c.heat.none) return W(300, "With no heating, the electronics freeze on the first night.", "من غير تدفية، الإلكترونيات بتتجمد أول ليلة.");
+    if (c.heat.pipes && !c.pow.rtg) return W(300, "Heat pipes need an RTG. Without one, they carry no heat.", "مواسير الحرارة محتاجة RTG، ومن غيره مش هتنقل حرارة.");
+    if (!c.heat.pipes && c.pow.rtg) return W(70, "The RTG's heat was free; electric heaters burn 1,000 Wh a day.", "حرارة الـ RTG كانت ببلاش، والهيترز الكهربا بتحرق 1,000 وات-ساعة في اليوم."); return 0; },
+  "planner.land": c => { if (!c.land.k) return 0; if (!c.land.drive) return W(200, "A lander with legs cannot drive off.", "اللاندر اللي برجول مبيقدرش يمشي.");
+    if (c.mass > c.land.max) return W(300, `Airbags only worked for rovers of about 180 kg; yours weighs ${nf(Math.round(c.mass))} kg.`, `الإيرباجز اشتغلت بس مع روڤرز وزنها حوالي 180 كيلو، وبتاعك ${nf(Math.round(c.mass))} كيلو.`); return 0; },
+  "planner.danger": c => c.dang.k && !c.dang.trn && c.site.hazard ? W(300, "Jezero has rocks and cliffs; with no steering the rover tipped over.", "Jezero فيها صخور وجروف، ومن غير توجيه الروڤر اتقلب.") : 0,
+  "planner.launch": { A: W(300, "Outside the launch window there is not enough fuel to reach Mars.", "برّه اللانش ويندو مفيش وقود كفاية يوصّلنا المريخ."), C: W(300, "Outside the launch window there is not enough fuel to reach Mars.", "برّه اللانش ويندو مفيش وقود كفاية يوصّلنا المريخ.") } };
+function lDecisionRows(m, c, picks) {
+  return TEAM_ROLES.flatMap(r => m.decisions[r].map(d => { const o = pickOpt(m, picks, r, d.k); const T = (m.lose || {})[r + "." + d.k];
+    const v = !o ? W(0, "", "") : typeof T === "function" ? T(c, o) : (T && T[o.k]) || 0; const w = v || [0, "", ""];
+    return { role: r, q: d.t, pick: o ? o.n : ok("—", "—"), pts: w[0], why: ok(w[1], w[2]) }; }));
+}
+function lStarsFor(total) { return total >= 900 ? 3 : total >= 700 ? 2 : total >= 400 ? 1 : 0; }
+
 const CML = [
   { n: 1, m: "storm", t: ok("CML 1 · The idea", "CML 1 · الفكرة"), d: ok("Khamsin Storm Watch. One choice each, two options. Just words, no numbers.", "رادار الخماسين. كل واحد اختيار واحد من اتنين. كلام بس، مفيش أرقام.") },
   { n: 2, m: "moon", t: ok("CML 2 · Can it work?", "CML 2 · هل تنفع؟"), d: ok("Moon Landing Map. Two choices each. Compare each number with what is needed, no adding.", "خريطة الهبوط على القمر. كل واحد اختيارين. قارن كل رقم باللي مطلوب، من غير جمع.") },
@@ -3055,14 +3113,47 @@ const lvl = () => CML[LB.level - 1];
 const LM = () => LAB_M[lvl().m] || M_STORM;
 const rolesInPlay = () => TEAM_ROLES;
 const isHost = () => LB.mode === "online" && LB.room && LB.room.state.host === myId;
-const myRoles = () => LB.mode !== "online" ? TEAM_ROLES : TEAM_ROLES.filter(r => r === LB.myRole || (isHost() && !LB.players.some(p => p.role === r)));
-function allPicks() { if (LB.mode !== "online") return LB.picks; const p = {}; LB.players.forEach(pl => Object.assign(p, (pl.data && pl.data.picks) || {})); return p; }
+/* who owns each role: its player; else the player it was shared to; else nobody (the team votes) */
+function lPlanExtra() { const ps = LB.players.slice().sort((a, b) => a.id - b.id), ex = {}; if (!ps.length) return ex; let i = 0; TEAM_ROLES.forEach(r => { if (!ps.some(p => p.role === r)) { ex[r] = ps[i % ps.length].id; i++; } }); return ex; }
+function lOwner(r) { const p = LB.players.find(x => x.role === r); if (p) return p; const ex = (LB.room && LB.room.state.phase !== "lobby" && LB.room.state.extra) || lPlanExtra(); const id = ex[r]; return LB.players.find(x => x.id === id) || null; }
+const lOrphan = r => LB.mode === "online" && !lOwner(r);
+const myRoles = () => LB.mode !== "online" ? TEAM_ROLES : TEAM_ROLES.filter(r => { const o = lOwner(r); return !o || (LB.me && o.id === LB.me.id); });
+function allPicks() {
+  if (LB.mode !== "online") return LB.picks; const p = {};
+  TEAM_ROLES.forEach(r => { const o = lOwner(r); (LM().decisions[r] || []).forEach(d => { const key = r + "." + d.k;
+    if (o) { const v = o.data && o.data.picks && o.data.picks[key]; if (v) p[key] = v; }
+    else { const cnt = {}; LB.players.forEach(pl => { const v = pl.data && pl.data.rv && pl.data.rv[key]; if (v) cnt[v] = (cnt[v] || 0) + 1; }); const best = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || a.localeCompare(b))[0]; if (best) p[key] = best; } }); });
+  return p;
+}
+function lVotesFor(key, o) { return LB.players.filter(pl => pl.data && pl.data.rv && pl.data.rv[key] === o).length; }
+/* one-computer team: players take turns, roles shared out in order */
+function lLocalOwner(r) { const ps = LB.localPlayers || []; return ps.length > 1 ? ps[TEAM_ROLES.indexOf(r) % ps.length] : null; }
 function pickOpt(m, picks, role, k) { const d = (m.decisions[role] || []).find(x => x.k === k); const v = picks[role + "." + k]; return d && v ? d.o.find(o => o.k === v) : null; }
 const lCompute = picks => LM().compute(picks);
 const decisionsFor = roles => roles.flatMap(r => (LM().decisions[r] || []).map(d => ({ role: r, d })));
 const allChosen = (picks, roles) => decisionsFor(roles).every(({ role, d }) => picks[role + "." + d.k]);
 /* ---- Supabase (online rooms) ---- */
-function sbClient() { if (LB.sb) return LB.sb; if (!window.supabase || !window.supabase.createClient) return null; LB.sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: false } }); return LB.sb; }
+function sbClient() { if (LB.sb) return LB.sb; if (!window.supabase || !window.supabase.createClient) return null; LB.sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }); return LB.sb; }
+/* ---- accounts: sign in with Google so your levels follow you to any device ---- */
+async function lAuthInit() {
+  const sb = sbClient(); if (!sb || LB.authInit) return; LB.authInit = true;
+  const apply = async session => {
+    A.user = session && session.user ? { id: session.user.id, name: (session.user.user_metadata && (session.user.user_metadata.full_name || session.user.user_metadata.name)) || session.user.email || "Player", email: session.user.email } : null;
+    if (A.user) { if (!A.lastName) A.lastName = A.user.name.split(" ")[0];
+      const { data } = await sb.from("profiles").select("progress").eq("user_id", A.user.id).maybeSingle();
+      const pr = (data && data.progress) || {}; CML.forEach(c => { const k = "cml" + c.n; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, pr[k] || 0); }); store.set("ma.progress3", A.progress); lSaveProgress(); }
+    if (["lhome", "llevel", "lonline"].includes(A.screen)) render();
+  };
+  try { const { data } = await sb.auth.getSession(); await apply(data.session); } catch (e) { }
+  sb.auth.onAuthStateChange((ev, session) => { if (ev === "SIGNED_IN" || ev === "SIGNED_OUT") apply(session); });
+}
+async function lSaveProgress() { const sb = sbClient(); if (!sb || !A.user) return; const pr = {}; CML.forEach(c => { pr["cml" + c.n] = A.progress.stars["cml" + c.n] || 0; });
+  try { await sb.from("profiles").upsert({ user_id: A.user.id, name: A.user.name, progress: pr, updated_at: new Date().toISOString() }); } catch (e) { } }
+function lAuthBox() {
+  if (!window.supabase) return "";
+  return A.user ? `<div class="authbox">👤 <b>${esc(A.user.name)}</b> · ${L(ok("your levels are saved to your account", "المستويات بتاعتك محفوظة على حسابك"))} <button class="linkbtn" type="button" data-act="signout">${L(ok("Sign out", "اخرج"))}</button></div>`
+    : `<div class="authbox"><button class="hbtn ghost" type="button" data-act="signin">🔐 ${L(ok("Sign in with Google", "سجّل دخول بجوجل"))}</button> <span class="psub">${L(ok("so your finished levels follow you to any device (optional)", "علشان المستويات اللي خلّصتها تفضل معاك على أي جهاز (اختياري)"))}</span></div>`;
+}
 async function onlineAvailable() { const sb = sbClient(); if (!sb) return false; try { const { error } = await sb.from("rooms").select("code").limit(1); return !error; } catch (e) { return false; } }
 const newCode = () => "SO-" + Math.random().toString(36).slice(2, 6).toUpperCase().replace(/[^A-Z0-9]/g, "X");
 async function roomCreate(name, roleMode) {
@@ -3132,6 +3223,7 @@ function lhome() {
     <div class="cine-txt"><div class="kick">NASA SPACE APPS 2026 · TEAM STELLAROPS</div>
       <h1 class="cine-h">MISSION <span>LAB</span></h1>
       <p class="cine-p">${L(ok("You are a space mission team. Each of you gets a role and a guide. Watch your guide's video, write what you learn on the team board, talk together, and design a real satellite.", "إنتوا تيم مهمة فضاء. كل واحد فيكم ليه دور ومرشد. اتفرج على فيديو المرشد بتاعك، واكتب اللي اتعلمته على سبورة التيم، واتكلموا مع بعض، وصمموا قمر صناعي حقيقي."))}</p>
+      ${lAuthBox()}
       <div class="row"><button class="hbtn" type="button" data-lmode="solo">${L(ok("Play solo", "العب لوحدك"))}</button>
         <button class="hbtn ghost" type="button" data-lmode="local">${L(ok("Team on one computer", "تيم على جهاز واحد"))}</button>
         <button class="hbtn ghost" type="button" data-lmode="online">${L(ok("Online team (each on own laptop)", "تيم أونلاين (كل واحد على اللابتوب بتاعه)"))}</button></div></div>
@@ -3139,6 +3231,13 @@ function lhome() {
   </section>`;
 }
 const cmlDone = n => (A.progress.stars["cml" + n] || 0) >= 1;
+function llocal() {
+  const ps = LB.localPlayers || [];
+  return `<section class="hpanel notr"><div class="kick">${L(ok("Team on one computer", "تيم على جهاز واحد"))}</div><h2 class="hh">${L(ok("Who is playing?", "مين بيلعب؟"))}</h2>
+    <p class="needline">${L(ok("Write 1 to 4 names. The four roles are shared out in turns: with 2 players, each one plays 2 roles. In surprises, everyone votes.", "اكتبوا من اسم لـ 4 أسامي. الأربع أدوار بيتوزعوا بالدور: لو اتنين، كل واحد بياخد دورين. وفي المفاجآت الكل بيصوّت."))}</p>
+    <div class="cols2">${[0, 1, 2, 3].map(i => `<input type="text" class="lpname" maxlength="20" placeholder="${L(ok("Player", "لاعب"))} ${i + 1}" value="${esc(ps[i] || "")}">`).join("")}</div>
+    <div class="row"><button class="hbtn" type="button" data-act="llocalgo">${L(ok("Continue", "كمّل"))} →</button></div></section>`;
+}
 function llevel() {
   return `<section class="hpanel notr"><div class="kick">${L(ok("Choose a level", "اختار المستوى"))}</div>
     <h2 class="hh">${L(ok("How mature is your mission idea?", "فكرة مهمتك ناضجة لحد فين؟"))}</h2>
@@ -3170,6 +3269,7 @@ function lroom() {
     <p class="needline">${LB.room.state.roleMode === "pick" ? L(ok("Send this code to your team. Each player joins from their own laptop and picks a free role below. The room creator also covers empty roles.", "ابعت الكود ده للتيم. كل لاعب يدخل من اللابتوب بتاعه ويختار دور فاضي من تحت. واللي عمل الغرفة بيمسك الأدوار الفاضية.")) : L(ok("Send this code to your team. Each player joins from their own laptop and gets a role by luck. The room creator also covers empty roles.", "ابعت الكود ده للتيم. كل لاعب يدخل من اللابتوب بتاعه وبيطلعله دور بالحظ. واللي عمل الغرفة بيمسك الأدوار الفاضية."))}</p>
     ${host ? `<div class="row"><span class="psub">${L(ok("Roles", "الأدوار"))}:</span> <button class="hbtn ${LB.room.state.roleMode !== "pick" ? "" : "ghost"}" type="button" data-act="omode" data-m="random">🎲 ${L(ok("By luck", "بالحظ"))}</button><button class="hbtn ${LB.room.state.roleMode === "pick" ? "" : "ghost"}" type="button" data-act="omode" data-m="pick">✋ ${L(ok("Players pick", "اللاعبين يختاروا"))}</button></div>` : ""}
     <div id="lroomlist" class="rolepick">${lRoomList()}</div>
+    ${LB.players.length && LB.players.length < 4 ? `<p class="needline">🔁 ${L(ok("Fewer than 4 players, so the empty roles are shared out:", "التيم أقل من 4، فالأدوار الفاضية اتوزعت كده:"))} ${Object.entries(lPlanExtra()).map(([r, id]) => `<b>${esc((LB.players.find(p => p.id === id) || {}).name || "")}</b> → ${L(CREW[r].title)}`).join(" · ")}</p>` : ""}
     ${lLobbyCtl()}
     ${host ? `<div class="row">${lBlocked(LB.level).length ? `<p class="bad">⚠️ ${lBlocked(LB.level).map(p => esc(p.name)).join(", ")} ${L(ok(`can't play CML ${LB.level} yet. Finish CML ${LB.level - 1} first, or pick another level.`, `لسه مينفعش يلعب CML ${LB.level}. لازم يخلّص CML ${LB.level - 1} الأول، أو اختاروا مستوى تاني.`))}</p>` : ""}<button class="hbtn" type="button" data-act="ostart" ${LB.players.every(p => p.data && p.data.lobbyReady) && !lBlocked(LB.level).length ? "" : "disabled"}>${L(ok("Start the game for everyone", "ابدأ اللعبة للكل"))} (${LB.players.filter(p => p.data && p.data.lobbyReady).length}/${LB.players.length} ${L(ok("ready", "جاهزين"))})</button><button class="linkbtn" type="button" data-act="ostartnow" ${lBlocked(LB.level).length ? "disabled" : ""}>${L(ok("Start anyway", "ابدأ برضه"))}</button></div>` : `<p class="psub">${L(ok("Waiting for the room creator to start…", "مستنيين اللي عمل الغرفة يبدأ…"))}</p>`}
   </section>${lChatBox()}`;
@@ -3190,7 +3290,7 @@ function lRoomBar() {
 function lRoomBarInner() {
   const host = isHost(), ph = LB.room.state.phase;
   return `<div class="rb-code"><span class="psub">${L(ok("Room code", "كود الغرفة"))}</span> <b class="code">${LB.room.code}</b> <button class="linkbtn" type="button" data-act="ocopy">${L(ok("Copy", "انسخ"))}</button></div>
-    <div class="rb-who">${LB.players.map(p => `<span class="rb-p" style="--sc:${(CREW[p.role] || CREW.director).col}"><i></i>${esc(p.name)}${p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : ""} · ${L(CREW[p.role].title)}${p.data && p.data.ready ? " ✓" : ""} · ${(() => { const d = (p.data && p.data.done) || {}; const top = [4, 3, 2, 1].find(n => d[n] >= 1); return top ? "🎓 CML " + top : L(ok("new", "جديد")); })()}${host && !(p.data && p.data.cid === myId) ? ` <button class="rb-kick" type="button" data-kick="${p.id}" title="${L(ok("Remove from the room", "طلّعه من الغرفة"))}">✕</button>` : ""}</span>`).join("")}</div>
+    <div class="rb-who">${LB.players.map(p => `<span class="rb-p" style="--sc:${(CREW[p.role] || CREW.director).col}"><i></i>${esc(p.name)}${p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : ""} · ${TEAM_ROLES.filter(r => (lOwner(r) || {}).id === p.id).map(r => L(CREW[r].title)).join(" + ")}${p.data && p.data.ready ? " ✓" : ""} · ${(() => { const d = (p.data && p.data.done) || {}; const top = [4, 3, 2, 1].find(n => d[n] >= 1); return top ? "🎓 CML " + top : L(ok("new", "جديد")); })()}${host && !(p.data && p.data.cid === myId) ? ` <button class="rb-kick" type="button" data-kick="${p.id}" title="${L(ok("Remove from the room", "طلّعه من الغرفة"))}">✕</button>` : ""}</span>`).join("")}</div>
     <div class="rb-act">${host && ph !== "lobby" ? `<button class="hbtn ghost" type="button" data-act="olobby">${L(ok("Back to lobby (everyone)", "ارجع للوبي (للكل)"))}</button>` : ""}<button class="hbtn ghost" type="button" data-act="oleave">${L(ok("Leave room", "اخرج من الغرفة"))}</button></div>`;
 }
 async function lSwitchRole(r) {
@@ -3204,7 +3304,7 @@ async function lSwitchRole(r) {
   LB.me = res.data; LB.myRole = r; await roomRefresh(); render();
 }
 function lSave() { try { if (LB.room && LB.me) sessionStorage.setItem("ma.room", JSON.stringify({ code: LB.room.code, name: LB.me.name })); else sessionStorage.removeItem("ma.room"); } catch (e) { } }
-function lResetGame() { LB.flight = null; LB.watched = {}; LB.reviews = 0; LB.rewatch = 0; LB.vi = 0; LB.revealed = null; const m = $("#modal"); if (m) m.innerHTML = ""; if (LB.me) myData({ picks: {}, ready: false, watched: false, votes: {}, lobbyReady: false }); }
+function lResetGame() { LB.flight = null; LB.watched = {}; LB.reviews = 0; LB.rewatch = 0; LB.vi = 0; LB.revealed = null; const m = $("#modal"); if (m) m.innerHTML = ""; if (LB.me) myData({ picks: {}, rv: {}, ready: false, watched: false, votes: {}, lobbyReady: false }); }
 function lLeave() { try { sessionStorage.removeItem("ma.room"); } catch (e) { } const sb = sbClient(); if (sb && LB.chan) sb.removeChannel(LB.chan); clearInterval(pollT); LB.chan = null; LB.room = null; LB.me = null; LB.myRole = null; LB.players = []; LB.chat = []; LB.flight = null; LB.mode = "solo"; const m = $("#modal"); if (m) m.innerHTML = ""; }
 function lRoomBarPaint() { const el = $("#roombar"); if (el && LB.room) el.innerHTML = lRoomBarInner(); }
 function lRoomList() {
@@ -3245,8 +3345,9 @@ function lvideo() {
       <span class="psub">${L(ok("The button unlocks when the video ends.", "الزرار بيتفتح لما الفيديو يخلص."))}</span></div></section>${lBoard()}`;
 }
 function lCard(role, d, o, picks, mine) {
-  const sel = picks[role + "." + d.k] === o.k;
-  return `<button type="button" class="ccard ${sel ? "sel" : ""}" ${mine ? `data-lpick="${role}.${d.k}.${o.k}"` : "disabled"}><span class="cnum">${o.k}</span><span class="cicon">${sIcon(o.icon)}</span><b>${L(o.n)}</b></button>`;
+  const sel = picks[role + "." + d.k] === o.k, orph = lOrphan(role), key = role + "." + d.k;
+  const myv = orph && LB.me && LB.me.data && LB.me.data.rv && LB.me.data.rv[key] === o.k, nv = orph ? lVotesFor(key, o.k) : 0;
+  return `<button type="button" class="ccard ${sel ? "sel" : ""} ${myv ? "myvote" : ""}" ${mine ? `data-lpick="${role}.${d.k}.${o.k}"` : "disabled"}><span class="cnum">${o.k}</span><span class="cicon">${sIcon(o.icon)}</span><b>${L(o.n)}</b>${orph ? `<span class="vcount">🗳 ${nv}${myv ? " · " + L(ok("your vote", "صوتك")) : ""}</span>` : ""}</button>`;
 }
 function ldesign() {
   const picks = allPicks(), mine = myRoles(), m = LM();
@@ -3260,7 +3361,7 @@ function ldesign() {
       <div class="stepper">${tabs}</div></div></div>
     <div class="buildgrid"><div class="holowrap"><canvas id="holoBuild" class="holo"></canvas><div class="holotag">${L(ok("Your satellite", "القمر بتاعك"))}</div></div>
       <div class="choose"><div class="steptitle" style="--sc:${CREW[r].col}">${roleTag(r)}<span class="psub">${L(SEGMENT[r])} · ${L(ok("Guide", "المرشد"))}: ${CREW[r].name}</span></div>
-        ${canEdit ? "" : `<p class="needline">${L(ok("This is a teammate's job. Talk to them in the chat.", "ده شغل حد تاني في التيم. كلّمه في الشات."))}</p>`}
+        ${lOrphan(r) ? `<p class="needline">🗳 <b>${L(ok("Nobody has this role now, so the whole team votes. The choice with the most votes wins.", "مفيش حد ماسك الدور ده دلوقتي، فالتيم كله بيصوّت، والاختيار اللي ياخد أصوات أكتر بيكسب."))}</b></p>` : LB.mode === "online" ? (canEdit ? (lOwner(r) && lOwner(r).role !== r ? `<p class="needline">🔁 <b>${L(ok("This is an extra role for you, because the team has fewer than 4 players.", "ده دور زيادة عليك، علشان التيم أقل من 4 لاعبين."))}</b></p>` : "") : `<p class="needline">${L(ok("This is the job of", "ده شغل"))} <b>${esc((lOwner(r) || {}).name || "")}</b>. ${L(ok("Talk to them in the chat.", "كلّمه في الشات."))}</p>`) : lLocalOwner(r) ? `<p class="needline">👤 ${L(ok("Turn", "الدور على"))}: <b>${esc(lLocalOwner(r))}</b></p>` : ""}
         ${m.decisions[r].map(d => `<div class="dec"><h3>${L(d.t)}</h3><div class="cards3 ${d.o.length === 2 ? "two" : ""}">${d.o.map(o => lCard(r, d, o, picks, canEdit)).join("")}</div></div>`).join("")}
         <div class="nav2"><button class="hbtn ghost" type="button" data-act="rewatch">${L(ok("Rewatch my guide (−20 points)", "اتفرج على المرشد تاني (−20 نقطة)"))}</button></div></div></div>
     <div class="reviewbar"><button class="hbtn ghost" type="button" data-act="review">${L(ok("Design review", "مراجعة التصميم"))} ${reviews ? L(ok("(−30 points)", "(−30 نقطة)")) : L(ok("(first one free)", "(أول مرة ببلاش)"))}</button>
@@ -3277,7 +3378,7 @@ function lPtsPaint() { const el = $("#ptsNow"); if (el) el.textContent = nf(1000
 function lStepBtns() {
   if (LB.mode === "online") return "";
   const i = TEAM_ROLES.indexOf(LB.tab), prev = TEAM_ROLES[i - 1], next = TEAM_ROLES[i + 1];
-  return (prev ? `<button class="hbtn ghost" type="button" data-act="ltabprev">← ${L(CREW[prev].title)}</button>` : "") + (next ? `<button class="hbtn" type="button" data-act="ltabnext">${L(ok("Next", "التالي"))}: ${L(CREW[next].title)} →</button>` : "");
+  return (prev ? `<button class="hbtn ghost" type="button" data-act="ltabprev">← ${L(CREW[prev].title)}</button>` : "") + (next ? `<button class="hbtn" type="button" data-act="ltabnext">${L(ok("Next", "التالي"))}: ${lLocalOwner(next) ? esc(lLocalOwner(next)) + " · " : ""}${L(CREW[next].title)} →</button>` : "");
 }
 function lLaunchBtn(picks) {
   const done = allChosen(picks, TEAM_ROLES);
@@ -3295,6 +3396,9 @@ function lPartial() {
   if (A.screen === "lroom") { const sig = [LB.room.state.roleMode, LB.myRole, LB.level, LB.players.length, LB.players.filter(p => p.data && p.data.lobbyReady).length, LB.players.map(p => JSON.stringify((p.data && p.data.done) || {})).join(",")].join("|"); if (LB._sig !== sig) { LB._sig = sig; const ci = $("#chatin"), cv = ci ? ci.value : ""; render(); const c2 = $("#chatin"); if (c2 && cv) c2.value = cv; return; } const el = $("#lroomlist"); if (el) el.innerHTML = lRoomList(); return; }
   const bo = $("#boardOthers"); if (bo) bo.innerHTML = lBoardOthers();
   if (A.screen === "ldesign") { const picks = allPicks();
+    const sig = TEAM_ROLES.map(r => (lOwner(r) || {}).id || "v").join(",") + "|" + LB.players.map(p => JSON.stringify((p.data && p.data.rv) || {})).join("");
+    if (LB.mode === "online" && LB._dsig !== undefined && LB._dsig !== sig) { LB._dsig = sig; const ci = $("#chatin"), cv = ci ? ci.value : "", nt = $("#lnotes"), nv2 = nt ? nt.value : null; render(); const c2 = $("#chatin"); if (c2 && cv) c2.value = cv; const n2 = $("#lnotes"); if (n2 && nv2 !== null) n2.value = nv2; return; }
+    LB._dsig = sig;
     document.querySelectorAll("[data-lpick]").forEach(b => { const [r, k, o] = b.dataset.lpick.split("."); b.classList.toggle("sel", picks[r + "." + k] === o); });
     document.querySelectorAll(".ccard[disabled]").forEach(b => { /* teammates' cards are shown via tabs */ });
     document.querySelectorAll(".stp[data-ltab]").forEach(b => b.classList.toggle("done", decisionsFor([b.dataset.ltab]).every(({ role, d }) => picks[role + "." + d.k])));
@@ -3306,11 +3410,11 @@ function lEngineDesign(c) { const m = LM(), base = MISSIONS.find(x => x.id === m
 function lHolo() { const tg = document.querySelector(".holowrap .holotag"); if (tg) tg.textContent = LB.lastPart ? L(ok("Added: ", "اتضاف: ")) + LB.lastPart : L(ok("Your satellite", "القمر بتاعك")); if (!holoL) return; const c = lCompute(allPicks()); try { const { base, d } = lEngineDesign(c); holoL.setDesign(base, d, { dry: 400 }); } catch (e) { } }
 
 /* ---- flight (3D engine with real NASA models) ---- */
-function lfly() { return sfly().replace('<b id="hp">100%</b></div>', `<b id="hp">100%</b></div><div class="fb-h"><span>${L(ok("Points left", "النقط اللي فاضلة"))}</span><b id="ptsFly">${nf(1000 - lPenNow())}</b></div>`); }
+function lfly() { return sfly().replace('<b id="hp">100%</b></div>', `<b id="hp">100%</b></div><div class="fb-h"><span>${L(ok("Points (decisions are scored at the end)", "النقط (القرارات بتتحسب في الآخر)"))}</span><b id="ptsFly">${nf(1000 - lPenNow())}</b></div>`); }
 function lSay(role, text) { const el = $("#subt"); if (el) { el.innerHTML = `<b style="color:${CREW[role].col}">${CREW[role].name}:</b> ${text}`; el.classList.add("on"); } }
 async function lRunFlight() {
   SEQ++; const m = LM(), picks = allPicks(), c = lCompute(picks); const { base, d } = lEngineDesign(c);
-  const F = LB.flight = { health: 100, sci: 1, cost: 0, events: [], lost: null, c, m };
+  const F = LB.flight = { health: 100, sci: 1, cost: 0, events: [], lost: null, c, m, picks: Object.assign({}, picks) };
   curP = 0; totalDays = m.days;
   if (Space3D.ok && $("#view3d")) { flightView = Space3D.createView($("#view3d"), {}); flightView.setReal && flightView.setReal(false); flightView.setMission(base, d, { dry: (c.mass || 1500), prop: 200 }); skyLoop(); }
   const marks = flightView ? flightView.marks() : { ascent: .12 }; ascentEnd = marks.ascent || .12;
@@ -3333,13 +3437,20 @@ function lEvent(i, F) {
     const online = LB.mode === "online";
     el.innerHTML = `<div class="overlay notr" role="dialog" aria-modal="true"><div class="hmodal">
       <div class="evhead">${crewImg(e.role)}<div><div class="kick">${L(ok("Surprise!", "مفاجأة!"))} · ${CREW[e.role].name}</div><h2 class="hh">${L(e.t)}</h2></div></div>
-      <p class="evx">${L(e.x)}</p><p class="evq">${online ? L(ok("Everyone votes. The most votes wins.", "الكل يصوّت، والأكتر أصوات يكسب.")) : L(ok("Talk with the team, then choose.", "اتكلموا مع بعض، وبعدين اختاروا."))}</p>
+      <p class="evx">${L(e.x)}</p><p class="evq">${online || (LB.localPlayers || []).length > 1 ? L(ok("Everyone votes. The most votes wins.", "الكل يصوّت، والأكتر أصوات يكسب.")) : L(ok("Talk with the team, then choose.", "اتكلموا مع بعض، وبعدين اختاروا."))}</p>
       <div class="cards3 ${e.o.length === 2 ? "two" : ""}">${e.o.map((o, j) => `<button type="button" class="ccard" data-lev="${j}"><span class="cnum">${"ABC"[j]}</span><b>${L(o.t)}</b></button>`).join("")}</div><p class="psub" id="votes"></p></div></div>`;
     el.querySelectorAll("[data-lev]").forEach(b => b.onclick = async () => { const j = +b.dataset.lev;
       if (online) { el.querySelectorAll("[data-lev]").forEach(x => x.classList.toggle("sel", x === b)); const v = Object.assign({}, LB.me.data.votes || {}); v[i] = j; await myData({ votes: v }); lVoteCheck(); }
-      else lEventResolve(j, F); });
-    if (online) lVoteCheck();
+      else if ((LB.localPlayers || []).length > 1) lLocalVote(j, F); else lEventResolve(j, F); });
+    LB.lv = {}; if (online) lVoteCheck(); else if ((LB.localPlayers || []).length > 1) lLocalVote(null, F);
   });
+}
+function lLocalVote(j, F) {
+  const ps = LB.localPlayers, i = LB.evI, cur = ps.find(n => LB.lv[n] === undefined);
+  if (j !== null && cur !== undefined) LB.lv[cur] = j;
+  const next = ps.find(n => LB.lv[n] === undefined), vt = $("#votes");
+  if (vt) vt.innerHTML = `<b class="hl">${next ? "🗳 " + L(ok("Now voting", "دور التصويت على")) + ": " + esc(next) : ""}</b><div class="votelist">${ps.map(n => `<span class="rb-p">${LB.lv[n] !== undefined ? "✅" : "⏳"} ${esc(n)}${LB.lv[n] !== undefined ? " · " + "ABC"[LB.lv[n]] : ""}</span>`).join("")}</div>`;
+  if (!next) { const cnt = {}; ps.forEach(n => cnt[LB.lv[n]] = (cnt[LB.lv[n]] || 0) + 1); const lead = lLocalOwner(F.m.events[i].role), max = Math.max(...Object.values(cnt)); const pick = cnt[LB.lv[lead]] === max ? LB.lv[lead] : +Object.keys(cnt).find(k => cnt[k] === max); setTimeout(() => lEventResolve(pick, F), 600); }
 }
 function lVoteCheck() {
   const i = LB.evI; if (i == null || !LB.evRes || LB.mode !== "online" || !LB.flight) return; const votes = LB.players.map(p => p.data && p.data.votes ? p.data.votes[i] : undefined).filter(v => v !== undefined);
@@ -3356,26 +3467,29 @@ function lEventResolve(j, F) {
 }
 function lFinish(F) {
   const c = F.c, m = F.m, alive = !F.lost, rules = c.rules, nR = m.rules.length, met = Object.values(rules).filter(Boolean).length;
-  let stars = alive && met >= 1 ? 1 : 0;
   const reviews = LB.mode === "online" ? LB.room.state.reviews || 0 : LB.reviews;
-  const parts = { success: stars >= 1 ? 300 : 0, rules: alive ? Math.round(met * 300 / nR) : 0, efficiency: alive ? Math.max(0, 200 - c.waste.length * 70) : 0, health: alive ? Math.round(F.health) : 0, cleanup: alive && c.clean ? 100 : 0, penalties: -(Math.max(0, reviews - 1) * 30 + LB.rewatch * 20 + Math.round(F.cost * 10)) };
-  const total = Math.max(0, Object.values(parts).reduce((a, b) => a + b, 0));
-  if (stars && met === nR && total >= 650) stars = 2; if (stars === 2 && total >= 900) stars = 3;
-  F.result = { alive, rules, met, nR, stars, parts, total, missed: m.rules.filter(r => !rules[r.k]), waste: c.waste, sciPct: alive ? Math.round(Math.min(1, c.sci * F.sci * (F.health / 100)) * 100) : 0 };
-  if (alive) { const k = "cml" + LB.level; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, stars); store.set("ma.progress3", A.progress); } if (LB.mode === "online" && LB.me) myData({ done: myDone() });
+  const rows = lDecisionRows(m, c, F.picks || allPicks()), decLoss = rows.reduce((a, r) => a + r.pts, 0);
+  const dmg = alive ? Math.round(100 - F.health) : 0, extraRev = Math.max(0, reviews - 1) * 30, rew = LB.rewatch * 20, rent = Math.round(F.cost * 10);
+  let total = Math.max(0, 1000 - decLoss - dmg - extraRev - rew - rent); if (!alive) total = Math.min(total, 350);
+  const stars = lStarsFor(total);
+  F.result = { alive, rules, met, nR, stars, total, rows, dmg, extraRev, rew, rent, reviews, missed: m.rules.filter(r => !rules[r.k]), waste: c.waste, sciPct: alive ? Math.round(Math.min(1, c.sci * F.sci * (F.health / 100)) * 100) : 0 };
+  const k = "cml" + LB.level; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, stars); store.set("ma.progress3", A.progress); lSaveProgress();
+  if (LB.mode === "online" && LB.me) myData({ done: myDone() });
   setTimeout(() => { if (A.screen === "lfly" && LB.flight === F) go("lusers"); }, 800);
 }
 function lLossHtml(R) {
-  const P = R.parts, rows = [
-    [ok("Mission did not work, or met no need", "المهمة مااشتغلتش، أو محققتش ولا طلب"), 300 - P.success],
-    [{ en: "Needs not met" + (R.missed && R.missed.length ? ": " + R.missed.map(x => x.en).join(", ") : ""), ar: "طلبات متحققتش" + (R.missed && R.missed.length ? ": " + R.missed.map(x => x.ar).join("، ") : "") }, 300 - P.rules],
-    [{ en: "Wasted parts" + (R.waste && R.waste.length ? ": " + R.waste.map(w => w.en.split(":")[0]).join(", ") : ""), ar: "قطع زيادة عن اللزوم" + (R.waste && R.waste.length ? ": " + R.waste.map(w => w.ar.split(":")[0]).join("، ") : "") }, 200 - P.efficiency],
-    [ok("Damage in flight", "ضرر وإنتوا طايرين"), 100 - P.health],
-    [ok("Space junk at the end", "زبالة فضائية في الآخر"), 100 - P.cleanup],
-    [ok("Extra reviews, rewatched videos, rented stations", "مراجعات زيادة، وفيديوهات اتشافت تاني، ومحطات متأجرة"), -P.penalties]].filter(r => r[1] > 0);
-  return `<div class="losses"><div class="lrow start"><span>${L(ok("You started with", "بدأتوا بـ"))}</span><b>1,000</b></div>
-    ${rows.map(([t, v]) => `<div class="lrow"><span>${L(t)}</span><b class="bad">−${nf(v)}</b></div>`).join("")}
-    <div class="lrow end"><span>${L(ok("You kept", "فضل معاكم"))}</span><b>${nf(R.total)}</b></div></div>`;
+  const extra = [
+    [ok("Damage from the surprises in flight", "ضرر من المفاجآت وإنتوا طايرين"), R.dmg],
+    [ok("Rented a partner's ground station in a surprise (it costs money)", "أجّرتوا محطة أرضية من شريك في مفاجأة (وده بفلوس)"), R.rent],
+    [{ en: `Extra design reviews (${Math.max(0, R.reviews - 1)} × 30; the first one is free)`, ar: `مراجعات تصميم زيادة (${Math.max(0, R.reviews - 1)} × 30، وأول واحدة ببلاش)` }, R.extraRev],
+    [{ en: `Rewatched videos (${LB.rewatch} × 20)`, ar: `فيديوهات اتشافت تاني (${LB.rewatch} × 20)` }, R.rew]].filter(r => r[1] > 0);
+  return `<div class="dash"><div class="lrow start"><span>${L(ok("Your team started with", "التيم بدأ بـ"))}</span><b>1,000</b></div>
+    <table class="dtab"><tr><th>${L(ok("Decision", "القرار"))}</th><th>${L(ok("Your choice", "اختياركم"))}</th><th>${L(ok("Points", "النقط"))}</th><th>${L(ok("Why", "ليه"))}</th></tr>
+    ${R.rows.map(r => `<tr class="${r.pts ? "lost" : "okr"}"><td><span class="rdot" style="--sc:${CREW[r.role].col}"></span>${L(r.q)}</td><td>${L(r.pick)}</td><td><b class="${r.pts ? "bad" : "good"}">${r.pts ? "−" + nf(r.pts) : "✅ 0"}</b></td><td class="psub">${r.pts ? L(r.why) : L(ok("Best choice", "أحسن اختيار"))}</td></tr>`).join("")}</table>
+    ${extra.map(([t, v]) => `<div class="lrow"><span>${L(t)}</span><b class="bad">−${nf(v)}</b></div>`).join("")}
+    ${!R.alive ? `<div class="lrow"><span>${L(ok("The mission was lost, so the score is capped at 350", "المهمة فشلت، فأقصى نقط 350"))}</span><b class="bad">≤ 350</b></div>` : ""}
+    <div class="lrow end"><span>${L(ok("You kept", "فضل معاكم"))}</span><b>${nf(R.total)} / 1,000</b></div>
+    <p class="psub">${L(ok("Stars come only from points: ★ 400+ · ★★ 700+ · ★★★ 900+. You need at least ★ to unlock the next level.", "النجوم بتيجي من النقط بس: ★ من 400 · ★★ من 700 · ★★★ من 900. ومحتاجين ★ على الأقل علشان المستوى الجاي يتفتح."))}</p></div>`;
 }
 function lCert() {
   const F = LB.flight; if (!F || !F.result) return; const R = F.result, m = F.m;
@@ -3421,7 +3535,7 @@ function lreport() {
     <div class="resgrid"><div><div class="bigstars">${"★".repeat(R.stars)}<span>${"★".repeat(3 - R.stars)}</span></div>
       <h2 class="hh">${!R.alive ? L(ok("Mission lost", "المهمة فشلت")) : R.stars ? L(ok("Mission complete", "المهمة نجحت")) : L(ok("It worked, but met no need", "اشتغلت، بس محققتش ولا طلب"))} · ${R.total} ${L(ok("points", "نقطة"))}</h2>
       <p class="sciline">${L(ok("Needs met", "الطلبات المتحققة"))}: <b>${R.met}/${R.nR}</b> · ${L(ok("Health", "الصحة"))}: <b>${Math.round(F.health)}%</b>${c.mass ? ` · ${L(ok("Mass", "الوزن"))}: <b>${nf(Math.round(c.mass))} kg</b>` : ""}${c.need ? ` · ${L(ok("Power", "الكهربا"))}: <b>${nf(c.need)} / ${nf(c.supply)} ${m.unit || "W"}</b>` : ""}</p>
-      <ul class="starkey"><li class="${R.stars >= 1 ? "on" : ""}">★ ${L(ok("It worked and met at least one need", "اشتغلت وحققت طلب واحد على الأقل"))}</li><li class="${R.stars >= 2 ? "on" : ""}">★ ${L(ok("Every need met, and 650+ points", "كل الطلبات اتحققت، و 650 نقطة أو أكتر"))}</li><li class="${R.stars >= 3 ? "on" : ""}">★ ${L(ok("900+ points: nothing wasted, little damage", "900 نقطة أو أكتر: مفيش تضييع، وضرر قليل"))}</li></ul>
+      <ul class="starkey"><li class="${R.stars >= 1 ? "on" : ""}">★ ${L(ok("400+ points", "400 نقطة أو أكتر"))}</li><li class="${R.stars >= 2 ? "on" : ""}">★★ ${L(ok("700+ points", "700 نقطة أو أكتر"))}</li><li class="${R.stars >= 3 ? "on" : ""}">★★★ ${L(ok("900+ points", "900 نقطة أو أكتر"))}</li></ul>
       ${lLossHtml(R)}</div>
     <div class="resholo"><canvas id="holoRes" class="holo"></canvas><div class="holotag">NASA 3D model · ${({ goes: "GOES", lro: "LRO", landsat8: "Landsat 8", perseverance: "Perseverance" })[m.model]}</div></div></div>
     <div class="cols2"><div class="hcard"><h3>${L(ok("What you did well", "اللي عملته صح"))}</h3><ul>${(good.length ? good : [ok("You tried. Every NASA team learns from its first design.", "إنت جرّبت، وكل تيم في ناسا بيتعلم من أول تصميم.")]).slice(0, 6).map(x => `<li>${L(x)}</li>`).join("")}</ul></div>
@@ -3435,7 +3549,7 @@ function lreport() {
     ${LB.level < 4 ? `<p class="needline">${R.stars >= 1 ? `🔓 ${L(ok("Next level unlocked! You need at least 1 star to move on. Come back any time for 3 stars.", "المستوى اللي بعده اتفتح! محتاج نجمة واحدة على الأقل علشان تكمّل، وتقدر ترجع في أي وقت علشان الـ 3 نجوم."))}` : `🔒 ${L(ok("Get at least 1 star to unlock the next level: the spacecraft must work and meet at least one need.", "محتاج نجمة واحدة على الأقل علشان المستوى اللي بعده يتفتح: المركبة لازم تشتغل وتحقق طلب واحد على الأقل."))}`}</p>` : ""}
     <div class="row">${LB.mode === "online" ? `<button class="hbtn" type="button" data-act="oagain">🔁 ${L(ok("Back to the room (next game)", "ارجع للغرفة (الجولة الجاية)"))}</button><button class="hbtn ghost" type="button" data-act="oleave">🚪 ${L(ok("Leave this room", "اخرج من الغرفة دي"))}</button>` : ""}${LB.mode !== "online" && LB.level < 4 && R.stars >= 1 ? `<button class="hbtn" type="button" data-act="nextlvl">${L(ok("Next level", "المستوى اللي بعده"))} → CML ${LB.level + 1}</button>` : ""}<button class="hbtn ${R.stars >= 1 && LB.level < 4 ? "ghost" : ""}" type="button" data-act="redesign">${L(ok("Change the design and fly again", "غيّر التصميم وطير تاني"))}</button><button class="hbtn ghost" type="button" data-go="llevel">${L(ok("Levels", "المستويات"))}</button></div></section>`;
 }
-Object.assign(SIMPLE, { lhome, llevel, lonline, lroom, lvideo, ldesign, lfly, lusers, lreport });
+Object.assign(SIMPLE, { lhome, llocal, llevel, lonline, lroom, lvideo, ldesign, lfly, lusers, lreport });
 Object.assign(SIMPLE_AFTER, {
   lhome() { const cv = $("#holoHome"); if (!Space3D.ok || !cv) return; const h = Space3D.createHolo(cv); h && h.setModel("landsat8"); },
   lonline() { onlineAvailable().then(okk => { const el = $("#olstat"); if (!el) return; el.innerHTML = okk ? L(ok("Connected. Write your name, then create or join a room.", "متوصل. اكتب اسمك، وبعدين اعمل غرفة أو ادخل واحدة.")) : L(ok("Online play can't connect here. Open the public game link (GitHub Pages), or play on one computer.", "اللعب الأونلاين مش قادر يتوصل هنا. افتح لينك اللعبة العام (GitHub Pages)، أو العبوا على جهاز واحد.")); if (!okk) document.querySelectorAll("[data-act=ocreate],[data-act=ojoin]").forEach(b => b.disabled = true); }); },
@@ -3450,17 +3564,20 @@ Object.assign(SIMPLE_AFTER, {
 function lStartDesign() { LB.tab = myRoles()[0] || "science"; LB.revealed = null; go("ldesign"); }
 function lClick(t) {
   const a = t.dataset.act;
-  if (t.dataset.lmode) { LB.mode = t.dataset.lmode; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.watched = {}; go(LB.mode === "online" ? "lonline" : "llevel"); return true; }
+  if (t.dataset.lmode) { LB.mode = t.dataset.lmode; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.watched = {}; LB.localPlayers = LB.mode === "local" ? (LB.localPlayers || []) : []; go(LB.mode === "online" ? "lonline" : LB.mode === "local" ? "llocal" : "llevel"); return true; }
+  if (a === "llocalgo") { LB.localPlayers = [...document.querySelectorAll(".lpname")].map(i => i.value.trim()).filter(Boolean).slice(0, 4); A.certNames = LB.localPlayers.join(", "); go("llevel"); return true; }
   if (t.dataset.llevel) { LB.level = +t.dataset.llevel; LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
   if (t.dataset.ltab) { LB.tab = t.dataset.ltab; render(); return true; }
   if (a === "ltabnext" || a === "ltabprev") { const i = TEAM_ROLES.indexOf(LB.tab) + (a === "ltabnext" ? 1 : -1); if (TEAM_ROLES[i]) { LB.tab = TEAM_ROLES[i]; LB.lastPart = null; render(); window.scrollTo({ top: 0 }); } return true; }
-  if (t.dataset.lpick) { const [r, k, o] = t.dataset.lpick.split("."); if (LB.mode === "online") { const p = Object.assign({}, (LB.me.data && LB.me.data.picks) || {}); p[r + "." + k] = o; LB.me.data.picks = p; myData({ picks: p, ready: false }); } else LB.picks[r + "." + k] = o; const dd = LM().decisions[r].find(x => x.k === k), oo = dd && dd.o.find(x => x.k === o); LB.lastPart = oo ? L(oo.n) : null; lPartial(); return true; }
+  if (t.dataset.lpick) { const [r, k, o] = t.dataset.lpick.split("."); if (LB.mode === "online" && lOrphan(r)) { const v = Object.assign({}, (LB.me.data && LB.me.data.rv) || {}); v[r + "." + k] = o; LB.me.data.rv = v; myData({ rv: v }); } else if (LB.mode === "online") { const p = Object.assign({}, (LB.me.data && LB.me.data.picks) || {}); p[r + "." + k] = o; LB.me.data.picks = p; myData({ picks: p, ready: false }); } else LB.picks[r + "." + k] = o; const dd = LM().decisions[r].find(x => x.k === k), oo = dd && dd.o.find(x => x.k === o); LB.lastPart = oo ? L(oo.n) : null; lPartial(); return true; }
   if (a === "vnext") { LB.vi = (LB.vi || 0) + 1; render(); return true; }
   if (a === "vdone") { if (LB.mode === "online") myData({ watched: true }); lStartDesign(); return true; }
   if (a === "rewatch") { LB.rewatch++; LB.vi = lVideoList().length - 1; go("lvideo"); return true; }
   if (a === "review") { const n = LB.mode === "online" ? (LB.room.state.reviews || 0) : LB.reviews; if (LB.mode === "online") roomState({ reviews: n + 1, lastReview: Date.now() }); else { LB.reviews = n + 1; LB.revealed = Date.now(); } const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); lPtsPaint(); return true; }
   if (a === "llaunch") { go("lfly"); lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return true; }
   if (a === "redesign") { lStartDesign(); return true; }
+  if (a === "signin") { const sb = sbClient(); if (sb) sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.href.split("#")[0] } }).then(r => { if (r && r.error) alert(r.error.message); }); return true; }
+  if (a === "signout") { const sb = sbClient(); if (sb) sb.auth.signOut().then(() => { A.user = null; render(); }); return true; }
   if (a === "cert") { A.certNames = $("#certnames").value; lCert(); return true; }
   if (a === "nextlvl") { if (LB.mode === "online") { go("llevel"); return true; } LB.level = Math.min(4, LB.level + 1); LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
   if (a === "oready") { myData({ ready: true }).then(() => { if (LB.players.every(p => p.data && (p.data.ready || p.id === LB.me.id))) roomState({ phase: "flight", at: Date.now() }); }); return true; }
@@ -3469,7 +3586,7 @@ function lClick(t) {
     if (a === "ocreate") LB.level = +$("#olevel").value;
     (a === "ocreate" ? roomCreate(name, (document.querySelector("input[name=rmode]:checked") || {}).value) : roomJoin($("#ocode").value, name)).then(() => go("lroom")).catch(e => { err.textContent = e.message || String(e); }); return true; }
   if ((a === "ostart" || a === "ostartnow") && lBlocked(LB.level).length) return true;
-  if (a === "ostart" || a === "ostartnow") { const at = Date.now(); LB.gameAt = at; LB.backInRoom = false; lResetGame(); roomState({ phase: "video", videoAt: at, reviews: 0, lastReview: null }).then(() => go("lvideo")); return true; }
+  if (a === "ostart" || a === "ostartnow") { const at = Date.now(); LB.gameAt = at; LB.backInRoom = false; lResetGame(); roomState({ phase: "video", videoAt: at, reviews: 0, lastReview: null, extra: lPlanExtra() }).then(() => go("lvideo")); return true; }
   if (a === "oready0") { myData({ lobbyReady: !(LB.me.data && LB.me.data.lobbyReady) }).then(() => roomRefresh()); return true; }
   if (a === "olevel") { if (isHost() && !lBlocked(+t.dataset.n).length) { const n = +t.dataset.n; LB.level = n; sbClient().from("rooms").update({ level: n, mission: CML[n - 1].m }).eq("code", LB.room.code).then(() => roomRefresh()); } return true; }
   if (a === "oagain") { lResetGame(); LB.backInRoom = true; go("lroom"); return true; }
@@ -3483,7 +3600,7 @@ function lClick(t) {
 }
 document.addEventListener("submit", e => { if (e.target.id === "chatform") { e.preventDefault(); const i = $("#chatin"); sendChat(i.value); i.value = ""; } });
 document.addEventListener("change", e => { if (e.target.id === "ula2") { A.unlockAll = e.target.checked; render(); } });
-window.LB = LB; render(); applyLang();
+window.LB = LB; render(); applyLang(); lAuthInit();
 (function lResume() { let s = null; try { s = JSON.parse(sessionStorage.getItem("ma.room") || "null"); } catch (e) { } if (!s || !s.code) return;
   if (!sbClient()) return; A.resumeMsg = s.code; LB.mode = "online"; go("lonline"); LB.vi = 0;
   roomJoin(s.code, s.name).then(() => { A.resumeMsg = null; const ph = LB.room.state.phase; if (ph === "lobby") go("lroom"); else if (ph === "video" && LB.me.data && LB.me.data.watched) lStartDesign(); })
