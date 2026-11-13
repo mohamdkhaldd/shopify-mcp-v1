@@ -383,7 +383,7 @@ function roomSubscribe() {
   clearInterval(pollT); pollT = setInterval(roomRefresh, 4000); // safety net if realtime drops
 }
 async function roomState(patch) { const sb = sbClient(); const st = Object.assign({}, LB.room.state, patch); LB.room.state = st; await sb.from("rooms").update({ state: st, updated_at: new Date().toISOString() }).eq("code", LB.room.code); }
-async function myData(patch) { const sb = sbClient(); const d = Object.assign({}, LB.me.data, patch); LB.me.data = d; await sb.from("players").update({ data: d, last_seen: new Date().toISOString() }).eq("id", LB.me.id); }
+async function myData(patch) { const sb = sbClient(); if (!sb || !LB.me) return; const d = Object.assign({}, LB.me.data, patch, { done: myDone() }); LB.me.data = d; await sb.from("players").update({ data: d, last_seen: new Date().toISOString() }).eq("id", LB.me.id); }
 async function sendChat(body) { const sb = sbClient(); body = body.trim().slice(0, 300); if (!body) return; await sb.from("messages").insert({ room: LB.room.code, name: LB.me.name, role: LB.myRole, body }); }
 function onRoomChange() {
   if (!LB.room) return; const ph = LB.room.state.phase;
@@ -393,7 +393,10 @@ function onRoomChange() {
   if (LB.backInRoom && ph === "flight") { if (["lroom", "ldesign", "lvideo"].includes(A.screen)) lPartial(); lChatPaint(); return; }
   if (ph === "lobby" && !['lroom', 'lonline'].includes(A.screen)) { lResetGame(); go("lroom"); return; }
   const RANK = { lonline: 0, lroom: 1, lvideo: 2, ldesign: 3, lfly: 4, lusers: 5, lreport: 6 }, target = { lobby: "lroom", video: "lvideo", flight: "lfly" }[ph];
-  if (target && (RANK[A.screen] ?? 0) < RANK[target]) { if (target === "lvideo") LB.vi = 0; go(target); if (target === "lfly") lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return; }
+  let doneG = null; try { doneG = sessionStorage.getItem("ma.doneGame"); } catch (e) { }
+  const finishedThis = doneG && String(LB.room.state.videoAt || LB.room.state.at) === doneG;
+  if (target === "lfly" && !["lfly", "lusers", "lreport"].includes(A.screen) && (finishedThis || LB.backInRoom || !["lroom", "lvideo", "ldesign"].includes(A.screen))) { if (["lroom", "ldesign", "lvideo"].includes(A.screen)) lPartial(); lChatPaint(); return; }
+  if (target && ["lonline", "lroom", "lvideo", "ldesign"].includes(A.screen) && (RANK[A.screen] ?? 0) < RANK[target]) { if (target === "lvideo") LB.vi = 0; go(target); if (target === "lfly") lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return; }
   if (isHost() && ph !== "flight" && LB.players.length && LB.players.every(p => p.data && p.data.ready) && allChosen(allPicks(), rolesInPlay())) { roomState({ phase: "flight", at: Date.now() }); }
   if (["lroom", "ldesign", "lvideo"].includes(A.screen)) lPartial();
   if (A.screen === "lfly") lVoteCheck();
@@ -411,6 +414,7 @@ function lhome() {
       <h1 class="cine-h">MISSION <span>LAB</span></h1>
       <p class="cine-p">${L(ok("You are a space mission team. Each of you gets a role and a guide. Watch your guide's video, write what you learn on the team board, talk together, and design a real satellite.", "إنتوا تيم مهمة فضاء. كل واحد فيكم ليه دور ومرشد. اتفرج على فيديو المرشد بتاعك، واكتب اللي اتعلمته على سبورة التيم، واتكلموا مع بعض، وصمموا قمر صناعي حقيقي."))}</p>
       ${lAuthBox()}
+      ${LB.mode === "online" && LB.room ? `<div class="needline">🛰 ${L(ok("You are still in room", "إنت لسه في الغرفة"))} <b class="code">${LB.room.code}</b> <button class="hbtn" type="button" data-act="oagain">${L(ok("Back to the room", "ارجع للغرفة"))}</button> <button class="linkbtn" type="button" data-act="oleave">${L(ok("Leave it", "اخرج منها"))}</button></div>` : ""}
       <div class="row"><button class="hbtn" type="button" data-lmode="solo">${L(ok("Play solo", "العب لوحدك"))}</button>
         <button class="hbtn ghost" type="button" data-lmode="local">${L(ok("Team on one computer", "تيم على جهاز واحد"))}</button>
         <button class="hbtn ghost" type="button" data-lmode="online">${L(ok("Online team (each on own laptop)", "تيم أونلاين (كل واحد على اللابتوب بتاعه)"))}</button></div></div>
@@ -734,7 +738,7 @@ function lreport() {
       ${m.real.photos ? `<div class="realgal">${m.real.photos.map(([id, cap]) => `<figure><img src="img/real/${id}.jpg" alt="" loading="lazy"><figcaption>${L(cap)} <span class="psub">· NASA</span></figcaption></figure>`).join("")}</div>` : ""}
       <p class="psub">${L(ok("Sources", "المصادر"))}: ${m.real.links.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join(" · ")} · <a href="https://nasa.github.io/mission-viz/" target="_blank" rel="noopener">NASA Mission Viz</a></p></div>
     ${LB.level < 4 ? `<p class="needline">${R.stars >= 1 ? `🔓 ${L(ok("Next level unlocked! You need at least 1 star to move on. Come back any time for 3 stars.", "المستوى اللي بعده اتفتح! محتاج نجمة واحدة على الأقل علشان تكمّل، وتقدر ترجع في أي وقت علشان الـ 3 نجوم."))}` : `🔒 ${L(ok("Get at least 1 star to unlock the next level: the spacecraft must work and meet at least one need.", "محتاج نجمة واحدة على الأقل علشان المستوى اللي بعده يتفتح: المركبة لازم تشتغل وتحقق طلب واحد على الأقل."))}`}</p>` : ""}
-    <div class="row">${LB.mode === "online" ? `<button class="hbtn" type="button" data-act="oagain">🔁 ${L(ok("Back to the room (next game)", "ارجع للغرفة (الجولة الجاية)"))}</button><button class="hbtn ghost" type="button" data-act="oleave">🚪 ${L(ok("Leave this room", "اخرج من الغرفة دي"))}</button>` : ""}${LB.mode !== "online" && LB.level < 4 && R.stars >= 1 ? `<button class="hbtn" type="button" data-act="nextlvl">${L(ok("Next level", "المستوى اللي بعده"))} → CML ${LB.level + 1}</button>` : ""}<button class="hbtn ${R.stars >= 1 && LB.level < 4 ? "ghost" : ""}" type="button" data-act="redesign">${L(ok("Change the design and fly again", "غيّر التصميم وطير تاني"))}</button><button class="hbtn ghost" type="button" data-go="llevel">${L(ok("Levels", "المستويات"))}</button></div></section>`;
+    <div class="row">${LB.mode === "online" ? `<button class="hbtn" type="button" data-act="oagain">🔁 ${L(ok("Back to the room (next game)", "ارجع للغرفة (الجولة الجاية)"))}</button><button class="hbtn ghost" type="button" data-act="oleave">🚪 ${L(ok("Leave this room", "اخرج من الغرفة دي"))}</button>` : ""}${LB.mode !== "online" && LB.level < 4 && R.stars >= 1 ? `<button class="hbtn" type="button" data-act="nextlvl">${L(ok("Next level", "المستوى اللي بعده"))} → CML ${LB.level + 1}</button>` : ""}<button class="hbtn ${R.stars >= 1 && LB.level < 4 ? "ghost" : ""}" type="button" data-act="redesign">${L(ok("Change the design and fly again", "غيّر التصميم وطير تاني"))}</button>${LB.mode === "online" ? "" : `<button class="hbtn ghost" type="button" data-go="llevel">${L(ok("Levels", "المستويات"))}</button>`}</div></section>`;
 }
 Object.assign(SIMPLE, { lhome, llocal, llevel, lonline, lroom, lvideo, ldesign, lfly, lusers, lreport });
 Object.assign(SIMPLE_AFTER, {
@@ -751,7 +755,7 @@ Object.assign(SIMPLE_AFTER, {
 function lStartDesign() { LB.tab = myRoles()[0] || "science"; LB.revealed = null; go("ldesign"); }
 function lClick(t) {
   const a = t.dataset.act;
-  if (t.dataset.lmode) { LB.mode = t.dataset.lmode; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.watched = {}; LB.localPlayers = LB.mode === "local" ? (LB.localPlayers || []) : []; go(LB.mode === "online" ? "lonline" : LB.mode === "local" ? "llocal" : "llevel"); return true; }
+  if (t.dataset.lmode) { if (LB.room && LB.me) { myData({ left: true, ready: false }); lLeave(); } LB.mode = t.dataset.lmode; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.watched = {}; LB.localPlayers = LB.mode === "local" ? (LB.localPlayers || []) : []; go(LB.mode === "online" ? "lonline" : LB.mode === "local" ? "llocal" : "llevel"); return true; }
   if (a === "llocalgo") { LB.localPlayers = [...document.querySelectorAll(".lpname")].map(i => i.value.trim()).filter(Boolean).slice(0, 4); A.certNames = LB.localPlayers.join(", "); go("llevel"); return true; }
   if (t.dataset.llevel) { LB.level = +t.dataset.llevel; LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
   if (t.dataset.ltab) { LB.tab = t.dataset.ltab; render(); return true; }
