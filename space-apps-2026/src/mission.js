@@ -418,6 +418,7 @@ function lhome() {
       <div class="row"><button class="hbtn" type="button" data-lmode="solo">${L(ok("Play solo", "العب لوحدك"))}</button>
         <button class="hbtn ghost" type="button" data-lmode="local">${L(ok("Team on one computer", "تيم على جهاز واحد"))}</button>
         <button class="hbtn ghost" type="button" data-lmode="online">${L(ok("Online team (each on own laptop)", "تيم أونلاين (كل واحد على اللابتوب بتاعه)"))}</button></div></div>
+    <p class="psub legal"><a href="privacy.html" target="_blank" rel="noopener">${L(ok("Privacy Policy", "سياسة الخصوصية"))}</a> · <a href="terms.html" target="_blank" rel="noopener">${L(ok("Terms of Use", "شروط الاستخدام"))}</a></p>
     <div class="how">${[[1, ok("Watch your guide", "اتفرج على المرشد")], [2, ok("Write on the team board", "اكتب على السبورة")], [3, ok("Decide together", "قرروا مع بعض")], [4, ok("Launch and see who you helped", "اطلق وشوف ساعدت مين")]].map(([n, t]) => `<div><span>0${n}</span><b>${L(t)}</b></div>`).join("")}</div>
   </section>`;
 }

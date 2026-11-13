@@ -408,3 +408,4 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 @media (max-width:700px){.dtab td:nth-child(4),.dtab th:nth-child(4){display:none}}
 .authbox{margin:10px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}.authbox b{color:var(--hl)}
 .dtab .bad{color:#ff7a85}
+.legal a{color:var(--muted,#9fb8cd)}
