@@ -3561,7 +3561,7 @@ Object.assign(SIMPLE_AFTER, {
   lhome() { const cv = $("#holoHome"); if (!Space3D.ok || !cv) return; const h = Space3D.createHolo(cv); h && h.setModel("landsat8"); },
   lonline() { onlineAvailable().then(okk => { const el = $("#olstat"); if (!el) return; el.innerHTML = okk ? L(ok("Connected. Write your name, then create or join a room.", "متوصل. اكتب اسمك، وبعدين اعمل غرفة أو ادخل واحدة.")) : L(ok("Online play can't connect here. Open the public game link (GitHub Pages), or play on one computer.", "اللعب الأونلاين مش قادر يتوصل هنا. افتح لينك اللعبة العام (GitHub Pages)، أو العبوا على جهاز واحد.")); if (!okk) document.querySelectorAll("[data-act=ocreate],[data-act=ojoin]").forEach(b => b.disabled = true); }); },
   lroom() { lChatPaint(); },
-  lvideo() { clearInterval(LB.vt); if (LB.mode === "online" && LB.room && LB.room.state.videoAt && LB.level > 1) { const lim = 7 * 60000, end = LB.room.state.videoAt + lim;
+  lvideo() { clearInterval(LB.vt); if (LB.mode === "online" && LB.room && LB.room.state.videoAt && LB.level > 1) { const lim = (LB.level === 2 ? 9 : 7) * 60000, end = LB.room.state.videoAt + lim;
       const tick = () => { const el = $("#vtimer"); if (A.screen !== "lvideo") return clearInterval(LB.vt); const ms = end - Date.now(); if (ms <= 0) { clearInterval(LB.vt); myData({ watched: true }); lStartDesign(); return; } if (el) el.textContent = Math.floor(ms / 60000) + ":" + String(Math.floor(ms / 1000) % 60).padStart(2, "0"); };
       tick(); LB.vt = setInterval(tick, 1000); }
     const v = $("#brief"); const list = lVideoList(), r = list[Math.min(LB.vi || 0, list.length - 1)]; if (v) v.onended = () => { LB.watched[LM().id + r] = true; const b = $("#vnext"); if (b) b.disabled = false; }; },
