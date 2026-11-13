@@ -483,9 +483,9 @@ function lEventResolve(j, F) {
 }
 function lFinish(F) {
   const c = F.c, m = F.m, alive = !F.lost, rules = c.rules, nR = m.rules.length, met = Object.values(rules).filter(Boolean).length;
-  let stars = alive ? 1 : 0; if (alive && met === nR) stars = 2; if (stars === 2 && F.health >= 70 && c.clean && c.efficient) stars = 3;
+  let stars = alive && met >= 1 ? 1 : 0; if (alive && met === nR) stars = 2; if (stars === 2 && F.health >= 70 && c.clean && c.efficient) stars = 3;
   const reviews = LB.mode === "online" ? LB.room.state.reviews || 0 : LB.reviews;
-  const parts = { success: alive ? 300 : 0, rules: alive ? Math.round(met * 300 / nR) : 0, efficiency: alive ? Math.max(0, 200 - c.waste.length * 70) : 0, health: alive ? Math.round(F.health) : 0, cleanup: alive && c.clean ? 100 : 0, penalties: -(Math.max(0, reviews - 1) * 30 + LB.rewatch * 20 + Math.round(F.cost * 10)) };
+  const parts = { success: stars >= 1 ? 300 : 0, rules: alive ? Math.round(met * 300 / nR) : 0, efficiency: alive ? Math.max(0, 200 - c.waste.length * 70) : 0, health: alive ? Math.round(F.health) : 0, cleanup: alive && c.clean ? 100 : 0, penalties: -(Math.max(0, reviews - 1) * 30 + LB.rewatch * 20 + Math.round(F.cost * 10)) };
   const total = Math.max(0, Object.values(parts).reduce((a, b) => a + b, 0));
   F.result = { alive, rules, met, nR, stars, parts, total, sciPct: alive ? Math.round(Math.min(1, c.sci * F.sci * (F.health / 100)) * 100) : 0 };
   if (alive) { const k = "cml" + LB.level; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, stars); store.set("ma.progress3", A.progress); }
@@ -508,9 +508,9 @@ function lreport() {
   const mine = TEAM_ROLES.flatMap(r => m.decisions[r].map(d => { const o = pickOpt(m, allPicks(), r, d.k); return o ? L(o.n) : "—"; })).join(" · ");
   return `<section class="hpanel notr result"><div class="kick">${L(ok("Mission report", "تقرير المهمة"))} · ${L(lvl().t)} · ${L(m.name)}</div>
     <div class="resgrid"><div><div class="bigstars">${"★".repeat(R.stars)}<span>${"★".repeat(3 - R.stars)}</span></div>
-      <h2 class="hh">${R.alive ? L(ok("Mission complete", "المهمة نجحت")) : L(ok("Mission lost", "المهمة فشلت"))} · ${R.total} ${L(ok("points", "نقطة"))}</h2>
+      <h2 class="hh">${!R.alive ? L(ok("Mission lost", "المهمة فشلت")) : R.stars ? L(ok("Mission complete", "المهمة نجحت")) : L(ok("It worked, but met no need", "اشتغلت، بس محققتش ولا طلب"))} · ${R.total} ${L(ok("points", "نقطة"))}</h2>
       <p class="sciline">${L(ok("Needs met", "الطلبات المتحققة"))}: <b>${R.met}/${R.nR}</b> · ${L(ok("Health", "الصحة"))}: <b>${Math.round(F.health)}%</b>${c.mass ? ` · ${L(ok("Mass", "الوزن"))}: <b>${nf(Math.round(c.mass))} kg</b>` : ""}${c.need ? ` · ${L(ok("Power", "الكهربا"))}: <b>${nf(c.need)} / ${nf(c.supply)} ${m.unit || "W"}</b>` : ""}</p>
-      <ul class="starkey"><li class="${R.stars >= 1 ? "on" : ""}">★ ${L(ok("The spacecraft got there and worked", "المركبة وصلت واشتغلت"))}</li><li class="${R.stars >= 2 ? "on" : ""}">★ ${L(ok("Every need was met", "كل الطلبات اتحققت"))}</li><li class="${R.stars >= 3 ? "on" : ""}">★ ${L(ok("Nothing wasted, healthy, clean end", "مفيش تضييع، وصحة كويسة، ونهاية نضيفة"))}</li></ul>
+      <ul class="starkey"><li class="${R.stars >= 1 ? "on" : ""}">★ ${L(ok("It worked and met at least one need", "اشتغلت وحققت طلب واحد على الأقل"))}</li><li class="${R.stars >= 2 ? "on" : ""}">★ ${L(ok("Every need was met", "كل الطلبات اتحققت"))}</li><li class="${R.stars >= 3 ? "on" : ""}">★ ${L(ok("Nothing wasted, healthy, clean end", "مفيش تضييع، وصحة كويسة، ونهاية نضيفة"))}</li></ul>
       <p class="psub">${L(ok("Points", "النقط"))}: ${Object.entries(R.parts).map(([k, v]) => `${k} ${v}`).join(" · ")}</p></div>
     <div class="resholo"><canvas id="holoRes" class="holo"></canvas><div class="holotag">NASA 3D model · ${({ goes: "GOES", lro: "LRO", landsat8: "Landsat 8", perseverance: "Perseverance" })[m.model]}</div></div></div>
     <div class="cols2"><div class="hcard"><h3>${L(ok("What you did well", "اللي عملته صح"))}</h3><ul>${(good.length ? good : [ok("You tried. Every NASA team learns from its first design.", "إنت جرّبت، وكل تيم في ناسا بيتعلم من أول تصميم.")]).slice(0, 6).map(x => `<li>${L(x)}</li>`).join("")}</ul></div>
@@ -518,7 +518,7 @@ function lreport() {
     <div class="hcard fact"><h3>${L(ok("The real mission", "المهمة الحقيقية"))}: ${esc(m.real.name)}</h3><p>${L(m.real.facts)}</p>
       <p class="psub"><b>${L(ok("The real mission chose", "المهمة الحقيقية اختارت"))}:</b> ${L(m.real.picks)}<br><b>${L(ok("Your team chose", "التيم بتاعك اختار"))}:</b> ${esc(mine)}</p>
       <p class="psub">${L(ok("Sources", "المصادر"))}: ${m.real.links.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join(" · ")} · <a href="https://nasa.github.io/mission-viz/" target="_blank" rel="noopener">NASA Mission Viz</a></p></div>
-    ${LB.level < 4 ? `<p class="needline">${R.stars >= 1 ? `🔓 ${L(ok("Next level unlocked! You need at least 1 star to move on. Come back any time for 3 stars.", "المستوى اللي بعده اتفتح! محتاج نجمة واحدة على الأقل علشان تكمّل، وتقدر ترجع في أي وقت علشان الـ 3 نجوم."))}` : `🔒 ${L(ok("Get at least 1 star to unlock the next level.", "محتاج نجمة واحدة على الأقل علشان المستوى اللي بعده يتفتح."))}`}</p>` : ""}
+    ${LB.level < 4 ? `<p class="needline">${R.stars >= 1 ? `🔓 ${L(ok("Next level unlocked! You need at least 1 star to move on. Come back any time for 3 stars.", "المستوى اللي بعده اتفتح! محتاج نجمة واحدة على الأقل علشان تكمّل، وتقدر ترجع في أي وقت علشان الـ 3 نجوم."))}` : `🔒 ${L(ok("Get at least 1 star to unlock the next level: the spacecraft must work and meet at least one need.", "محتاج نجمة واحدة على الأقل علشان المستوى اللي بعده يتفتح: المركبة لازم تشتغل وتحقق طلب واحد على الأقل."))}`}</p>` : ""}
     <div class="row">${LB.level < 4 && R.stars >= 1 ? `<button class="hbtn" type="button" data-act="nextlvl">${L(ok("Next level", "المستوى اللي بعده"))} → CML ${LB.level + 1}</button>` : ""}<button class="hbtn ${R.stars >= 1 && LB.level < 4 ? "ghost" : ""}" type="button" data-act="redesign">${L(ok("Change the design and fly again", "غيّر التصميم وطير تاني"))}</button><button class="hbtn ghost" type="button" data-go="llevel">${L(ok("Levels", "المستويات"))}</button></div></section>`;
 }
 Object.assign(SIMPLE, { lhome, llevel, lonline, lroom, lvideo, ldesign, lfly, lusers, lreport });
