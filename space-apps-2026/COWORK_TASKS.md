@@ -17,7 +17,14 @@ Do them in order. Ask the user to sign in when a page needs it. Never paste pass
 ## Task 2 · Google sign-in (keeps each player's levels on any device)
 **A. Google Cloud**
 1. Open https://console.cloud.google.com/ → create or pick a project named `StellarOps Mission Lab`.
-2. **APIs & Services → OAuth consent screen**: User type **External**; app name `StellarOps Mission Lab`; support email = the user's; save. Add the team's Gmail addresses as **Test users**.
+2. **APIs & Services → OAuth consent screen** (may be called **Google Auth Platform → Branding / Audience**):
+   - User type **External**; app name `StellarOps Mission Lab`; user support email and developer contact email = the user's own (let the user pick it, do not type it into chat).
+   - **Application home page**: `https://mohamdkhaldd.github.io/shopify-mcp-v1/space-apps-2026/`
+   - **Application privacy policy link**: `https://mohamdkhaldd.github.io/shopify-mcp-v1/space-apps-2026/privacy.html`
+   - **Application terms of service link**: `https://mohamdkhaldd.github.io/shopify-mcp-v1/space-apps-2026/terms.html`
+   - **Authorized domains**: `mohamdkhaldd.github.io` and `supabase.co`
+   - Scopes: only the default `email`, `profile`, `openid`.
+   - Save. Under **Test users** (Audience), add the team's Gmail addresses the user gives you. (Leaving the app in "Testing" is fine for the hackathon.)
 3. **APIs & Services → Credentials → Create credentials → OAuth client ID** → type **Web application**.
 4. **Authorized redirect URIs** → add exactly: `https://sruvvklwlixpzjyhhnit.supabase.co/auth/v1/callback`
 5. Create. Keep the **Client ID** and **Client secret** on screen (do not paste them in chat).
