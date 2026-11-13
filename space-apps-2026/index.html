@@ -3087,7 +3087,7 @@ async function roomJoin(code, name) {
     if (!res.error && res.data) { me = res.data; break; }
   }
   if (!me) throw new Error(L({ en: "This room is full: all 4 roles are taken.", ar: "الغرفة دي اتملت: الأربع أدوار اتاخدوا." }));
-  LB.room = room; LB.me = me; LB.myRole = me.role; LB.level = room.level; LB.mode = "online"; LB.online = true; LB.drawn = Date.now(); lSave();
+  LB.room = room; LB.me = me; LB.myRole = me.role; LB.level = room.level; LB.mode = "online"; LB.online = true; LB.drawn = Date.now(); lSave(); myData({ done: myDone() });
   await roomRefresh(); roomSubscribe(); return code;
 }
 async function roomRefresh() {
@@ -3171,12 +3171,15 @@ function lroom() {
     ${host ? `<div class="row"><span class="psub">${L(ok("Roles", "الأدوار"))}:</span> <button class="hbtn ${LB.room.state.roleMode !== "pick" ? "" : "ghost"}" type="button" data-act="omode" data-m="random">🎲 ${L(ok("By luck", "بالحظ"))}</button><button class="hbtn ${LB.room.state.roleMode === "pick" ? "" : "ghost"}" type="button" data-act="omode" data-m="pick">✋ ${L(ok("Players pick", "اللاعبين يختاروا"))}</button></div>` : ""}
     <div id="lroomlist" class="rolepick">${lRoomList()}</div>
     ${lLobbyCtl()}
-    ${host ? `<div class="row"><button class="hbtn" type="button" data-act="ostart" ${LB.players.every(p => p.data && p.data.lobbyReady) ? "" : "disabled"}>${L(ok("Start the game for everyone", "ابدأ اللعبة للكل"))} (${LB.players.filter(p => p.data && p.data.lobbyReady).length}/${LB.players.length} ${L(ok("ready", "جاهزين"))})</button><button class="linkbtn" type="button" data-act="ostartnow">${L(ok("Start anyway", "ابدأ برضه"))}</button></div>` : `<p class="psub">${L(ok("Waiting for the room creator to start…", "مستنيين اللي عمل الغرفة يبدأ…"))}</p>`}
+    ${host ? `<div class="row">${lBlocked(LB.level).length ? `<p class="bad">⚠️ ${lBlocked(LB.level).map(p => esc(p.name)).join(", ")} ${L(ok(`can't play CML ${LB.level} yet. Finish CML ${LB.level - 1} first, or pick another level.`, `لسه مينفعش يلعب CML ${LB.level}. لازم يخلّص CML ${LB.level - 1} الأول، أو اختاروا مستوى تاني.`))}</p>` : ""}<button class="hbtn" type="button" data-act="ostart" ${LB.players.every(p => p.data && p.data.lobbyReady) && !lBlocked(LB.level).length ? "" : "disabled"}>${L(ok("Start the game for everyone", "ابدأ اللعبة للكل"))} (${LB.players.filter(p => p.data && p.data.lobbyReady).length}/${LB.players.length} ${L(ok("ready", "جاهزين"))})</button><button class="linkbtn" type="button" data-act="ostartnow" ${lBlocked(LB.level).length ? "disabled" : ""}>${L(ok("Start anyway", "ابدأ برضه"))}</button></div>` : `<p class="psub">${L(ok("Waiting for the room creator to start…", "مستنيين اللي عمل الغرفة يبدأ…"))}</p>`}
   </section>${lChatBox()}`;
 }
+function myDone() { const d = {}; CML.forEach(c => { d[c.n] = A.progress.stars["cml" + c.n] || 0; }); return d; }
+function lBlocked(n) { if (n <= 1 || A.unlockAll) return []; return LB.players.filter(p => !(((p.data && p.data.done) || {})[n - 1] >= 1)); }
 function lLobbyCtl() {
   const host = isHost(), meReady = LB.me && LB.me.data && LB.me.data.lobbyReady;
-  return `${host ? `<div class="row lvlpick"><span class="psub">${L(ok("Level for this game", "مستوى الجولة دي"))}:</span>${CML.map(c => `<button type="button" class="hbtn ${LB.level === c.n ? "" : "ghost"}" data-act="olevel" data-n="${c.n}">CML ${c.n} · ${L(LAB_M[c.m].name)}</button>`).join("")}</div>` : `<p class="needline">${L(ok("Level", "المستوى"))}: <b class="hl">${L(lvl().t)} · ${L(LM().name)}</b></p>`}
+  return `${host ? `<div class="row lvlpick"><span class="psub">${L(ok("Level for this game", "مستوى الجولة دي"))}:</span>${CML.map(c => { const bl = lBlocked(c.n); return `<button type="button" class="hbtn ${LB.level === c.n ? "" : "ghost"}" data-act="olevel" data-n="${c.n}" ${bl.length ? "disabled" : ""}>${bl.length ? "🔒 " : ""}CML ${c.n} · ${L(LAB_M[c.m].name)}</button>`; }).join("")}</div>
+    ${CML.filter(c => lBlocked(c.n).length).map(c => `<p class="psub">🔒 CML ${c.n}: ${lBlocked(c.n).map(p => `<b class="hl">${esc(p.name)}</b>`).join(", ")} ${L(ok(`didn't finish CML ${c.n - 1} yet (needs at least 1 star).`, `لسه مخلّصش CML ${c.n - 1} (محتاج نجمة واحدة على الأقل).`))}</p>`).join("")}` : `<p class="needline">${L(ok("Level", "المستوى"))}: <b class="hl">${L(lvl().t)} · ${L(LM().name)}</b></p>`}
     <div class="row"><button class="hbtn ${meReady ? "ghost" : ""}" type="button" data-act="oready0">${meReady ? "✅ " + L(ok("I'm ready (click to cancel)", "أنا جاهز (دوس علشان تلغي)")) : "✋ " + L(ok("I'm ready", "أنا جاهز"))}</button>
     <span class="psub">${L(ok("The game starts when everyone is ready.", "اللعبة بتبدأ لما الكل يبقى جاهز."))}</span></div>`;
 }
@@ -3187,7 +3190,7 @@ function lRoomBar() {
 function lRoomBarInner() {
   const host = isHost(), ph = LB.room.state.phase;
   return `<div class="rb-code"><span class="psub">${L(ok("Room code", "كود الغرفة"))}</span> <b class="code">${LB.room.code}</b> <button class="linkbtn" type="button" data-act="ocopy">${L(ok("Copy", "انسخ"))}</button></div>
-    <div class="rb-who">${LB.players.map(p => `<span class="rb-p" style="--sc:${(CREW[p.role] || CREW.director).col}"><i></i>${esc(p.name)}${p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : ""} · ${L(CREW[p.role].title)}${p.data && p.data.ready ? " ✓" : ""}${host && !(p.data && p.data.cid === myId) ? ` <button class="rb-kick" type="button" data-kick="${p.id}" title="${L(ok("Remove from the room", "طلّعه من الغرفة"))}">✕</button>` : ""}</span>`).join("")}</div>
+    <div class="rb-who">${LB.players.map(p => `<span class="rb-p" style="--sc:${(CREW[p.role] || CREW.director).col}"><i></i>${esc(p.name)}${p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : ""} · ${L(CREW[p.role].title)}${p.data && p.data.ready ? " ✓" : ""} · ${(() => { const d = (p.data && p.data.done) || {}; const top = [4, 3, 2, 1].find(n => d[n] >= 1); return top ? "🎓 CML " + top : L(ok("new", "جديد")); })()}${host && !(p.data && p.data.cid === myId) ? ` <button class="rb-kick" type="button" data-kick="${p.id}" title="${L(ok("Remove from the room", "طلّعه من الغرفة"))}">✕</button>` : ""}</span>`).join("")}</div>
     <div class="rb-act">${host && ph !== "lobby" ? `<button class="hbtn ghost" type="button" data-act="olobby">${L(ok("Back to lobby (everyone)", "ارجع للوبي (للكل)"))}</button>` : ""}<button class="hbtn ghost" type="button" data-act="oleave">${L(ok("Leave room", "اخرج من الغرفة"))}</button></div>`;
 }
 async function lSwitchRole(r) {
@@ -3289,7 +3292,7 @@ function lReviewHtml() {
   return `${c.ring ? ringsRow({ ring: c.ring }) : ""}<div class="hcard"><h3>${L(ok("Review findings", "نتايج المراجعة"))}</h3><ul>${(list.length ? list : [ok("No problems found. The design closes, with nothing wasted.", "مفيش مشاكل. التصميم مظبوط ومفيهوش تضييع.")]).map(x => `<li>${L(x)}</li>`).join("")}</ul><p class="psub">${L(ok("The review tells you what is wrong, not how to fix it.", "المراجعة بتقولك إيه الغلط، مش بتقولك تصلّحه إزاي."))}</p></div>`;
 }
 function lPartial() {
-  if (A.screen === "lroom") { const sig = [LB.room.state.roleMode, LB.myRole, LB.level, LB.players.length, LB.players.filter(p => p.data && p.data.lobbyReady).length].join("|"); if (LB._sig !== sig) { LB._sig = sig; const ci = $("#chatin"), cv = ci ? ci.value : ""; render(); const c2 = $("#chatin"); if (c2 && cv) c2.value = cv; return; } const el = $("#lroomlist"); if (el) el.innerHTML = lRoomList(); return; }
+  if (A.screen === "lroom") { const sig = [LB.room.state.roleMode, LB.myRole, LB.level, LB.players.length, LB.players.filter(p => p.data && p.data.lobbyReady).length, LB.players.map(p => JSON.stringify((p.data && p.data.done) || {})).join(",")].join("|"); if (LB._sig !== sig) { LB._sig = sig; const ci = $("#chatin"), cv = ci ? ci.value : ""; render(); const c2 = $("#chatin"); if (c2 && cv) c2.value = cv; return; } const el = $("#lroomlist"); if (el) el.innerHTML = lRoomList(); return; }
   const bo = $("#boardOthers"); if (bo) bo.innerHTML = lBoardOthers();
   if (A.screen === "ldesign") { const picks = allPicks();
     document.querySelectorAll("[data-lpick]").forEach(b => { const [r, k, o] = b.dataset.lpick.split("."); b.classList.toggle("sel", picks[r + "." + k] === o); });
@@ -3359,7 +3362,7 @@ function lFinish(F) {
   const total = Math.max(0, Object.values(parts).reduce((a, b) => a + b, 0));
   if (stars && met === nR && total >= 650) stars = 2; if (stars === 2 && total >= 900) stars = 3;
   F.result = { alive, rules, met, nR, stars, parts, total, missed: m.rules.filter(r => !rules[r.k]), waste: c.waste, sciPct: alive ? Math.round(Math.min(1, c.sci * F.sci * (F.health / 100)) * 100) : 0 };
-  if (alive) { const k = "cml" + LB.level; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, stars); store.set("ma.progress3", A.progress); }
+  if (alive) { const k = "cml" + LB.level; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, stars); store.set("ma.progress3", A.progress); } if (LB.mode === "online" && LB.me) myData({ done: myDone() });
   setTimeout(() => { if (A.screen === "lfly" && LB.flight === F) go("lusers"); }, 800);
 }
 function lLossHtml(R) {
@@ -3465,9 +3468,10 @@ function lClick(t) {
     if (!name) { err.textContent = L(ok("Write your name first.", "اكتب اسمك الأول.")); return true; } A.lastName = name;
     if (a === "ocreate") LB.level = +$("#olevel").value;
     (a === "ocreate" ? roomCreate(name, (document.querySelector("input[name=rmode]:checked") || {}).value) : roomJoin($("#ocode").value, name)).then(() => go("lroom")).catch(e => { err.textContent = e.message || String(e); }); return true; }
+  if ((a === "ostart" || a === "ostartnow") && lBlocked(LB.level).length) return true;
   if (a === "ostart" || a === "ostartnow") { const at = Date.now(); LB.gameAt = at; LB.backInRoom = false; lResetGame(); roomState({ phase: "video", videoAt: at, reviews: 0, lastReview: null }).then(() => go("lvideo")); return true; }
   if (a === "oready0") { myData({ lobbyReady: !(LB.me.data && LB.me.data.lobbyReady) }).then(() => roomRefresh()); return true; }
-  if (a === "olevel") { if (isHost()) { const n = +t.dataset.n; LB.level = n; sbClient().from("rooms").update({ level: n, mission: CML[n - 1].m }).eq("code", LB.room.code).then(() => roomRefresh()); } return true; }
+  if (a === "olevel") { if (isHost() && !lBlocked(+t.dataset.n).length) { const n = +t.dataset.n; LB.level = n; sbClient().from("rooms").update({ level: n, mission: CML[n - 1].m }).eq("code", LB.room.code).then(() => roomRefresh()); } return true; }
   if (a === "oagain") { lResetGame(); LB.backInRoom = true; go("lroom"); return true; }
   if (a === "omode") { if (isHost()) roomState({ roleMode: t.dataset.m }).then(() => render()); return true; }
   if (t.dataset.orole) { lSwitchRole(t.dataset.orole); return true; }
