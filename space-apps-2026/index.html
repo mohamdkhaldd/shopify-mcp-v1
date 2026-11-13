@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>StellarOps Mission Lab</title>
+<title>StellarOp Mission Lab</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -429,7 +429,7 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 
 <div class="wrap">
   <div class="top">
-    <button class="logo notr" type="button" data-go="lhome">StellarOps <span>Mission Lab</span></button>
+    <button class="logo notr" type="button" data-go="lhome">StellarOp <span>Mission Lab</span></button>
     <div class="nav" id="nav"></div>
   </div>
   <main id="app"></main>
@@ -1806,7 +1806,7 @@ const Space3D = (() => {
 
 /* ================= STATE ================= */
 const store = {get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const A = {screen:"lhome", simple:true, mode:"solo", players:["Player 1"], team:"StellarOps", mi:0, d:null, sandbox:false, unlockAll:false, tab:"planner",
+const A = {screen:"lhome", simple:true, mode:"solo", players:["Player 1"], team:"StellarOp", mi:0, d:null, sandbox:false, unlockAll:false, tab:"planner",
   trainRole:"planner", trainIdx:{planner:0,engineer:0,science:0,comms:0}, trained:{}, flight:null, lastScore:{}, voice:true,
   progress: store.get("ma.progress3",{stars:{},best:{}}), flights:0};
 const $ = s => document.querySelector(s);
@@ -2341,8 +2341,8 @@ document.addEventListener("click",e=>{
   if(a==="lang"){ setLang(LANG==="ar"?"en":"ar"); return render(); }
   if(a==="voice"){ A.voice=!A.voice; if(!A.voice) Voice.stop(); return render(); }
   if(a==="gfx"){ Space3D.setQuality(Space3D.quality==="high"?"low":"high"); if(A.screen!=="flight") return render(); return; }
-  if(a==="solo"){ A.mode="solo"; A.players=["Player 1"]; A.team="StellarOps"; return go("training"); }
-  if(a==="team"){ A.mode="team"; if(A.players.length<2) A.players=["Player 1","Player 2","Player 3","Player 4"]; A.team="StellarOps"; return go("setup"); }
+  if(a==="solo"){ A.mode="solo"; A.players=["Player 1"]; A.team="StellarOp"; return go("training"); }
+  if(a==="team"){ A.mode="team"; if(A.players.length<2) A.players=["Player 1","Player 2","Player 3","Player 4"]; A.team="StellarOp"; return go("setup"); }
   if(a==="np"){ const n=+t.dataset.n; A.players=Array.from({length:n},(_,i)=>A.players[i]||`Player ${i+1}`); return render(); }
   if(a==="tnext"){ A.trainIdx[A.trainRole]++; return render(); }
   if(a==="tprev"){ A.trainIdx[A.trainRole]--; return render(); }
@@ -2615,7 +2615,7 @@ function shome() {
   return `<section class="cine notr">
     <canvas id="holoHome" class="holo" aria-label="${L({ en: "Hologram of a real NASA satellite", ar: "هولوجرام لقمر صناعي حقيقي من ناسا" })}"></canvas>
     <div class="cine-txt">
-      <div class="kick">NASA SPACE APPS 2026 · TEAM STELLAROPS</div>
+      <div class="kick">NASA SPACE APPS 2026 · TEAM STELLAROP</div>
       <h1 class="cine-h">MISSION <span>ARCHITECT</span></h1>
       <p class="cine-p">${L({ en: "Build a real space mission in 5 minutes. No space knowledge needed: we'll teach you as you play.", ar: "ابني مهمة فضائية حقيقية في 5 دقايق. مش محتاج تعرف أي حاجة عن الفضاء: هنعلّمك وانت بتلعب." })}</p>
       <div class="row"><button class="hbtn" type="button" data-go="spick">${L({ en: "Start", ar: "ابدأ" })}</button>
@@ -3244,7 +3244,7 @@ function crewImg(r) { return `<img src="img/${CREW[r].img}" alt="">`; }
 function lhome() {
   return `<section class="cine notr">
     <canvas id="holoHome" class="holo" aria-label="Hologram of a NASA satellite"></canvas>
-    <div class="cine-txt"><div class="kick">NASA SPACE APPS 2026 · TEAM STELLAROPS</div>
+    <div class="cine-txt"><div class="kick">NASA SPACE APPS 2026 · TEAM STELLAROP</div>
       <h1 class="cine-h">MISSION <span>LAB</span></h1>
       <p class="cine-p">${L(ok("You are a space mission team. Each of you gets a role and a guide. Watch your guide's video, write what you learn on the team board, talk together, and design a real satellite.", "إنتوا تيم مهمة فضاء. كل واحد فيكم ليه دور ومرشد. اتفرج على فيديو المرشد بتاعك، واكتب اللي اتعلمته على سبورة التيم، واتكلموا مع بعض، وصمموا قمر صناعي حقيقي."))}</p>
       ${lAuthBox()}
@@ -3523,7 +3523,7 @@ function lCert() {
   const grd = g.createLinearGradient(0, 0, 1600, 1130); grd.addColorStop(0, "#050b18"); grd.addColorStop(1, "#0c1a33"); g.fillStyle = grd; g.fillRect(0, 0, 1600, 1130);
   for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * .7})`; g.fillRect(Math.random() * 1600, Math.random() * 1130, 2, 2); }
   g.strokeStyle = "#ffd84d"; g.lineWidth = 6; g.strokeRect(40, 40, 1520, 1050); g.strokeStyle = "#5fd8ff55"; g.lineWidth = 2; g.strokeRect(62, 62, 1476, 1006);
-  g.textAlign = "center"; g.fillStyle = "#5fd8ff"; g.font = "600 30px 'IBM Plex Mono', monospace"; g.fillText("NASA SPACE APPS 2026 · TEAM STELLAROPS · MISSION LAB", 800, 140);
+  g.textAlign = "center"; g.fillStyle = "#5fd8ff"; g.font = "600 30px 'IBM Plex Mono', monospace"; g.fillText("NASA SPACE APPS 2026 · TEAM STELLAROP · MISSION LAB", 800, 140);
   g.fillStyle = "#ffd84d"; g.font = "700 76px 'Chakra Petch', sans-serif"; g.fillText("CERTIFICATE OF MISSION SUCCESS", 800, 250);
   g.fillStyle = "#eaf6ff"; g.font = "400 34px 'IBM Plex Sans', sans-serif"; g.fillText("This certifies that the mission team", 800, 330);
   g.fillStyle = "#ffffff"; g.font = "700 54px 'IBM Plex Sans', sans-serif"; const names = (A.certNames || "").trim() || "Mission Team"; g.fillText(names.length > 60 ? names.slice(0, 57) + "…" : names, 800, 420);
@@ -3533,11 +3533,11 @@ function lCert() {
   g.fillStyle = "#ffd84d"; g.font = "700 110px sans-serif"; g.fillText("★".repeat(R.stars) + "☆".repeat(3 - R.stars), 800, 790);
   g.fillStyle = "#9fb8cd"; g.font = "400 28px 'IBM Plex Sans', sans-serif"; g.fillText("Real mission it is based on: " + m.real.name, 800, 860);
   g.fillText(new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }), 800, 905);
-  g.fillStyle = "#ffc26b"; g.font = "italic 600 34px 'IBM Plex Sans', sans-serif"; g.fillText("Mohamed", 400, 1000); g.fillText("StellarOps Mission Control", 1200, 1000);
+  g.fillStyle = "#ffc26b"; g.font = "italic 600 34px 'IBM Plex Sans', sans-serif"; g.fillText("Mohamed", 400, 1000); g.fillText("StellarOp Mission Control", 1200, 1000);
   g.fillStyle = "#9fb8cd"; g.font = "400 22px 'IBM Plex Sans', sans-serif"; g.fillText("Mission Director", 400, 1035); g.fillText("Mission Lab", 1200, 1035);
   g.strokeStyle = "#9fb8cd"; g.lineWidth = 1; g.beginPath(); g.moveTo(260, 965); g.lineTo(540, 965); g.moveTo(1060, 965); g.lineTo(1340, 965); g.stroke();
   const url = cv.toDataURL("image/png");
-  try { const a = document.createElement("a"); a.download = "StellarOps-certificate-CML" + LB.level + ".png"; a.href = url; document.body.appendChild(a); a.click(); a.remove(); } catch (e) { }
+  try { const a = document.createElement("a"); a.download = "StellarOp-certificate-CML" + LB.level + ".png"; a.href = url; document.body.appendChild(a); a.click(); a.remove(); } catch (e) { }
   const md = $("#modal") || document.body.appendChild(Object.assign(document.createElement("div"), { id: "modal" }));
   md.innerHTML = `<div class="overlay notr" role="dialog" aria-modal="true"><div class="hmodal certmodal"><h2 class="hh">🎓 ${L(ok("Your certificate", "الشهادة بتاعتكم"))}</h2><img src="${url}" alt="Certificate"><p class="psub">${L(ok("If it did not download, right-click the picture (or long-press on a phone) and choose Save image.", "لو مااتنزلتش، دوس كليك يمين على الصورة (أو دوسة طويلة على الموبايل) واختار Save image."))}</p><div class="row"><button class="hbtn" type="button" id="certclose">${L(ok("Close", "اقفل"))}</button></div></div></div>`;
   $("#certclose").onclick = () => { md.innerHTML = ""; };

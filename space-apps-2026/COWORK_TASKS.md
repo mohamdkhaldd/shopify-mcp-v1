@@ -1,6 +1,6 @@
 # Tasks for Claude Cowork (paste this whole file into Cowork)
 
-You are helping Team StellarOps finish their NASA Space Apps 2026 game, **StellarOps Mission Lab**.
+You are helping Team StellarOp finish their NASA Space Apps 2026 game, **StellarOp Mission Lab**.
 The code is already done and pushed. These tasks need the team's own browser accounts (GitHub, Google, Supabase, Google Flow).
 Do them in order. Ask the user to sign in when a page needs it. Never paste passwords or secrets into chat.
 
@@ -16,9 +16,9 @@ Do them in order. Ask the user to sign in when a page needs it. Never paste pass
 
 ## Task 2 · Google sign-in (keeps each player's levels on any device)
 **A. Google Cloud**
-1. Open https://console.cloud.google.com/ → create or pick a project named `StellarOps Mission Lab`.
+1. Open https://console.cloud.google.com/ → create or pick a project named `StellarOp Mission Lab`.
 2. **APIs & Services → OAuth consent screen** (may be called **Google Auth Platform → Branding / Audience**):
-   - User type **External**; app name `StellarOps Mission Lab`; user support email and developer contact email = the user's own (let the user pick it, do not type it into chat).
+   - User type **External**; app name `StellarOp Mission Lab`; user support email and developer contact email = the user's own (let the user pick it, do not type it into chat).
    - **Application home page**: `https://mohamdkhaldd.github.io/shopify-mcp-v1/space-apps-2026/`
    - **Application privacy policy link**: `https://mohamdkhaldd.github.io/shopify-mcp-v1/space-apps-2026/privacy.html`
    - **Application terms of service link**: `https://mohamdkhaldd.github.io/shopify-mcp-v1/space-apps-2026/terms.html`

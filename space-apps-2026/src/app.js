@@ -1,6 +1,6 @@
 /* ================= STATE ================= */
 const store = {get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-const A = {screen:"lhome", simple:true, mode:"solo", players:["Player 1"], team:"StellarOps", mi:0, d:null, sandbox:false, unlockAll:false, tab:"planner",
+const A = {screen:"lhome", simple:true, mode:"solo", players:["Player 1"], team:"StellarOp", mi:0, d:null, sandbox:false, unlockAll:false, tab:"planner",
   trainRole:"planner", trainIdx:{planner:0,engineer:0,science:0,comms:0}, trained:{}, flight:null, lastScore:{}, voice:true,
   progress: store.get("ma.progress3",{stars:{},best:{}}), flights:0};
 const $ = s => document.querySelector(s);
@@ -535,8 +535,8 @@ document.addEventListener("click",e=>{
   if(a==="lang"){ setLang(LANG==="ar"?"en":"ar"); return render(); }
   if(a==="voice"){ A.voice=!A.voice; if(!A.voice) Voice.stop(); return render(); }
   if(a==="gfx"){ Space3D.setQuality(Space3D.quality==="high"?"low":"high"); if(A.screen!=="flight") return render(); return; }
-  if(a==="solo"){ A.mode="solo"; A.players=["Player 1"]; A.team="StellarOps"; return go("training"); }
-  if(a==="team"){ A.mode="team"; if(A.players.length<2) A.players=["Player 1","Player 2","Player 3","Player 4"]; A.team="StellarOps"; return go("setup"); }
+  if(a==="solo"){ A.mode="solo"; A.players=["Player 1"]; A.team="StellarOp"; return go("training"); }
+  if(a==="team"){ A.mode="team"; if(A.players.length<2) A.players=["Player 1","Player 2","Player 3","Player 4"]; A.team="StellarOp"; return go("setup"); }
   if(a==="np"){ const n=+t.dataset.n; A.players=Array.from({length:n},(_,i)=>A.players[i]||`Player ${i+1}`); return render(); }
   if(a==="tnext"){ A.trainIdx[A.trainRole]++; return render(); }
   if(a==="tprev"){ A.trainIdx[A.trainRole]--; return render(); }

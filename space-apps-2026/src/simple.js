@@ -237,7 +237,7 @@ function shome() {
   return `<section class="cine notr">
     <canvas id="holoHome" class="holo" aria-label="${L({ en: "Hologram of a real NASA satellite", ar: "هولوجرام لقمر صناعي حقيقي من ناسا" })}"></canvas>
     <div class="cine-txt">
-      <div class="kick">NASA SPACE APPS 2026 · TEAM STELLAROPS</div>
+      <div class="kick">NASA SPACE APPS 2026 · TEAM STELLAROP</div>
       <h1 class="cine-h">MISSION <span>ARCHITECT</span></h1>
       <p class="cine-p">${L({ en: "Build a real space mission in 5 minutes. No space knowledge needed: we'll teach you as you play.", ar: "ابني مهمة فضائية حقيقية في 5 دقايق. مش محتاج تعرف أي حاجة عن الفضاء: هنعلّمك وانت بتلعب." })}</p>
       <div class="row"><button class="hbtn" type="button" data-go="spick">${L({ en: "Start", ar: "ابدأ" })}</button>

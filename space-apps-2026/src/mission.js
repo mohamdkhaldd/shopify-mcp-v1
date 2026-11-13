@@ -426,7 +426,7 @@ function crewImg(r) { return `<img src="img/${CREW[r].img}" alt="">`; }
 function lhome() {
   return `<section class="cine notr">
     <canvas id="holoHome" class="holo" aria-label="Hologram of a NASA satellite"></canvas>
-    <div class="cine-txt"><div class="kick">NASA SPACE APPS 2026 · TEAM STELLAROPS</div>
+    <div class="cine-txt"><div class="kick">NASA SPACE APPS 2026 · TEAM STELLAROP</div>
       <h1 class="cine-h">MISSION <span>LAB</span></h1>
       <p class="cine-p">${L(ok("You are a space mission team. Each of you gets a role and a guide. Watch your guide's video, write what you learn on the team board, talk together, and design a real satellite.", "إنتوا تيم مهمة فضاء. كل واحد فيكم ليه دور ومرشد. اتفرج على فيديو المرشد بتاعك، واكتب اللي اتعلمته على سبورة التيم، واتكلموا مع بعض، وصمموا قمر صناعي حقيقي."))}</p>
       ${lAuthBox()}
@@ -705,7 +705,7 @@ function lCert() {
   const grd = g.createLinearGradient(0, 0, 1600, 1130); grd.addColorStop(0, "#050b18"); grd.addColorStop(1, "#0c1a33"); g.fillStyle = grd; g.fillRect(0, 0, 1600, 1130);
   for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * .7})`; g.fillRect(Math.random() * 1600, Math.random() * 1130, 2, 2); }
   g.strokeStyle = "#ffd84d"; g.lineWidth = 6; g.strokeRect(40, 40, 1520, 1050); g.strokeStyle = "#5fd8ff55"; g.lineWidth = 2; g.strokeRect(62, 62, 1476, 1006);
-  g.textAlign = "center"; g.fillStyle = "#5fd8ff"; g.font = "600 30px 'IBM Plex Mono', monospace"; g.fillText("NASA SPACE APPS 2026 · TEAM STELLAROPS · MISSION LAB", 800, 140);
+  g.textAlign = "center"; g.fillStyle = "#5fd8ff"; g.font = "600 30px 'IBM Plex Mono', monospace"; g.fillText("NASA SPACE APPS 2026 · TEAM STELLAROP · MISSION LAB", 800, 140);
   g.fillStyle = "#ffd84d"; g.font = "700 76px 'Chakra Petch', sans-serif"; g.fillText("CERTIFICATE OF MISSION SUCCESS", 800, 250);
   g.fillStyle = "#eaf6ff"; g.font = "400 34px 'IBM Plex Sans', sans-serif"; g.fillText("This certifies that the mission team", 800, 330);
   g.fillStyle = "#ffffff"; g.font = "700 54px 'IBM Plex Sans', sans-serif"; const names = (A.certNames || "").trim() || "Mission Team"; g.fillText(names.length > 60 ? names.slice(0, 57) + "…" : names, 800, 420);
@@ -715,11 +715,11 @@ function lCert() {
   g.fillStyle = "#ffd84d"; g.font = "700 110px sans-serif"; g.fillText("★".repeat(R.stars) + "☆".repeat(3 - R.stars), 800, 790);
   g.fillStyle = "#9fb8cd"; g.font = "400 28px 'IBM Plex Sans', sans-serif"; g.fillText("Real mission it is based on: " + m.real.name, 800, 860);
   g.fillText(new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }), 800, 905);
-  g.fillStyle = "#ffc26b"; g.font = "italic 600 34px 'IBM Plex Sans', sans-serif"; g.fillText("Mohamed", 400, 1000); g.fillText("StellarOps Mission Control", 1200, 1000);
+  g.fillStyle = "#ffc26b"; g.font = "italic 600 34px 'IBM Plex Sans', sans-serif"; g.fillText("Mohamed", 400, 1000); g.fillText("StellarOp Mission Control", 1200, 1000);
   g.fillStyle = "#9fb8cd"; g.font = "400 22px 'IBM Plex Sans', sans-serif"; g.fillText("Mission Director", 400, 1035); g.fillText("Mission Lab", 1200, 1035);
   g.strokeStyle = "#9fb8cd"; g.lineWidth = 1; g.beginPath(); g.moveTo(260, 965); g.lineTo(540, 965); g.moveTo(1060, 965); g.lineTo(1340, 965); g.stroke();
   const url = cv.toDataURL("image/png");
-  try { const a = document.createElement("a"); a.download = "StellarOps-certificate-CML" + LB.level + ".png"; a.href = url; document.body.appendChild(a); a.click(); a.remove(); } catch (e) { }
+  try { const a = document.createElement("a"); a.download = "StellarOp-certificate-CML" + LB.level + ".png"; a.href = url; document.body.appendChild(a); a.click(); a.remove(); } catch (e) { }
   const md = $("#modal") || document.body.appendChild(Object.assign(document.createElement("div"), { id: "modal" }));
   md.innerHTML = `<div class="overlay notr" role="dialog" aria-modal="true"><div class="hmodal certmodal"><h2 class="hh">🎓 ${L(ok("Your certificate", "الشهادة بتاعتكم"))}</h2><img src="${url}" alt="Certificate"><p class="psub">${L(ok("If it did not download, right-click the picture (or long-press on a phone) and choose Save image.", "لو مااتنزلتش، دوس كليك يمين على الصورة (أو دوسة طويلة على الموبايل) واختار Save image."))}</p><div class="row"><button class="hbtn" type="button" id="certclose">${L(ok("Close", "اقفل"))}</button></div></div></div>`;
   $("#certclose").onclick = () => { md.innerHTML = ""; };
