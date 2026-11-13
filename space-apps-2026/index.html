@@ -384,6 +384,7 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .drawn b{display:block;font-size:24px;color:var(--sc);margin:2px 0}
 @keyframes drawin{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
 .rb-kick{background:none;border:0;color:#ff7a85;cursor:pointer;font:inherit;padding:0 0 0 6px}.rb-kick:hover{color:#ff4d5e}
+.rolecard.free{cursor:pointer;font:inherit;text-align:start;color:inherit}.rolecard.free:hover{border-color:var(--sc);transform:translateY(-2px)}
 </style>
 </head>
 <body>
@@ -2292,7 +2293,7 @@ function report(){
 /* ================= WIRING ================= */
 function startMission(i){ A.mi=i; const m=MISSIONS[i]; A.d=structuredClone(m.def); A.d.compress=!!A.d.compress; A.d.relay=!!A.d.relay; A.d.shelter=!!A.d.shelter; A.d.abort=!!A.d.abort; A.tab="planner"; go("briefing"); }
 document.addEventListener("click",e=>{
-  const t=e.target.closest("[data-go],[data-act],[data-mi],[data-tab],[data-trole],[data-view],[data-smi],[data-sstep],[data-scard],[data-lmode],[data-llevel],[data-ltab],[data-lpick],[data-kick]"); if(!t) return;
+  const t=e.target.closest("[data-go],[data-act],[data-mi],[data-tab],[data-trole],[data-view],[data-smi],[data-sstep],[data-scard],[data-lmode],[data-llevel],[data-ltab],[data-lpick],[data-kick],[data-orole]"); if(!t) return;
   if(!t.dataset.go && !t.dataset.view && sClick(t)) return;
   if(t.dataset.view){ flightView&&flightView.setView(t.dataset.view); document.querySelectorAll("[data-view]").forEach(b=>b.setAttribute("aria-pressed",b===t)); $("#screen").dataset.view=t.dataset.view; return; }
   if(t.dataset.go){ if(t.dataset.go==="design"&&!A.d) return go("select"); return go(t.dataset.go); }
@@ -3041,9 +3042,9 @@ const allChosen = (picks, roles) => decisionsFor(roles).every(({ role, d }) => p
 function sbClient() { if (LB.sb) return LB.sb; if (!window.supabase || !window.supabase.createClient) return null; LB.sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: false } }); return LB.sb; }
 async function onlineAvailable() { const sb = sbClient(); if (!sb) return false; try { const { error } = await sb.from("rooms").select("code").limit(1); return !error; } catch (e) { return false; } }
 const newCode = () => "SO-" + Math.random().toString(36).slice(2, 6).toUpperCase().replace(/[^A-Z0-9]/g, "X");
-async function roomCreate(name) {
+async function roomCreate(name, roleMode) {
   const sb = sbClient(); const code = newCode();
-  const { error } = await sb.from("rooms").insert({ code, mission: LM().id, level: LB.level, state: { phase: "lobby", host: myId, reviews: 0 } }); if (error) throw error;
+  const { error } = await sb.from("rooms").insert({ code, mission: LM().id, level: LB.level, state: { phase: "lobby", host: myId, reviews: 0, roleMode: roleMode || "random" } }); if (error) throw error;
   return roomJoin(code, name);
 }
 async function roomJoin(code, name) {
@@ -3063,13 +3064,13 @@ async function roomJoin(code, name) {
     if (!res.error && res.data) { me = res.data; break; }
   }
   if (!me) throw new Error(L({ en: "This room is full: all 4 roles are taken.", ar: "الغرفة دي اتملت: الأربع أدوار اتاخدوا." }));
-  LB.room = room; LB.me = me; LB.myRole = me.role; LB.level = room.level; LB.mode = "online"; LB.online = true; LB.drawn = Date.now();
+  LB.room = room; LB.me = me; LB.myRole = me.role; LB.level = room.level; LB.mode = "online"; LB.online = true; LB.drawn = Date.now(); lSave();
   await roomRefresh(); roomSubscribe(); return code;
 }
 async function roomRefresh() {
   const sb = sbClient(); if (!sb || !LB.room) return;
   const [r, p, m] = await Promise.all([sb.from("rooms").select("*").eq("code", LB.room.code).single(), sb.from("players").select("*").eq("room", LB.room.code), sb.from("messages").select("*").eq("room", LB.room.code).order("id").limit(200)]);
-  if (!LB.room) return; if (p.data && LB.me) { const meRow = p.data.find(x => x.id === LB.me.id); if (meRow && meRow.data && meRow.data.kicked) { lLeave(); A.kickedMsg = true; go("lonline"); return; } } if (r.data) LB.room = r.data; if (p.data) LB.players = p.data.filter(x => !(x.data && x.data.left)); if (m.data) LB.chat = m.data; onRoomChange(); lRoomBarPaint();
+  if (!LB.room) return; if (p.data && LB.me) { const meRow = p.data.find(x => x.id === LB.me.id); if (meRow && meRow.data && meRow.data.kicked) { lLeave(); A.kickedMsg = true; go("lonline"); return; } } if (r.data) LB.room = r.data; if (p.data) { LB.players = p.data.filter(x => !(x.data && x.data.left)); const mr = LB.me && p.data.find(x => x.id === LB.me.id); if (mr) { LB.me = mr; LB.myRole = mr.role; } } if (m.data) LB.chat = m.data; onRoomChange(); lRoomBarPaint();
 }
 let pollT = null;
 function roomSubscribe() {
@@ -3123,10 +3124,13 @@ function llevel() {
 }
 function lonline() {
   return `<section class="hpanel notr"><div class="kick">${L(ok("Online team", "تيم أونلاين"))}</div><h2 class="hh">${L(ok("Create or join a mission room", "اعمل أو ادخل غرفة مهمة"))}</h2>
-    ${A.kickedMsg ? `<p class="bad">${L(ok("The room creator removed you from the room.", "اللي عامل الغرفة طلّعك من الغرفة."))}</p>` : ""}<div id="olstat" class="needline">${L(ok("Checking the connection…", "بنشيك على الاتصال…"))}</div>
+    ${A.resumeMsg ? `<p class="needline">🔄 ${L(ok("Reconnecting to room", "بنرجّعك للغرفة"))} <b class="code">${esc(A.resumeMsg)}</b>…</p>` : ""}${A.kickedMsg ? `<p class="bad">${L(ok("The room creator removed you from the room.", "اللي عامل الغرفة طلّعك من الغرفة."))}</p>` : ""}<div id="olstat" class="needline">${L(ok("Checking the connection…", "بنشيك على الاتصال…"))}</div>
     <div class="cols2"><div class="hcard"><h3>${L(ok("Your name", "اسمك"))}</h3><input type="text" id="oname" maxlength="24" value="${esc(A.lastName || "")}">
-      <div class="needline">🎲 ${L(ok("Nobody chooses a role. When you join, the game draws your role by luck: Science Lead, Communications Lead, Spacecraft Engineer or Mission Planner.", "محدش بيختار دوره. أول ما تدخل الغرفة، اللعبة بتسحبلك دور بالحظ: رئيس العلماء، أو مسؤول الاتصالات، أو مهندس المركبة، أو مخطط المهمة."))}</div><div class="rolepick">${TEAM_ROLES.map(r => `<div class="rolecard" style="--sc:${CREW[r].col}">${crewImg(r)}<b>${L(CREW[r].title)}</b><span>?</span></div>`).join("")}</div></div>
+      <div class="needline">🎲 ${L(ok("The room creator decides: roles are drawn by luck, or each player picks a free role in the room.", "اللي بيعمل الغرفة هو اللي بيقرر: الأدوار تتوزع بالحظ، أو كل لاعب يختار دور فاضي جوه الغرفة."))}</div><div class="rolepick">${TEAM_ROLES.map(r => `<div class="rolecard" style="--sc:${CREW[r].col}">${crewImg(r)}<b>${L(CREW[r].title)}</b><span>?</span></div>`).join("")}</div></div>
     <div class="hcard"><h3>${L(ok("Start a new room", "ابدأ غرفة جديدة"))}</h3><p class="psub">${L(ok("You choose the level. Share the code with your team.", "إنت اللي هتختار المستوى. ابعت الكود للتيم."))}</p>
+      <h3>${L(ok("How are roles given?", "الأدوار هتتوزع إزاي؟"))}</h3>
+      <label class="opt inline"><input type="radio" name="rmode" value="random" checked> 🎲 ${L(ok("By luck (random)", "بالحظ (عشوائي)"))}</label>
+      <label class="opt inline"><input type="radio" name="rmode" value="pick"> ✋ ${L(ok("Each player picks a free role", "كل لاعب يختار دور فاضي"))}</label>
       <select id="olevel">${CML.filter(c => c.m && !LAB_M[c.m].soon).map(c => `<option value="${c.n}" ${c.n === LB.level ? "selected" : ""}>${L(c.t)} · ${L(LAB_M[c.m].name)}</option>`).join("")}</select>
       <button class="hbtn" type="button" data-act="ocreate">${L(ok("Create room", "اعمل غرفة"))}</button>
       <h3>${L(ok("Or join with a code", "أو ادخل بكود"))}</h3><input type="text" id="ocode" maxlength="16" placeholder="SO-XXXX">
@@ -3135,9 +3139,10 @@ function lonline() {
 function lroom() {
   const host = LB.room.state.host === myId;
   return lRoomBar() + `<section class="hpanel notr"><div class="kick">${L(ok("Mission room", "غرفة المهمة"))} · ${L(lvl().t)} · ${L(LM().name)}</div>
-    ${LB.myRole ? `<div class="drawn" style="--sc:${CREW[LB.myRole].col}">${crewImg(LB.myRole)}<div><span class="psub">🎲 ${L(ok("Your role, drawn by luck", "دورك اللي طلعلك بالحظ"))}</span><b>${L(CREW[LB.myRole].title)}</b><span class="psub">${L(ok("Your guide", "المرشد بتاعك"))}: ${CREW[LB.myRole].name}${isHost() ? " · " + L(ok("You created the room, so you also cover empty roles.", "إنت اللي عامل الغرفة، فإنت كمان ماسك الأدوار الفاضية.")) : ""}</span></div></div>` : ""}
+    ${LB.myRole ? `<div class="drawn" style="--sc:${CREW[LB.myRole].col}">${crewImg(LB.myRole)}<div><span class="psub">${LB.room.state.roleMode === "pick" ? "✋ " + L(ok("Your role (pick a free one below to change it)", "دورك (اختار دور فاضي تحت لو عايز تغيّره)")) : "🎲 " + L(ok("Your role, drawn by luck", "دورك اللي طلعلك بالحظ"))}</span><b>${L(CREW[LB.myRole].title)}</b><span class="psub">${L(ok("Your guide", "المرشد بتاعك"))}: ${CREW[LB.myRole].name}${isHost() ? " · " + L(ok("You created the room, so you also cover empty roles.", "إنت اللي عامل الغرفة، فإنت كمان ماسك الأدوار الفاضية.")) : ""}</span></div></div>` : ""}
     <h2 class="hh">${L(ok("Room code", "كود الغرفة"))}: <span class="code">${LB.room.code}</span></h2>
     <p class="needline">${L(ok("Send this code to your team. Each player joins from their own laptop and gets a role by luck. The room creator also covers empty roles.", "ابعت الكود ده للتيم. كل لاعب يدخل من اللابتوب بتاعه وبيطلعله دور بالحظ. واللي عمل الغرفة بيمسك الأدوار الفاضية."))}</p>
+    ${host ? `<div class="row"><span class="psub">${L(ok("Roles", "الأدوار"))}:</span> <button class="hbtn ${LB.room.state.roleMode !== "pick" ? "" : "ghost"}" type="button" data-act="omode" data-m="random">🎲 ${L(ok("By luck", "بالحظ"))}</button><button class="hbtn ${LB.room.state.roleMode === "pick" ? "" : "ghost"}" type="button" data-act="omode" data-m="pick">✋ ${L(ok("Players pick", "اللاعبين يختاروا"))}</button></div>` : ""}
     <div id="lroomlist" class="rolepick">${lRoomList()}</div>
     ${host ? `<button class="hbtn" type="button" data-act="ostart">${L(ok("Start the briefing for everyone", "ابدأ الشرح للكل"))}</button>` : `<p class="psub">${L(ok("Waiting for the room creator to start…", "مستنيين اللي عمل الغرفة يبدأ…"))}</p>`}
   </section>${lChatBox()}`;
@@ -3152,9 +3157,25 @@ function lRoomBarInner() {
     <div class="rb-who">${LB.players.map(p => `<span class="rb-p" style="--sc:${(CREW[p.role] || CREW.director).col}"><i></i>${esc(p.name)}${p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : ""} · ${L(CREW[p.role].title)}${p.data && p.data.ready ? " ✓" : ""}${host && !(p.data && p.data.cid === myId) ? ` <button class="rb-kick" type="button" data-kick="${p.id}" title="${L(ok("Remove from the room", "طلّعه من الغرفة"))}">✕</button>` : ""}</span>`).join("")}</div>
     <div class="rb-act">${host && ph !== "lobby" ? `<button class="hbtn ghost" type="button" data-act="olobby">${L(ok("Back to lobby (everyone)", "ارجع للوبي (للكل)"))}</button>` : ""}<button class="hbtn ghost" type="button" data-act="oleave">${L(ok("Leave room", "اخرج من الغرفة"))}</button></div>`;
 }
-function lLeave() { const sb = sbClient(); if (sb && LB.chan) sb.removeChannel(LB.chan); clearInterval(pollT); LB.chan = null; LB.room = null; LB.me = null; LB.myRole = null; LB.players = []; LB.chat = []; LB.flight = null; LB.mode = "solo"; const m = $("#modal"); if (m) m.innerHTML = ""; }
+async function lSwitchRole(r) {
+  const sb = sbClient(); if (!sb || !LB.room || !LB.me) return;
+  const { data: all } = await sb.from("players").select("*").eq("room", LB.room.code); const seat = (all || []).find(x => x.role === r);
+  let res;
+  if (seat && !(seat.data && seat.data.left)) { alert(L(ok("Someone just took that role. Pick another free one.", "حد لسه واخد الدور ده. اختار دور فاضي تاني."))); return roomRefresh(); }
+  if (seat) { res = await sb.from("players").update({ name: LB.me.name, data: { cid: myId, picks: {} } }).eq("id", seat.id).select().single(); if (!res.error) await sb.from("players").update({ data: Object.assign({}, LB.me.data, { left: true, ready: false, cid: "moved-" + myId }) }).eq("id", LB.me.id); }
+  else res = await sb.from("players").update({ role: r, data: Object.assign({}, LB.me.data, { picks: {}, ready: false }) }).eq("id", LB.me.id).select().single();
+  if (res.error || !res.data) { alert(L(ok("Someone just took that role. Pick another free one.", "حد لسه واخد الدور ده. اختار دور فاضي تاني."))); return roomRefresh(); }
+  LB.me = res.data; LB.myRole = r; await roomRefresh(); render();
+}
+function lSave() { try { if (LB.room && LB.me) sessionStorage.setItem("ma.room", JSON.stringify({ code: LB.room.code, name: LB.me.name })); else sessionStorage.removeItem("ma.room"); } catch (e) { } }
+function lLeave() { try { sessionStorage.removeItem("ma.room"); } catch (e) { } const sb = sbClient(); if (sb && LB.chan) sb.removeChannel(LB.chan); clearInterval(pollT); LB.chan = null; LB.room = null; LB.me = null; LB.myRole = null; LB.players = []; LB.chat = []; LB.flight = null; LB.mode = "solo"; const m = $("#modal"); if (m) m.innerHTML = ""; }
 function lRoomBarPaint() { const el = $("#roombar"); if (el && LB.room) el.innerHTML = lRoomBarInner(); }
-function lRoomList() { return TEAM_ROLES.map(r => { const p = LB.players.find(x => x.role === r); return `<div class="rolecard ${p ? "taken" : ""}" style="--sc:${CREW[r].col}">${crewImg(r)}<b>${L(CREW[r].title)}</b><span>${p ? esc(p.name) + (p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : "") : L(ok("empty", "فاضي"))}</span></div>`; }).join(""); }
+function lRoomList() {
+  const pick = LB.room && LB.room.state.roleMode === "pick";
+  return TEAM_ROLES.map(r => { const p = LB.players.find(x => x.role === r); const me = p && p.data && p.data.cid === myId;
+    const can = pick && !p;
+    return `<${can ? 'button type="button" data-orole="' + r + '"' : "div"} class="rolecard ${p ? "taken" : ""} ${can ? "free" : ""}" style="--sc:${CREW[r].col}">${crewImg(r)}<b>${L(CREW[r].title)}</b><span>${p ? esc(p.name) + (me ? " (" + L(ok("you", "إنت")) + ")" : "") + (pick && !me ? " · " + L(ok("not available", "مش متاح")) : "") : pick ? "✋ " + L(ok("Free: click to take it", "فاضي: دوس علشان تاخده")) : L(ok("empty", "فاضي"))}</span></${can ? "button" : "div"}>`; }).join("");
+}
 function lChatBox() { if (LB.mode !== "online") return ""; return `<section class="hpanel notr chat"><div class="kick">${L(ok("Team chat", "شات التيم"))}</div><div id="chatlog" class="chatlog"></div><form id="chatform" class="row"><input type="text" id="chatin" maxlength="300" placeholder="${L(ok("Tell your team what you found…", "قول للتيم إنت لقيت إيه…"))}"><button class="hbtn" type="submit">${L(ok("Send", "ابعت"))}</button></form></section>`; }
 function lChatPaint() { const el = $("#chatlog"); if (!el) return; el.innerHTML = LB.chat.map(m => `<div><b style="color:${(CREW[m.role] || CREW.director).col}">${esc(m.name)}</b> <span class="psub">${esc(L((CREW[m.role] || CREW.director).title))}</span><br>${esc(m.body)}</div>`).join(""); el.scrollTop = 1e9; }
 
@@ -3226,7 +3247,7 @@ function lReviewHtml() {
   return `${c.ring ? ringsRow({ ring: c.ring }) : ""}<div class="hcard"><h3>${L(ok("Review findings", "نتايج المراجعة"))}</h3><ul>${(list.length ? list : [ok("No problems found. The design closes, with nothing wasted.", "مفيش مشاكل. التصميم مظبوط ومفيهوش تضييع.")]).map(x => `<li>${L(x)}</li>`).join("")}</ul><p class="psub">${L(ok("The review tells you what is wrong, not how to fix it.", "المراجعة بتقولك إيه الغلط، مش بتقولك تصلّحه إزاي."))}</p></div>`;
 }
 function lPartial() {
-  if (A.screen === "lroom") { const el = $("#lroomlist"); if (el) el.innerHTML = lRoomList(); return; }
+  if (A.screen === "lroom") { if (LB._mode !== LB.room.state.roleMode || LB._role !== LB.myRole) { LB._mode = LB.room.state.roleMode; LB._role = LB.myRole; render(); return; } const el = $("#lroomlist"); if (el) el.innerHTML = lRoomList(); return; }
   const bo = $("#boardOthers"); if (bo) bo.innerHTML = lBoardOthers();
   if (A.screen === "ldesign") { const picks = allPicks();
     document.querySelectorAll("[data-lpick]").forEach(b => { const [r, k, o] = b.dataset.lpick.split("."); b.classList.toggle("sel", picks[r + "." + k] === o); });
@@ -3356,8 +3377,10 @@ function lClick(t) {
   if (a === "ocreate" || a === "ojoin") { A.kickedMsg = false; const name = ($("#oname").value || "").trim(); const err = $("#oerr");
     if (!name) { err.textContent = L(ok("Write your name first.", "اكتب اسمك الأول.")); return true; } A.lastName = name;
     if (a === "ocreate") LB.level = +$("#olevel").value;
-    (a === "ocreate" ? roomCreate(name) : roomJoin($("#ocode").value, name)).then(() => go("lroom")).catch(e => { err.textContent = e.message || String(e); }); return true; }
+    (a === "ocreate" ? roomCreate(name, (document.querySelector("input[name=rmode]:checked") || {}).value) : roomJoin($("#ocode").value, name)).then(() => go("lroom")).catch(e => { err.textContent = e.message || String(e); }); return true; }
   if (a === "ostart") { roomState({ phase: "video" }); return true; }
+  if (a === "omode") { if (isHost()) roomState({ roleMode: t.dataset.m }).then(() => render()); return true; }
+  if (t.dataset.orole) { lSwitchRole(t.dataset.orole); return true; }
   if (a === "ocopy") { const c = LB.room ? LB.room.code : ""; try { navigator.clipboard.writeText(c).then(() => { t.textContent = L(ok("Copied!", "اتنسخ!")); }, () => { t.textContent = c; }); } catch (e) { t.textContent = c; } return true; }
   if (a === "olobby") { if (isHost()) { LB.players.forEach(() => {}); roomState({ phase: "lobby", lastReview: null }); myData({ ready: false }); LB.flight = null; go("lroom"); } return true; }
   if (a === "oleave") { if (LB.me) myData({ left: true, ready: false }); lLeave(); go("lhome"); return true; }
@@ -3367,6 +3390,10 @@ function lClick(t) {
 document.addEventListener("submit", e => { if (e.target.id === "chatform") { e.preventDefault(); const i = $("#chatin"); sendChat(i.value); i.value = ""; } });
 document.addEventListener("change", e => { if (e.target.id === "ula2") { A.unlockAll = e.target.checked; render(); } });
 window.LB = LB; render(); applyLang();
+(function lResume() { let s = null; try { s = JSON.parse(sessionStorage.getItem("ma.room") || "null"); } catch (e) { } if (!s || !s.code) return;
+  if (!sbClient()) return; A.resumeMsg = s.code; LB.mode = "online"; go("lonline"); LB.vi = 0;
+  roomJoin(s.code, s.name).then(() => { A.resumeMsg = null; const ph = LB.room.state.phase; if (ph === "lobby") go("lroom"); else if (ph === "video" && LB.me.data && LB.me.data.watched) lStartDesign(); })
+    .catch(() => { A.resumeMsg = null; try { sessionStorage.removeItem("ma.room"); } catch (e) { } render(); }); })();
 
 </script>
 </body>

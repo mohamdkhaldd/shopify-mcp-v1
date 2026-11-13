@@ -375,3 +375,4 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .drawn b{display:block;font-size:24px;color:var(--sc);margin:2px 0}
 @keyframes drawin{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
 .rb-kick{background:none;border:0;color:#ff7a85;cursor:pointer;font:inherit;padding:0 0 0 6px}.rb-kick:hover{color:#ff4d5e}
+.rolecard.free{cursor:pointer;font:inherit;text-align:start;color:inherit}.rolecard.free:hover{border-color:var(--sc);transform:translateY(-2px)}
