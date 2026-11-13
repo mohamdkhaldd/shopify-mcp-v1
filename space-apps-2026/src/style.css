@@ -357,3 +357,10 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .evhead{display:flex;gap:12px;align-items:center}.evhead img{width:64px;height:64px;border-radius:50%;object-fit:cover}
 .hcard.fact a{color:var(--holo)}
 .opt.inline{display:flex;gap:8px;align-items:center;margin-top:14px}
+.cards3.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:620px){.cards3.two{grid-template-columns:minmax(0,1fr)}}
+.board textarea{width:100%;box-sizing:border-box;background:#050c18;border:1px solid var(--edge);border-radius:6px;color:#eaf6ff;padding:10px 12px;font:inherit;resize:vertical}
+.boardothers{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px}
+.note{border-inline-start:3px solid var(--sc);background:rgba(4,10,22,.7);padding:8px 10px;border-radius:4px}
+.note b{color:var(--sc);font-size:13px}.note pre{white-space:pre-wrap;font:inherit;margin:4px 0 0;font-size:14px}
+.pstars{color:#ffc26b;letter-spacing:2px}

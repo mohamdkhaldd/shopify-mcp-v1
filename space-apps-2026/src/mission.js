@@ -1,107 +1,145 @@
-/* ===== MISSION LAB: video briefings, 4 CML levels, teams on one device or online (Supabase) =====
-   Facts used in the videos and here: Landsat 8 OLI (30 m, near-infrared, 185 km swath), MODIS (250 m, 2,330 km, whole Earth every 1-2 days),
-   X-band 384 Mbit/s, 705 km sun-synchronous orbit, ~10 a.m. crossing, Atlas V 401 launched Landsat 8 (2013), Pegasus XL ~450 kg to low orbit. */
+/* ===== MISSION LAB: a different mission per NASA Concept Maturity Level, teams on one device or online (Supabase) =====
+   CML 1 Khamsin Storm Watch (words only) · CML 2 Moon landing map (coming next) · CML 3 Nile Delta Crop Watch (add up numbers) · CML 4 expert mode.
+   Real facts are listed at the top of tts/scripts_storm.py and tts/scripts_delta.py; parts of our own satellite design are marked there. */
 const SB_URL = "https://sruvvklwlixpzjyhhnit.supabase.co", SB_KEY = "sb_publishable_FPsD1Xy-KmR_CrrkSwIdnQ_TP92c6Zh";
 const CREW = {
   director: { name: "Mohamed", title: { en: "Mission Director", ar: "مدير المهمة" }, img: "ctrl_2.jpg", col: "#ffc26b" },
-  science: { name: "Ayat", title: { en: "Science Lead", ar: "رئيسة العلماء" }, img: "crew_1.jpg", col: "#5fd8ff" },
+  science: { name: "Ayat", title: { en: "Science Lead", ar: "رئيس العلماء" }, img: "crew_1.jpg", col: "#5fd8ff" },
   comms: { name: "Adham", title: { en: "Communications Lead", ar: "مسؤول الاتصالات" }, img: "crew_4.jpg", col: "#c79bff" },
   engineer: { name: "Abdelrahman", title: { en: "Spacecraft Engineer", ar: "مهندس المركبة" }, img: "crew_2.jpg", col: "#ffb35f" },
   planner: { name: "Ahmed", title: { en: "Mission Planner", ar: "مخطط المهمة" }, img: "ctrl_4.jpg", col: "#7dffb0" } };
 const TEAM_ROLES = ["science", "comms", "engineer", "planner"];
 const SEGMENT = { science: { en: "Space segment · instruments", ar: "جزء الفضاء · الأجهزة" }, comms: { en: "Ground segment", ar: "الجزء الأرضي" }, engineer: { en: "Space segment · spacecraft", ar: "جزء الفضاء · المركبة" }, planner: { en: "Launch segment", ar: "جزء الإطلاق" } };
 const lopt = (k, icon, en, ar, v) => Object.assign({ k, icon, n: { en, ar } }, v);
-const DELTA = {
-  id: "delta", budget: 100, model: "landsat8",
-  name: { en: "Nile Delta Crop Watch", ar: "مراقب محاصيل الدلتا" },
-  user: { en: "Egypt's Ministry of Agriculture and the farmers of the Nile Delta", ar: "وزارة الزراعة وفلاحين دلتا النيل" },
-  rules: [{ k: "fields", en: "See each small field", ar: "نشوف كل أرض صغيرة" }, { k: "health", en: "See plant health", ar: "نشوف صحة النبات" },
-          { k: "light", en: "Same fields, same light", ar: "نفس الأراضي ونفس الإضاءة" }, { k: "life", en: "Work for 5 years", ar: "يشتغل 5 سنين" }, { k: "budget", en: "Budget: 100 points", ar: "الميزانية: 100 نقطة" }],
+const ok = (en, ar) => ({ en, ar });
+
+/* ---------- CML 1: Khamsin Storm Watch (2 choices each, no numbers) ---------- */
+const M_STORM = {
+  id: "storm", base: "storm", model: "goes", days: 365 * 5,
+  name: ok("Khamsin Storm Watch", "رادار عواصف الخماسين"),
+  user: ok("Egypt's weather forecasters, airports, and people with asthma", "خبراء الأرصاد في مصر، والمطارات، والناس اللي عندهم حساسية صدر"),
+  rules: [{ k: "always", en: "Watch Egypt all the time", ar: "يراقب مصر طول الوقت" }, { k: "night", en: "See storms day and night", ar: "يشوف العاصفة بالليل والنهار" }, { k: "fresh", en: "New picture every 15 minutes", ar: "صورة جديدة كل ربع ساعة" }],
+  decisions: {
+    science: [{ k: "cam", t: ok("Which camera?", "أنهي كاميرا؟"), o: [lopt("A", "cam1", "Color camera", "كاميرا ألوان", { ir: false }), lopt("B", "weather", "Infrared camera", "كاميرا إنفرا ريد", { ir: true })] }],
+    comms: [{ k: "ant", t: ok("Which antenna?", "أنهي أنتينا؟"), o: [lopt("A", "dish1", "Slow antenna", "أنتينا بطيئة", { fast: false }), lopt("B", "dish3", "Fast antenna", "أنتينا سريعة", { fast: true })] }],
+    engineer: [{ k: "pow", t: ok("Where does the power come from?", "الكهربا هتيجي منين؟"), o: [lopt("A", "panel2", "Solar panels", "سولار بانلز", { rtg: false }), lopt("B", "rtg", "RTG nuclear battery", "بطارية نووية RTG", { rtg: true })] }],
+    planner: [{ k: "orb", t: ok("Which orbit?", "أنهي أوربت؟"), o: [lopt("A", "ice", "Low orbit · 700 km", "أوربت واطي · 700 كم", { geo: false }), lopt("B", "relay", "Geostationary · 36,000 km", "جيوستيشنري · 36,000 كم", { geo: true })] }] },
+  compute(p) {
+    const g = (r, k) => pickOpt(this, p, r, k) || {}; const cam = g("science", "cam"), ant = g("comms", "ant"), pow = g("engineer", "pow"), orb = g("planner", "orb");
+    const rules = { always: !!orb.geo, night: !!cam.ir, fresh: !!ant.fast };
+    const issues = [];
+    this.rules.forEach(r => { if (!rules[r.k]) issues.push({ en: `Need not met: ${r.en}.`, ar: `طلب متحققش: ${r.ar}.` }); });
+    const waste = []; if (pow.rtg) waste.push(ok("Power: an RTG works, but it uses very rare fuel where sunlight is strong.", "الكهربا: الـ RTG شغالة، بس بتصرف وقود نادر جداً في مكان الشمس فيه قوية."));
+    const sci = (orb.geo ? 1 : .1) * (cam.ir ? 1 : .55) * (ant.fast ? 1 : .1);
+    return { rules, issues, waste, fatal: null, sci, clean: true, efficient: !pow.rtg, cam, ant, pow, orb, ring: null };
+  },
+  engine(c, base) { return { orbit: c.orb.geo ? "geo" : "polar", lv: "medium", antenna: c.ant.fast ? "large" : "small", instr: [c.cam.ir ? "thermal" : "cam_med"], power: c.pow.rtg ? "rtg1" : "solar", panel: 3 }; },
+  events: [
+    { role: "engineer", t: ok("Eclipse season", "موسم الكسوف"), x: ok("It is March. For about an hour each night, Earth's shadow covers the satellite. No sunlight.", "إحنا في مارس. كل يوم بالليل ضل الأرض بيغطي القمر حوالي ساعة، ومفيش شمس."),
+      o: [{ t: ok("Run on the battery", "اشتغل على البطارية"), f: c => ({ h: 0, sci: 0, w: c.pow.rtg ? ok("The RTG doesn't need sunlight, so nothing changed.", "الـ RTG مش محتاجة شمس، فمفيش حاجة اتغيرت.") : ok("The battery kept everything running through the shadow. Real geostationary satellites do exactly this.", "البطارية شغّلت كل حاجة لحد ما الضل خلص. والأقمار الجيوستيشنري الحقيقية بتعمل كده بالظبط.") }) },
+          { t: ok("Turn the camera off for an hour", "اطفي الكاميرا ساعة"), f: c => ({ h: 0, sci: -.06, w: ok("The camera was off for an hour every night. A storm could pass without anyone seeing it.", "الكاميرا كانت مطفية ساعة كل ليلة، وممكن عاصفة تعدّي من غير ما حد يشوفها.") }) }] },
+    { role: "comms", t: ok("Khamsin at 2 a.m.!", "خماسين الساعة 2 بالليل!"), x: ok("A giant dust storm is growing in the Western Desert, in the middle of the night.", "عاصفة تراب ضخمة بتكبر في الصحرا الغربية، في نص الليل."),
+      o: [{ t: ok("Warn the airports now", "حذّر المطارات دلوقتي"), f: c => c.rules.night && c.rules.always && c.rules.fresh ? { h: 0, sci: 0, w: ok("Your satellite saw it in the dark and sent fresh pictures. Airports got ready hours early.", "القمر بتاعك شافها في الضلمة وبعت صور جديدة، والمطارات استعدت قبلها بساعات.") } : { h: 0, sci: -.15, w: ok("You warned them, but your satellite could not really see the storm at night, so the warning was late and unclear.", "إنت حذّرتهم، بس القمر بتاعك مكانش شايف العاصفة كويس بالليل، فالتحذير جه متأخر ومش واضح.") } },
+          { t: ok("Wait for morning to be sure", "استنى للصبح علشان تتأكد"), f: c => ({ h: 0, sci: -.12, w: ok("By morning the storm had already reached Cairo. Waiting cost people time to get ready.", "على الصبح كانت العاصفة وصلت القاهرة خلاص، والانتظار ضيّع على الناس وقت كانوا هيستعدوا فيه.") }) }] }],
+  userMsg(R) { const r = R.rules; return r.always && r.night && r.fresh ? ok("Forecasters saw the Khamsin coming hours early, day and night. Airports and schools got ready, and people with asthma stayed inside.", "خبراء الأرصاد شافوا الخماسين جاية قبلها بساعات، بالليل والنهار. المطارات والمدارس استعدت، والناس اللي عندهم حساسية صدر قعدوا في البيت.")
+    : !r.always ? ok("The satellite saw Egypt for only a few minutes at a time. Most storms started while it was somewhere else.", "القمر كان بيشوف مصر كام دقيقة بس كل مرة، وأغلب العواصف بدأت وهو في مكان تاني.")
+    : !r.night ? ok("The satellite saw storms in the day, but the ones that started at night surprised everyone.", "القمر شاف العواصف اللي بالنهار، بس اللي بدأت بالليل فاجئت الكل.")
+    : ok("The satellite saw the storms, but the pictures arrived too slowly to warn people in time.", "القمر شاف العواصف، بس الصور كانت بتوصل ببطء، فملحقناش نحذّر الناس في الوقت المناسب."); },
+  real: { name: "Meteosat (EUMETSAT)", picks: ok("Infrared camera · fast antenna · solar panels · geostationary orbit", "كاميرا إنفرا ريد · أنتينا سريعة · سولار بانلز · أوربت جيوستيشنري"),
+    facts: ok("Europe's Meteosat satellites watch Egypt from geostationary orbit, 35,786 km up. Their infrared channels see dust and clouds day and night, and they send a new picture of Africa and Europe every 15 minutes. NASA and NOAA's GOES satellites do the same over the Americas.", "أقمار Meteosat الأوروبية بتراقب مصر من الأوربت الجيوستيشنري، على ارتفاع 35,786 كم. قنوات الإنفرا ريد بتاعتها بتشوف التراب والسحاب بالليل والنهار، وبتبعت صورة جديدة لأفريقيا وأوروبا كل ربع ساعة. وأقمار GOES بتاعة ناسا و NOAA بتعمل نفس الحكاية فوق أمريكا."),
+    links: [["EUMETSAT Meteosat", "https://www.eumetsat.int/our-satellites/meteosat-series"], ["NASA GOES", "https://science.nasa.gov/mission/goes/"]] }
+};
+
+/* ---------- CML 3: Nile Delta Crop Watch (add up watts and kilograms) ---------- */
+const nf = n => Number(n).toLocaleString("en-US");
+const BODY_KG = 1500, BODY_W = 1400;
+const M_DELTA = {
+  id: "delta", base: "delta", model: "landsat8", days: 365 * 5, rings: true,
+  name: ok("Nile Delta Crop Watch", "مراقب محاصيل الدلتا"),
+  user: ok("Egypt's Ministry of Agriculture and the farmers of the Nile Delta", "وزارة الزراعة وفلاحين دلتا النيل"),
+  rules: [{ k: "fields", en: "See each small field", ar: "يشوف كل أرض صغيرة" }, { k: "health", en: "See plant health", ar: "يشوف صحة الزرع" }, { k: "light", en: "Same place, same light", ar: "نفس المكان ونفس الإضاءة" }, { k: "life", en: "Work for 5 years", ar: "يشتغل 5 سنين" }],
   decisions: {
     science: [
-      { k: "cam", t: { en: "Which camera?", ar: "أنهي كاميرا؟" }, o: [
-        lopt("A", "leaf", "Camera A · OLI", "الكاميرا A · OLI", { mass: .45, power: 3, cost: 30, data: 3, res: 30, nir: true }),
-        lopt("B", "cam3", "Camera B · MODIS", "الكاميرا B · MODIS", { mass: .23, power: 2, cost: 20, data: 2, res: 250, nir: true }),
-        lopt("C", "cam1", "Camera C · Normal", "الكاميرا C · عادية", { mass: .2, power: 1, cost: 10, data: 2, res: 30, nir: false })] },
-      { k: "time", t: { en: "When do we take pictures?", ar: "بنصوّر إمتى؟" }, o: [
-        lopt("A", "weather", "Morning, ~10 a.m.", "الصبح، حوالي 10", { light: true, day: true }),
-        lopt("B", "cam1", "Any time of day", "أي وقت في اليوم", { light: false, day: true }),
-        lopt("C", "radar", "At night", "بالليل", { light: false, day: false })] }],
+      { k: "cam", t: ok("Which camera?", "أنهي كاميرا؟"), o: [lopt("A", "cam3", "MODIS", "MODIS", { res: 250, nir: true, mass: 230, w: 160, data: 10.6, instr: "cam_med" }), lopt("B", "weather", "TIRS", "TIRS", { res: 100, nir: false, mass: 240, w: 380, data: 3, instr: "thermal" }), lopt("C", "leaf", "OLI", "OLI", { res: 30, nir: true, mass: 470, w: 400, data: 200, instr: "multispec" })] },
+      { k: "time", t: ok("When do we take pictures?", "هنصوّر إمتى؟"), o: [lopt("A", "radar", "At night", "بالليل", { day: false }), lopt("B", "weather", "10 a.m. every day", "10 الصبح كل يوم", { day: true, light: true }), lopt("C", "cam1", "Any time of day", "أي وقت", { day: true, light: false })] }],
     comms: [
-      { k: "ant", t: { en: "Which antenna?", ar: "أنهي هوائي؟" }, o: [
-        lopt("A", "dish1", "Antenna A · S-band", "الهوائي A · S-band", { cap: 1, power: 1, cost: 3, mass: .02 }),
-        lopt("B", "dish2", "Antenna B · X-band", "الهوائي B · X-band", { cap: 4, power: 2, cost: 6, mass: .05 }),
-        lopt("C", "dish3", "Antenna C · Ka-band", "الهوائي C · Ka-band", { cap: 8, power: 3, cost: 12, mass: .08 })] },
-      { k: "st", t: { en: "How many ground stations?", ar: "كام محطة أرضية؟" }, o: [
-        lopt("A", "relay", "1 station", "محطة واحدة", { n: 1, cost: 4 }), lopt("B", "relay", "2 stations", "محطتين", { n: 2, cost: 8 }), lopt("C", "relay", "3 stations", "3 محطات", { n: 3, cost: 12 })] }],
+      { k: "ant", t: ok("Which antenna?", "أنهي أنتينا؟"), o: [lopt("A", "dish3", "Ka-band", "Ka-band", { rate: 3500, w: 350, mass: 30, few: true, eng: "large" }), lopt("B", "dish1", "S-band", "S-band", { rate: .25, w: 50, mass: 10, eng: "small" }), lopt("C", "dish2", "X-band", "X-band", { rate: 384, w: 150, mass: 20, eng: "medium" })] },
+      { k: "st", t: ok("How many ground stations?", "كام جراوند ستيشن؟"), o: [lopt("A", "relay", "1 station", "محطة واحدة", { n: 1 }), lopt("B", "relay", "2 stations", "محطتين", { n: 2 }), lopt("C", "relay", "3 stations", "3 محطات", { n: 3 })] }],
     engineer: [
-      { k: "pan", t: { en: "Which solar panels?", ar: "أنهي ألواح شمسية؟" }, o: [
-        lopt("A", "panel1", "Small panels", "ألواح صغيرة", { supply: 5, mass: .1, cost: 4 }), lopt("B", "panel2", "Medium panels", "ألواح متوسطة", { supply: 8, mass: .2, cost: 7 }), lopt("C", "panel3", "Large panels", "ألواح كبيرة", { supply: 12, mass: .35, cost: 11 })] },
-      { k: "bat", t: { en: "Which battery?", ar: "أنهي بطارية؟" }, o: [
-        lopt("A", "rtg", "Small battery", "بطارية صغيرة", { min: 20, mass: .06, cost: 3 }), lopt("B", "rtg", "Medium battery", "بطارية متوسطة", { min: 45, mass: .12, cost: 5 }), lopt("C", "rtg", "Large battery", "بطارية كبيرة", { min: 90, mass: .3, cost: 8 })] }],
+      { k: "pan", t: ok("Which solar panel?", "أنهي سولار بانل؟"), o: [lopt("A", "panel2", "Panel A · 2,600 W", "البانل A · 2,600 وات", { supply: 2600, mass: 200 }), lopt("B", "panel3", "Panel B · 3,200 W", "البانل B · 3,200 وات", { supply: 3200, mass: 300 }), lopt("C", "panel1", "Panel C · 2,000 W", "البانل C · 2,000 وات", { supply: 2000, mass: 120 })] },
+      { k: "bat", t: ok("Which battery?", "أنهي بطارية؟"), o: [lopt("A", "rtg", "Battery A · 60 min", "البطارية A · 60 دقيقة", { min: 60, mass: 150 }), lopt("B", "rtg", "Battery B · 40 min", "البطارية B · 40 دقيقة", { min: 40, mass: 70 }), lopt("C", "rtg", "Battery C · 25 min", "البطارية C · 25 دقيقة", { min: 25, mass: 40 })] }],
     planner: [
-      { k: "orb", t: { en: "How high is the orbit?", ar: "المدار على ارتفاع كام؟" }, o: [
-        lopt("A", "ice", "Orbit A · 400 km", "المدار A · 400 كم", { alt: 400, fuel: .8, cost: 10, resF: .57, life: 2, sso: false }),
-        lopt("B", "ice", "Orbit B · 705 km", "المدار B · 705 كم", { alt: 705, fuel: .4, cost: 6, resF: 1, life: 5, sso: true }),
-        lopt("C", "ice", "Orbit C · 1,500 km", "المدار C · 1,500 كم", { alt: 1500, fuel: .5, cost: 8, resF: 2.13, life: 5, sso: false, rad: true })] },
-      { k: "rkt", t: { en: "Which rocket?", ar: "أنهي صاروخ؟" }, o: [
-        lopt("A", "rocket1", "Pegasus XL", "Pegasus XL", { lift: .45, cost: 8, lv: "small" }), lopt("B", "rocket2", "Atlas V 401", "Atlas V 401", { lift: 6, cost: 25, lv: "medium" }), lopt("C", "rocket3", "Falcon Heavy", "Falcon Heavy", { lift: 30, cost: 50, lv: "heavy" })] },
-      { k: "eom", t: { en: "End of the mission?", ar: "نهاية المهمة؟" }, o: [
-        lopt("A", "rocket1", "Save fuel, bring it down", "نسيب وقود وننزّله", { mass: .05, cost: 2, clean: true }), lopt("B", "cam3", "Use all fuel for pictures", "نصرف الوقود كله على الصور", { clean: false, more: true }), lopt("C", "radar", "Just leave it up there", "نسيبه فوق", { clean: false })] }] },
-  facts: { en: "The real Landsat 8 has flown since 2013 at 705 km, crossing the equator around 10 a.m. Its OLI camera sees near-infrared at 30 m, and it sends data with X-band at 384 Mbit/s.", ar: "Landsat 8 الحقيقي بيطير من 2013 على ارتفاع 705 كم، وبيعدّي خط الاستوا حوالي الساعة 10 الصبح. كاميرته OLI بتشوف الأشعة تحت الحمرا بدقة 30 متر، وبيبعت الداتا بـ X-band بسرعة 384 ميجابت في الثانية." }
+      { k: "orb", t: ok("Which orbit?", "أنهي أوربت؟"), o: [lopt("A", "ice", "Orbit A · 400 km", "الأوربت A · 400 كم", { resF: .57, life: false, sso: false }), lopt("B", "ice", "Orbit B · 705 km", "الأوربت B · 705 كم", { resF: 1, life: true, sso: true }), lopt("C", "ice", "Orbit C · 1,500 km", "الأوربت C · 1,500 كم", { resF: 2.13, life: true, sso: false, rad: true })] },
+      { k: "rkt", t: ok("Which rocket?", "أنهي صاروخ؟"), o: [lopt("A", "rocket2", "Falcon 9", "Falcon 9", { lift: 10000, cost: 69, lv: "medium" }), lopt("B", "rocket1", "Pegasus XL", "Pegasus XL", { lift: 450, cost: 56, lv: "small" }), lopt("C", "rocket2", "Vega C", "Vega C", { lift: 2300, cost: 48, lv: "medium" })] },
+      { k: "eom", t: ok("End of the mission?", "نهاية المهمة؟"), o: [lopt("A", "radar", "Leave it up there", "نسيبه فوق", { clean: false }), lopt("B", "cam3", "Use all fuel for pictures", "نصرف الوقود كله على الصور", { clean: false, more: true }), lopt("C", "rocket1", "Save fuel, bring it down", "نسيب وقود وننزّله", { clean: true })] }] },
+  compute(p) {
+    const g = (r, k) => pickOpt(this, p, r, k) || {};
+    const cam = g("science", "cam"), time = g("science", "time"), ant = g("comms", "ant"), st = g("comms", "st"), pan = g("engineer", "pan"), bat = g("engineer", "bat"), orb = g("planner", "orb"), rkt = g("planner", "rkt"), eom = g("planner", "eom");
+    const mass = BODY_KG + (cam.mass || 0) + (ant.mass || 0) + (pan.mass || 0) + (bat.mass || 0), need = BODY_W + (cam.w || 0) + (ant.w || 0), supply = pan.supply || 0;
+    const made = cam.data || 0, down = ant.rate || 0, res = (cam.res || 0) * (orb.resF || 1);
+    const rules = { fields: !!cam.k && res <= 50, health: !!cam.nir && time.day === true, light: !!time.light && !!orb.sso, life: !!orb.life && (bat.min || 0) >= 35 };
+    const fatal = rkt.k && mass > rkt.lift ? "mass" : pan.k && need > supply ? "power" : null;
+    const sci = (cam.nir ? 1 : .15) * (res <= 50 ? 1 : .35) * (time.day === false ? 0 : time.light && orb.sso ? 1 : .6) * Math.min(1, made ? down / made : 1) * ((bat.min || 0) >= 35 ? 1 : .5) * (eom.more ? 1.1 : 1);
+    const lifts = this.decisions.planner[1].o.filter(o => o.lift >= mass), cheapest = lifts.length ? Math.min(...lifts.map(o => o.cost)) : null;
+    const waste = [];
+    if (pan.k && supply >= need && supply / need > 1.3) waste.push({ en: `Power: your panel makes ${nf(supply)} W, but the satellite uses only ${nf(need)} W. That is ${nf(supply - need)} W you carry for nothing.`, ar: `الكهربا: البانل بتاعك بيطلّع ${nf(supply)} وات، والقمر بياكل ${nf(need)} بس. يعني شايل ${nf(supply - need)} وات على الفاضي.` });
+    if (bat.k && bat.min >= 60) waste.push(ok("Battery: the shadow lasts up to 35 minutes, and a 40-minute battery is enough. The 60-minute one adds 80 kg.", "البطارية: الضل بيقعد لحد 35 دقيقة، وبطارية الـ 40 دقيقة كفاية. بطارية الـ 60 دقيقة بتزوّد 80 كيلو."));
+    if (ant.k && made && down >= made && down / made > 5) waste.push({ en: `Antenna: it sends ${nf(down)} Mbit/s, but the camera makes only ${made}. It uses extra power for speed you don't need.`, ar: `الأنتينا: بتبعت ${nf(down)} ميجابت في الثانية، والكاميرا بتطلّع ${made} بس. يعني بتاكل كهربا زيادة على سرعة إنت مش محتاجها.` });
+    if (rkt.k && !fatal && cheapest != null && rkt.cost > cheapest) waste.push({ en: `Rocket: a cheaper rocket could lift your ${nf(Math.round(mass))} kg. You paid about ${rkt.cost - cheapest} million dollars extra.`, ar: `الصاروخ: كان فيه صاروخ أرخص يقدر يشيل الـ ${nf(Math.round(mass))} كيلو بتوعك، فإنت دفعت حوالي ${rkt.cost - cheapest} مليون دولار زيادة.` });
+    const issues = [];
+    if (fatal === "mass") issues.push({ en: `Mass: the satellite weighs ${nf(Math.round(mass))} kg. The rocket cannot lift it.`, ar: `الوزن: القمر وزنه ${nf(Math.round(mass))} كيلو، والصاروخ مش هيقدر يشيله.` });
+    if (pan.k && need > supply) issues.push({ en: `Power: the satellite needs ${nf(need)} W, but the panel makes ${nf(supply)} W.`, ar: `الكهربا: القمر محتاج ${nf(need)} وات، والبانل بيطلّع ${nf(supply)} بس.` });
+    if (bat.k && bat.min < 35) issues.push(ok("Battery: it runs out before the satellite leaves Earth's shadow.", "البطارية: بتخلص قبل ما القمر يخرج من ضل الأرض."));
+    if (ant.k && cam.k && made > down) issues.push(ok("Data: the camera makes data faster than the antenna can send it.", "الداتا: الكاميرا بتطلّع داتا أسرع من ما الأنتينا تبعتها."));
+    this.rules.forEach(r => { if (!rules[r.k]) issues.push({ en: `Rule not met: ${r.en}.`, ar: `قاعدة متحققتش: ${r.ar}.` }); });
+    return { mass, need, supply, made, down, res, rules, fatal, sci: Math.max(0, Math.min(1.1, sci)), issues, waste, efficient: !waste.length, clean: !!eom.clean,
+      ring: { mass: rkt.lift ? mass / rkt.lift : 0, power: supply ? need / supply : 0, money: (rkt.cost || 0) / 100, data: down ? made / down : 0 }, cam, time, ant, st, pan, bat, orb, rkt, eom };
+  },
+  engine(c) { return { orbit: "sso600", lv: c.rkt.lv || "medium", antenna: c.ant.eng || "medium", instr: [c.cam.instr || "multispec"], panel: (c.pan.supply || 2000) / 1000, shield: "light" }; },
+  events: [
+    { role: "comms", t: ok("Ground station offline", "الجراوند ستيشن وقعت"), x: ok("A storm on Earth broke your main ground station for a week.", "عاصفة على الأرض وقّعت الجراوند ستيشن الرئيسية أسبوع."),
+      o: [{ t: ok("Use another station", "استخدم محطة تانية"), f: c => c.st.n < 2 ? { h: 0, sci: -.15, w: ok("You built only one station, so there was no other one. A week of pictures was lost.", "إنت عامل محطة واحدة بس، فمكانش فيه غيرها. صور أسبوع ضاعت.") } : c.ant.few ? { h: 0, sci: -.1, w: ok("Your other station could not hear Ka-band. Only a few stations in the world can. Pictures were lost.", "المحطة التانية مقدرتش تسمع Ka-band، لأن محطات قليلة في العالم بس اللي بتسمعه. صور ضاعت.") } : { h: 0, sci: 0, w: ok("Your backup station took over. Nothing was lost.", "المحطة الاحتياطي استلمت، ومفيش حاجة ضاعت.") } },
+          { t: ok("Keep pictures in memory, send later", "خزّن الصور وابعتها بعدين"), f: c => c.made && c.down >= c.made * 1.5 ? { h: 0, sci: 0, w: ok("Your antenna had spare speed, so it sent the saved pictures later.", "الأنتينا كان عندها سرعة زيادة، فبعتت الصور المتخزنة بعدين.") } : { h: 0, sci: -.1, w: ok("Your antenna was already busy, so it could not catch up. Some pictures were lost.", "الأنتينا كانت مشغولة أصلاً، فملحقتش. شوية صور ضاعت.") } },
+          { t: ok("Rent a partner's station", "أجّر محطة من شريك"), f: c => c.ant.few ? { h: 0, sci: -.1, cost: 3, w: ok("You paid, but the partner's station could not hear Ka-band.", "إنت دفعت، بس محطة الشريك مقدرتش تسمع Ka-band.") } : { h: 0, sci: 0, cost: 3, w: ok("Space agencies rent antenna time by the minute. It cost a little money, and nothing was lost.", "وكالات الفضاء بتأجر وقت المحطات بالدقيقة. كلّفنا شوية فلوس، ومفيش حاجة ضاعت.") } }] },
+    { role: "engineer", t: ok("Solar storm!", "عاصفة شمسية!"), x: ok("The Sun threw out a cloud of charged particles. They can confuse the computer.", "الشمس رمت سحابة جزيئات مشحونة، وممكن تلخبط الكمبيوتر."),
+      o: [{ t: ok("Safe mode for a day", "سيف مود يوم"), f: c => ({ h: 0, sci: -.03, w: ok("The computer was protected. You lost one day of pictures. Real satellites do this.", "الكمبيوتر اتحمى، وخسرنا صور يوم واحد. والأقمار الحقيقية بتعمل كده.") }) },
+          { t: ok("Keep going", "كمّل عادي"), f: c => c.orb.rad ? { h: -30, sci: 0, w: ok("At 1,500 km the radiation is stronger. The particles damaged the computer badly.", "على 1,500 كم الريدياشن أقوى، والجزيئات بوّظت الكمبيوتر جامد.") } : { h: -15, sci: 0, w: ok("Some particles hit the computer and broke a few parts.", "شوية جزيئات خبطت الكمبيوتر وبوّظت كام قطعة.") } },
+          { t: ok("Turn so the body shields the computer", "لف علشان جسم القمر يحمي الكمبيوتر"), f: c => ({ h: -5, sci: 0, w: ok("The satellite's body blocked most particles. Small damage.", "جسم القمر صد أغلب الجزيئات، والضرر بسيط.") }) }] }],
+  userMsg(R) { const r = R.rules; return r.health && r.fields ? { en: `The Ministry of Agriculture received ${R.sciPct}% of the planned pictures. Farmers saw which fields were thirsty, and watered them before the crops were damaged.`, ar: `وزارة الزراعة استلمت ${R.sciPct}% من الصور المطلوبة. والفلاحين شافوا أنهي أرض عطشانة وسقوها قبل ما المحصول يتضرر.` }
+    : r.health ? ok("The pictures showed plant health, but only for big areas. Farmers knew a region was thirsty, but not which field.", "الصور بيّنت صحة الزرع، بس لمناطق كبيرة. الفلاحين عرفوا إن المنطقة عطشانة، بس مش أنهي أرض بالظبط.")
+    : ok("The pictures could not show plant health. The Ministry could not use them for crops.", "الصور مكانتش بتبيّن صحة الزرع، والوزارة مقدرتش تستخدمها للمحاصيل."); },
+  real: { name: "Landsat 8 (NASA + USGS)", picks: ok("OLI camera · about 10 a.m. · X-band · 705 km sun-synchronous orbit", "كاميرا OLI · حوالي الساعة 10 · X-band · أوربت 705 كم صن سينكرونس"),
+    facts: ok("Your mission is the real Landsat 8. It has flown since 2013 at 705 km, crossing the equator at about 10 a.m. Its OLI camera sees near-infrared with 30 m pixels, and it sends data on X-band at 384 Mbit/s. (It launched on an Atlas V rocket.)", "مهمتك هي Landsat 8 الحقيقي. بيطير من 2013 على ارتفاع 705 كم، وبيعدّي خط الاستوا حوالي الساعة 10 الصبح. كاميرته OLI بتشوف النير إنفرا ريد ببيكسل 30 متر، وبيبعت الداتا على X-band بسرعة 384 ميجابت في الثانية. (واتطلق على صاروخ Atlas V.)"),
+    links: [["USGS Landsat 8", "https://www.usgs.gov/landsat-missions/landsat-8"], ["NASA MODIS", "https://modis.gsfc.nasa.gov/about/specifications.php"], ["ESA Vega C", "https://www.esa.int/Enabling_Support/Space_Transportation/Vega/Vega_capabilities"]] }
 };
+const M_MOON = { id: "moon", soon: true, name: ok("Moon Landing Map", "خريطة الهبوط على القمر") };
+const LAB_M = { storm: M_STORM, moon: M_MOON, delta: M_DELTA };
 const CML = [
-  { n: 1, t: { en: "CML 1 · The idea", ar: "CML 1 · الفكرة" }, d: { en: "Science Lead only: pick what the satellite sees. Are we answering the right question?", ar: "رئيسة العلماء بس: تختار القمر الصناعي هيشوف إيه. هل بنجاوب على السؤال الصح؟" }, roles: ["science"] },
-  { n: 2, t: { en: "CML 2 · Can it work?", ar: "CML 2 · هل تنفع؟" }, d: { en: "The whole team builds the full mission, reviews it, and launches.", ar: "التيم كله يبني المهمة كاملة، ويراجعها، ويطلقها." }, roles: TEAM_ROLES },
-  { n: 3, t: { en: "CML 3 · Trade study", ar: "CML 3 · المقارنة" }, d: { en: "Build two different designs, compare them, and fly the better one.", ar: "ابنوا تصميمين مختلفين، قارنوهم، وطيّروا الأحسن." }, roles: TEAM_ROLES },
-  { n: 4, t: { en: "CML 4 · Point design", ar: "CML 4 · التصميم التفصيلي" }, d: { en: "Every part and real number, for advanced players (expert mode).", ar: "كل القطع والأرقام الحقيقية، للاعبين المتقدمين (وضع الخبراء)." }, roles: [] }];
+  { n: 1, m: "storm", t: ok("CML 1 · The idea", "CML 1 · الفكرة"), d: ok("Khamsin Storm Watch. One choice each, two options. Just words, no numbers.", "رادار الخماسين. كل واحد اختيار واحد من اتنين. كلام بس، مفيش أرقام.") },
+  { n: 2, m: "moon", t: ok("CML 2 · Can it work?", "CML 2 · هل تنفع؟"), d: ok("Moon landing map. Compare each number with what is needed. Coming next.", "خريطة الهبوط على القمر. تقارن كل رقم باللي مطلوب. جاية قريب.") },
+  { n: 3, m: "delta", t: ok("CML 3 · Add it up", "CML 3 · اجمع"), d: ok("Nile Delta Crop Watch. Add up watts and kilograms. Many designs work; the smartest wastes nothing.", "مراقب محاصيل الدلتا. اجمع الوات والكيلوهات. تصميمات كتير بتنجح، والأذكى اللي مبيضيّعش حاجة.") },
+  { n: 4, m: null, t: ok("CML 4 · Every detail", "CML 4 · كل التفاصيل"), d: ok("Expert mode: every part and real number, for advanced players.", "وضع الخبراء: كل القطع والأرقام الحقيقية، للاعبين المتقدمين.") }];
 
 /* ---- lab state ---- */
-const LB = { mode: "solo", level: 2, room: null, me: null, myRole: null, picks: {}, designA: null, reviews: 0, rewatch: 0, watched: {}, players: [], chat: [], online: false, sb: null, chan: null, flight: null, revealed: null, votes: {} };
+const LB = { mode: "solo", level: 1, room: null, me: null, myRole: null, picks: {}, reviews: 0, rewatch: 0, watched: {}, players: [], chat: [], online: false, sb: null, chan: null, flight: null, revealed: null, notes: "" };
 const myId = (() => { try { let v = sessionStorage.getItem("ma.cid"); if (!v) { v = Math.random().toString(36).slice(2, 10); sessionStorage.setItem("ma.cid", v); } return v; } catch (e) { return Math.random().toString(36).slice(2, 10); } })();
 const lvl = () => CML[LB.level - 1];
-const rolesInPlay = () => lvl().roles;
+const LM = () => LAB_M[lvl().m] || M_STORM;
+const rolesInPlay = () => TEAM_ROLES;
 const isHost = () => LB.mode === "online" && LB.room && LB.room.state.host === myId;
-const myRoles = () => { if (LB.mode !== "online") return rolesInPlay(); // online: my role, and the host also covers empty roles
-  const mine = rolesInPlay().filter(r => r === LB.myRole || (isHost() && !LB.players.some(p => p.role === r))); return mine; };
-function allPicks() { // merge picks from every player in online mode
-  if (LB.mode !== "online") return LB.picks;
-  const p = {}; LB.players.forEach(pl => Object.assign(p, (pl.data && pl.data.picks) || {})); return p;
-}
-const pickOpt = (picks, role, k) => { const d = DELTA.decisions[role].find(x => x.k === k); const v = picks[role + "." + k]; return d && v ? d.o.find(o => o.k === v) : null; };
-
-/* ---- the model: hidden numbers, checked against the 5 rules ---- */
-function lCompute(picks) {
-  const g = (r, k) => pickOpt(picks, r, k) || {};
-  const cam = g("science", "cam"), time = g("science", "time"), ant = g("comms", "ant"), st = g("comms", "st"), pan = g("engineer", "pan"), bat = g("engineer", "bat"), orb = g("planner", "orb"), rkt = g("planner", "rkt"), eom = g("planner", "eom");
-  const mass = 1.4 + (cam.mass || 0) + (ant.mass || 0) + (pan.mass || 0) + (bat.mass || 0) + (orb.fuel || 0) + (eom.mass || 0);
-  const need = 2 + (cam.power || 0) + (ant.power || 0), supply = pan.supply || 0;
-  const cost = 10 + ["cost"].reduce(() => [cam, time, ant, st, pan, bat, orb, rkt, eom].reduce((a, o) => a + (o.cost || 0), 0), 0);
-  const down = (ant.cap || 0) * ({ 1: 1, 2: 1.6, 3: 2 }[st.n] || 0), made = cam.data || 0;
-  const ring = { mass: rkt.lift ? mass / rkt.lift : 0, power: supply ? need / supply : 0, money: cost / DELTA.budget, data: down ? made / down : 0 };
-  const res = (cam.res || 0) * (orb.resF || 1);
-  const rules = { fields: !!cam.k && res <= 50, health: !!cam.nir && time.day !== false, light: !!time.light && !!orb.sso, life: (orb.life || 0) >= 5 && cost <= DELTA.budget && (bat.min || 0) >= 35, budget: cost <= DELTA.budget };
-  const fatal = !rkt.k ? null : mass > rkt.lift ? "mass" : supply && need > supply ? "power" : null;
-  let sci = (cam.nir ? 1 : .15) * (res <= 50 ? 1 : .35) * (time.day === false ? 0 : time.light && orb.sso ? 1 : .6) * Math.min(1, down ? down / Math.max(made, .01) : 0) * ((bat.min || 0) >= 35 ? 1 : .5) * (eom.more ? 1.1 : 1);
-  const issues = [];
-  if (rkt.k && mass > rkt.lift) issues.push({ en: "Mass: the rocket cannot lift this satellite.", ar: "الوزن: الصاروخ مش هيقدر يشيل القمر ده." });
-  if (pan.k && need > supply) issues.push({ en: "Power: the panels make less power than the parts need.", ar: "الكهربا: الألواح بتعمل كهربا أقل من اللي القطع محتاجاها." });
-  if (bat.k && bat.min < 35) issues.push({ en: "Battery: it runs out before the satellite leaves Earth's shadow.", ar: "البطارية: بتخلص قبل ما القمر يخرج من ضل الأرض." });
-  if (ant.k && cam.k && made > down) issues.push({ en: "Data: the pictures cannot all reach Earth.", ar: "الداتا: الصور مش هتوصل الأرض كلها." });
-  if (cost > DELTA.budget) issues.push({ en: "Money: the design costs more than 100 points.", ar: "الفلوس: التصميم أغلى من 100 نقطة." });
-  DELTA.rules.slice(0, 4).forEach(r => { if (!rules[r.k]) issues.push({ en: `Rule not met: ${r.en}.`, ar: `قاعدة متحققتش: ${r.ar}.` }); });
-  return { mass, need, supply, cost, made, down, ring, res, rules, fatal, sci: Math.max(0, Math.min(1.1, sci)), issues, eom, orb, st, bat, cam, ant, rkt, time, pan };
-}
-const decisionsFor = roles => roles.flatMap(r => DELTA.decisions[r].map(d => ({ role: r, d })));
+const myRoles = () => LB.mode !== "online" ? TEAM_ROLES : TEAM_ROLES.filter(r => r === LB.myRole || (isHost() && !LB.players.some(p => p.role === r)));
+function allPicks() { if (LB.mode !== "online") return LB.picks; const p = {}; LB.players.forEach(pl => Object.assign(p, (pl.data && pl.data.picks) || {})); return p; }
+function pickOpt(m, picks, role, k) { const d = (m.decisions[role] || []).find(x => x.k === k); const v = picks[role + "." + k]; return d && v ? d.o.find(o => o.k === v) : null; }
+const lCompute = picks => LM().compute(picks);
+const decisionsFor = roles => roles.flatMap(r => (LM().decisions[r] || []).map(d => ({ role: r, d })));
 const allChosen = (picks, roles) => decisionsFor(roles).every(({ role, d }) => picks[role + "." + d.k]);
-
 /* ---- Supabase (online rooms) ---- */
 function sbClient() { if (LB.sb) return LB.sb; if (!window.supabase || !window.supabase.createClient) return null; LB.sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: false } }); return LB.sb; }
 async function onlineAvailable() { const sb = sbClient(); if (!sb) return false; try { const { error } = await sb.from("rooms").select("code").limit(1); return !error; } catch (e) { return false; } }
 const newCode = () => "SO-" + Math.random().toString(36).slice(2, 6).toUpperCase().replace(/[^A-Z0-9]/g, "X");
 async function roomCreate(name, role) {
   const sb = sbClient(); const code = newCode();
-  const { error } = await sb.from("rooms").insert({ code, mission: "delta", level: LB.level, state: { phase: "lobby", host: myId, reviews: 0 } }); if (error) throw error;
+  const { error } = await sb.from("rooms").insert({ code, mission: LM().id, level: LB.level, state: { phase: "lobby", host: myId, reviews: 0 } }); if (error) throw error;
   return roomJoin(code, name, role);
 }
 async function roomJoin(code, name, role) {
@@ -135,179 +173,165 @@ function onRoomChange() {
   const RANK = { lonline: 0, lroom: 1, lvideo: 2, ldesign: 3, lfly: 4, lusers: 5, lreport: 6 }, target = { lobby: "lroom", video: "lvideo", flight: "lfly" }[ph];
   if (target && (RANK[A.screen] ?? 0) < RANK[target]) { if (target === "lvideo") LB.vi = 0; go(target); if (target === "lfly") lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return; }
   if (isHost() && ph !== "flight" && LB.players.length && LB.players.every(p => p.data && p.data.ready) && allChosen(allPicks(), rolesInPlay())) { roomState({ phase: "flight", at: Date.now() }); }
-  if (A.screen === "lroom" || A.screen === "ldesign") lPartial();
+  if (["lroom", "ldesign", "lvideo"].includes(A.screen)) lPartial();
   if (A.screen === "lfly") lVoteCheck();
   lChatPaint();
 }
+
 
 /* ---- screens ---- */
 const roleTag = r => `<span class="rolechip" style="--sc:${CREW[r].col}">${L(CREW[r].title)}</span>`;
 function crewImg(r) { return `<img src="img/${CREW[r].img}" alt="">`; }
 function lhome() {
   return `<section class="cine notr">
-    <canvas id="holoHome" class="holo" aria-label="Hologram of NASA's Landsat 8"></canvas>
+    <canvas id="holoHome" class="holo" aria-label="Hologram of a NASA satellite"></canvas>
     <div class="cine-txt"><div class="kick">NASA SPACE APPS 2026 · TEAM STELLAROPS</div>
       <h1 class="cine-h">MISSION <span>LAB</span></h1>
-      <p class="cine-p">${L({ en: "You are a NASA-style mission team. Watch your specialist's briefing, remember the facts, talk with your team, and design a real satellite for Egypt's farmers.", ar: "انتوا تيم مهمة زي ناسا. اتفرجوا على شرح المتخصص بتاعكم، افتكروا المعلومات، اتكلموا مع بعض، وصمموا قمر صناعي حقيقي لفلاحين مصر." })}</p>
-      <div class="row"><button class="hbtn" type="button" data-lmode="solo">${L({ en: "Play solo", ar: "العب لوحدك" })}</button>
-        <button class="hbtn ghost" type="button" data-lmode="local">${L({ en: "Team on one computer", ar: "تيم على جهاز واحد" })}</button>
-        <button class="hbtn ghost" type="button" data-lmode="online">${L({ en: "Online team (each on own laptop)", ar: "تيم أونلاين (كل واحد على اللابتوب بتاعه)" })}</button></div></div>
-    <div class="how">${[[1, { en: "Watch the briefing", ar: "اتفرج على الشرح" }], [2, { en: "Each role decides", ar: "كل دور يقرر" }], [3, { en: "Review and launch", ar: "راجع واطلق" }], [4, { en: "See who your data helped", ar: "شوف الداتا ساعدت مين" }]].map(([n, t]) => `<div><span>0${n}</span><b>${L(t)}</b></div>`).join("")}</div>
+      <p class="cine-p">${L(ok("You are a space mission team. Each of you gets a role and a guide. Watch your guide's video, write what you learn on the team board, talk together, and design a real satellite.", "إنتوا تيم مهمة فضاء. كل واحد فيكم ليه دور ومرشد. اتفرج على فيديو المرشد بتاعك، واكتب اللي اتعلمته على سبورة التيم، واتكلموا مع بعض، وصمموا قمر صناعي حقيقي."))}</p>
+      <div class="row"><button class="hbtn" type="button" data-lmode="solo">${L(ok("Play solo", "العب لوحدك"))}</button>
+        <button class="hbtn ghost" type="button" data-lmode="local">${L(ok("Team on one computer", "تيم على جهاز واحد"))}</button>
+        <button class="hbtn ghost" type="button" data-lmode="online">${L(ok("Online team (each on own laptop)", "تيم أونلاين (كل واحد على اللابتوب بتاعه)"))}</button></div></div>
+    <div class="how">${[[1, ok("Watch your guide", "اتفرج على المرشد")], [2, ok("Write on the team board", "اكتب على السبورة")], [3, ok("Decide together", "قرروا مع بعض")], [4, ok("Launch and see who you helped", "اطلق وشوف ساعدت مين")]].map(([n, t]) => `<div><span>0${n}</span><b>${L(t)}</b></div>`).join("")}</div>
   </section>`;
 }
+const cmlDone = n => (A.progress.stars["cml" + n] || 0) >= 1;
 function llevel() {
-  const st = A.progress.stars;
-  return `<section class="hpanel notr"><div class="kick">${L(DELTA.name)} · ${L({ en: "choose a maturity level", ar: "اختار مستوى النضج" })}</div>
-    <h2 class="hh">${L({ en: "How mature is your mission idea?", ar: "فكرة مهمتك ناضجة لحد فين؟" })}</h2>
-    <p class="needline">${L({ en: "NASA's JPL measures mission ideas with Concept Maturity Levels (CML). Start at CML 1 and climb.", ar: "معمل JPL بتاع ناسا بيقيس أفكار المهمات بمستويات نضج اسمها CML. ابدأ من CML 1 واطلع." })}</p>
-    <div class="planets">${CML.map(c => { const locked = c.n > 1 && !A.unlockAll && (st["cml_delta"] || 0) < c.n - 1 && c.n !== 4;
-      return `<button class="pcard" type="button" data-llevel="${c.n}" ${locked ? "disabled" : ""}><span class="cmlnum">CML ${c.n}</span><b>${L(c.t)}</b><span class="psub">${L(c.d)}</span>${locked ? `<span class="psub">🔒 ${L({ en: "Finish the level before", ar: "خلّص المستوى اللي قبله" })}</span>` : ""}</button>`; }).join("")}</div>
-    <label class="opt inline"><input type="checkbox" id="ula2" ${A.unlockAll ? "checked" : ""}> ${L({ en: "Unlock all levels (judges and teachers)", ar: "افتح كل المستويات (للحكام والمدرسين)" })}</label></section>`;
+  return `<section class="hpanel notr"><div class="kick">${L(ok("Choose a level", "اختار المستوى"))}</div>
+    <h2 class="hh">${L(ok("How mature is your mission idea?", "فكرة مهمتك ناضجة لحد فين؟"))}</h2>
+    <p class="needline">${L(ok("NASA's JPL rates mission ideas with Concept Maturity Levels (CML). Each level here is a different mission, and each one is harder.", "معمل JPL بتاع ناسا بيقيّم أفكار المهمات بمستويات اسمها CML. هنا كل مستوى مهمة مختلفة، وكل واحدة أصعب من اللي قبلها."))}</p>
+    <div class="planets">${CML.map(c => { const m = LAB_M[c.m]; const soon = m && m.soon; const locked = !soon && c.n > 1 && c.n < 4 && !A.unlockAll && !cmlDone(c.n === 3 ? 1 : c.n - 1);
+      const st = A.progress.stars["cml" + c.n] || 0;
+      return `<button class="pcard" type="button" data-llevel="${c.n}" ${locked || soon ? "disabled" : ""}><span class="cmlnum">CML ${c.n}</span><b>${L(c.t)}</b>${m ? `<span class="psub"><b>${L(m.name)}</b></span>` : ""}<span class="psub">${L(c.d)}</span>${st ? `<span class="pstars">${"★".repeat(st)}</span>` : ""}${soon ? `<span class="psub">⏳ ${L(ok("Coming next", "جاي قريب"))}</span>` : locked ? `<span class="psub">🔒 ${L(ok("Finish the level before", "خلّص المستوى اللي قبله"))}</span>` : ""}</button>`; }).join("")}</div>
+    <label class="opt inline"><input type="checkbox" id="ula2" ${A.unlockAll ? "checked" : ""}> ${L(ok("Unlock all levels (judges and teachers)", "افتح كل المستويات (للحكام والمدرسين)"))}</label></section>`;
 }
 function lonline() {
-  return `<section class="hpanel notr"><div class="kick">${L({ en: "Online team", ar: "تيم أونلاين" })}</div><h2 class="hh">${L({ en: "Create or join a mission room", ar: "اعمل أو ادخل غرفة مهمة" })}</h2>
-    <div id="olstat" class="needline">${L({ en: "Checking the connection…", ar: "بنشيك على الاتصال…" })}</div>
-    <div class="cols2"><div class="hcard"><h3>${L({ en: "Your name", ar: "اسمك" })}</h3><input type="text" id="oname" maxlength="24" value="${esc(A.lastName || "")}">
-      <h3>${L({ en: "Your role", ar: "دورك" })}</h3><div class="rolepick">${TEAM_ROLES.map(r => `<label class="rolecard" style="--sc:${CREW[r].col}"><input type="radio" name="orole" value="${r}" ${r === "science" ? "checked" : ""}>${crewImg(r)}<b>${L(CREW[r].title)}</b><span>${L(SEGMENT[r])}</span></label>`).join("")}</div></div>
-    <div class="hcard"><h3>${L({ en: "Start a new room", ar: "ابدأ غرفة جديدة" })}</h3><p class="psub">${L({ en: "You choose the level. Share the code with your team.", ar: "انت اللي هتختار المستوى. ابعت الكود للتيم." })}</p>
-      <select id="olevel">${CML.slice(0, 3).map(c => `<option value="${c.n}" ${c.n === LB.level ? "selected" : ""}>${L(c.t)}</option>`).join("")}</select>
-      <button class="hbtn" type="button" data-act="ocreate">${L({ en: "Create room", ar: "اعمل غرفة" })}</button>
-      <h3>${L({ en: "Or join with a code", ar: "أو ادخل بكود" })}</h3><input type="text" id="ocode" maxlength="16" placeholder="SO-XXXX">
-      <button class="hbtn ghost" type="button" data-act="ojoin">${L({ en: "Join room", ar: "ادخل الغرفة" })}</button><p class="bad" id="oerr"></p></div></div></section>`;
+  return `<section class="hpanel notr"><div class="kick">${L(ok("Online team", "تيم أونلاين"))}</div><h2 class="hh">${L(ok("Create or join a mission room", "اعمل أو ادخل غرفة مهمة"))}</h2>
+    <div id="olstat" class="needline">${L(ok("Checking the connection…", "بنشيك على الاتصال…"))}</div>
+    <div class="cols2"><div class="hcard"><h3>${L(ok("Your name", "اسمك"))}</h3><input type="text" id="oname" maxlength="24" value="${esc(A.lastName || "")}">
+      <h3>${L(ok("Your role", "دورك"))}</h3><div class="rolepick">${TEAM_ROLES.map(r => `<label class="rolecard" style="--sc:${CREW[r].col}"><input type="radio" name="orole" value="${r}" ${r === "science" ? "checked" : ""}>${crewImg(r)}<b>${L(CREW[r].title)}</b><span>${L(ok("Guide", "المرشد"))}: ${CREW[r].name}</span></label>`).join("")}</div></div>
+    <div class="hcard"><h3>${L(ok("Start a new room", "ابدأ غرفة جديدة"))}</h3><p class="psub">${L(ok("You choose the level. Share the code with your team.", "إنت اللي هتختار المستوى. ابعت الكود للتيم."))}</p>
+      <select id="olevel">${CML.filter(c => c.m && !LAB_M[c.m].soon).map(c => `<option value="${c.n}" ${c.n === LB.level ? "selected" : ""}>${L(c.t)} · ${L(LAB_M[c.m].name)}</option>`).join("")}</select>
+      <button class="hbtn" type="button" data-act="ocreate">${L(ok("Create room", "اعمل غرفة"))}</button>
+      <h3>${L(ok("Or join with a code", "أو ادخل بكود"))}</h3><input type="text" id="ocode" maxlength="16" placeholder="SO-XXXX">
+      <button class="hbtn ghost" type="button" data-act="ojoin">${L(ok("Join room", "ادخل الغرفة"))}</button><p class="bad" id="oerr"></p></div></div></section>`;
 }
 function lroom() {
-  const st = LB.room.state, host = st.host === myId;
-  return `<section class="hpanel notr"><div class="kick">${L({ en: "Mission room", ar: "غرفة المهمة" })}</div>
-    <h2 class="hh">${L({ en: "Room code", ar: "كود الغرفة" })}: <span class="code">${LB.room.code}</span></h2>
-    <p class="needline">${L({ en: "Send this code to your team. Each player joins from their own laptop and takes one role.", ar: "ابعت الكود ده للتيم. كل لاعب يدخل من اللابتوب بتاعه وياخد دور." })} · ${L(lvl().t)}</p>
+  const host = LB.room.state.host === myId;
+  return `<section class="hpanel notr"><div class="kick">${L(ok("Mission room", "غرفة المهمة"))} · ${L(lvl().t)} · ${L(LM().name)}</div>
+    <h2 class="hh">${L(ok("Room code", "كود الغرفة"))}: <span class="code">${LB.room.code}</span></h2>
+    <p class="needline">${L(ok("Send this code to your team. Each player joins from their own laptop and takes one role. The room creator also covers empty roles.", "ابعت الكود ده للتيم. كل لاعب يدخل من اللابتوب بتاعه وياخد دور. واللي عمل الغرفة بيمسك الأدوار الفاضية."))}</p>
     <div id="lroomlist" class="rolepick">${lRoomList()}</div>
-    ${host ? `<button class="hbtn" type="button" data-act="ostart">${L({ en: "Start the briefing for everyone", ar: "ابدأ الشرح للكل" })}</button>` : `<p class="psub">${L({ en: "Waiting for the room creator to start…", ar: "مستنيين اللي عمل الغرفة يبدأ…" })}</p>`}
+    ${host ? `<button class="hbtn" type="button" data-act="ostart">${L(ok("Start the briefing for everyone", "ابدأ الشرح للكل"))}</button>` : `<p class="psub">${L(ok("Waiting for the room creator to start…", "مستنيين اللي عمل الغرفة يبدأ…"))}</p>`}
   </section>${lChatBox()}`;
 }
-function lRoomList() { return TEAM_ROLES.map(r => { const p = LB.players.find(x => x.role === r); return `<div class="rolecard ${p ? "taken" : ""}" style="--sc:${CREW[r].col}">${crewImg(r)}<b>${L(CREW[r].title)}</b><span>${p ? esc(p.name) + (p.data && p.data.cid === myId ? " (" + L({ en: "you", ar: "انت" }) + ")" : "") : L({ en: "empty", ar: "فاضي" })}</span></div>`; }).join(""); }
-function lChatBox() { if (LB.mode !== "online") return ""; return `<section class="hpanel notr chat"><div class="kick">${L({ en: "Team chat", ar: "شات التيم" })}</div><div id="chatlog" class="chatlog"></div><form id="chatform" class="row"><input type="text" id="chatin" maxlength="300" placeholder="${L({ en: "Tell your team what you found…", ar: "قول للتيم انت لقيت إيه…" })}"><button class="hbtn" type="submit">${L({ en: "Send", ar: "ابعت" })}</button></form></section>`; }
+function lRoomList() { return TEAM_ROLES.map(r => { const p = LB.players.find(x => x.role === r); return `<div class="rolecard ${p ? "taken" : ""}" style="--sc:${CREW[r].col}">${crewImg(r)}<b>${L(CREW[r].title)}</b><span>${p ? esc(p.name) + (p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : "") : L(ok("empty", "فاضي"))}</span></div>`; }).join(""); }
+function lChatBox() { if (LB.mode !== "online") return ""; return `<section class="hpanel notr chat"><div class="kick">${L(ok("Team chat", "شات التيم"))}</div><div id="chatlog" class="chatlog"></div><form id="chatform" class="row"><input type="text" id="chatin" maxlength="300" placeholder="${L(ok("Tell your team what you found…", "قول للتيم إنت لقيت إيه…"))}"><button class="hbtn" type="submit">${L(ok("Send", "ابعت"))}</button></form></section>`; }
 function lChatPaint() { const el = $("#chatlog"); if (!el) return; el.innerHTML = LB.chat.map(m => `<div><b style="color:${(CREW[m.role] || CREW.director).col}">${esc(m.name)}</b> <span class="psub">${esc(L((CREW[m.role] || CREW.director).title))}</span><br>${esc(m.body)}</div>`).join(""); el.scrollTop = 1e9; }
-function lVideoList() { const roles = myRoles(); return ["director", ...roles]; }
+
+/* ---- team board: players write what they learned; the game never fills it in ---- */
+function lBoard() {
+  const mine = LB.mode === "online" ? ((LB.me && LB.me.data && LB.me.data.notes) || "") : LB.notes;
+  return `<section class="hpanel notr board"><div class="kick">${L(ok("Team board", "سبورة التيم"))}</div>
+    <p class="psub">${L(ok("Write what you learned from your video: names, numbers, good and bad points. Your team can read it.", "اكتب اللي اتعلمته من الفيديو بتاعك: الأسامي، والأرقام، والميزة والعيب. والتيم كله يقدر يقراه."))}</p>
+    <textarea id="lnotes" rows="5" maxlength="1500" placeholder="${L(ok("e.g. Camera A: sees … / needs …", "مثلاً: الكاميرا A: بتشوف … / محتاجة …"))}">${esc(mine)}</textarea>
+    <div id="boardOthers" class="boardothers">${lBoardOthers()}</div></section>`;
+}
+function lBoardOthers() {
+  if (LB.mode !== "online") return "";
+  return LB.players.filter(p => p.id !== (LB.me && LB.me.id) && p.data && p.data.notes).map(p => `<div class="note" style="--sc:${(CREW[p.role] || CREW.director).col}"><b>${esc(p.name)} · ${L(CREW[p.role].title)}</b><pre>${esc(p.data.notes)}</pre></div>`).join("");
+}
+let notesT = null;
+document.addEventListener("input", e => { if (e.target.id !== "lnotes") return; const v = e.target.value; if (LB.mode === "online") { clearTimeout(notesT); notesT = setTimeout(() => myData({ notes: v }), 700); } else LB.notes = v; });
+
+function lVideoList() { return ["director", ...myRoles()]; }
 function lvideo() {
   const list = lVideoList(); const i = Math.min(LB.vi || 0, list.length - 1), r = list[i];
-  return `<section class="hpanel notr"><div class="kick">${L({ en: "Mission briefing", ar: "شرح المهمة" })} · ${i + 1}/${list.length}</div>
-    <h2 class="hh">${CREW[r].name} · ${L(CREW[r].title)}</h2>
-    <p class="needline">${L({ en: "Watch carefully and remember the numbers. You will not see them again on the cards.", ar: "اتفرج كويس وافتكر الأرقام. مش هتشوفها تاني على الكروت." })}</p>
-    <video id="brief" class="briefvid" src="video/delta_${r}.mp4" controls playsinline preload="auto"></video>
-    <div class="row">${i < list.length - 1 ? `<button class="hbtn" type="button" data-act="vnext" id="vnext" ${LB.watched[r] ? "" : "disabled"}>${L({ en: "Next briefing", ar: "الشرح اللي بعده" })}</button>`
-      : `<button class="hbtn" type="button" data-act="vdone" id="vnext" ${LB.watched[r] ? "" : "disabled"}>${L({ en: "I'm ready to design", ar: "أنا جاهز أصمم" })}</button>`}
-      <span class="psub">${L({ en: "The button unlocks when the video ends.", ar: "الزرار بيتفتح لما الفيديو يخلص." })}</span></div></section>`;
+  const who = r === "director" ? L(ok("Your Mission Director", "مدير المهمة")) : `${L(ok("Guide for", "مرشد"))} ${L(CREW[r].title)}`;
+  return `<section class="hpanel notr"><div class="kick">${L(LM().name)} · ${L(ok("Briefing", "الشرح"))} ${i + 1}/${list.length}</div>
+    <h2 class="hh">${CREW[r].name} · ${who}</h2>
+    <p class="needline">${L(ok("Watch carefully and write on the team board. The cards later show names only.", "اتفرج كويس واكتب على السبورة، علشان الكروت بعد كده عليها أسامي بس."))}</p>
+    <video id="brief" class="briefvid" src="video/${LM().id}_${r}.mp4" controls playsinline preload="auto"></video>
+    <div class="row">${i < list.length - 1 ? `<button class="hbtn" type="button" data-act="vnext" id="vnext" ${LB.watched[LM().id + r] ? "" : "disabled"}>${L(ok("Next briefing", "الشرح اللي بعده"))}</button>`
+      : `<button class="hbtn" type="button" data-act="vdone" id="vnext" ${LB.watched[LM().id + r] ? "" : "disabled"}>${L(ok("I'm ready to decide", "أنا جاهز أقرر"))}</button>`}
+      <span class="psub">${L(ok("The button unlocks when the video ends.", "الزرار بيتفتح لما الفيديو يخلص."))}</span></div></section>${lBoard()}`;
 }
 function lCard(role, d, o, picks, mine) {
   const sel = picks[role + "." + d.k] === o.k;
   return `<button type="button" class="ccard ${sel ? "sel" : ""}" ${mine ? `data-lpick="${role}.${d.k}.${o.k}"` : "disabled"}><span class="cnum">${o.k}</span><span class="cicon">${sIcon(o.icon)}</span><b>${L(o.n)}</b></button>`;
 }
 function ldesign() {
-  const picks = allPicks(), mine = myRoles(), c = lCompute(picks), roles = rolesInPlay();
-  const tabs = roles.map(r => `<button type="button" class="stp ${LB.tab === r ? "cur" : ""} ${decisionsFor([r]).every(({ role, d }) => picks[role + "." + d.k]) ? "done" : ""}" data-ltab="${r}" style="--sc:${CREW[r].col}"><span>${crewImg(r)}</span>${L(CREW[r].title)}</button>`).join("");
-  const r = roles.includes(LB.tab) ? LB.tab : (mine[0] || roles[0]); LB.tab = r; const canEdit = mine.includes(r);
-  const other = LB.mode === "online" ? LB.players.filter(p => p.role !== LB.myRole) : [];
+  const picks = allPicks(), mine = myRoles(), m = LM();
+  const tabs = TEAM_ROLES.map(r => `<button type="button" class="stp ${LB.tab === r ? "cur" : ""} ${decisionsFor([r]).every(({ role, d }) => picks[role + "." + d.k]) ? "done" : ""}" data-ltab="${r}" style="--sc:${CREW[r].col}"><span>${crewImg(r)}</span>${L(CREW[r].title)}</button>`).join("");
+  const r = TEAM_ROLES.includes(LB.tab) ? LB.tab : (mine[0] || "science"); LB.tab = r; const canEdit = mine.includes(r);
+  const reviews = LB.mode === "online" ? LB.room.state.reviews || 0 : LB.reviews;
   return `<section class="build notr">
-    <div class="buildhead"><div><div class="kick">${L(DELTA.name)} · ${L(lvl().t)}${LB.level === 3 ? " · " + (LB.designA ? L({ en: "Design B", ar: "التصميم B" }) : L({ en: "Design A", ar: "التصميم A" })) : ""}</div>
-      <div class="rulesrow">${DELTA.rules.map(x => `<span class="rulechip">${L(x)}</span>`).join("")}</div>
+    <div class="buildhead"><div><div class="kick">${L(m.name)} · ${L(lvl().t)}</div>
+      <div class="rulesrow">${m.rules.map(x => `<span class="rulechip">${L(x)}</span>`).join("")}</div>
       <div class="stepper">${tabs}</div></div></div>
-    <div class="buildgrid"><div class="holowrap"><canvas id="holoBuild" class="holo"></canvas><div class="holotag">${L({ en: "Your satellite", ar: "قمرك الصناعي" })}</div></div>
-      <div class="choose"><div class="steptitle" style="--sc:${CREW[r].col}">${roleTag(r)}<h2 class="hh">${CREW[r].name}</h2><span class="psub">${L(SEGMENT[r])}</span></div>
-        ${canEdit ? "" : `<p class="needline">${L({ en: "This is a teammate's job. Ask them in the chat.", ar: "ده شغل حد تاني في التيم. اسأله في الشات." })}</p>`}
-        ${DELTA.decisions[r].map(d => `<div class="dec"><h3>${L(d.t)}</h3><div class="cards3">${d.o.map(o => lCard(r, d, o, picks, canEdit)).join("")}</div></div>`).join("")}
-        <div class="nav2"><button class="hbtn ghost" type="button" data-act="rewatch">${L({ en: "Rewatch my briefing (−20 points)", ar: "اتفرج على الشرح تاني (−20 نقطة)" })}</button></div></div></div>
-    <div class="reviewbar"><button class="hbtn ghost" type="button" data-act="review">${L({ en: "Design review", ar: "مراجعة التصميم" })} ${(LB.mode === "online" ? LB.room.state.reviews || 0 : LB.reviews) ? L({ en: "(−30 points)", ar: "(−30 نقطة)" }) : L({ en: "(first one free)", ar: "(أول مرة ببلاش)" })}</button>
+    <div class="buildgrid"><div class="holowrap"><canvas id="holoBuild" class="holo"></canvas><div class="holotag">${L(ok("Your satellite", "القمر بتاعك"))}</div></div>
+      <div class="choose"><div class="steptitle" style="--sc:${CREW[r].col}">${roleTag(r)}<span class="psub">${L(SEGMENT[r])} · ${L(ok("Guide", "المرشد"))}: ${CREW[r].name}</span></div>
+        ${canEdit ? "" : `<p class="needline">${L(ok("This is a teammate's job. Talk to them in the chat.", "ده شغل حد تاني في التيم. كلّمه في الشات."))}</p>`}
+        ${m.decisions[r].map(d => `<div class="dec"><h3>${L(d.t)}</h3><div class="cards3 ${d.o.length === 2 ? "two" : ""}">${d.o.map(o => lCard(r, d, o, picks, canEdit)).join("")}</div></div>`).join("")}
+        <div class="nav2"><button class="hbtn ghost" type="button" data-act="rewatch">${L(ok("Rewatch my guide (−20 points)", "اتفرج على المرشد تاني (−20 نقطة)"))}</button></div></div></div>
+    <div class="reviewbar"><button class="hbtn ghost" type="button" data-act="review">${L(ok("Design review", "مراجعة التصميم"))} ${reviews ? L(ok("(−30 points)", "(−30 نقطة)")) : L(ok("(first one free)", "(أول مرة ببلاش)"))}</button>
       ${lLaunchBtn(picks)}</div>
     <div id="reviewbox">${lReviewHtml()}</div>
-  </section>${lChatBox()}`;
+  </section>${lBoard()}${lChatBox()}`;
 }
 function lLaunchBtn(picks) {
-  const roles = rolesInPlay(), done = allChosen(picks, roles);
-  if (LB.level === 1) return `<button class="hbtn launch" type="button" data-act="concept" ${done ? "" : "disabled"}>${L({ en: "Submit the concept", ar: "قدّم الفكرة" })}</button>`;
-  if (LB.level === 3 && !LB.designA) return `<button class="hbtn launch" type="button" data-act="saveA" ${done ? "" : "disabled"}>${L({ en: "Save design A, make design B", ar: "احفظ التصميم A واعمل B" })}</button>`;
-  if (LB.level === 3) return `<button class="hbtn launch" type="button" data-act="compare" ${done ? "" : "disabled"}>${L({ en: "Compare A and B", ar: "قارن A و B" })}</button>`;
+  const done = allChosen(picks, TEAM_ROLES);
   if (LB.mode === "online") { const ready = LB.players.filter(p => p.data && p.data.ready).length, meReady = LB.me.data && LB.me.data.ready;
-    return `<button class="hbtn launch" type="button" data-act="oready" ${done ? "" : "disabled"}>${meReady ? L({ en: "Waiting for team", ar: "مستنيين التيم" }) : L({ en: "I'm ready to launch", ar: "أنا جاهز للإطلاق" })} (${ready}/${LB.players.length})</button>`; }
-  return `<button class="hbtn launch" type="button" data-act="llaunch" ${done ? "" : "disabled"}>${L({ en: "Launch!", ar: "اطلق!" })}</button>`;
+    return `<button class="hbtn launch" type="button" data-act="oready" ${done ? "" : "disabled"}>${meReady ? L(ok("Waiting for team", "مستنيين التيم")) : L(ok("I'm ready to launch", "أنا جاهز للإطلاق"))} (${ready}/${LB.players.length})</button>`; }
+  return `<button class="hbtn launch" type="button" data-act="llaunch" ${done ? "" : "disabled"}>${L(ok("Launch!", "اطلق!"))}</button>`;
 }
 function lReviewHtml() {
-  const rv = LB.mode === "online" ? LB.room.state.lastReview : LB.revealed; if (!rv) return `<p class="ringhelp">${L({ en: "The 4 meters stay hidden until you ask for a design review, like a real NASA review.", ar: "الأربع عدادات متخفية لحد ما تطلبوا مراجعة تصميم، زي مراجعات ناسا الحقيقية." })}</p>`;
-  const c = lCompute(allPicks());
-  return `${ringsRow({ ring: c.ring })}<div class="hcard"><h3>${L({ en: "Review findings", ar: "نتايج المراجعة" })}</h3><ul>${(c.issues.length ? c.issues : [{ en: "No problems found. The design closes.", ar: "مفيش مشاكل. التصميم مظبوط." }]).map(x => `<li>${L(x)}</li>`).join("")}</ul><p class="psub">${L({ en: "The review tells you what is wrong, not how to fix it.", ar: "المراجعة بتقولك إيه الغلط، مش بتقولك تصلّحه إزاي." })}</p></div>`;
+  const rv = LB.mode === "online" ? LB.room.state.lastReview : LB.revealed;
+  if (!rv) return `<p class="ringhelp">${L(ok("The review stays hidden until you ask for it, like a real NASA design review.", "المراجعة متخفية لحد ما تطلبوها، زي مراجعات التصميم الحقيقية في ناسا."))}</p>`;
+  const c = lCompute(allPicks()), list = c.issues.concat(c.waste.map(w => ({ en: "Waste · " + w.en, ar: "تضييع · " + w.ar })));
+  return `${c.ring ? ringsRow({ ring: c.ring }) : ""}<div class="hcard"><h3>${L(ok("Review findings", "نتايج المراجعة"))}</h3><ul>${(list.length ? list : [ok("No problems found. The design closes, with nothing wasted.", "مفيش مشاكل. التصميم مظبوط ومفيهوش تضييع.")]).map(x => `<li>${L(x)}</li>`).join("")}</ul><p class="psub">${L(ok("The review tells you what is wrong, not how to fix it.", "المراجعة بتقولك إيه الغلط، مش بتقولك تصلّحه إزاي."))}</p></div>`;
 }
 function lPartial() {
   if (A.screen === "lroom") { const el = $("#lroomlist"); if (el) el.innerHTML = lRoomList(); return; }
-  if (A.screen === "ldesign") { const keep = document.activeElement && document.activeElement.id === "chatin"; const val = keep ? $("#chatin").value : "";
-    const ch = document.querySelector(".choose"); if (!ch) return; const picks = allPicks();
+  const bo = $("#boardOthers"); if (bo) bo.innerHTML = lBoardOthers();
+  if (A.screen === "ldesign") { const picks = allPicks();
     document.querySelectorAll("[data-lpick]").forEach(b => { const [r, k, o] = b.dataset.lpick.split("."); b.classList.toggle("sel", picks[r + "." + k] === o); });
-    document.querySelectorAll(".ccard[disabled]").forEach(b => { /* teammate's cards */ });
+    document.querySelectorAll(".ccard[disabled]").forEach(b => { /* teammates' cards are shown via tabs */ });
+    document.querySelectorAll(".stp[data-ltab]").forEach(b => b.classList.toggle("done", decisionsFor([b.dataset.ltab]).every(({ role, d }) => picks[role + "." + d.k])));
     const rb = document.querySelector(".reviewbar"); if (rb) rb.lastElementChild.outerHTML = lLaunchBtn(picks);
-    const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); lHolo();
-    if (keep) { $("#chatin").value = val; $("#chatin").focus(); } }
+    const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); lHolo(); }
 }
 let holoL = null;
-function lHolo() { if (!holoL) return; const c = lCompute(allPicks()); const base = MISSIONS.find(x => x.id === "delta"); const d = Object.assign(structuredClone(base.def), { orbit: "sso600", lv: (c.rkt && c.rkt.lv) || "medium", panel: c.pan && c.pan.supply ? c.pan.supply * .8 : 2, antenna: c.ant && c.ant.k ? { A: "small", B: "medium", C: "large" }[c.ant.k] : "small", instr: c.cam && c.cam.k ? [{ A: "multispec", B: "cam_med", C: "cam_high" }[c.cam.k]] : [], shield: "light" });
-  holoL.setDesign(base, d, { dry: 400 }); }
+function lEngineDesign(c) { const m = LM(), base = MISSIONS.find(x => x.id === m.base); return { base, d: Object.assign(structuredClone(base.def), m.engine(c, base)) }; }
+function lHolo() { if (!holoL) return; const c = lCompute(allPicks()); try { const { base, d } = lEngineDesign(c); holoL.setDesign(base, d, { dry: 400 }); } catch (e) { } }
 
-/* ---- concept (CML 1) and trade study (CML 3) ---- */
-function lconcept() {
-  const c = lCompute(allPicks()); const ok = c.rules.fields && c.rules.health && c.rules.light === !!(c.time && c.time.light) && c.time && c.time.light;
-  const pass = c.rules.fields && c.rules.health && c.time && c.time.light;
-  if (pass) { A.progress.stars["cml_delta"] = Math.max(A.progress.stars["cml_delta"] || 0, 1); store.set("ma.progress3", A.progress); }
-  return `<section class="hpanel notr result"><div class="kick">CML 1 · ${L({ en: "Concept review", ar: "مراجعة الفكرة" })}</div>
-    <h2 class="hh">${pass ? L({ en: "Concept approved! It answers the question.", ar: "الفكرة اتقبلت! بتجاوب على السؤال." }) : L({ en: "Not yet. The concept doesn't answer the question.", ar: "لسه. الفكرة مش بتجاوب على السؤال." })}</h2>
-    <ul class="starkey">${[["fields", c.rules.fields], ["health", c.rules.health], ["light", !!(c.time && c.time.light)]].map(([k, v]) => `<li class="${v ? "on" : ""}">${v ? "✓" : "✗"} ${L(DELTA.rules.find(x => x.k === k))}</li>`).join("")}</ul>
-    <p class="needline">${pass ? L({ en: "At CML 1, NASA only asks: is this the right idea? Next, CML 2 checks if the whole mission can really work.", ar: "في CML 1 ناسا بتسأل بس: هل دي الفكرة الصح؟ وبعدين CML 2 بيشوف المهمة كلها تنفع فعلاً ولا لأ." }) : L({ en: "Think again about what each camera can see, and about the light.", ar: "فكّر تاني في كل كاميرا بتشوف إيه، وفي الإضاءة." })}</p>
-    <div class="row"><button class="hbtn" type="button" data-act="${pass ? "tocml2" : "redesign"}">${pass ? L({ en: "Go to CML 2", ar: "روح لـ CML 2" }) : L({ en: "Try again", ar: "جرّب تاني" })}</button><button class="linkbtn" type="button" data-go="llevel">${L({ en: "Levels", ar: "المستويات" })}</button></div></section>`;
-}
-function lcompare() {
-  const a = lCompute(LB.designA), b = lCompute(allPicks()); const row = (lab, fa, fb) => `<tr><td>${L(lab)}</td><td>${fa}</td><td>${fb}</td></tr>`;
-  const pc = v => Math.round(v * 100) + "%"; const rulesN = c => Object.values(c.rules).filter(Boolean).length + " / 5";
-  return `<section class="hpanel notr"><div class="kick">CML 3 · ${L({ en: "Trade study", ar: "دراسة المقارنة" })}</div><h2 class="hh">${L({ en: "Which design should fly?", ar: "أنهي تصميم يطير؟" })}</h2>
-    <div class="tablewrap"><table><tr><th></th><th>${L({ en: "Design A", ar: "التصميم A" })}</th><th>${L({ en: "Design B", ar: "التصميم B" })}</th></tr>
-    ${row({ en: "Rules met", ar: "القواعد المتحققة" }, rulesN(a), rulesN(b))}${row({ en: "Mass vs rocket", ar: "الوزن مقابل الصاروخ" }, pc(a.ring.mass), pc(b.ring.mass))}${row({ en: "Power used", ar: "الكهربا المستخدمة" }, pc(a.ring.power), pc(b.ring.power))}${row({ en: "Budget used", ar: "الميزانية المستخدمة" }, pc(a.ring.money), pc(b.ring.money))}${row({ en: "Data sent", ar: "الداتا اللي بتتبعت" }, pc(Math.min(1, 1 / Math.max(a.ring.data, .01))), pc(Math.min(1, 1 / Math.max(b.ring.data, .01))))}</table></div>
-    <p class="needline">${L({ en: "This is what NASA's Mission Design Lab calls a trade study: compare options, then choose.", ar: "ده اللي معمل تصميم المهمات في ناسا بيسميه Trade study: تقارن الاختيارات، وبعدين تختار." })}</p>
-    <div class="row"><button class="hbtn" type="button" data-act="flyA">${L({ en: "Fly design A", ar: "طيّر التصميم A" })}</button><button class="hbtn" type="button" data-act="flyB">${L({ en: "Fly design B", ar: "طيّر التصميم B" })}</button></div></section>`;
-}
-
-function lSay(role, text) { const el = $("#subt"); if (el) { el.innerHTML = `<b style="color:${CREW[role].col}">${CREW[role].name}:</b> ${text}`; el.classList.add("on"); } }
-/* ---- flight (reuses the 3D engine with real NASA models) ---- */
-const L_EVENTS = [
-  { role: "comms", t: { en: "Ground station offline", ar: "المحطة الأرضية وقعت" }, x: { en: "A storm on Earth broke your main ground station for a week.", ar: "عاصفة على الأرض وقّعت المحطة الأرضية الرئيسية أسبوع." },
-    o: [{ t: { en: "Use another station", ar: "استخدم محطة تانية" }, f: c => c.st.n >= 2 ? { h: 0, sci: 0, w: { en: "Your second station took over. Nothing was lost.", ar: "المحطة التانية استلمت. مفيش حاجة ضاعت." } } : { h: 0, sci: -.15, w: { en: "You built only one station, so there was no other station. A week of pictures was lost.", ar: "انت عامل محطة واحدة بس، فمكانش فيه محطة تانية. صور أسبوع ضاعت." } } },
-        { t: { en: "Keep pictures in memory, send later", ar: "خزّن الصور في الذاكرة وابعتها بعدين" }, f: c => c.ring.data <= .8 ? { h: 0, sci: 0, w: { en: "Your antenna had spare speed, so it sent the saved pictures later. Landsat 8 really has a 3.14-terabit memory for this.", ar: "الهوائي كان عنده سرعة زيادة، فبعت الصور المتخزنة بعدين. وLandsat 8 فعلاً عنده ذاكرة 3.14 تيرابت علشان كده." } } : { h: 0, sci: -.1, w: { en: "Your antenna was already busy, so it could not catch up. Some pictures were lost.", ar: "الهوائي كان مشغول أصلاً، فملحقش. شوية صور ضاعت." } } },
-        { t: { en: "Rent a partner's station", ar: "أجّر محطة من شريك" }, f: c => ({ h: 0, sci: 0, cost: 5, w: { en: "Space agencies share antennas. It cost 5 budget points, and nothing was lost.", ar: "وكالات الفضاء بتشارك الهوائيات. كلّف 5 نقط من الميزانية، ومفيش حاجة ضاعت." } }) }] },
-  { role: "engineer", t: { en: "Solar storm!", ar: "عاصفة شمسية!" }, x: { en: "The Sun threw out a cloud of charged particles. They can confuse the computer.", ar: "الشمس رمت سحابة جزيئات مشحونة، ممكن تلخبط الكمبيوتر." },
-    o: [{ t: { en: "Safe mode for a day", ar: "الوضع الآمن يوم" }, f: c => ({ h: 0, sci: -.03, w: { en: "The computer was protected. You lost one day of pictures. Real satellites do this.", ar: "الكمبيوتر اتحمى. خسرت صور يوم. والأقمار الحقيقية بتعمل كده." } }) },
-        { t: { en: "Keep going", ar: "كمّل عادي" }, f: c => c.orb.rad ? { h: -30, sci: 0, w: { en: "At 1,500 km the radiation is stronger. The particles damaged the computer badly.", ar: "على 1,500 كم الإشعاع أقوى. الجزيئات بوّظت الكمبيوتر جامد." } } : { h: -15, sci: 0, w: { en: "Some particles hit the computer and broke a few parts.", ar: "شوية جزيئات خبطت الكمبيوتر وبوّظت كام قطعة." } } },
-        { t: { en: "Turn so the body shields the computer", ar: "لف علشان جسم القمر يحمي الكمبيوتر" }, f: c => ({ h: -5, sci: 0, w: { en: "The satellite's body blocked most particles. Small damage.", ar: "جسم القمر صد أغلب الجزيئات. ضرر بسيط." } }) }] }];
+/* ---- flight (3D engine with real NASA models) ---- */
 function lfly() { return sfly(); }
+function lSay(role, text) { const el = $("#subt"); if (el) { el.innerHTML = `<b style="color:${CREW[role].col}">${CREW[role].name}:</b> ${text}`; el.classList.add("on"); } }
 async function lRunFlight() {
-  SEQ++; const picks = LB.flyPicks || allPicks(), c = lCompute(picks); const base = MISSIONS.find(x => x.id === "delta");
-  const d = Object.assign(structuredClone(base.def), { orbit: "sso600", lv: c.rkt.lv, antenna: { A: "small", B: "medium", C: "large" }[c.ant.k], instr: [{ A: "multispec", B: "cam_med", C: "cam_high" }[c.cam.k]], panel: c.pan.supply * .8 });
-  const F = LB.flight = { health: 100, sci: 1, cost: 0, events: [], lost: null, c, picks };
-  curP = 0; totalDays = 365 * 5;
-  if (Space3D.ok && $("#view3d")) { flightView = Space3D.createView($("#view3d"), {}); flightView.setMission(base, d, { dry: c.mass * 1000, prop: 200 }); skyLoop(); }
-  const marks = flightView ? flightView.marks() : { ascent: .12, orbit: 1 }; ascentEnd = marks.ascent || .12;
-  lSay("planner", L({ en: "Three, two, one... liftoff!", ar: "تلاتة، اتنين، واحد... انطلقنا!" })); await wait(2600); setPhase(L({ en: "LIFTOFF", ar: "الإطلاق" }));
-  if (c.fatal === "mass") { await animTo(.045, 3500); flightView && flightView.flag("fall"); F.lost = { en: `The ${L(c.rkt.n)} could not lift this satellite. It ran out of fuel before space and fell into the ocean.`, ar: `صاروخ ${c.rkt.n.ar} مقدرش يشيل القمر ده. الوقود خلص قبل الفضاء ووقع في المحيط.` }; lSay("planner", L(F.lost)); await wait(4500); return lFinish(F); }
-  await animTo(ascentEnd, 6500); flightView && flightView.flag("separated"); setPhase(L({ en: "IN ORBIT", ar: "في المدار" }));
-  lSay("engineer", L({ en: "We are in orbit! Opening the solar panels.", ar: "إحنا في المدار! بنفتح الألواح الشمسية." })); await wait(2400);
-  if (c.fatal === "power") { await animTo(ascentEnd + .03, 2500); flightView && flightView.flag("tumble"); F.lost = { en: "The camera, antenna and computer needed more power than the panels made. The satellite went silent.", ar: "الكاميرا والهوائي والكمبيوتر كانوا محتاجين كهربا أكتر من اللي الألواح بتعمله. القمر سكت." }; lSay("engineer", L(F.lost)); await wait(4500); return lFinish(F); }
-  if (c.bat.min < 35) { lSay("engineer", L({ en: "First shadow... the battery is empty before sunrise. We shut down every orbit.", ar: "أول ضل... البطارية فضيت قبل الشمس ما تطلع. هنطفي في كل لفة." })); await wait(3500); }
-  await animTo(.5, 5000); for (let i = 0; i < L_EVENTS.length; i++) { await lEvent(i, F); await animTo(.5 + (i + 1) * .22, 3500); }
-  lSay("comms", L({ en: "Five years later... the mission is complete.", ar: "بعد 5 سنين... المهمة خلصت." })); setPhase(L({ en: "MISSION COMPLETE", ar: "المهمة خلصت" })); await animTo(1, 2500); await wait(1500);
+  SEQ++; const m = LM(), picks = allPicks(), c = lCompute(picks); const { base, d } = lEngineDesign(c);
+  const F = LB.flight = { health: 100, sci: 1, cost: 0, events: [], lost: null, c, m };
+  curP = 0; totalDays = m.days;
+  if (Space3D.ok && $("#view3d")) { flightView = Space3D.createView($("#view3d"), {}); flightView.setMission(base, d, { dry: (c.mass || 1500), prop: 200 }); skyLoop(); }
+  const marks = flightView ? flightView.marks() : { ascent: .12 }; ascentEnd = marks.ascent || .12;
+  lSay("planner", L(ok("Three, two, one... liftoff!", "تلاتة، اتنين، واحد... انطلقنا!"))); await wait(2600); setPhase(L(ok("LIFTOFF", "الإطلاق")));
+  if (c.fatal === "mass") { await animTo(.045, 3500); flightView && flightView.flag("fall"); F.lost = { en: `The ${c.rkt.n.en} could not lift a ${nf(Math.round(c.mass))} kg satellite. It ran out of fuel before space and fell into the ocean.`, ar: `صاروخ ${c.rkt.n.ar} مقدرش يشيل قمر وزنه ${nf(Math.round(c.mass))} كيلو. الوقود خلص قبل ما يوصل الفضاء ووقع في المحيط.` }; lSay("planner", L(F.lost)); await wait(4500); return lFinish(F); }
+  await animTo(ascentEnd, 6500); flightView && flightView.flag("separated"); setPhase(L(ok("IN ORBIT", "في الأوربت")));
+  lSay("engineer", L(ok("We are in orbit! Opening the solar panels.", "إحنا في الأوربت! بنفتح السولار بانلز."))); await wait(2400);
+  if (c.fatal === "power") { await animTo(ascentEnd + .03, 2500); flightView && flightView.flag("tumble"); F.lost = { en: `The satellite needed ${nf(c.need)} W, but the panel made only ${nf(c.supply)} W. It went silent.`, ar: `القمر كان محتاج ${nf(c.need)} وات، والبانل كان بيطلّع ${nf(c.supply)} بس، فالقمر سكت.` }; lSay("engineer", L(F.lost)); await wait(4500); return lFinish(F); }
+  if (c.bat && c.bat.min < 35) { lSay("engineer", L(ok("First shadow... the battery is empty before sunrise. We shut down every orbit.", "أول ضل... البطارية فضيت قبل الشمس ما تطلع، فهنطفي في كل لفة."))); await wait(3500); }
+  await animTo(.5, 5000); for (let i = 0; i < m.events.length; i++) { await lEvent(i, F); await animTo(.5 + (i + 1) * (.45 / m.events.length), 3500); }
+  lSay("comms", L(ok("Five years later... the mission is complete.", "بعد 5 سنين... المهمة خلصت."))); setPhase(L(ok("MISSION COMPLETE", "المهمة خلصت"))); await animTo(1, 2500); await wait(1500);
   return lFinish(F);
 }
 function lEvent(i, F) {
-  const e = L_EVENTS[i];
+  const e = F.m.events[i];
   return new Promise(res => {
     const el = $("#modal"); lSay(e.role, L(e.x)); LB.evRes = res; LB.evI = i;
     const online = LB.mode === "online";
     el.innerHTML = `<div class="overlay notr" role="dialog" aria-modal="true"><div class="hmodal">
-      <div class="evhead">${crewImg(e.role)}<div><div class="kick">${L({ en: "Surprise!", ar: "مفاجأة!" })} · ${CREW[e.role].name}</div><h2 class="hh">${L(e.t)}</h2></div></div>
-      <p class="evx">${L(e.x)}</p><p class="evq">${online ? L({ en: "Everyone votes. The most votes wins.", ar: "الكل يصوّت، والأكتر أصوات يكسب." }) : L({ en: "Talk with the team, then choose.", ar: "اتكلموا مع بعض، وبعدين اختاروا." })}</p>
-      <div class="cards3">${e.o.map((o, j) => `<button type="button" class="ccard" data-lev="${j}"><span class="cnum">${"ABC"[j]}</span><b>${L(o.t)}</b></button>`).join("")}</div><p class="psub" id="votes"></p></div></div>`;
+      <div class="evhead">${crewImg(e.role)}<div><div class="kick">${L(ok("Surprise!", "مفاجأة!"))} · ${CREW[e.role].name}</div><h2 class="hh">${L(e.t)}</h2></div></div>
+      <p class="evx">${L(e.x)}</p><p class="evq">${online ? L(ok("Everyone votes. The most votes wins.", "الكل يصوّت، والأكتر أصوات يكسب.")) : L(ok("Talk with the team, then choose.", "اتكلموا مع بعض، وبعدين اختاروا."))}</p>
+      <div class="cards3 ${e.o.length === 2 ? "two" : ""}">${e.o.map((o, j) => `<button type="button" class="ccard" data-lev="${j}"><span class="cnum">${"ABC"[j]}</span><b>${L(o.t)}</b></button>`).join("")}</div><p class="psub" id="votes"></p></div></div>`;
     el.querySelectorAll("[data-lev]").forEach(b => b.onclick = async () => { const j = +b.dataset.lev;
       if (online) { el.querySelectorAll("[data-lev]").forEach(x => x.classList.toggle("sel", x === b)); const v = Object.assign({}, LB.me.data.votes || {}); v[i] = j; await myData({ votes: v }); lVoteCheck(); }
       else lEventResolve(j, F); });
@@ -315,88 +339,82 @@ function lEvent(i, F) {
   });
 }
 function lVoteCheck() {
-  const i = LB.evI; if (i == null || !LB.evRes || LB.mode !== "online") return; const votes = LB.players.map(p => p.data && p.data.votes ? p.data.votes[i] : undefined).filter(v => v !== undefined);
-  const vt = $("#votes"); if (vt) vt.textContent = `${L({ en: "Votes", ar: "الأصوات" })}: ${votes.length} / ${LB.players.length}`;
-  if (votes.length >= LB.players.length) { const cnt = [0, 0, 0]; votes.forEach(v => cnt[v]++); const lead = LB.players.find(p => p.role === L_EVENTS[i].role); const lv = lead && lead.data.votes ? lead.data.votes[i] : 0; const max = Math.max(...cnt); const pick = cnt[lv] === max ? lv : cnt.indexOf(max); lEventResolve(pick, LB.flight); }
+  const i = LB.evI; if (i == null || !LB.evRes || LB.mode !== "online" || !LB.flight) return; const votes = LB.players.map(p => p.data && p.data.votes ? p.data.votes[i] : undefined).filter(v => v !== undefined);
+  const vt = $("#votes"); if (vt) vt.textContent = `${L(ok("Votes", "الأصوات"))}: ${votes.length} / ${LB.players.length}`;
+  if (votes.length >= LB.players.length) { const n = LB.flight.m.events[i].o.length, cnt = Array(n).fill(0); votes.forEach(v => cnt[v]++); const lead = LB.players.find(p => p.role === LB.flight.m.events[i].role); const lv = lead && lead.data.votes ? lead.data.votes[i] : 0; const max = Math.max(...cnt); lEventResolve(cnt[lv] === max ? lv : cnt.indexOf(max), LB.flight); }
 }
 function lEventResolve(j, F) {
-  const i = LB.evI, e = L_EVENTS[i], o = e.o[j], r = o.f(F.c), res = LB.evRes; if (!res) return; LB.evRes = null;
-  F.health = Math.max(5, F.health + r.h); F.sci *= 1 + r.sci; F.cost += r.cost || 0; setHealth(F.health); F.events.push({ e, o, r });
-  const el = $("#modal"); const good = !r.h && !r.sci && !r.cost;
-  el.querySelector(".hmodal").innerHTML = `<div class="evhead">${crewImg(e.role)}<div><div class="kick">${L(e.t)} · ${L({ en: "the team chose", ar: "التيم اختار" })} ${"ABC"[j]}</div><h2 class="hh">${good ? L({ en: "Great choice!", ar: "اختيار ممتاز!" }) : L({ en: "Here's what happened", ar: "ده اللي حصل" })}</h2></div></div>
-    <p class="evx">${L(r.w)}</p><div class="row"><button class="hbtn" type="button" id="levok">${L({ en: "Continue", ar: "كمّل" })}</button></div>`;
+  const i = LB.evI, e = F.m.events[i], r = e.o[j].f(F.c), res = LB.evRes; if (!res) return; LB.evRes = null;
+  F.health = Math.max(5, F.health + r.h); F.sci *= 1 + r.sci; F.cost += r.cost || 0; setHealth(F.health); F.events.push({ e, j, r });
+  const el = $("#modal"), good = !r.h && !r.sci;
+  el.querySelector(".hmodal").innerHTML = `<div class="evhead">${crewImg(e.role)}<div><div class="kick">${L(e.t)} · ${L(ok("the team chose", "التيم اختار"))} ${"ABC"[j]}</div><h2 class="hh">${good ? L(ok("Good call!", "قرار صح!")) : L(ok("Here's what happened", "ده اللي حصل"))}</h2></div></div>
+    <p class="evx">${L(r.w)}</p><div class="row"><button class="hbtn" type="button" id="levok">${L(ok("Continue", "كمّل"))}</button></div>`;
   lSay(e.role, L(r.w)); $("#levok").onclick = () => { el.innerHTML = ""; res(); };
 }
 function lFinish(F) {
-  const c = F.c, ok = !F.lost, cost = c.cost + F.cost, rules = Object.assign({}, c.rules, { budget: cost <= DELTA.budget });
-  const met = Object.values(rules).filter(Boolean).length;
-  let stars = ok ? 1 : 0; if (ok && met === 5) stars = 2; if (stars === 2 && F.health >= 70 && c.eom.clean) stars = 3;
+  const c = F.c, m = F.m, alive = !F.lost, rules = c.rules, nR = m.rules.length, met = Object.values(rules).filter(Boolean).length;
+  let stars = alive ? 1 : 0; if (alive && met === nR) stars = 2; if (stars === 2 && F.health >= 70 && c.clean && c.efficient) stars = 3;
   const reviews = LB.mode === "online" ? LB.room.state.reviews || 0 : LB.reviews;
-  const parts = { success: ok ? 300 : 0, rules: ok ? met * 60 : 0, budget: ok ? Math.max(0, Math.round((DELTA.budget - cost) * 5)) : 0, decisions: ok ? Math.round(F.health) : 0, space: ok && c.eom.clean ? 100 : 0, penalty: -(Math.max(0, reviews - 1) * 30 + LB.rewatch * 20) };
+  const parts = { success: alive ? 300 : 0, rules: alive ? Math.round(met * 300 / nR) : 0, efficiency: alive ? Math.max(0, 200 - c.waste.length * 70) : 0, health: alive ? Math.round(F.health) : 0, cleanup: alive && c.clean ? 100 : 0, penalties: -(Math.max(0, reviews - 1) * 30 + LB.rewatch * 20 + Math.round(F.cost * 10)) };
   const total = Math.max(0, Object.values(parts).reduce((a, b) => a + b, 0));
-  F.result = { ok, rules, met, stars, parts, total, sciPct: ok ? Math.round(c.sci * F.sci * (F.health / 100) * 100) : 0, cost };
-  if (ok) { A.progress.stars["cml_delta"] = Math.max(A.progress.stars["cml_delta"] || 0, LB.level >= 3 ? 3 : 2); store.set("ma.progress3", A.progress); }
+  F.result = { alive, rules, met, nR, stars, parts, total, sciPct: alive ? Math.round(Math.min(1, c.sci * F.sci * (F.health / 100)) * 100) : 0 };
+  if (alive) { const k = "cml" + LB.level; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, stars); store.set("ma.progress3", A.progress); }
   setTimeout(() => { if (A.screen === "lfly" && LB.flight === F) go("lusers"); }, 800);
 }
 function lusers() {
-  const F = LB.flight; if (!F || !F.result) return lhome(); const R = F.result, c = F.c;
-  const msg = !R.ok ? { en: "The satellite never sent any data. The farmers are still guessing which fields need water.", ar: "القمر الصناعي مبعتش أي داتا. والفلاحين لسه بيخمّنوا أنهي أرض محتاجة مية." }
-    : R.rules.health && R.rules.fields ? { en: `The Ministry of Agriculture received ${R.sciPct}% of the planned pictures. Farmers could see which fields were thirsty, and water them before the crops were damaged.`, ar: `وزارة الزراعة استلمت ${R.sciPct}% من الصور المطلوبة. والفلاحين قدروا يشوفوا أنهي أرض عطشانة ويسقوها قبل ما المحصول يتضرر.` }
-    : R.rules.health ? { en: "The pictures showed plant health, but only for big areas. Farmers knew a region was thirsty, but not which field.", ar: "الصور بيّنت صحة النبات، بس لمناطق كبيرة. الفلاحين عرفوا إن المنطقة عطشانة، بس مش أنهي أرض بالظبط." }
-    : { en: "The pictures were beautiful, but they could not show plant health. The Ministry could not use them for crops.", ar: "الصور كانت حلوة، بس مكانتش بتبيّن صحة النبات. والوزارة مقدرتش تستخدمها للمحاصيل." };
-  return `<section class="hpanel notr result"><div class="kick">${L({ en: "User segment", ar: "جزء المستخدمين" })} · ${L({ en: "who used your data?", ar: "مين استخدم الداتا بتاعتك؟" })}</div>
-    <h2 class="hh">${L(DELTA.user)}</h2><p class="evx">${L(msg)}</p>
-    <p class="needline">${L({ en: "NASA splits every mission into four segments: launch, space, ground, and users. A mission only matters when its data helps people.", ar: "ناسا بتقسم أي مهمة لأربع أجزاء: الإطلاق، والفضاء، والأرض، والمستخدمين. والمهمة بتبقى ليها قيمة بس لما الداتا بتاعتها تساعد الناس." })}</p>
-    <div class="row"><button class="hbtn" type="button" data-go="lreport">${L({ en: "See the mission report", ar: "شوف تقرير المهمة" })}</button></div></section>`;
+  const F = LB.flight; if (!F || !F.result) return lhome(); const R = F.result;
+  const msg = !R.alive ? ok("The satellite never sent any data. Nobody on Earth was helped.", "القمر الصناعي مبعتش أي داتا، ومحدش على الأرض استفاد.") : F.m.userMsg(R);
+  return `<section class="hpanel notr result"><div class="kick">${L(ok("User segment", "جزء المستخدمين"))} · ${L(ok("who used your data?", "مين استخدم الداتا بتاعتك؟"))}</div>
+    <h2 class="hh">${L(F.m.user)}</h2><p class="evx">${L(msg)}</p>
+    <p class="needline">${L(ok("NASA splits every mission into four segments: launch, space, ground, and users. A mission only matters when its data helps people.", "ناسا بتقسم أي مهمة لأربع أجزاء: الإطلاق، والفضاء، والأرض، والمستخدمين. والمهمة بتبقى ليها قيمة لما الداتا بتاعتها تساعد الناس."))}</p>
+    <div class="row"><button class="hbtn" type="button" data-go="lreport">${L(ok("See the mission report", "شوف تقرير المهمة"))}</button></div></section>`;
 }
 function lreport() {
-  const F = LB.flight; if (!F || !F.result) return lhome(); const R = F.result, c = F.c;
+  const F = LB.flight; if (!F || !F.result) return lhome(); const R = F.result, c = F.c, m = F.m;
   const fix = []; if (F.lost) fix.push(F.lost);
-  DELTA.rules.forEach(r => { if (!R.rules[r.k]) fix.push({ en: `Rule missed: ${r.en}.`, ar: `قاعدة متحققتش: ${r.ar}.` }); });
-  if (!c.eom.clean) fix.push({ en: "Your satellite becomes space junk at the end. NASA plans how every mission ends.", ar: "القمر بتاعك هيبقى زبالة فضائية في الآخر. ناسا بتخطط لنهاية كل مهمة." });
-  const good = []; DELTA.rules.forEach(r => { if (R.rules[r.k]) good.push(r); }); F.events.forEach(ev => { if (!ev.r.h && !ev.r.sci && !ev.r.cost) good.push({ en: `Smart decision: ${ev.e.t.en}.`, ar: `قرار ذكي: ${ev.e.t.ar}.` }); });
-  return `<section class="hpanel notr result"><div class="kick">${L({ en: "Mission report", ar: "تقرير المهمة" })} · ${L(lvl().t)}</div>
+  m.rules.forEach(r => { if (!R.rules[r.k]) fix.push({ en: `Not met: ${r.en}.`, ar: `متحققش: ${r.ar}.` }); });
+  c.waste.forEach(w => fix.push(w)); if (!c.clean) fix.push(ok("Your satellite becomes space junk at the end. NASA plans how every mission ends.", "القمر بتاعك هيبقى زبالة فضائية في الآخر، وناسا بتخطط لنهاية كل مهمة."));
+  const good = []; m.rules.forEach(r => { if (R.rules[r.k]) good.push(r); }); if (c.efficient && R.alive) good.push(ok("Nothing wasted: just what the mission needs.", "مفيش تضييع: على قد اللي المهمة محتاجاه بالظبط.")); F.events.forEach(ev => { if (!ev.r.h && !ev.r.sci) good.push({ en: `Smart decision: ${ev.e.t.en.replace(/[.!]+$/, "")}.`, ar: `قرار ذكي: ${ev.e.t.ar.replace(/[.!]+$/, "")}.` }); });
+  const mine = TEAM_ROLES.flatMap(r => m.decisions[r].map(d => { const o = pickOpt(m, allPicks(), r, d.k); return o ? L(o.n) : "—"; })).join(" · ");
+  return `<section class="hpanel notr result"><div class="kick">${L(ok("Mission report", "تقرير المهمة"))} · ${L(lvl().t)} · ${L(m.name)}</div>
     <div class="resgrid"><div><div class="bigstars">${"★".repeat(R.stars)}<span>${"★".repeat(3 - R.stars)}</span></div>
-      <h2 class="hh">${R.ok ? L({ en: "Mission complete", ar: "المهمة نجحت" }) : L({ en: "Mission lost", ar: "المهمة فشلت" })} · ${R.total} ${L({ en: "points", ar: "نقطة" })}</h2>
-      <p class="sciline">${L({ en: "Rules met", ar: "القواعد المتحققة" })}: <b>${R.met}/5</b> · ${L({ en: "Health", ar: "الصحة" })}: <b>${Math.round(F.health)}%</b> · ${L({ en: "Budget", ar: "الميزانية" })}: <b>${R.cost}/100</b></p>
-      <ul class="starkey"><li class="${R.stars >= 1 ? "on" : ""}">★ ${L({ en: "The satellite reached orbit and worked", ar: "القمر وصل المدار واشتغل" })}</li><li class="${R.stars >= 2 ? "on" : ""}">★ ${L({ en: "All 5 mission rules met", ar: "الـ 5 قواعد اتحققوا" })}</li><li class="${R.stars >= 3 ? "on" : ""}">★ ${L({ en: "Healthy, and a clean end of mission", ar: "بصحة كويسة، ونهاية مهمة نضيفة" })}</li></ul>
-      <p class="psub">${L({ en: "Points", ar: "النقط" })}: ${Object.entries(R.parts).map(([k, v]) => `${k} ${v}`).join(" · ")}</p></div>
-    <div class="resholo"><canvas id="holoRes" class="holo"></canvas><div class="holotag">Landsat 8 · NASA 3D model</div></div></div>
-    <div class="cols2"><div class="hcard"><h3>${L({ en: "What you did well", ar: "اللي عملته صح" })}</h3><ul>${(good.length ? good : [{ en: "You tried. Every NASA team learns from its first design.", ar: "انت جرّبت. وكل تيم في ناسا بيتعلم من أول تصميم." }]).slice(0, 5).map(x => `<li>${L(x)}</li>`).join("")}</ul></div>
-      <div class="hcard"><h3>${L({ en: "Fix next time", ar: "صلّحه المرة الجاية" })}</h3><ul>${(fix.length ? fix : [{ en: "Nothing! Try the next CML level.", ar: "ولا حاجة! جرّب مستوى CML اللي بعده." }]).slice(0, 5).map(x => `<li>${L(x)}</li>`).join("")}</ul></div></div>
-    <div class="hcard fact"><h3>${L({ en: "The real mission", ar: "المهمة الحقيقية" })}</h3><p>${L(DELTA.facts)}</p>
-      <p class="psub">${L({ en: "Explore real mission trajectories in", ar: "استكشف مسارات المهمات الحقيقية في" })} <a href="https://nasa.github.io/mission-viz/" target="_blank" rel="noopener">NASA Mission Viz</a> · ${L({ en: "Sources", ar: "المصادر" })}: <a href="https://www.usgs.gov/landsat-missions/landsat-8" target="_blank" rel="noopener">USGS Landsat 8</a> · <a href="https://modis.gsfc.nasa.gov/about/" target="_blank" rel="noopener">NASA MODIS</a></p></div>
-    <div class="row"><button class="hbtn" type="button" data-act="redesign">${L({ en: "Change the design and fly again", ar: "غيّر التصميم وطير تاني" })}</button><button class="hbtn ghost" type="button" data-go="llevel">${L({ en: "Next level", ar: "المستوى اللي بعده" })}</button></div></section>`;
+      <h2 class="hh">${R.alive ? L(ok("Mission complete", "المهمة نجحت")) : L(ok("Mission lost", "المهمة فشلت"))} · ${R.total} ${L(ok("points", "نقطة"))}</h2>
+      <p class="sciline">${L(ok("Needs met", "الطلبات المتحققة"))}: <b>${R.met}/${R.nR}</b> · ${L(ok("Health", "الصحة"))}: <b>${Math.round(F.health)}%</b>${c.mass ? ` · ${L(ok("Mass", "الوزن"))}: <b>${nf(Math.round(c.mass))} kg</b> · ${L(ok("Power", "الكهربا"))}: <b>${nf(c.need)} / ${nf(c.supply)} W</b>` : ""}</p>
+      <ul class="starkey"><li class="${R.stars >= 1 ? "on" : ""}">★ ${L(ok("The satellite reached orbit and worked", "القمر وصل الأوربت واشتغل"))}</li><li class="${R.stars >= 2 ? "on" : ""}">★ ${L(ok("Every need was met", "كل الطلبات اتحققت"))}</li><li class="${R.stars >= 3 ? "on" : ""}">★ ${L(ok("Nothing wasted, healthy, clean end", "مفيش تضييع، وصحة كويسة، ونهاية نضيفة"))}</li></ul>
+      <p class="psub">${L(ok("Points", "النقط"))}: ${Object.entries(R.parts).map(([k, v]) => `${k} ${v}`).join(" · ")}</p></div>
+    <div class="resholo"><canvas id="holoRes" class="holo"></canvas><div class="holotag">NASA 3D model · ${m.model === "goes" ? "GOES" : "Landsat 8"}</div></div></div>
+    <div class="cols2"><div class="hcard"><h3>${L(ok("What you did well", "اللي عملته صح"))}</h3><ul>${(good.length ? good : [ok("You tried. Every NASA team learns from its first design.", "إنت جرّبت، وكل تيم في ناسا بيتعلم من أول تصميم.")]).slice(0, 6).map(x => `<li>${L(x)}</li>`).join("")}</ul></div>
+      <div class="hcard"><h3>${L(ok("Fix next time", "صلّحه المرة الجاية"))}</h3><ul>${(fix.length ? fix : [ok("Nothing! Try the next level.", "ولا حاجة! جرّب المستوى اللي بعده.")]).slice(0, 6).map(x => `<li>${L(x)}</li>`).join("")}</ul></div></div>
+    <div class="hcard fact"><h3>${L(ok("The real mission", "المهمة الحقيقية"))}: ${esc(m.real.name)}</h3><p>${L(m.real.facts)}</p>
+      <p class="psub"><b>${L(ok("The real mission chose", "المهمة الحقيقية اختارت"))}:</b> ${L(m.real.picks)}<br><b>${L(ok("Your team chose", "التيم بتاعك اختار"))}:</b> ${esc(mine)}</p>
+      <p class="psub">${L(ok("Sources", "المصادر"))}: ${m.real.links.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join(" · ")} · <a href="https://nasa.github.io/mission-viz/" target="_blank" rel="noopener">NASA Mission Viz</a></p></div>
+    <div class="row"><button class="hbtn" type="button" data-act="redesign">${L(ok("Change the design and fly again", "غيّر التصميم وطير تاني"))}</button><button class="hbtn ghost" type="button" data-go="llevel">${L(ok("Levels", "المستويات"))}</button></div></section>`;
 }
-Object.assign(SIMPLE, { lhome, llevel, lonline, lroom, lvideo, ldesign, lconcept, lcompare, lfly, lusers, lreport });
+Object.assign(SIMPLE, { lhome, llevel, lonline, lroom, lvideo, ldesign, lfly, lusers, lreport });
 Object.assign(SIMPLE_AFTER, {
   lhome() { const cv = $("#holoHome"); if (!Space3D.ok || !cv) return; const h = Space3D.createHolo(cv); h && h.setModel("landsat8"); },
-  lonline() { onlineAvailable().then(ok => { const el = $("#olstat"); if (!el) return; el.innerHTML = ok ? L({ en: "Connected. Choose your name and role.", ar: "متوصل. اختار اسمك ودورك." }) : L({ en: "Online play can't connect here. Open the public game link (GitHub Pages), or play on one computer.", ar: "اللعب الأونلاين مش قادر يتوصل هنا. افتح لينك اللعبة العام (GitHub Pages)، أو العبوا على جهاز واحد." }); if (!ok) document.querySelectorAll("[data-act=ocreate],[data-act=ojoin]").forEach(b => b.disabled = true); }); },
-  lroom() { lChatPaint(); }, lvideo() { const v = $("#brief"); const list = lVideoList(), r = list[Math.min(LB.vi || 0, list.length - 1)]; if (v) v.onended = () => { LB.watched[r] = true; const b = $("#vnext"); if (b) b.disabled = false; }; },
+  lonline() { onlineAvailable().then(okk => { const el = $("#olstat"); if (!el) return; el.innerHTML = okk ? L(ok("Connected. Choose your name and role.", "متوصل. اختار اسمك ودورك.")) : L(ok("Online play can't connect here. Open the public game link (GitHub Pages), or play on one computer.", "اللعب الأونلاين مش قادر يتوصل هنا. افتح لينك اللعبة العام (GitHub Pages)، أو العبوا على جهاز واحد.")); if (!okk) document.querySelectorAll("[data-act=ocreate],[data-act=ojoin]").forEach(b => b.disabled = true); }); },
+  lroom() { lChatPaint(); },
+  lvideo() { const v = $("#brief"); const list = lVideoList(), r = list[Math.min(LB.vi || 0, list.length - 1)]; if (v) v.onended = () => { LB.watched[LM().id + r] = true; const b = $("#vnext"); if (b) b.disabled = false; }; },
   ldesign() { const cv = $("#holoBuild"); holoL = Space3D.ok && cv ? Space3D.createHolo(cv) : null; lHolo(); lChatPaint(); },
-  lreport() { const cv = $("#holoRes"); if (!Space3D.ok || !cv) return; const h = Space3D.createHolo(cv); h && h.setModel("landsat8"); }
+  lreport() { const cv = $("#holoRes"); if (!Space3D.ok || !cv || !LB.flight) return; const h = Space3D.createHolo(cv); h && h.setModel(LB.flight.m.model); }
 });
-function lStartDesign() { LB.tab = myRoles()[0] || rolesInPlay()[0]; LB.revealed = null; go("ldesign"); }
+function lStartDesign() { LB.tab = myRoles()[0] || "science"; LB.revealed = null; go("ldesign"); }
 function lClick(t) {
   const a = t.dataset.act;
-  if (t.dataset.lmode) { LB.mode = t.dataset.lmode; LB.picks = {}; LB.designA = null; LB.reviews = 0; LB.rewatch = 0; LB.watched = {}; if (LB.mode === "online") go("lonline"); else go("llevel"); return true; }
-  if (t.dataset.llevel) { LB.level = +t.dataset.llevel; if (LB.level === 4) { A.simple = false; go("home"); return true; } LB.vi = 0; LB.picks = {}; LB.designA = null; LB.flyPicks = null; go("lvideo"); return true; }
+  if (t.dataset.lmode) { LB.mode = t.dataset.lmode; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.watched = {}; go(LB.mode === "online" ? "lonline" : "llevel"); return true; }
+  if (t.dataset.llevel) { LB.level = +t.dataset.llevel; if (LB.level === 4) { A.simple = false; go("home"); return true; } LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
   if (t.dataset.ltab) { LB.tab = t.dataset.ltab; render(); return true; }
   if (t.dataset.lpick) { const [r, k, o] = t.dataset.lpick.split("."); if (LB.mode === "online") { const p = Object.assign({}, (LB.me.data && LB.me.data.picks) || {}); p[r + "." + k] = o; LB.me.data.picks = p; myData({ picks: p, ready: false }); } else LB.picks[r + "." + k] = o; lPartial(); return true; }
   if (a === "vnext") { LB.vi = (LB.vi || 0) + 1; render(); return true; }
-  if (a === "vdone") { if (LB.mode === "online") { myData({ watched: true }); } lStartDesign(); return true; }
+  if (a === "vdone") { if (LB.mode === "online") myData({ watched: true }); lStartDesign(); return true; }
   if (a === "rewatch") { LB.rewatch++; LB.vi = lVideoList().length - 1; go("lvideo"); return true; }
   if (a === "review") { const n = LB.mode === "online" ? (LB.room.state.reviews || 0) : LB.reviews; if (LB.mode === "online") roomState({ reviews: n + 1, lastReview: Date.now() }); else { LB.reviews = n + 1; LB.revealed = Date.now(); } const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); return true; }
-  if (a === "llaunch") { LB.flyPicks = null; go("lfly"); lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return true; }
-  if (a === "concept") { go("lconcept"); return true; }
-  if (a === "tocml2") { LB.level = 2; LB.vi = 0; LB.watched = {}; go("lvideo"); return true; }
-  if (a === "redesign") { LB.designA = null; LB.flyPicks = null; lStartDesign(); return true; }
-  if (a === "saveA") { LB.designA = Object.assign({}, allPicks()); if (LB.mode !== "online") LB.picks = {}; lStartDesign(); return true; }
-  if (a === "compare") { go("lcompare"); return true; }
-  if (a === "flyA" || a === "flyB") { LB.flyPicks = a === "flyA" ? LB.designA : Object.assign({}, allPicks()); go("lfly"); lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return true; }
+  if (a === "llaunch") { go("lfly"); lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return true; }
+  if (a === "redesign") { lStartDesign(); return true; }
   if (a === "oready") { myData({ ready: true }).then(() => { if (LB.players.every(p => p.data && (p.data.ready || p.id === LB.me.id))) roomState({ phase: "flight", at: Date.now() }); }); return true; }
   if (a === "ocreate" || a === "ojoin") { const name = ($("#oname").value || "").trim(); const role = (document.querySelector("input[name=orole]:checked") || {}).value; const err = $("#oerr");
-    if (!name) { err.textContent = L({ en: "Write your name first.", ar: "اكتب اسمك الأول." }); return true; } A.lastName = name;
+    if (!name) { err.textContent = L(ok("Write your name first.", "اكتب اسمك الأول.")); return true; } A.lastName = name;
     if (a === "ocreate") LB.level = +$("#olevel").value;
     (a === "ocreate" ? roomCreate(name, role) : roomJoin($("#ocode").value, name, role)).then(() => go("lroom")).catch(e => { err.textContent = e.message || String(e); }); return true; }
   if (a === "ostart") { roomState({ phase: "video" }); return true; }
@@ -404,5 +422,4 @@ function lClick(t) {
 }
 document.addEventListener("submit", e => { if (e.target.id === "chatform") { e.preventDefault(); const i = $("#chatin"); sendChat(i.value); i.value = ""; } });
 document.addEventListener("change", e => { if (e.target.id === "ula2") { A.unlockAll = e.target.checked; render(); } });
-
 window.LB = LB; render(); applyLang();
