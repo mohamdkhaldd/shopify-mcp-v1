@@ -389,6 +389,7 @@ function onRoomChange() {
   if (!LB.room) return; const ph = LB.room.state.phase;
   if (ph === "video" && LB.room.state.videoAt && LB.gameAt && LB.room.state.videoAt !== LB.gameAt && A.screen !== "lvideo") { LB.gameAt = LB.room.state.videoAt; lResetGame(); LB.backInRoom = false; go("lvideo"); return; }
   if (ph === "video" && LB.room.state.videoAt) LB.gameAt = LB.room.state.videoAt;
+  if (ph === "flight" && !LB.flight && !LB.backInRoom) { let done = null; try { done = sessionStorage.getItem("ma.doneGame"); } catch (e) { } if (done && String(LB.room.state.videoAt || LB.room.state.at) === done) { LB.backInRoom = true; if (A.screen !== "lroom") { go("lroom"); return; } } }
   if (LB.backInRoom && ph === "flight") { if (["lroom", "ldesign", "lvideo"].includes(A.screen)) lPartial(); lChatPaint(); return; }
   if (ph === "lobby" && !['lroom', 'lonline'].includes(A.screen)) { lResetGame(); go("lroom"); return; }
   const RANK = { lonline: 0, lroom: 1, lvideo: 2, ldesign: 3, lfly: 4, lusers: 5, lreport: 6 }, target = { lobby: "lroom", video: "lvideo", flight: "lfly" }[ph];
@@ -596,7 +597,7 @@ function lEngineDesign(c) { const m = LM(), base = MISSIONS.find(x => x.id === m
 function lHolo() { const tg = document.querySelector(".holowrap .holotag"); if (tg) tg.textContent = LB.lastPart ? L(ok("Added: ", "اتضاف: ")) + LB.lastPart : L(ok("Your satellite", "القمر بتاعك")); if (!holoL) return; const c = lCompute(allPicks()); try { const { base, d } = lEngineDesign(c); holoL.setDesign(base, d, { dry: 400 }); } catch (e) { } }
 
 /* ---- flight (3D engine with real NASA models) ---- */
-function lfly() { return sfly().replace('<b id="hp">100%</b></div>', `<b id="hp">100%</b></div><div class="fb-h"><span>${L(ok("Points (decisions are scored at the end)", "النقط (القرارات بتتحسب في الآخر)"))}</span><b id="ptsFly">${nf(1000 - lPenNow())}</b></div>`); }
+function lfly() { return sfly().replace('<b id="hp">100%</b></div>', `<b id="hp">100%</b></div><div class="fb-h"><span>${L(ok("Points (decisions are scored at the end)", "النقط (القرارات بتتحسب في الآخر)"))}</span><b id="ptsFly">${nf(1000 - lPenNow())}</b></div>${LB.mode === "online" ? `<div class="fb-h"><button class="linkbtn" type="button" data-act="oskipfly">⏭ ${L(ok("Back to the room", "ارجع للغرفة"))}</button></div>` : ""}`); }
 function lSay(role, text) { const el = $("#subt"); if (el) { el.innerHTML = `<b style="color:${CREW[role].col}">${CREW[role].name}:</b> ${text}`; el.classList.add("on"); } }
 async function lRunFlight() {
   SEQ++; const m = LM(), picks = allPicks(), c = lCompute(picks); const { base, d } = lEngineDesign(c);
@@ -660,7 +661,7 @@ function lFinish(F) {
   const stars = lStarsFor(total);
   F.result = { alive, rules, met, nR, stars, total, rows, dmg, extraRev, rew, rent, reviews, missed: m.rules.filter(r => !rules[r.k]), waste: c.waste, sciPct: alive ? Math.round(Math.min(1, c.sci * F.sci * (F.health / 100)) * 100) : 0 };
   const k = "cml" + LB.level; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, stars); store.set("ma.progress3", A.progress); lSaveProgress();
-  if (LB.mode === "online" && LB.me) myData({ done: myDone() });
+  if (LB.mode === "online" && LB.me) { myData({ done: myDone() }); try { sessionStorage.setItem("ma.doneGame", String(LB.room.state.videoAt || LB.room.state.at)); } catch (e) { } }
   setTimeout(() => { if (A.screen === "lfly" && LB.flight === F) go("lusers"); }, 800);
 }
 function lLossHtml(R) {
@@ -775,6 +776,7 @@ function lClick(t) {
   if (a === "ostart" || a === "ostartnow") { const at = Date.now(); LB.gameAt = at; LB.backInRoom = false; lResetGame(); roomState({ phase: "video", videoAt: at, reviews: 0, lastReview: null, extra: lPlanExtra() }).then(() => go("lvideo")); return true; }
   if (a === "oready0") { myData({ lobbyReady: !(LB.me.data && LB.me.data.lobbyReady) }).then(() => roomRefresh()); return true; }
   if (a === "olevel") { if (isHost() && !lBlocked(+t.dataset.n).length) { const n = +t.dataset.n; LB.level = n; sbClient().from("rooms").update({ level: n, mission: CML[n - 1].m }).eq("code", LB.room.code).then(() => roomRefresh()); } return true; }
+  if (a === "oskipfly") { SEQ++; try { sessionStorage.setItem("ma.doneGame", String(LB.room.state.videoAt || LB.room.state.at)); } catch (e) { } const md = $("#modal"); if (md) md.innerHTML = ""; lResetGame(); LB.backInRoom = true; go("lroom"); return true; }
   if (a === "oagain") { lResetGame(); LB.backInRoom = true; go("lroom"); return true; }
   if (a === "omode") { if (isHost()) roomState({ roleMode: t.dataset.m }).then(() => render()); return true; }
   if (t.dataset.orole) { lSwitchRole(t.dataset.orole); return true; }
