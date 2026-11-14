@@ -19,6 +19,7 @@ const Space3D = (() => {
   /* ---------- textures ---------- */
   const cache = {}; let loader, sky;
   const tex = n => { if (!cache[n]) { loader = loader || new T.TextureLoader(); const t = loader.load("tex/" + n); t.anisotropy = 4; cache[n] = t; } return cache[n]; };
+  let skyB; const skyBg = () => skyB || (skyB = new T.CubeTextureLoader().setPath("tex/").load(["real-s_px.jpg", "real-s_nx.jpg", "real-s_py.jpg", "real-s_ny.jpg", "real-s_pz.jpg", "real-s_nz.jpg"]));
   const skybox = () => sky || (sky = new T.CubeTextureLoader().setPath("tex/").load(["dark-s_px.jpg", "dark-s_nx.jpg", "dark-s_py.jpg", "dark-s_ny.jpg", "dark-s_pz.jpg", "dark-s_nz.jpg"]));
   function canvasTex(w, h, draw) { const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h); const t = new T.CanvasTexture(c); t.anisotropy = 4; return t; }
   let cellTex;
@@ -120,14 +121,14 @@ const Space3D = (() => {
   }
   /* ---------- worlds ---------- */
   function worldEarth() {
-    const s = new T.Scene(); s.background = skybox(); lights(s);
+    const s = new T.Scene(); s.background = skyBg(); lights(s);
     const earth = makeEarth(); earth.rotation.y = -1.2; s.add(earth);
     const moon = makeMoon(); moon.position.copy(MOON_POS); s.add(moon);
     s.add(makeSun(SUN_POS, 696000 * KM));
     return { scene: s, mpu: MPU_SPACE, earth, moon, focus: { earth: V(0, 0, 0), moon: MOON_POS } };
   }
   function worldMars() {
-    const s = new T.Scene(); s.background = skybox(); lights(s, .03);
+    const s = new T.Scene(); s.background = skyBg(); lights(s, .03);
     const mars = makeMars(); s.add(mars);
     s.add(makeSun(SUN_DIR.clone().multiplyScalar(227.9e6 * KM), 696000 * KM));
     const phobos = new T.Mesh(rockGeometry(11 * KM * 3, 3, .5, 3), new T.MeshStandardMaterial({ color: 0x7a6a5c, roughness: 1, flatShading: true }));
@@ -135,12 +136,12 @@ const Space3D = (() => {
     return { scene: s, mpu: MPU_SPACE, mars, phobos, focus: { mars: V(0, 0, 0) } };
   }
   function worldDeep() {
-    const s = new T.Scene(); s.background = skybox(); lights(s, .03);
+    const s = new T.Scene(); s.background = skyBg(); lights(s, .03);
     s.add(makeSun(SUN_DIR.clone().multiplyScalar(149.6e6 * KM), 696000 * KM));
     return { scene: s, mpu: MPU_SPACE, focus: { sun: SUN_POS } };
   }
   function worldAsteroid() { // units: metres
-    const s = new T.Scene(); s.background = skybox(); lights(s, .02);
+    const s = new T.Scene(); s.background = skyBg(); lights(s, .02);
     const mat = new T.MeshStandardMaterial({ color: 0x8a7d70, roughness: 1, metalness: 0, flatShading: true });
     const didy = new T.Mesh(rockGeometry(390, quality === "high" ? 5 : 4, .35, 1), mat); s.add(didy);
     const dimo = new T.Mesh(rockGeometry(80, 4, .45, 7), mat); dimo.position.set(1190, 0, 0); s.add(dimo);
@@ -254,20 +255,58 @@ const Space3D = (() => {
   }
   function rtg() { const g = new T.Group(); g.add(cyl(.3, .3, 1.1, MAT.dark, 16)); for (let i = 0; i < 8; i++) { const f = box(.04, 1, .5, MAT.grey); f.position.set(Math.cos(i * .785) * .4, 0, Math.sin(i * .785) * .4); f.rotation.y = -i * .785; g.add(f); } return g; }
   function instrumentPod(i) { const g = new T.Group(); const b = cyl(.13 + i * .02, .15 + i * .02, .32, MAT.white, 24); g.add(b); const baffle = cyl(.11 + i * .02, .09, .14, MAT.kapton, 24); baffle.position.y = -.22; g.add(baffle); const l = cyl(.08, .08, .015, MAT.lens, 24); l.position.y = -.17; g.add(l); return g; }
+  /* ---- realistic rocket fire: shader plume with shock diamonds, embers, smoke, light ---- */
+  const FLAME_U = { t: { value: 0 } };
+  const PLUME_VS = "varying vec2 vUv; varying float vEdge; void main(){ vUv = uv; vec4 mv = modelViewMatrix * vec4(position,1.0); vec3 n = normalize(normalMatrix * normal); vEdge = abs(dot(n, normalize(-mv.xyz))); gl_Position = projectionMatrix * mv; }";
+  const PLUME_FS = "uniform float t; uniform float core; uniform float seed; varying vec2 vUv; varying float vEdge;"
+    + "float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }"
+    + "float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }"
+    + "float fbm(vec2 p){ float a = .5, s = 0.; for(int k=0;k<3;k++){ s += a*n(p); p *= 2.03; a *= .5; } return s; }"
+    + "void main(){ float al = 1.0 - vUv.y;"
+    + " vec2 q = vec2(vUv.x*7.0 + seed, al*9.0 - t*(core > .5 ? 14.0 : 7.0));"
+    + " float tur = fbm(q) * 1.1;"
+    + " float edge = pow(vEdge, core > .5 ? .9 : 1.6);"
+    + " float fall = pow(clamp(1.0 - al, 0.0, 1.0), core > .5 ? 2.2 : 1.05);"
+    + " float diam = core > .5 ? .55 + .45 * pow(abs(sin(al*30.0 - t*2.0)), 6.0) : 1.0;"
+    + " float I = (core > .5 ? 1.25 : 2.1) * fall * edge * (.45 + .75 * tur) * diam * smoothstep(0.0, .04, al + .01);"
+    + " vec3 white = vec3(1.0,.96,.85), yel = vec3(1.0,.74,.22), ora = vec3(1.0,.38,.05), red = vec3(.95,.32,.06);"
+    + " vec3 c = core > .5 ? mix(vec3(.85,.92,1.0), white, smoothstep(0.,.25,al)) : mix(mix(yel, ora, smoothstep(.05,.45,al)), red, smoothstep(.45,1.0,al + tur*.2));"
+    + " gl_FragColor = vec4(c * (core > .5 ? 1.25 : 1.1), clamp(I, 0.0, 1.0)); }";
+  const plumeMat = (core, seed) => new T.ShaderMaterial({ uniforms: { t: FLAME_U.t, core: { value: core }, seed: { value: seed } }, vertexShader: PLUME_VS, fragmentShader: PLUME_FS, transparent: true, depthWrite: false, blending: core > .5 ? T.AdditiveBlending : T.NormalBlending, side: T.DoubleSide });
+  let fireDot;
+  const fireTex = () => fireDot || (fireDot = canvasTex(64, 64, (g, w, h) => { const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(.25, "rgba(255,255,255,.75)"); gr.addColorStop(.6, "rgba(255,255,255,.18)"); gr.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = gr; g.fillRect(0, 0, w, h); }));
   function flame(r, h) {
-    const g = new T.Group();
-    const o = new T.Mesh(new T.CylinderGeometry(r * .85, r * 1.9, h, 28, 1, true), MAT.flame); o.position.y = -h / 2; g.add(o);
-    const m2 = new T.Mesh(new T.CylinderGeometry(r * .7, r * .95, h * .45, 20, 1, true), MAT.flame); m2.position.y = -h * .25; g.add(m2);
-    const c = new T.Mesh(new T.ConeGeometry(r * .6, h * .22, 16, 1, true), MAT.flameCore); c.rotation.x = Math.PI; c.position.y = -h * .11; g.add(c);
-    const glow = new T.Sprite(new T.SpriteMaterial({ map: dotTex(), color: 0xffc070, blending: T.AdditiveBlending, transparent: true, depthWrite: false })); glow.scale.setScalar(r * 7); glow.position.y = -r * .8; g.add(glow);
-    g.userData.flame = true; return g;
+    const g = new T.Group(), sd = Math.random() * 50;
+    const outer = new T.Mesh(new T.CylinderGeometry(r * .95, r * 3.2, h * 1.3, 32, 12, true), plumeMat(0, sd)); outer.position.y = -h * .65; g.add(outer);
+    const mid = new T.Mesh(new T.CylinderGeometry(r * .8, r * 1.5, h * .55, 24, 8, true), plumeMat(0, sd + 9)); mid.position.y = -h * .275; g.add(mid);
+    const core = new T.Mesh(new T.CylinderGeometry(r * .62, r * .5, h * .32, 20, 8, true), plumeMat(1, sd + 21)); core.position.y = -h * .16; g.add(core);
+    // embers: hot particles that fly out of the nozzle and cool down
+    const N = 160, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), seeds = [];
+    for (let k = 0; k < N; k++) seeds.push([Math.random(), Math.random() * 6.283, Math.random(), .6 + Math.random() * .8]);
+    const pg = new T.BufferGeometry(); pg.setAttribute("position", new T.BufferAttribute(pos, 3)); pg.setAttribute("color", new T.BufferAttribute(col, 3));
+    const pts = new T.Points(pg, new T.PointsMaterial({ size: r * 1.1, map: fireTex(), vertexColors: true, transparent: true, depthWrite: false, blending: T.AdditiveBlending, sizeAttenuation: true }));
+    pts.frustumCulled = false; g.add(pts);
+    const glow = new T.Sprite(new T.SpriteMaterial({ map: dotTex(), color: 0xffb060, blending: T.AdditiveBlending, transparent: true, depthWrite: false })); glow.scale.setScalar(r * 4.5); glow.material.opacity = .7; glow.position.y = -r * 1.2; g.add(glow);
+    const glow2 = new T.Sprite(new T.SpriteMaterial({ map: dotTex(), color: 0xff6a20, opacity: .3, blending: T.AdditiveBlending, transparent: true, depthWrite: false })); glow2.scale.setScalar(r * 13); glow2.position.y = -h * .35; g.add(glow2);
+    const light = new T.PointLight(0xff9a40, 2.2, r * 60, 2); light.position.y = -r * 2; g.add(light);
+    g.traverse(o => { o.renderOrder = 3; });
+    g.userData.flame = true;
+    g.userData.tick = t => {
+      FLAME_U.t.value = t;
+      for (let k = 0; k < N; k++) { const [a, ang, b, sp] = seeds[k]; const life = (t * .9 * sp + a) % 1, sprd = r * (.4 + life * 2.6 * b);
+        pos[k * 3] = Math.cos(ang + life * 3) * sprd; pos[k * 3 + 1] = -r * .5 - life * h * 1.05; pos[k * 3 + 2] = Math.sin(ang + life * 3) * sprd;
+        const heat = 1 - life; col[k * 3] = 1 * heat + .25; col[k * 3 + 1] = .75 * heat * heat + .05; col[k * 3 + 2] = .35 * heat * heat * heat; }
+      pg.attributes.position.needsUpdate = true; pg.attributes.color.needsUpdate = true;
+      const fl = .85 + .15 * Math.sin(t * 47) * Math.sin(t * 31); glow.material.opacity = .7 * fl; light.intensity = 2.2 * fl;
+    };
+    return g;
   }
   function smokeTrail(r) {
     const n = 260, geo = new T.BufferGeometry(), pos = new Float32Array(n * 3), seed = [];
     for (let i = 0; i < n; i++) seed.push([Math.random(), Math.random() * 6.28, Math.random()]);
     geo.setAttribute("position", new T.BufferAttribute(pos, 3));
     const p = new T.Points(geo, new T.PointsMaterial({ map: dotTex(), color: 0xe9e4dc, size: r * 9, transparent: true, opacity: .5, depthWrite: false, sizeAttenuation: true }));
-    p.userData = { smoke: true, seed, r }; p.frustumCulled = false; return p;
+    p.userData = { smoke: true, seed, r }; p.frustumCulled = false; p.renderOrder = 1; return p;
   }
   /* ---------- spacecraft from the design ---------- */
   /* Mission Lab: build the satellite from the team's picks, so every choice is visible */
@@ -575,13 +614,14 @@ const Space3D = (() => {
       else { const mtx = new T.Matrix4().lookAt(V(0, 0, 0), dir, up); q.setFromRotationMatrix(mtx); }
       if (st.flags.tumble) q.multiply(new T.Quaternion().setFromEuler(new T.Euler(t * 1.3, t * .7, 0)));
       model.quaternion.copy(q);
-      model.traverse(o => { if (o.userData.flame) { o.visible = !st.flags.fall; o.scale.set(1 + Math.sin(t * 40) * .05, 1 + Math.sin(t * 31) * .12, 1 + Math.sin(t * 37) * .05); } });
+      model.traverse(o => { if (o.userData.flame) { o.visible = !st.flags.fall; o.scale.set(1 + Math.sin(t * 40) * .04, 1 + Math.sin(t * 31) * .08, 1 + Math.sin(t * 37) * .04); if (o.visible && o.userData.tick) o.userData.tick(t); } });
       const altKm = ev.s.world === "earth" ? (ev.pos.length() - RE) * 637.1 : 999;
+      if (w.earth) { const day = isAscent && altKm < 35; if (w.dayBg !== day) { w.scene.background = day ? new T.Color(0x000000) : skyBg(); w.dayBg = day; } }
       if (isAscent) {
         const k = 1 + Math.min(1.8, Math.max(0, altKm - 20) / 60); model.traverse(o => { if (o.userData.flame) { o.scale.x *= k; o.scale.z *= k; } });
         const sm = st.rocket.userData.smoke; if (sm) { const pa = sm.geometry.attributes.position, sd = sm.userData.seed, r = sm.userData.r, dens = Math.max(0, 1 - altKm / 45);
           sm.material.opacity = .55 * dens; sm.visible = dens > .02 && !st.flags.fall;
-          for (let i = 0; i < sd.length; i++) { const [a, ang, b] = sd[i]; const life = (t * .35 + a) % 1; const spread = r * (.6 + life * 7); pa.setXYZ(i, Math.cos(ang + life * 2) * spread * b, -6 - life * life * r * 90, Math.sin(ang + life * 2) * spread * b); }
+          for (let i = 0; i < sd.length; i++) { const [a, ang, b] = sd[i]; const life = (t * .35 + a) % 1; const spread = r * (.6 + life * 7); pa.setXYZ(i, Math.cos(ang + life * 2) * spread * b, -r * 9 - life * life * r * 90, Math.sin(ang + life * 2) * spread * b); }
           pa.needsUpdate = true; }
       }
       const want = isAscent ? "r" : "s"; if (st.shadowFor !== want) { fitShadow(model.userData.radius || 3); st.shadowFor = want; }
