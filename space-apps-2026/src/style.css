@@ -539,3 +539,12 @@ html[lang=ar] .hud .eyebrow{font-size:13px}
 .buildgrid .holowrap{position:sticky;top:12px;height:min(560px,72vh);min-height:340px;background:radial-gradient(ellipse at 50% 75%,rgba(120,160,220,.16),transparent 65%),linear-gradient(180deg,#0a1222,#03060c)}
 .holowrap canvas.holo{position:absolute;inset:0}
 @media (max-width:920px){.buildgrid .holowrap{position:relative;top:0;height:340px}}
+
+/* launch film overlay */
+.lfilm{position:absolute;inset:0;z-index:6;background:#000;display:flex;align-items:center;justify-content:center;transition:opacity .6s}
+.lfilm.out{opacity:0}
+.lfilm video{width:100%;height:100%;object-fit:cover}
+.lfilm-cap{position:absolute;left:12px;bottom:12px;background:rgba(0,0,0,.6);color:#dfe9f2;font-size:13px;padding:5px 10px;border-radius:6px}
+[dir=rtl] .lfilm-cap{left:auto;right:12px}
+.lfilm-skip{position:absolute;top:12px;right:12px;padding:8px 14px;font-size:15px;background:rgba(0,0,0,.55)}
+[dir=rtl] .lfilm-skip{right:auto;left:12px}

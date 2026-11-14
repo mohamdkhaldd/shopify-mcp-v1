@@ -645,10 +645,26 @@ function lHolo() { const tg = document.querySelector(".holowrap .holotag"); if (
 /* ---- flight (3D engine with real NASA models) ---- */
 function lfly() { return sfly().replace('<b id="hp">100%</b></div>', `<b id="hp">100%</b></div><div class="fb-h"><span>${L(ok("Points (decisions are scored at the end)", "النقط (القرارات بتتحسب في الآخر)"))}</span><b id="ptsFly">${nf(1000 - lPenNow())}</b></div>${LB.mode === "online" ? `<div class="fb-h"><button class="linkbtn" type="button" data-act="oskipfly">⏭ ${L(ok("Back to the room", "ارجع للغرفة"))}</button></div>` : ""}`); }
 function lSay(role, text) { const el = $("#subt"); if (el) { el.innerHTML = `<b style="color:${CREW[role].col}">${CREW[role].name}:</b> ${text}`; el.classList.add("on"); } }
+/* real NASA footage for the liftoff, then the 3D flight takes over */
+function lLaunchFilm() {
+  const scr = $("#screen"); if (!scr) return Promise.resolve();
+  return new Promise(res => {
+    const w = document.createElement("div"); w.className = "lfilm";
+    w.innerHTML = `<video src="video/launch_f9.mp4" playsinline autoplay preload="auto"></video>
+      <div class="lfilm-cap"><b>${L(ok("Real launch footage", "لقطات إطلاق حقيقية"))}</b> · NASA / SpaceX · Falcon 9 · PACE, 2024</div>
+      <button type="button" class="hbtn ghost lfilm-skip">${L(ok("Skip", "تخطّي"))} ${IC("skip")}</button>`;
+    scr.appendChild(w); const v = w.querySelector("video"), seq = SEQ;
+    const done = () => { if (w.dataset.done) return; w.dataset.done = 1; w.classList.add("out"); setTimeout(() => w.remove(), 600); res(); };
+    v.onended = done; v.onerror = done; w.querySelector(".lfilm-skip").onclick = done;
+    const chk = setInterval(() => { if (seq !== SEQ || !w.isConnected) { clearInterval(chk); done(); } }, 500);
+    v.play().catch(() => { v.muted = true; v.play().catch(done); });
+  });
+}
 async function lRunFlight() {
   SEQ++; const m = LM(), picks = allPicks(), c = lCompute(picks); const { base, d } = lEngineDesign(c);
   const F = LB.flight = { health: 100, sci: 1, cost: 0, events: [], lost: null, c, m, picks: Object.assign({}, picks) };
   curP = 0; totalDays = m.days;
+  if (d.lv === "medium" && !c.fatal) await lLaunchFilm();
   if (Space3D.ok && $("#view3d")) { flightView = Space3D.createView($("#view3d"), {}); flightView.setReal && flightView.setReal(false); flightView.setMission(base, d, { dry: (c.mass || 1500), prop: 200 }); skyLoop(); }
   const marks = flightView ? flightView.marks() : { ascent: .12 }; ascentEnd = marks.ascent || .12;
   lSay("planner", L(ok("Three, two, one... liftoff!", "تلاتة، اتنين، واحد... انطلقنا!"))); await wait(2600); setPhase(L(ok("LIFTOFF", "الإطلاق")));
