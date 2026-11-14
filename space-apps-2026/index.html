@@ -544,6 +544,10 @@ html[lang=ar] .hud .eyebrow{font-size:13px}
 .evparts ul{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
 .evparts li b{color:#fff}.evparts li small{display:block;color:#d4efff;font-size:13.5px}
 .evbest{display:flex;flex-direction:column;gap:4px;background:rgba(255,200,80,.08);border:1px solid rgba(255,200,80,.45);border-radius:10px;padding:10px 14px;color:#ffe9b0}
+.buildgrid{align-items:start}
+.buildgrid .holowrap{position:sticky;top:12px;height:min(560px,72vh);min-height:340px;background:radial-gradient(ellipse at 50% 75%,rgba(120,160,220,.16),transparent 65%),linear-gradient(180deg,#0a1222,#03060c)}
+.holowrap canvas.holo{position:absolute;inset:0}
+@media (max-width:920px){.buildgrid .holowrap{position:relative;top:0;height:340px}}
 </style>
 </head>
 <body>
@@ -2035,10 +2039,17 @@ const Space3D = (() => {
     };
   }
   /* ---------- hologram view (design screen, cinematic blueprint look) ---------- */
-  function createHolo(canvas) {
-    if (!webgl) return null;
+  function createHolo(canvas, opts) {
+    if (!webgl) return null; const real = !!(opts && opts.real);
     const renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true }); renderer.setClearColor(0x000000, 0); renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
     const scene = new T.Scene(), cam = new T.PerspectiveCamera(36, 1, .05, 2000);
+    if (real) { // real materials, studio lights like a clean room photo
+      renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+      const key = new T.DirectionalLight(0xfff1e0, 2.4); key.position.set(5, 6, 4); scene.add(key);
+      const fill = new T.DirectionalLight(0x9cc4ff, .8); fill.position.set(-6, 2, 3); scene.add(fill);
+      const rim = new T.DirectionalLight(0xffffff, 1.4); rim.position.set(-2, 4, -6); scene.add(rim);
+      scene.add(new T.HemisphereLight(0xb8cfff, 0x1a2230, .55));
+    }
     const col = new T.Color(0x5fd8ff), red = new T.Color(0xff4d5e), cur = col.clone();
     const lineM = new T.LineBasicMaterial({ color: cur, transparent: true, opacity: .9, blending: T.AdditiveBlending, depthWrite: false });
     const faceM = new T.ShaderMaterial({ transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide, uniforms: { c: { value: cur } },
@@ -2056,15 +2067,17 @@ const Space3D = (() => {
       obj.traverse(o => { if (!o.isMesh || !o.geometry || !o.visible) return; let v = true; for (let p = o; p; p = p.parent) if (p.visible === false) v = false; if (!v) return;
         let geo = o.geometry; const pa = geo.attributes.position;
         if (pa && (pa.normalized || !(pa.array instanceof Float32Array))) { const div = pa.normalized ? ({ Int8Array: 127, Uint8Array: 255, Int16Array: 32767, Uint16Array: 65535 }[pa.array.constructor.name] || 1) : 1; const f32 = new Float32Array(pa.count * 3); for (let i = 0; i < pa.count; i++) for (let j = 0; j < 3; j++) f32[i * 3 + j] = Math.max(-1, pa.array[(pa.isInterleavedBufferAttribute ? i * pa.data.stride + pa.offset : i * pa.itemSize) + j] / div); geo = new T.BufferGeometry(); geo.setAttribute("position", new T.BufferAttribute(pa.normalized ? f32 : f32.map((v, i) => v), 3)); if (o.geometry.index) geo.setIndex(o.geometry.index); if (!pa.normalized) { for (let i = 0; i < f32.length; i++) f32[i] = pa.array[(pa.isInterleavedBufferAttribute ? Math.floor(i / 3) * pa.data.stride + pa.offset : Math.floor(i / 3) * pa.itemSize) + i % 3]; } geo.computeVertexNormals(); }
-        const e = new T.LineSegments(new T.EdgesGeometry(geo, 26), lineM); e.applyMatrix4(o.matrixWorld); g.add(e);
+        if (real) return;
+      const e = new T.LineSegments(new T.EdgesGeometry(geo, 26), lineM); e.applyMatrix4(o.matrixWorld); g.add(e);
         const f = new T.Mesh(geo, faceM); f.applyMatrix4(o.matrixWorld); g.add(f); });
       return g;
     }
     function place(obj) {
-      if (ship) root.remove(ship); ship = holoify(obj);
+      if (ship) root.remove(ship); ship = real ? obj : holoify(obj);
       const b = new T.Box3().setFromObject(ship), c = b.getCenter(new T.Vector3()), sz = b.getSize(new T.Vector3());
       ship.position.sub(c); R = Math.max(.5, sz.length() / 2); root.add(ship); buildFloor();
       ring.scale.setScalar(R * 1.05); dust.scale.setScalar(R * 2.2);
+      if (real) { dust.visible = false; gridM.opacity = .16; ring.visible = alert; }
     }
     let token = 0;
     canvas.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); });
@@ -2073,12 +2086,12 @@ const Space3D = (() => {
     function frame(t) {
       if (!alive) return; if (!canvas.isConnected) { alive = false; renderer.dispose(); return; } requestAnimationFrame(frame);
       const w = canvas.clientWidth || 600, h = canvas.clientHeight || 400; if (canvas.width !== Math.round(w * renderer.getPixelRatio())) renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix();
-      cur.lerp(alert ? red : col, .08); lineM.color.copy(cur); gridM.color.copy(cur); ring.material.color.copy(cur); dust.material.color.copy(cur);
+      if (real) ring.visible = alert; cur.lerp(alert ? red : col, .08); lineM.color.copy(cur); gridM.color.copy(cur); ring.material.color.copy(cur); dust.material.color.copy(cur);
       if (!drag) yaw += .0035; const s = t / 1000;
       ring.position.y = Math.sin(s * .9) * R * .5; ring.material.opacity = .25 + .3 * (1 - Math.abs(Math.sin(s * .9)));
       lineM.opacity = .75 + Math.sin(s * 7) * .04 + (Math.random() < .01 ? -.4 : 0);
       dust.rotation.y = s * .02;
-      const d = R * 2.7; cam.position.set(Math.sin(yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d, Math.cos(yaw) * Math.cos(pitch) * d); cam.lookAt(0, 0, 0);
+      const d = R * (real ? 3.1 : 2.7) * Math.max(1, 1.15 / cam.aspect); cam.position.set(Math.sin(yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d, Math.cos(yaw) * Math.cos(pitch) * d); cam.lookAt(0, 0, 0);
       renderer.render(scene, cam);
     }
     requestAnimationFrame(frame);
@@ -3713,7 +3726,7 @@ function lvideo() {
 function lCard(role, d, o, picks, mine) {
   const sel = picks[role + "." + d.k] === o.k, orph = lOrphan(role), key = role + "." + d.k;
   const myv = orph && LB.me && LB.me.data && LB.me.data.rv && LB.me.data.rv[key] === o.k, nv = orph ? lVotesFor(key, o.k) : 0;
-  return `<button type="button" class="ccard ${sel ? "sel" : ""} ${myv ? "myvote" : ""}" ${mine ? `data-lpick="${role}.${d.k}.${o.k}"` : "disabled"}><span class="cnum">${o.k}</span><span class="cicon">${sIcon(o.icon)}</span><b>${L(o.n)}</b>${o.hint && LB.level === 1 ? `<span class="chint">💡 ${L(o.hint)}</span>` : ""}${o.spec && (LB.level === 2 || LB.level === 3) ? `<span class="chint spec">📏 ${L(o.spec)}</span>` : ""}${orph ? `<span class="vcount">🗳 ${nv}${myv ? " · " + L(ok("your vote", "صوتك")) : ""}</span>` : ""}</button>`;
+  return `<button type="button" class="ccard ${sel ? "sel" : ""} ${myv ? "myvote" : ""}" ${mine ? `data-lpick="${role}.${d.k}.${o.k}"` : "disabled"}><span class="cnum">${o.k}</span><span class="cicon">${sIcon(o.icon)}</span><b>${L(o.n)}</b>${o.hint && LB.level === 1 ? `<span class="chint">💡 ${L(o.hint)}</span>` : ""}${o.spec && (LB.level === 2 || LB.level === 3) ? `<span class="chint spec">${L(o.spec)}</span>` : ""}${orph ? `<span class="vcount">🗳 ${nv}${myv ? " · " + L(ok("your vote", "صوتك")) : ""}</span>` : ""}</button>`;
 }
 function ldesign() {
   const picks = allPicks(), mine = myRoles(), m = LM();
@@ -3941,8 +3954,8 @@ Object.assign(SIMPLE_AFTER, {
       const tick = () => { const el = $("#vtimer"); if (A.screen !== "lvideo") return clearInterval(LB.vt); const ms = end - Date.now(); if (ms <= 0) { clearInterval(LB.vt); myData({ watched: true }); lStartDesign(); return; } if (el) el.textContent = Math.floor(ms / 60000) + ":" + String(Math.floor(ms / 1000) % 60).padStart(2, "0"); };
       tick(); LB.vt = setInterval(tick, 1000); }
     const v = $("#brief"); const list = lVideoList(), r = list[Math.min(LB.vi || 0, list.length - 1)]; if (v) v.onended = () => { LB.watched[LM().id + r] = true; const b = $("#vnext"); if (b) b.disabled = false; }; },
-  ldesign() { const cv = $("#holoBuild"); holoL = Space3D.ok && cv ? Space3D.createHolo(cv) : null; lHolo(); lChatPaint(); },
-  lreport() { const cv = $("#holoRes"); if (!Space3D.ok || !cv || !LB.flight) return; const h = Space3D.createHolo(cv); h && h.setModel(LB.flight.m.model); }
+  ldesign() { const cv = $("#holoBuild"); holoL = Space3D.ok && cv ? Space3D.createHolo(cv, { real: true }) : null; lHolo(); lChatPaint(); },
+  lreport() { const cv = $("#holoRes"); if (!Space3D.ok || !cv || !LB.flight) return; const h = Space3D.createHolo(cv, { real: true }); h && h.setModel(LB.flight.m.model); }
 });
 function lStartDesign() { LB.tab = myRoles()[0] || "science"; LB.revealed = null; go("ldesign"); }
 /* ---- account: game-style button at the top + modal ---- */

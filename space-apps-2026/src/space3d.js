@@ -687,10 +687,17 @@ const Space3D = (() => {
     };
   }
   /* ---------- hologram view (design screen, cinematic blueprint look) ---------- */
-  function createHolo(canvas) {
-    if (!webgl) return null;
+  function createHolo(canvas, opts) {
+    if (!webgl) return null; const real = !!(opts && opts.real);
     const renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true }); renderer.setClearColor(0x000000, 0); renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
     const scene = new T.Scene(), cam = new T.PerspectiveCamera(36, 1, .05, 2000);
+    if (real) { // real materials, studio lights like a clean room photo
+      renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+      const key = new T.DirectionalLight(0xfff1e0, 2.4); key.position.set(5, 6, 4); scene.add(key);
+      const fill = new T.DirectionalLight(0x9cc4ff, .8); fill.position.set(-6, 2, 3); scene.add(fill);
+      const rim = new T.DirectionalLight(0xffffff, 1.4); rim.position.set(-2, 4, -6); scene.add(rim);
+      scene.add(new T.HemisphereLight(0xb8cfff, 0x1a2230, .55));
+    }
     const col = new T.Color(0x5fd8ff), red = new T.Color(0xff4d5e), cur = col.clone();
     const lineM = new T.LineBasicMaterial({ color: cur, transparent: true, opacity: .9, blending: T.AdditiveBlending, depthWrite: false });
     const faceM = new T.ShaderMaterial({ transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide, uniforms: { c: { value: cur } },
@@ -708,15 +715,17 @@ const Space3D = (() => {
       obj.traverse(o => { if (!o.isMesh || !o.geometry || !o.visible) return; let v = true; for (let p = o; p; p = p.parent) if (p.visible === false) v = false; if (!v) return;
         let geo = o.geometry; const pa = geo.attributes.position;
         if (pa && (pa.normalized || !(pa.array instanceof Float32Array))) { const div = pa.normalized ? ({ Int8Array: 127, Uint8Array: 255, Int16Array: 32767, Uint16Array: 65535 }[pa.array.constructor.name] || 1) : 1; const f32 = new Float32Array(pa.count * 3); for (let i = 0; i < pa.count; i++) for (let j = 0; j < 3; j++) f32[i * 3 + j] = Math.max(-1, pa.array[(pa.isInterleavedBufferAttribute ? i * pa.data.stride + pa.offset : i * pa.itemSize) + j] / div); geo = new T.BufferGeometry(); geo.setAttribute("position", new T.BufferAttribute(pa.normalized ? f32 : f32.map((v, i) => v), 3)); if (o.geometry.index) geo.setIndex(o.geometry.index); if (!pa.normalized) { for (let i = 0; i < f32.length; i++) f32[i] = pa.array[(pa.isInterleavedBufferAttribute ? Math.floor(i / 3) * pa.data.stride + pa.offset : Math.floor(i / 3) * pa.itemSize) + i % 3]; } geo.computeVertexNormals(); }
-        const e = new T.LineSegments(new T.EdgesGeometry(geo, 26), lineM); e.applyMatrix4(o.matrixWorld); g.add(e);
+        if (real) return;
+      const e = new T.LineSegments(new T.EdgesGeometry(geo, 26), lineM); e.applyMatrix4(o.matrixWorld); g.add(e);
         const f = new T.Mesh(geo, faceM); f.applyMatrix4(o.matrixWorld); g.add(f); });
       return g;
     }
     function place(obj) {
-      if (ship) root.remove(ship); ship = holoify(obj);
+      if (ship) root.remove(ship); ship = real ? obj : holoify(obj);
       const b = new T.Box3().setFromObject(ship), c = b.getCenter(new T.Vector3()), sz = b.getSize(new T.Vector3());
       ship.position.sub(c); R = Math.max(.5, sz.length() / 2); root.add(ship); buildFloor();
       ring.scale.setScalar(R * 1.05); dust.scale.setScalar(R * 2.2);
+      if (real) { dust.visible = false; gridM.opacity = .16; ring.visible = alert; }
     }
     let token = 0;
     canvas.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); });
@@ -725,12 +734,12 @@ const Space3D = (() => {
     function frame(t) {
       if (!alive) return; if (!canvas.isConnected) { alive = false; renderer.dispose(); return; } requestAnimationFrame(frame);
       const w = canvas.clientWidth || 600, h = canvas.clientHeight || 400; if (canvas.width !== Math.round(w * renderer.getPixelRatio())) renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix();
-      cur.lerp(alert ? red : col, .08); lineM.color.copy(cur); gridM.color.copy(cur); ring.material.color.copy(cur); dust.material.color.copy(cur);
+      if (real) ring.visible = alert; cur.lerp(alert ? red : col, .08); lineM.color.copy(cur); gridM.color.copy(cur); ring.material.color.copy(cur); dust.material.color.copy(cur);
       if (!drag) yaw += .0035; const s = t / 1000;
       ring.position.y = Math.sin(s * .9) * R * .5; ring.material.opacity = .25 + .3 * (1 - Math.abs(Math.sin(s * .9)));
       lineM.opacity = .75 + Math.sin(s * 7) * .04 + (Math.random() < .01 ? -.4 : 0);
       dust.rotation.y = s * .02;
-      const d = R * 2.7; cam.position.set(Math.sin(yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d, Math.cos(yaw) * Math.cos(pitch) * d); cam.lookAt(0, 0, 0);
+      const d = R * (real ? 3.1 : 2.7) * Math.max(1, 1.15 / cam.aspect); cam.position.set(Math.sin(yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d, Math.cos(yaw) * Math.cos(pitch) * d); cam.lookAt(0, 0, 0);
       renderer.render(scene, cam);
     }
     requestAnimationFrame(frame);

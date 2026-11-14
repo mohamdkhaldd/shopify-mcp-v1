@@ -535,3 +535,7 @@ html[lang=ar] .hud .eyebrow{font-size:13px}
 .evparts ul{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
 .evparts li b{color:#fff}.evparts li small{display:block;color:#d4efff;font-size:13.5px}
 .evbest{display:flex;flex-direction:column;gap:4px;background:rgba(255,200,80,.08);border:1px solid rgba(255,200,80,.45);border-radius:10px;padding:10px 14px;color:#ffe9b0}
+.buildgrid{align-items:start}
+.buildgrid .holowrap{position:sticky;top:12px;height:min(560px,72vh);min-height:340px;background:radial-gradient(ellipse at 50% 75%,rgba(120,160,220,.16),transparent 65%),linear-gradient(180deg,#0a1222,#03060c)}
+.holowrap canvas.holo{position:absolute;inset:0}
+@media (max-width:920px){.buildgrid .holowrap{position:relative;top:0;height:340px}}

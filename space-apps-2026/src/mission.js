@@ -571,7 +571,7 @@ function lvideo() {
 function lCard(role, d, o, picks, mine) {
   const sel = picks[role + "." + d.k] === o.k, orph = lOrphan(role), key = role + "." + d.k;
   const myv = orph && LB.me && LB.me.data && LB.me.data.rv && LB.me.data.rv[key] === o.k, nv = orph ? lVotesFor(key, o.k) : 0;
-  return `<button type="button" class="ccard ${sel ? "sel" : ""} ${myv ? "myvote" : ""}" ${mine ? `data-lpick="${role}.${d.k}.${o.k}"` : "disabled"}><span class="cnum">${o.k}</span><span class="cicon">${sIcon(o.icon)}</span><b>${L(o.n)}</b>${o.hint && LB.level === 1 ? `<span class="chint">💡 ${L(o.hint)}</span>` : ""}${o.spec && (LB.level === 2 || LB.level === 3) ? `<span class="chint spec">📏 ${L(o.spec)}</span>` : ""}${orph ? `<span class="vcount">🗳 ${nv}${myv ? " · " + L(ok("your vote", "صوتك")) : ""}</span>` : ""}</button>`;
+  return `<button type="button" class="ccard ${sel ? "sel" : ""} ${myv ? "myvote" : ""}" ${mine ? `data-lpick="${role}.${d.k}.${o.k}"` : "disabled"}><span class="cnum">${o.k}</span><span class="cicon">${sIcon(o.icon)}</span><b>${L(o.n)}</b>${o.hint && LB.level === 1 ? `<span class="chint">💡 ${L(o.hint)}</span>` : ""}${o.spec && (LB.level === 2 || LB.level === 3) ? `<span class="chint spec">${L(o.spec)}</span>` : ""}${orph ? `<span class="vcount">🗳 ${nv}${myv ? " · " + L(ok("your vote", "صوتك")) : ""}</span>` : ""}</button>`;
 }
 function ldesign() {
   const picks = allPicks(), mine = myRoles(), m = LM();
@@ -799,8 +799,8 @@ Object.assign(SIMPLE_AFTER, {
       const tick = () => { const el = $("#vtimer"); if (A.screen !== "lvideo") return clearInterval(LB.vt); const ms = end - Date.now(); if (ms <= 0) { clearInterval(LB.vt); myData({ watched: true }); lStartDesign(); return; } if (el) el.textContent = Math.floor(ms / 60000) + ":" + String(Math.floor(ms / 1000) % 60).padStart(2, "0"); };
       tick(); LB.vt = setInterval(tick, 1000); }
     const v = $("#brief"); const list = lVideoList(), r = list[Math.min(LB.vi || 0, list.length - 1)]; if (v) v.onended = () => { LB.watched[LM().id + r] = true; const b = $("#vnext"); if (b) b.disabled = false; }; },
-  ldesign() { const cv = $("#holoBuild"); holoL = Space3D.ok && cv ? Space3D.createHolo(cv) : null; lHolo(); lChatPaint(); },
-  lreport() { const cv = $("#holoRes"); if (!Space3D.ok || !cv || !LB.flight) return; const h = Space3D.createHolo(cv); h && h.setModel(LB.flight.m.model); }
+  ldesign() { const cv = $("#holoBuild"); holoL = Space3D.ok && cv ? Space3D.createHolo(cv, { real: true }) : null; lHolo(); lChatPaint(); },
+  lreport() { const cv = $("#holoRes"); if (!Space3D.ok || !cv || !LB.flight) return; const h = Space3D.createHolo(cv, { real: true }); h && h.setModel(LB.flight.m.model); }
 });
 function lStartDesign() { LB.tab = myRoles()[0] || "science"; LB.revealed = null; go("ldesign"); }
 /* ---- account: game-style button at the top + modal ---- */
