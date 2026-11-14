@@ -293,8 +293,8 @@ function lDecisionRows(m, c, picks) {
 function lStarsFor(total) { return total >= 900 ? 3 : total >= 700 ? 2 : total >= 400 ? 1 : 0; }
 
 const CML = [
-  { n: 1, m: "storm", t: ok("CML 1 · The idea", "CML 1 · الفكرة"), d: ok("Khamsin Storm Watch. One choice each, two options. Just words, no numbers.", "رادار الخماسين. كل واحد اختيار واحد من اتنين. كلام بس، مفيش أرقام.") },
-  { n: 2, m: "moon", t: ok("CML 2 · Can it work?", "CML 2 · هل تنفع؟"), d: ok("Moon Landing Map. Two choices each. Compare each number with what is needed, no adding.", "خريطة الهبوط على القمر. كل واحد اختيارين. قارن كل رقم باللي مطلوب، من غير جمع.") },
+  { n: 1, m: "storm", t: ok("CML 1 · The idea", "CML 1 · الفكرة"), d: ok("Khamsin Storm Watch. One choice each, two options, no numbers. Each choice stands alone, so it is the easiest start.", "رادار الخماسين. كل واحد اختيار واحد من اتنين، من غير أرقام. كل اختيار لوحده ومش مربوط بحاجة، فهي أسهل بداية.") },
+  { n: 2, m: "moon", t: ok("CML 2 · Can it work?", "CML 2 · هل تنفع؟"), d: ok("Moon Landing Map. Compare each number with what is needed, no adding. New: choices are linked in pairs, so talk to the teammate your choice affects.", "خريطة الهبوط على القمر. قارن كل رقم باللي مطلوب، من غير جمع. الجديد: الاختيارات مربوطة اتنين اتنين، فكلّم زميلك اللي اختيارك بيأثر عليه.") },
   { n: 3, m: "delta", t: ok("CML 3 · Add it up", "CML 3 · اجمع"), d: ok("Nile Delta Crop Watch. Add up watts and kilograms. Many designs work; the smartest wastes nothing.", "مراقب محاصيل الدلتا. اجمع الوات والكيلوهات. تصميمات كتير بتنجح، والأذكى اللي مبيضيّعش حاجة.") },
   { n: 4, m: "mars", t: ok("CML 4 · Everything connects", "CML 4 · كل حاجة مربوطة ببعض"), d: ok("Mars Life Hunter. Add up kilograms and energy, and every choice depends on another role.", "صياد الحياة على المريخ. اجمع الكيلوهات والطاقة، وكل اختيار مربوط بدور تاني.") }];
 
@@ -337,13 +337,13 @@ async function lAuthInit() {
     if (A.user) {
       const { data } = await sb.from("profiles").select("progress,name").eq("user_id", A.user.id).maybeSingle();
       A.needName = !A.user.name; if (A.user.name) A.lastName = A.user.name;
-      const pr = (data && data.progress) || {}; CML.forEach(c => { const k = "cml" + c.n; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, pr[k] || 0); }); store.set("ma.progress3", A.progress); lSaveProgress(); }
+      const pr = (data && data.progress) || {}; CML.forEach(c => { const k = "cml" + c.n; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, pr[k] || 0); const rp = A.progress.roles = A.progress.roles || {}; rp[k] = TEAM_ROLES.filter(r => (rp[k] || []).includes(r) || (pr["roles" + c.n] || []).includes(r)); }); store.set("ma.progress3", A.progress); lSaveProgress(); }
     if (["lhome", "llevel", "lonline"].includes(A.screen)) render(); else lAcctPaint();
   };
   try { const { data } = await sb.auth.getSession(); await apply(data.session); } catch (e) { }
   sb.auth.onAuthStateChange((ev, session) => { if (ev === "SIGNED_IN" || ev === "SIGNED_OUT") apply(session); });
 }
-async function lSaveProgress() { const sb = sbClient(); if (!sb || !A.user) return; const pr = {}; CML.forEach(c => { pr["cml" + c.n] = A.progress.stars["cml" + c.n] || 0; });
+async function lSaveProgress() { const sb = sbClient(); if (!sb || !A.user) return; const pr = {}; CML.forEach(c => { pr["cml" + c.n] = A.progress.stars["cml" + c.n] || 0; pr["roles" + c.n] = (A.progress.roles || {})["cml" + c.n] || []; });
   try { await sb.from("profiles").upsert(Object.assign({ user_id: A.user.id, progress: pr, updated_at: new Date().toISOString() }, A.user.name ? { name: A.user.name } : {})); } catch (e) { } }
 async function lSaveName(name) {
   const sb = sbClient(); name = (name || "").trim().slice(0, 24); if (!sb || !A.user || !name) return false;
@@ -469,7 +469,7 @@ function llevel() {
         <span class="lv-art"${ph ? ` style="background-image:url('img/real/${ph}.jpg')"` : ""}></span>
         <span class="lv-top"><span class="lv-badge">CML ${c.n}</span><span class="lv-stars">${[0, 1, 2].map(k => IC(k < st ? "star" : "starO")).join("")}</span></span>
         ${locked ? `<span class="lv-lock">${IC("lock")}<small>${L(ok("Finish the level before", "خلّص المستوى اللي قبله"))}</small></span>` : soon ? `<span class="lv-lock">${IC("hourglass")}<small>${L(ok("Coming next", "جاي قريب"))}</small></span>` : ""}
-        <span class="lv-body"><span class="lv-kick">${L(c.t).replace(/^CML\s*\d+\s*·\s*/, "")}</span><b class="lv-name">${nm}</b><span class="lv-desc">${desc}</span>
+        <span class="lv-body"><span class="lv-kick">${L(c.t).replace(/^CML\s*\d+\s*·\s*/, "")}</span><b class="lv-name">${nm}</b><span class="lv-desc">${desc}</span>${!locked && !soon ? (() => { const rl = (A.progress.roles || {})["cml" + c.n] || []; return `<span class="lv-roles"><span class="rolesdots">${TEAM_ROLES.map(r => `<i class="${rl.includes(r) ? "on" : ""}" style="--sc:${CREW[r].col}"></i>`).join("")}</span>${L(ok("Characters played", "الشخصيات اللي لعبتها"))}: ${rl.length}/4</span>`; })() : ""}
         ${!locked && !soon ? `<span class="lv-go">${st ? L(ok("Play again", "العب تاني")) : L(ok("Start mission", "ابدأ المهمة"))}</span>` : ""}</span></button>`; }).join("")}</div>
     <label class="opt inline"><input type="checkbox" id="ula2" ${A.unlockAll ? "checked" : ""}> ${L(ok("Unlock all levels (judges and teachers)", "افتح كل المستويات (للحكام والمدرسين)"))}</label></section>`;
 }
@@ -565,11 +565,10 @@ function lvideo() {
   return lRoomBar() + `<section class="hpanel notr"><div class="kick">${L(LM().name)} · ${L(ok("Briefing", "الشرح"))} ${i + 1}/${list.length}</div>
     <h2 class="hh">${CREW[r].name} · ${who}</h2>
     <p class="needline">${L(ok("Watch carefully and write on the team board. The cards later show names only.", "اتفرج كويس واكتب على السبورة، علشان الكروت بعد كده عليها أسامي بس."))}</p>
-    ${LB.mode === "online" && LB.room && LB.room.state.videoAt && LB.level > 1 ? `<p class="timer">⏱️ ${L(ok("Time to watch", "وقت الفرجة"))}: <b id="vtimer">--:--</b> · ${L(ok("Watch your videos and write your notes. When time is up, everyone moves on to the design.", "اتفرج على الفيديوهات واكتب النوتس بتاعتك. ولما الوقت يخلص، الكل بيروح على التصميم."))}</p>` : ""}
     <video id="brief" class="briefvid" src="video/${LM().id}_${r}.mp4" controls playsinline preload="auto"></video>
-    <div class="row">${i < list.length - 1 ? `<button class="hbtn" type="button" data-act="vnext" id="vnext" ${LB.watched[LM().id + r] ? "" : "disabled"}>${L(ok("Next briefing", "الشرح اللي بعده"))}</button>`
-      : `<button class="hbtn" type="button" data-act="vdone" id="vnext" ${LB.watched[LM().id + r] ? "" : "disabled"}>${L(ok("I'm ready to decide", "أنا جاهز أقرر"))}</button>`}
-      <span class="psub">${L(ok("The button unlocks when the video ends.", "الزرار بيتفتح لما الفيديو يخلص."))}</span></div>
+    <div class="row">${i < list.length - 1 ? `<button class="hbtn" type="button" data-act="vnext" id="vnext">${L(ok("Next briefing", "الشرح اللي بعده"))}</button>`
+      : `<button class="hbtn" type="button" data-act="vdone" id="vnext">${L(ok("I'm ready to decide", "أنا جاهز أقرر"))}</button>`}
+      <span class="psub">${L(ok("You can go on any time. The video has the numbers you need, and the script is below.", "تقدر تكمّل في أي وقت. الفيديو فيه الأرقام اللي محتاجها، والسكريبت مكتوب تحت."))}</span></div>
     ${(TRANSCRIPT[LM().id] || {})[r] ? `<details class="script" open><summary>📜 ${L(ok("Video script (read it, or copy the numbers to the team board)", "سكريبت الفيديو (اقراه، أو انسخ الأرقام للسبورة)"))}</summary><ol>${TRANSCRIPT[LM().id][r].map(t => `<li>${esc(t).replace(/(\$?\d[\d,.]*\s?(?:%|km|kg|m|W|Wh|Mbit\/s|megabits|minutes|million|billion|meters|kilometers|kilograms|watts|watt-hours|degrees|hours|days|years|months)?)/g, '<b class="hl">$1</b>')}</li>`).join("")}</ol></details>` : ""}</section>${lBoard()}`;
 }
 function lCard(role, d, o, picks, mine) {
@@ -734,7 +733,8 @@ function lFinish(F) {
   let total = Math.max(0, 1000 - decLoss - dmg - extraRev - rew - rent); if (!alive) total = Math.min(total, 350);
   const stars = lStarsFor(total);
   F.result = { alive, rules, met, nR, stars, total, rows, dmg, extraRev, rew, rent, reviews, missed: m.rules.filter(r => !rules[r.k]), waste: c.waste, sciPct: alive ? Math.round(Math.min(1, c.sci * F.sci * (F.health / 100)) * 100) : 0 };
-  const k = "cml" + LB.level; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, stars); store.set("ma.progress3", A.progress); lSaveProgress();
+  const k = "cml" + LB.level; A.progress.stars[k] = Math.max(A.progress.stars[k] || 0, stars);
+  if (stars >= 1) { const rp = A.progress.roles = A.progress.roles || {}; rp[k] = TEAM_ROLES.filter(r => (rp[k] || []).includes(r) || (LB.mode !== "online" ? true : (() => { const o = lOwner(r); return !!(o && LB.me && o.id === LB.me.id); })())); } store.set("ma.progress3", A.progress); lSaveProgress();
   if (LB.mode === "online" && LB.me) { myData({ done: myDone() }); try { sessionStorage.setItem("ma.doneGame", String(LB.room.state.videoAt || LB.room.state.at)); } catch (e) { } }
   setTimeout(() => { if (A.screen === "lfly" && LB.flight === F) go("lusers"); }, 800);
 }
@@ -815,9 +815,7 @@ Object.assign(SIMPLE_AFTER, {
   lhome() { const cv = $("#holoHome"); if (!Space3D.ok || !cv) return; Space3D.createHero(cv, "landsat8"); },
   lonline() { onlineAvailable().then(okk => { const el = $("#olstat"); if (!el) return; el.innerHTML = okk ? L(ok("Connected. Write your name, then create or join a room.", "متوصل. اكتب اسمك، وبعدين اعمل غرفة أو ادخل واحدة.")) : L(ok("Online play can't connect here. Open the public game link (GitHub Pages), or play on one computer.", "اللعب الأونلاين مش قادر يتوصل هنا. افتح لينك اللعبة العام (GitHub Pages)، أو العبوا على جهاز واحد.")); if (!okk) document.querySelectorAll("[data-act=ocreate],[data-act=ojoin]").forEach(b => b.disabled = true); }); },
   lroom() { lChatPaint(); },
-  lvideo() { clearInterval(LB.vt); if (LB.mode === "online" && LB.room && LB.room.state.videoAt && LB.level > 1) { const lim = (LB.level === 2 ? 9 : 7) * 60000, end = LB.room.state.videoAt + lim;
-      const tick = () => { const el = $("#vtimer"); if (A.screen !== "lvideo") return clearInterval(LB.vt); const ms = end - Date.now(); if (ms <= 0) { clearInterval(LB.vt); myData({ watched: true }); lStartDesign(); return; } if (el) el.textContent = Math.floor(ms / 60000) + ":" + String(Math.floor(ms / 1000) % 60).padStart(2, "0"); };
-      tick(); LB.vt = setInterval(tick, 1000); }
+  lvideo() { clearInterval(LB.vt);
     const v = $("#brief"); const list = lVideoList(), r = list[Math.min(LB.vi || 0, list.length - 1)]; if (v) v.onended = () => { LB.watched[LM().id + r] = true; const b = $("#vnext"); if (b) b.disabled = false; }; },
   ldesign() { const cv = $("#holoBuild"); holoL = Space3D.ok && cv ? Space3D.createHolo(cv, { real: true }) : null; lHolo(); lChatPaint(); },
   lreport() { const cv = $("#holoRes"); if (!Space3D.ok || !cv || !LB.flight) return; const h = Space3D.createHolo(cv, { real: true }); h && h.setModel(LB.flight.m.model); }
@@ -840,7 +838,8 @@ function lAcctPaint() {
   const keep = id => { const el = m.querySelector("#" + id); return el ? el.value : null; }, em = keep("aemail"), pw = keep("apass");
   m.innerHTML = `<div class="modal-card"><div class="modal-h"><span>${IC("user")} ${L(ok("Player account", "حساب اللاعب"))}</span><button class="modal-x" type="button" data-act="acctclose" aria-label="${L(ok("Close", "اقفل"))}">${IC("x")}</button></div>
     ${A.user && !A.needName && !A.editName ? `<div class="prof"><span class="ava big">${esc((A.user.name || "?").charAt(0).toUpperCase())}</span><div><b>${esc(A.user.name)}</b><span class="psub">${L(ok("Your stars and levels are saved to this account.", "النجوم والمستويات بتاعتك محفوظة على الحساب ده."))}</span></div></div>
-      <div class="lvrow">${CML.map(c => { const k = A.progress.stars["cml" + c.n] || 0; return `<div class="lvmini"><small>CML ${c.n}</small><span>${[0, 1, 2].map(i => IC(i < k ? "star" : "starO")).join("")}</span></div>`; }).join("")}</div>
+      <div class="lvrow">${CML.map(c => { const k = A.progress.stars["cml" + c.n] || 0; const rl = ((A.progress.roles || {})["cml" + c.n] || []); return `<div class="lvmini"><small>CML ${c.n}</small><span>${[0, 1, 2].map(i => IC(i < k ? "star" : "starO")).join("")}</span><span class="rolesdots">${TEAM_ROLES.map(r => `<i class="${rl.includes(r) ? "on" : ""}" style="--sc:${CREW[r].col}" title="${L(CREW[r].title)}"></i>`).join("")}</span><em>${L(ok("Characters", "الشخصيات"))} ${rl.length}/4</em></div>`; }).join("")}</div>
+      <p class="psub">${L(ok("Characters: how many of the 4 roles you have finished this level with. Solo play counts all 4.", "الشخصيات: لعبت المستوى ده بكام دور من الأربعة. اللعب لوحدك بيتحسب الأربعة."))}</p>
       <div class="row"><button class="hbtn ghost" type="button" data-act="editname">${IC("pencil")} ${L(ok("Edit name", "غيّر الاسم"))}</button><button class="hbtn ghost" type="button" data-act="signout">${IC("door")} ${L(ok("Sign out", "اخرج"))}</button></div>` : lAuthBox()}</div>`;
   if (em != null && m.querySelector("#aemail")) { m.querySelector("#aemail").value = em; m.querySelector("#apass").value = pw; }
   const d = m.querySelector("details.emailauth"); if (d && !A.user) d.open = true;
