@@ -416,3 +416,4 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .chint{display:block;font-size:12.5px;line-height:1.35;color:#ffe9a3;margin-top:4px;font-weight:500}
 .script{margin-top:12px;background:rgba(4,10,22,.7);border:1px solid var(--edge);border-radius:8px;padding:10px 14px}
 .script summary{cursor:pointer;color:var(--hl);font-weight:700}.script ol{margin:8px 0 0;padding-inline-start:22px;display:grid;gap:6px;font-size:14.5px;line-height:1.5;user-select:text}
+.chint.spec{color:#bfe8ff}
