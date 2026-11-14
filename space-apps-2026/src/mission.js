@@ -114,7 +114,7 @@ const M_DELTA = {
     links: [["USGS Landsat 8", "https://www.usgs.gov/landsat-missions/landsat-8"], ["NASA MODIS", "https://modis.gsfc.nasa.gov/about/specifications.php"], ["ESA Vega C", "https://www.esa.int/Enabling_Support/Space_Transportation/Vega/Vega_capabilities"]] }
 };
 const M_MOON = {
-  board: ok("WHAT THE MISSION NEEDS (compare each card's number with these):\n1. Pixel 1 m or smaller (to see rocks 2 m wide)\n2. See inside dark craters, where there is NO light\n3. Fly over the south pole\n4. Send 100 Mbit/s or more\n5. Battery longer than the 48-minute shadow, and stay warm\n6. Rocket must carry our 1,900 kg to the Moon, for $150 million or less\nAlso: one ground station sees the Moon only half of each day.", "المهمة محتاجة إيه (قارن رقم كل كارت بده):\n1. البيكسل 1 متر أو أقل (علشان نشوف صخور 2 متر)\n2. نشوف جوه الحفر الضلمة، اللي مفيهاش نور خالص\n3. نعدّي فوق القطب الجنوبي\n4. نبعت 100 ميجابت/ث أو أكتر\n5. بطارية أطول من ضل الـ 48 دقيقة، ونفضل دافيين\n6. الصاروخ يشيل الـ 1,900 كيلو بتوعنا للقمر، بـ 150 مليون دولار أو أقل\nوكمان: المحطة الواحدة بتشوف القمر نص اليوم بس."),
+  board: ok("WHAT THE MISSION NEEDS (compare each card's number with these):\n1. Pixel 1 m or smaller (to see rocks 2 m wide)\n2. See inside dark craters, where there is NO light\n3. Fly over the south pole, and stay LOW so the pixel does not grow\n4. Send 100 Mbit/s or more\n5. Battery longer than the 48-minute shadow, and stay warm\n6. Rocket must carry our 1,900 kg to the Moon, for $150 million or less\nAlso: one ground station sees the Moon only half of each day.", "المهمة محتاجة إيه (قارن رقم كل كارت بده):\n1. البيكسل 1 متر أو أقل (علشان نشوف صخور 2 متر)\n2. نشوف جوه الحفر الضلمة، اللي مفيهاش نور خالص\n3. نعدّي فوق القطب الجنوبي، ونفضل واطيين علشان البيكسل ميكبرش\n4. نبعت 100 ميجابت/ث أو أكتر\n5. بطارية أطول من ضل الـ 48 دقيقة، ونفضل دافيين\n6. الصاروخ يشيل الـ 1,900 كيلو بتوعنا للقمر، بـ 150 مليون دولار أو أقل\nوكمان: المحطة الواحدة بتشوف القمر نص اليوم بس."),
   id: "moon", base: "moon", model: "lro", days: 365 * 2,
   name: ok("Moon Landing Map", "خريطة الهبوط على القمر"),
   user: ok("NASA's Artemis landing planners and the astronauts who will land", "مخططين الهبوط في برنامج Artemis بتاع ناسا، والرواد اللي هينزلوا"),
@@ -130,7 +130,7 @@ const M_MOON = {
       { k: "bat", t: ok("Which battery?", "أنهي بطارية؟"), o: [lopt("A", "rtg", "Battery A · 30 min", "البطارية A · 30 دقيقة", { min: 30, spec: ok("Lasts 30 minutes", "بتقعد 30 دقيقة") }), lopt("B", "rtg", "Battery B · 60 min", "البطارية B · 60 دقيقة", { min: 60, spec: ok("Lasts 60 minutes", "بتقعد 60 دقيقة") }), lopt("C", "rtg", "Battery C · 120 min", "البطارية C · 120 دقيقة", { min: 120, spec: ok("Lasts 120 minutes · very heavy", "بتقعد 120 دقيقة · تقيلة جداً") })] },
       { k: "heat", t: ok("How do we stay warm?", "إزاي نفضل دافيين؟"), o: [lopt("A", "panel1", "Blanket + heaters", "بطانية حرارية + هيترز", { warm: true, spec: ok("Keeps heat in, like a jacket", "بتحافظ على الحرارة زي الجاكيت") }), lopt("B", "radar", "No protection", "من غير حماية", { warm: false, spec: ok("Lighter · free · nothing against the cold", "أخف · ببلاش · مفيش حاجة ضد البرد") }), lopt("C", "rtg", "Extra RTG for heat", "RTG زيادة للتدفية", { warm: true, rtg: true, spec: ok("Always warm · very rare fuel", "دافي على طول · وقود نادر جداً") })] }],
     planner: [
-      { k: "orb", t: ok("Which orbit?", "أنهي أوربت؟"), o: [lopt("A", "ice", "Polar orbit · 50 km", "أوربت قطبي · 50 كم", { pole: true, resF: 1, eng: "polar50", spec: ok("Flies over both poles every trip · 50 km high", "بيعدّي فوق القطبين كل لفة · على 50 كم") }), lopt("B", "ice", "Equator orbit · 50 km", "أوربت خط الاستوا · 50 كم", { pole: false, resF: 1, eng: "eq100", spec: ok("Flies around the middle · never over the poles", "بيلف حوالين النص · عمره ما بيعدّي فوق القطبين") }), lopt("C", "ice", "High polar orbit · 3,000 km", "أوربت قطبي عالي · 3,000 كم", { pole: true, resF: 60, eng: "polar100", spec: ok("Over the poles · every pixel 60× bigger", "فوق القطبين · كل بيكسل أكبر 60 مرة") })] },
+      { k: "orb", t: ok("Which orbit?", "أنهي أوربت؟"), o: [lopt("A", "ice", "Polar orbit · 50 km", "أوربت قطبي · 50 كم", { pole: true, resF: 1, eng: "polar50", spec: ok("Flies over the north AND south pole every trip · low (50 km), so the camera pixel stays the same", "بيعدّي فوق القطب الشمالي والجنوبي كل لفة · واطي (50 كم)، فبيكسل الكاميرا يفضل زي ما هو") }), lopt("B", "ice", "Equator orbit · 50 km", "أوربت خط الاستوا · 50 كم", { pole: false, resF: 1, eng: "eq100", spec: ok("Flies around the middle · never over the poles", "بيلف حوالين النص · عمره ما بيعدّي فوق القطبين") }), lopt("C", "ice", "High polar orbit · 3,000 km", "أوربت قطبي عالي · 3,000 كم", { pole: true, resF: 60, eng: "polar100", spec: ok("Over the poles, but 60× higher: the 0.5 m camera pixel becomes 30 m, too big to see 2 m rocks", "فوق القطبين، بس أعلى 60 مرة: بيكسل الكاميرا النص متر يبقى 30 متر، أكبر من إننا نشوف صخور 2 متر") })] },
       { k: "rkt", t: ok("Which rocket?", "أنهي صاروخ؟"), o: [lopt("A", "rocket3", "SLS", "SLS", { lift: 27000, cost: 2000, lv: "superheavy", spec: ok("Carries 27,000+ kg to the Moon · costs $2 billion+", "بيشيل 27,000+ كيلو للقمر · بيكلّف 2 مليار دولار+") }), lopt("B", "rocket1", "Electron", "Electron", { lift: 25, cost: 10, lv: "small", spec: ok("Carries about 25 kg to the Moon · about $10 million", "بيشيل حوالي 25 كيلو للقمر · حوالي 10 مليون دولار") }), lopt("C", "rocket2", "Falcon 9", "Falcon 9", { lift: 1900, cost: 69, lv: "medium", spec: ok("Carries 1,900 kg to the Moon · about $69 million", "بيشيل 1,900 كيلو للقمر · حوالي 69 مليون دولار") })] }] },
   compute(p) {
     const g = (r, k) => pickOpt(this, p, r, k) || {};
@@ -440,8 +440,9 @@ function lhome() {
       ${LB.mode === "online" && LB.room ? `<div class="needline">🛰 ${L(ok("You are still in room", "إنت لسه في الغرفة"))} <b class="code">${LB.room.code}</b> <button class="hbtn" type="button" data-act="oagain">${L(ok("Back to the room", "ارجع للغرفة"))}</button> <button class="linkbtn" type="button" data-act="oleave">${L(ok("Leave it", "اخرج منها"))}</button></div>` : ""}
       <div class="row"><button class="hbtn" type="button" data-lmode="solo">${L(ok("Play solo", "العب لوحدك"))}</button>
         <button class="hbtn ghost" type="button" data-lmode="local">${L(ok("Team on one computer", "تيم على جهاز واحد"))}</button>
-        <button class="hbtn ghost" type="button" data-lmode="online">${L(ok("Online team (each on own laptop)", "تيم أونلاين (كل واحد على اللابتوب بتاعه)"))}</button></div></div>
-    <p class="psub legal"><a href="privacy.html" target="_blank" rel="noopener">${L(ok("Privacy Policy", "سياسة الخصوصية"))}</a> · <a href="terms.html" target="_blank" rel="noopener">${L(ok("Terms of Use", "شروط الاستخدام"))}</a></p>
+        <button class="hbtn ghost" type="button" data-lmode="online">${L(ok("Online team (each on own laptop)", "تيم أونلاين (كل واحد على اللابتوب بتاعه)"))}</button></div>
+          <p class="psub legal"><a href="privacy.html" target="_blank" rel="noopener">${L(ok("Privacy Policy", "سياسة الخصوصية"))}</a> · <a href="terms.html" target="_blank" rel="noopener">${L(ok("Terms of Use", "شروط الاستخدام"))}</a></p>
+</div>
     <div class="how">${[[1, ok("Watch your guide", "اتفرج على المرشد")], [2, ok("Write on the team board", "اكتب على السبورة")], [3, ok("Decide together", "قرروا مع بعض")], [4, ok("Launch and see who you helped", "اطلق وشوف ساعدت مين")]].map(([n, t]) => `<div><span>0${n}</span><b>${L(t)}</b></div>`).join("")}</div>
   </section>`;
 }
@@ -662,6 +663,13 @@ async function lRunFlight() {
   lSay("comms", L(ok("Years later... the mission is complete.", "بعد سنين... المهمة خلصت."))); setPhase(L(ok("MISSION COMPLETE", "المهمة خلصت"))); await animTo(1, 2500); await wait(1500);
   return lFinish(F);
 }
+function lEvParts(e, c) {
+  const keys = []; e.o.forEach(o => (o.f.toString().match(/c\.(\w+)/g) || []).forEach(x => { const k = x.slice(2); if (!keys.includes(k)) keys.push(k); }));
+  const out = []; keys.forEach(k => TEAM_ROLES.forEach(r => (LM().decisions[r] || []).forEach(d => { if (d.k !== k) return; const o = c[k]; if (!o || !o.n) return;
+    out.push(`<li><span class="psub">${L(d.t)}</span> <b>${L(o.n)}</b>${o.spec || o.hint ? `<small>${L(o.spec || o.hint)}</small>` : ""}</li>`); })));
+  return out.length ? `<div class="evparts"><div class="kick">${L(ok("Your satellite has (this decides the answer)", "القمر بتاعكم فيه (ده اللي بيحدد الإجابة)"))}</div><ul>${out.join("")}</ul></div>` : "";
+}
+const lEvLoss = r => Math.max(0, -(r.h || 0)) + Math.max(0, -(r.sci || 0)) * 1000 + (r.cost || 0) * 10;
 function lEvent(i, F) {
   const e = F.m.events[i];
   return new Promise(res => {
@@ -669,7 +677,7 @@ function lEvent(i, F) {
     const online = LB.mode === "online";
     el.innerHTML = `<div class="overlay notr" role="dialog" aria-modal="true"><div class="hmodal">
       <div class="evhead">${crewImg(e.role)}<div><div class="kick">${L(ok("Surprise!", "مفاجأة!"))} · ${CREW[e.role].name}</div><h2 class="hh">${L(e.t)}</h2></div></div>
-      <p class="evx">${L(e.x)}</p><p class="evq">${online || (LB.localPlayers || []).length > 1 ? L(ok("Everyone votes. The most votes wins.", "الكل يصوّت، والأكتر أصوات يكسب.")) : L(ok("Talk with the team, then choose.", "اتكلموا مع بعض، وبعدين اختاروا."))}</p>
+      <p class="evx">${L(e.x)}</p>${LB.level <= 3 ? lEvParts(e, F.c) : ""}<p class="evq">${online || (LB.localPlayers || []).length > 1 ? L(ok("Everyone votes. The most votes wins.", "الكل يصوّت، والأكتر أصوات يكسب.")) : L(ok("Talk with the team, then choose.", "اتكلموا مع بعض، وبعدين اختاروا."))}</p>
       <div class="cards3 ${e.o.length === 2 ? "two" : ""}">${e.o.map((o, j) => `<button type="button" class="ccard" data-lev="${j}"><span class="cnum">${"ABC"[j]}</span><b>${L(o.t)}</b></button>`).join("")}</div><p class="psub" id="votes"></p></div></div>`;
     el.querySelectorAll("[data-lev]").forEach(b => b.onclick = async () => { const j = +b.dataset.lev;
       if (online) { el.querySelectorAll("[data-lev]").forEach(x => x.classList.toggle("sel", x === b)); const v = Object.assign({}, LB.me.data.votes || {}); v[i] = j; await myData({ votes: v }); lVoteCheck(); }
@@ -694,7 +702,8 @@ function lEventResolve(j, F) {
   F.health = Math.max(5, F.health + r.h); F.sci *= 1 + r.sci; F.cost += r.cost || 0; setHealth(F.health); { const el = $("#ptsFly"); if (el) el.textContent = nf(1000 - lPenNow() - Math.round(100 - F.health) - Math.round(F.cost * 10)); } F.events.push({ e, j, r });
   const el = $("#modal"), good = !r.h && !r.sci;
   el.querySelector(".hmodal").innerHTML = `<div class="evhead">${crewImg(e.role)}<div><div class="kick">${L(e.t)} · ${L(ok("the team chose", "التيم اختار"))} ${"ABC"[j]}</div><h2 class="hh">${good ? L(ok("Good call!", "قرار صح!")) : L(ok("Here's what happened", "ده اللي حصل"))}</h2></div></div>
-    <p class="evx">${L(r.w)}</p><div class="row"><button class="hbtn" type="button" id="levok">${L(ok("Continue", "كمّل"))}</button></div>`;
+    <p class="evx">${L(r.w)}</p>${(() => { const best = e.o.map((o, k) => [k, lEvLoss(o.f(F.c))]).sort((a, b) => a[1] - b[1])[0]; if (lEvLoss(r) <= best[1]) return ""; const br = e.o[best[0]].f(F.c);
+      return `<div class="evbest"><b>${IC("bulb")} ${L(ok("Best choice was", "الاختيار الأحسن كان"))} ${"ABC"[best[0]]}: ${L(e.o[best[0]].t)}</b><span>${L(br.w)}</span></div>`; })()}<div class="row"><button class="hbtn" type="button" id="levok">${L(ok("Continue", "كمّل"))}</button></div>`;
   lSay(e.role, L(r.w)); $("#levok").onclick = () => { el.innerHTML = ""; res(); };
 }
 function lFinish(F) {
