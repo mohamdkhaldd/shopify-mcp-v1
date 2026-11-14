@@ -296,12 +296,14 @@ const CML = [
 const LB = { mode: "solo", level: 1, room: null, me: null, myRole: null, picks: {}, reviews: 0, rewatch: 0, watched: {}, players: [], chat: [], online: false, sb: null, chan: null, flight: null, revealed: null, notes: "" };
 const myId = (() => { try { let v = sessionStorage.getItem("ma.cid"); if (!v) { v = Math.random().toString(36).slice(2, 10); sessionStorage.setItem("ma.cid", v); } return v; } catch (e) { return Math.random().toString(36).slice(2, 10); } })();
 const lvl = () => CML[LB.level - 1];
+const lAway = p => !!(p && p.last_seen && Date.now() - Date.parse(p.last_seen) > 45000 && !(LB.me && p.id === LB.me.id));
+const lActive = () => LB.players.filter(p => !lAway(p));
 const LM = () => LAB_M[lvl().m] || M_STORM;
 const rolesInPlay = () => TEAM_ROLES;
 const isHost = () => LB.mode === "online" && LB.room && LB.room.state.host === myId;
 /* who owns each role: its player; else the player it was shared to; else nobody (the team votes) */
 function lPlanExtra() { const ps = LB.players.slice().sort((a, b) => a.id - b.id), ex = {}; if (!ps.length) return ex; let i = 0; TEAM_ROLES.forEach(r => { if (!ps.some(p => p.role === r)) { ex[r] = ps[i % ps.length].id; i++; } }); return ex; }
-function lOwner(r) { const p = LB.players.find(x => x.role === r); if (p) return p; const ex = (LB.room && LB.room.state.phase !== "lobby" && LB.room.state.extra) || lPlanExtra(); const id = ex[r]; return LB.players.find(x => x.id === id) || null; }
+function lOwner(r) { const p = LB.players.find(x => x.role === r); if (p) return lAway(p) ? null : p; const ex = (LB.room && LB.room.state.phase !== "lobby" && LB.room.state.extra) || lPlanExtra(); const id = ex[r]; const q = LB.players.find(x => x.id === id); return q && !lAway(q) ? q : null; }
 const lOrphan = r => LB.mode === "online" && !lOwner(r);
 const myRoles = () => LB.mode !== "online" ? TEAM_ROLES : TEAM_ROLES.filter(r => { const o = lOwner(r); return !o || (LB.me && o.id === LB.me.id); });
 function allPicks() {
@@ -370,16 +372,19 @@ async function roomJoin(code, name) {
   const all = seats || [];
   let me = null, mine = all.find(x => x.data && x.data.cid === myId);
   if (mine && mine.data && mine.data.kicked) throw new Error(L({ en: "The room creator removed you from this room.", ar: "اللي عامل الغرفة طلّعك منها." }));
-  if (mine) { const { data: up } = await sb.from("players").update({ name, data: Object.assign({}, mine.data, { left: false }), last_seen: new Date().toISOString() }).eq("id", mine.id).select().single(); me = up; }
+  if (!mine) { const nm = name.trim().toLowerCase(); const ghost = all.find(x => x.data && !x.data.left && !x.data.kicked && (x.name || "").trim().toLowerCase() === nm && x.last_seen && Date.now() - Date.parse(x.last_seen) > 40000);
+    if (ghost) { const { data: up } = await sb.from("players").update({ name, data: Object.assign({}, ghost.data, { cid: myId, left: false }), last_seen: new Date().toISOString() }).eq("id", ghost.id).select().single(); if (up) mine = up; } }
+  if (mine && !me) { const { data: up } = await sb.from("players").update({ name, data: Object.assign({}, mine.data, { left: false }), last_seen: new Date().toISOString() }).eq("id", mine.id).select().single(); me = up; }
   // draw a role by luck: a free role, or a seat someone left
-  const free = TEAM_ROLES.filter(r => { const x = all.find(y => y.role === r); return !x || (x.data && x.data.left); }).sort(() => Math.random() - .5);
+  const quiet = x => x.last_seen && Date.now() - Date.parse(x.last_seen) > 120000;
+  const free = TEAM_ROLES.filter(r => { const x = all.find(y => y.role === r); return !x || (x.data && x.data.left) || quiet(x); }).sort(() => Math.random() - .5);
   for (const role of mine ? [] : free) {
     const old = all.find(y => y.role === role);
     const res = old ? await sb.from("players").update({ name, data: { cid: myId, picks: {} }, last_seen: new Date().toISOString() }).eq("id", old.id).select().single()
                     : await sb.from("players").insert({ room: code, name, role, data: { cid: myId, picks: {} } }).select().single();
     if (!res.error && res.data) { me = res.data; break; }
   }
-  if (!me) throw new Error(L({ en: "This room is full: all 4 roles are taken.", ar: "الغرفة دي اتملت: الأربع أدوار اتاخدوا." }));
+  if (!me) throw new Error(L({ en: "This room is full: all 4 roles are taken. If you were already in this room, join again with exactly the same name you used before (wait about a minute after closing the game).", ar: "الغرفة دي اتملت: الأربع أدوار اتاخدوا. لو إنت كنت في الغرفة دي قبل كده، ادخل تاني بنفس الاسم بالظبط اللي كنت كاتبه (استنى حوالي دقيقة بعد ما قفلت اللعبة)." }));
   LB.room = room; LB.me = me; LB.myRole = me.role; LB.level = room.level; LB.mode = "online"; LB.online = true; LB.drawn = Date.now(); lSave(); myData({ done: myDone() });
   await roomRefresh(); roomSubscribe(); return code;
 }
@@ -396,7 +401,8 @@ function roomSubscribe() {
     .on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: `code=eq.${code}` }, () => roomRefresh())
     .on("postgres_changes", { event: "*", schema: "public", table: "players", filter: `room=eq.${code}` }, () => roomRefresh())
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `room=eq.${code}` }, () => roomRefresh()).subscribe();
-  clearInterval(pollT); pollT = setInterval(roomRefresh, 4000); // safety net if realtime drops
+  clearInterval(pollT); pollT = setInterval(roomRefresh, 4000);
+  clearInterval(LB.hb); const beat = () => { if (LB.me && LB.room) sb.from("players").update({ last_seen: new Date().toISOString() }).eq("id", LB.me.id).then(() => { }); }; beat(); LB.hb = setInterval(beat, 10000); // safety net if realtime drops
 }
 async function roomState(patch) { const sb = sbClient(); const st = Object.assign({}, LB.room.state, patch); LB.room.state = st; await sb.from("rooms").update({ state: st, updated_at: new Date().toISOString() }).eq("code", LB.room.code); }
 async function myData(patch) { const sb = sbClient(); if (!sb || !LB.me) return; const d = Object.assign({}, LB.me.data, patch, { done: myDone() }); LB.me.data = d; await sb.from("players").update({ data: d, last_seen: new Date().toISOString() }).eq("id", LB.me.id); }
@@ -413,7 +419,7 @@ function onRoomChange() {
   const finishedThis = doneG && String(LB.room.state.videoAt || LB.room.state.at) === doneG;
   if (target === "lfly" && !["lfly", "lusers", "lreport"].includes(A.screen) && (finishedThis || LB.backInRoom || !["lroom", "lvideo", "ldesign"].includes(A.screen))) { if (["lroom", "ldesign", "lvideo"].includes(A.screen)) lPartial(); lChatPaint(); return; }
   if (target && ["lonline", "lroom", "lvideo", "ldesign"].includes(A.screen) && (RANK[A.screen] ?? 0) < RANK[target]) { if (target === "lvideo") LB.vi = 0; go(target); if (target === "lfly") lRunFlight().catch(err => { if (err !== "abort") console.error(err); }); return; }
-  if (isHost() && ph !== "flight" && LB.players.length && LB.players.every(p => p.data && p.data.ready) && allChosen(allPicks(), rolesInPlay())) { roomState({ phase: "flight", at: Date.now() }); }
+  if (isHost() && ph !== "flight" && lActive().length && lActive().every(p => p.data && p.data.ready) && allChosen(allPicks(), rolesInPlay())) { roomState({ phase: "flight", at: Date.now() }); }
   if (["lroom", "ldesign", "lvideo"].includes(A.screen)) lPartial();
   if (A.screen === "lfly") lVoteCheck();
   lChatPaint();
@@ -479,7 +485,7 @@ function lroom() {
     <div id="lroomlist" class="rolepick">${lRoomList()}</div>
     ${LB.players.length && LB.players.length < 4 ? `<p class="needline">🔁 ${L(ok("Fewer than 4 players, so the empty roles are shared out:", "التيم أقل من 4، فالأدوار الفاضية اتوزعت كده:"))} ${Object.entries(lPlanExtra()).map(([r, id]) => `<b>${esc((LB.players.find(p => p.id === id) || {}).name || "")}</b> → ${L(CREW[r].title)}`).join(" · ")}</p>` : ""}
     ${lLobbyCtl()}
-    ${host ? `<div class="row">${lBlocked(LB.level).length ? `<p class="bad">⚠️ ${lBlocked(LB.level).map(p => esc(p.name)).join(", ")} ${L(ok(`can't play CML ${LB.level} yet. Finish CML ${LB.level - 1} first, or pick another level.`, `لسه مينفعش يلعب CML ${LB.level}. لازم يخلّص CML ${LB.level - 1} الأول، أو اختاروا مستوى تاني.`))}</p>` : ""}<button class="hbtn" type="button" data-act="ostart" ${LB.players.every(p => p.data && p.data.lobbyReady) && !lBlocked(LB.level).length ? "" : "disabled"}>${L(ok("Start the game for everyone", "ابدأ اللعبة للكل"))} (${LB.players.filter(p => p.data && p.data.lobbyReady).length}/${LB.players.length} ${L(ok("ready", "جاهزين"))})</button><button class="linkbtn" type="button" data-act="ostartnow" ${lBlocked(LB.level).length ? "disabled" : ""}>${L(ok("Start anyway", "ابدأ برضه"))}</button></div>` : `<p class="psub">${L(ok("Waiting for the room creator to start…", "مستنيين اللي عمل الغرفة يبدأ…"))}</p>`}
+    ${host ? `<div class="row">${lBlocked(LB.level).length ? `<p class="bad">⚠️ ${lBlocked(LB.level).map(p => esc(p.name)).join(", ")} ${L(ok(`can't play CML ${LB.level} yet. Finish CML ${LB.level - 1} first, or pick another level.`, `لسه مينفعش يلعب CML ${LB.level}. لازم يخلّص CML ${LB.level - 1} الأول، أو اختاروا مستوى تاني.`))}</p>` : ""}<button class="hbtn" type="button" data-act="ostart" ${lActive().every(p => p.data && p.data.lobbyReady) && !lBlocked(LB.level).length ? "" : "disabled"}>${L(ok("Start the game for everyone", "ابدأ اللعبة للكل"))} (${lActive().filter(p => p.data && p.data.lobbyReady).length}/${lActive().length} ${L(ok("ready", "جاهزين"))})</button><button class="linkbtn" type="button" data-act="ostartnow" ${lBlocked(LB.level).length ? "disabled" : ""}>${L(ok("Start anyway", "ابدأ برضه"))}</button></div>` : `<p class="psub">${L(ok("Waiting for the room creator to start…", "مستنيين اللي عمل الغرفة يبدأ…"))}</p>`}
   </section>${lChatBox()}`;
 }
 function myDone() { const d = {}; CML.forEach(c => { d[c.n] = A.progress.stars["cml" + c.n] || 0; }); return d; }
@@ -498,7 +504,7 @@ function lRoomBar() {
 function lRoomBarInner() {
   const host = isHost(), ph = LB.room.state.phase;
   return `<div class="rb-code"><span class="psub">${L(ok("Room code", "كود الغرفة"))}</span> <b class="code">${LB.room.code}</b> <button class="linkbtn" type="button" data-act="ocopy">${L(ok("Copy", "انسخ"))}</button></div>
-    <div class="rb-who">${LB.players.map(p => `<span class="rb-p" style="--sc:${(CREW[p.role] || CREW.director).col}"><i></i>${esc(p.name)}${p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : ""} · ${TEAM_ROLES.filter(r => (lOwner(r) || {}).id === p.id).map(r => L(CREW[r].title)).join(" + ")}${p.data && p.data.ready ? " ✓" : ""} · ${(() => { const d = (p.data && p.data.done) || {}; const top = [4, 3, 2, 1].find(n => d[n] >= 1); return top ? "🎓 CML " + top : L(ok("new", "جديد")); })()}${host && !(p.data && p.data.cid === myId) ? ` <button class="rb-kick" type="button" data-kick="${p.id}" title="${L(ok("Remove from the room", "طلّعه من الغرفة"))}">✕</button>` : ""}</span>`).join("")}</div>
+    <div class="rb-who">${LB.players.map(p => `<span class="rb-p ${lAway(p) ? "away" : ""}" style="--sc:${(CREW[p.role] || CREW.director).col}"><i></i>${lAway(p) ? "💤 " : ""}${esc(p.name)}${p.data && p.data.cid === myId ? " (" + L(ok("you", "إنت")) + ")" : ""} · ${TEAM_ROLES.filter(r => (lOwner(r) || {}).id === p.id).map(r => L(CREW[r].title)).join(" + ")}${p.data && p.data.ready ? " ✓" : ""} · ${(() => { const d = (p.data && p.data.done) || {}; const top = [4, 3, 2, 1].find(n => d[n] >= 1); return top ? "🎓 CML " + top : L(ok("new", "جديد")); })()}${host && !(p.data && p.data.cid === myId) ? ` <button class="rb-kick" type="button" data-kick="${p.id}" title="${L(ok("Remove from the room", "طلّعه من الغرفة"))}">✕</button>` : ""}</span>`).join("")}</div>
     <div class="rb-act">${host && ph !== "lobby" ? `<button class="hbtn ghost" type="button" data-act="olobby">${L(ok("Back to lobby (everyone)", "ارجع للوبي (للكل)"))}</button>` : ""}<button class="hbtn ghost" type="button" data-act="oleave">${L(ok("Leave room", "اخرج من الغرفة"))}</button></div>`;
 }
 async function lSwitchRole(r) {
@@ -513,7 +519,7 @@ async function lSwitchRole(r) {
 }
 function lSave() { try { if (LB.room && LB.me) sessionStorage.setItem("ma.room", JSON.stringify({ code: LB.room.code, name: LB.me.name })); else sessionStorage.removeItem("ma.room"); } catch (e) { } }
 function lResetGame() { LB.flight = null; LB.watched = {}; LB.reviews = 0; LB.rewatch = 0; LB.vi = 0; LB.revealed = null; const m = $("#modal"); if (m) m.innerHTML = ""; if (LB.me) myData({ picks: {}, rv: {}, ready: false, watched: false, votes: {}, lobbyReady: false }); }
-function lLeave() { try { sessionStorage.removeItem("ma.room"); } catch (e) { } const sb = sbClient(); if (sb && LB.chan) sb.removeChannel(LB.chan); clearInterval(pollT); LB.chan = null; LB.room = null; LB.me = null; LB.myRole = null; LB.players = []; LB.chat = []; LB.flight = null; LB.mode = "solo"; const m = $("#modal"); if (m) m.innerHTML = ""; }
+function lLeave() { clearInterval(LB.hb); try { sessionStorage.removeItem("ma.room"); } catch (e) { } const sb = sbClient(); if (sb && LB.chan) sb.removeChannel(LB.chan); clearInterval(pollT); LB.chan = null; LB.room = null; LB.me = null; LB.myRole = null; LB.players = []; LB.chat = []; LB.flight = null; LB.mode = "solo"; const m = $("#modal"); if (m) m.innerHTML = ""; }
 function lRoomBarPaint() { const el = $("#roombar"); if (el && LB.room) el.innerHTML = lRoomBarInner(); }
 function lRoomList() {
   const pick = LB.room && LB.room.state.roleMode === "pick";
@@ -590,8 +596,8 @@ function lStepBtns() {
 }
 function lLaunchBtn(picks) {
   const done = allChosen(picks, TEAM_ROLES);
-  if (LB.mode === "online") { const ready = LB.players.filter(p => p.data && p.data.ready).length, meReady = LB.me.data && LB.me.data.ready;
-    return `<button class="hbtn launch" type="button" data-act="oready" ${done ? "" : "disabled"}>${meReady ? L(ok("Waiting for team", "مستنيين التيم")) : L(ok("I'm ready to launch", "أنا جاهز للإطلاق"))} (${ready}/${LB.players.length})</button>`; }
+  if (LB.mode === "online") { const ready = lActive().filter(p => p.data && p.data.ready).length, meReady = LB.me.data && LB.me.data.ready;
+    return `<button class="hbtn launch" type="button" data-act="oready" ${done ? "" : "disabled"}>${meReady ? L(ok("Waiting for team", "مستنيين التيم")) : L(ok("I'm ready to launch", "أنا جاهز للإطلاق"))} (${ready}/${lActive().length})</button>`; }
   return `<button class="hbtn launch" type="button" data-act="llaunch" ${done ? "" : "disabled"}>${L(ok("Launch!", "اطلق!"))}</button>`;
 }
 function lReviewHtml() {
@@ -604,7 +610,7 @@ function lPartial() {
   if (A.screen === "lroom") { const sig = [LB.room.state.roleMode, LB.myRole, LB.level, LB.players.length, LB.players.filter(p => p.data && p.data.lobbyReady).length, LB.players.map(p => JSON.stringify((p.data && p.data.done) || {})).join(",")].join("|"); if (LB._sig !== sig) { LB._sig = sig; const ci = $("#chatin"), cv = ci ? ci.value : ""; render(); const c2 = $("#chatin"); if (c2 && cv) c2.value = cv; return; } const el = $("#lroomlist"); if (el) el.innerHTML = lRoomList(); return; }
   const bo = $("#boardOthers"); if (bo) bo.innerHTML = lBoardOthers();
   if (A.screen === "ldesign") { const picks = allPicks();
-    const sig = TEAM_ROLES.map(r => (lOwner(r) || {}).id || "v").join(",") + "|" + LB.players.map(p => JSON.stringify((p.data && p.data.rv) || {})).join("");
+ const sig = TEAM_ROLES.map(r => (lOwner(r) || {}).id || "v").join(",") + "|" + LB.players.map(p => JSON.stringify((p.data && p.data.rv) || {})).join("");
     if (LB.mode === "online" && LB._dsig !== undefined && LB._dsig !== sig) { LB._dsig = sig; const ci = $("#chatin"), cv = ci ? ci.value : "", nt = $("#lnotes"), nv2 = nt ? nt.value : null; render(); const c2 = $("#chatin"); if (c2 && cv) c2.value = cv; const n2 = $("#lnotes"); if (n2 && nv2 !== null) n2.value = nv2; return; }
     LB._dsig = sig;
     document.querySelectorAll("[data-lpick]").forEach(b => { const [r, k, o] = b.dataset.lpick.split("."); b.classList.toggle("sel", picks[r + "." + k] === o); });
@@ -661,9 +667,9 @@ function lLocalVote(j, F) {
   if (!next) { const cnt = {}; ps.forEach(n => cnt[LB.lv[n]] = (cnt[LB.lv[n]] || 0) + 1); const lead = lLocalOwner(F.m.events[i].role), max = Math.max(...Object.values(cnt)); const pick = cnt[LB.lv[lead]] === max ? LB.lv[lead] : +Object.keys(cnt).find(k => cnt[k] === max); setTimeout(() => lEventResolve(pick, F), 600); }
 }
 function lVoteCheck() {
-  const i = LB.evI; if (i == null || !LB.evRes || LB.mode !== "online" || !LB.flight) return; const votes = LB.players.map(p => p.data && p.data.votes ? p.data.votes[i] : undefined).filter(v => v !== undefined);
-  const vt = $("#votes"); if (vt) vt.innerHTML = `<b class="hl">${L(ok("Votes", "الأصوات"))}: ${votes.length} / ${LB.players.length}</b><div class="votelist">${LB.players.map(p => { const v = p.data && p.data.votes ? p.data.votes[i] : undefined; return `<span class="rb-p" style="--sc:${(CREW[p.role] || CREW.director).col}">${v !== undefined ? "✅" : "⏳"} ${esc(p.name)}${v !== undefined ? " · " + "ABC"[v] : " · " + L(ok("not voted yet", "لسه مصوّتش"))}</span>`; }).join("")}</div>`;
-  if (votes.length >= LB.players.length) { const n = LB.flight.m.events[i].o.length, cnt = Array(n).fill(0); votes.forEach(v => cnt[v]++); const lead = LB.players.find(p => p.role === LB.flight.m.events[i].role); const lv = lead && lead.data.votes ? lead.data.votes[i] : 0; const max = Math.max(...cnt); lEventResolve(cnt[lv] === max ? lv : cnt.indexOf(max), LB.flight); }
+  const i = LB.evI; if (i == null || !LB.evRes || LB.mode !== "online" || !LB.flight) return; const act = lActive(); const votes = act.map(p => p.data && p.data.votes ? p.data.votes[i] : undefined).filter(v => v !== undefined);
+  const vt = $("#votes"); if (vt) vt.innerHTML = `<b class="hl">${L(ok("Votes", "الأصوات"))}: ${votes.length} / ${act.length}</b><div class="votelist">${act.map(p => { const v = p.data && p.data.votes ? p.data.votes[i] : undefined; return `<span class="rb-p" style="--sc:${(CREW[p.role] || CREW.director).col}">${v !== undefined ? "✅" : "⏳"} ${esc(p.name)}${v !== undefined ? " · " + "ABC"[v] : " · " + L(ok("not voted yet", "لسه مصوّتش"))}</span>`; }).join("")}</div>`;
+  if (votes.length >= act.length) { const n = LB.flight.m.events[i].o.length, cnt = Array(n).fill(0); votes.forEach(v => cnt[v]++); const lead = LB.players.find(p => p.role === LB.flight.m.events[i].role); const lv = lead && lead.data.votes ? lead.data.votes[i] : 0; const max = Math.max(...cnt); lEventResolve(cnt[lv] === max ? lv : cnt.indexOf(max), LB.flight); }
 }
 function lEventResolve(j, F) {
   const i = LB.evI, e = F.m.events[i], r = e.o[j].f(F.c), res = LB.evRes; if (!res) return; LB.evRes = null;
@@ -799,7 +805,7 @@ function lClick(t) {
   if (a === "signout") { const sb = sbClient(); if (sb) sb.auth.signOut().then(() => { A.user = null; render(); }); return true; }
   if (a === "cert") { A.certNames = $("#certnames").value; lCert(); return true; }
   if (a === "nextlvl") { if (LB.mode === "online") { go("llevel"); return true; } LB.level = Math.min(4, LB.level + 1); LB.vi = 0; LB.picks = {}; LB.reviews = 0; LB.rewatch = 0; LB.notes = ""; go("lvideo"); return true; }
-  if (a === "oready") { myData({ ready: true }).then(() => { if (LB.players.every(p => p.data && (p.data.ready || p.id === LB.me.id))) roomState({ phase: "flight", at: Date.now() }); }); return true; }
+  if (a === "oready") { myData({ ready: true }).then(() => { if (lActive().every(p => p.data && (p.data.ready || p.id === LB.me.id))) roomState({ phase: "flight", at: Date.now() }); }); return true; }
   if (a === "ocreate" || a === "ojoin") { A.kickedMsg = false; const name = ($("#oname").value || "").trim(); const err = $("#oerr");
     if (!name) { err.textContent = L(ok("Write your name first.", "اكتب اسمك الأول.")); return true; } A.lastName = name;
     if (a === "ocreate") LB.level = +$("#olevel").value;
