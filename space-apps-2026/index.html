@@ -492,6 +492,42 @@ body::after{background:radial-gradient(ellipse at center,transparent 60%,rgba(0,
 .lvmini small{font-family:var(--f-mono);color:var(--holo)}
 .hbtn .ic{margin-inline-end:4px}
 body.modal-open{overflow:hidden}
+
+/* ===== level select: game cards with real NASA photos ===== */
+.planets:has(.lvcard){grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.lvcard{position:relative;display:flex;flex-direction:column;justify-content:space-between;min-height:340px;padding:0;border:1px solid var(--edge);border-radius:14px;overflow:hidden;background:#050b16;color:#eaf6ff;font:inherit;text-align:start;cursor:pointer;isolation:isolate;transition:transform .25s cubic-bezier(.2,1.2,.4,1),box-shadow .25s,border-color .25s}
+.lv-art{position:absolute;inset:0;z-index:-2;background:#0a1830 center/cover no-repeat;transform:scale(1.04);transition:transform .6s ease,filter .3s}
+.lvcard::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(2,6,14,.55) 0,rgba(2,6,14,.05) 30%,rgba(2,6,14,.7) 58%,rgba(2,6,14,.97) 100%)}
+.lvcard:not(:disabled):hover{transform:translateY(-6px);border-color:var(--holo);box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 34px rgba(95,216,255,.3)}
+.lvcard:not(:disabled):hover .lv-art{transform:scale(1.12)}
+.lvcard:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.lvcard.done{border-color:rgba(255,201,77,.55)}
+.lvcard:disabled{cursor:not-allowed}
+.lvcard.locked .lv-art{filter:grayscale(1) brightness(.45) blur(1.5px)}
+.lv-top{display:flex;justify-content:space-between;align-items:center;padding:12px 14px}
+.lv-badge{font-family:var(--f-mono);font-size:13px;font-weight:600;letter-spacing:.12em;color:#02121c;background:var(--holo);border-radius:6px;padding:3px 9px;box-shadow:0 0 14px rgba(95,216,255,.5)}
+.lv-stars{display:flex;gap:2px;background:rgba(0,0,0,.45);border-radius:999px;padding:4px 8px}
+.lv-stars .ic{width:20px;height:20px}
+.lv-stars .ic-starO{color:rgba(255,255,255,.35);filter:none}
+.lv-lock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#cfdbe6;font-size:14px;z-index:1;pointer-events:none}
+.lv-lock .ic{width:46px;height:46px;color:#cfdbe6;filter:drop-shadow(0 2px 8px #000)}
+.lv-lock small{background:rgba(0,0,0,.6);border-radius:999px;padding:4px 12px;font-size:14px}
+.lv-body{display:flex;flex-direction:column;gap:6px;padding:16px}
+.lv-kick{font-size:14px;font-weight:600;color:var(--holo)}
+.lv-name{font-family:var(--f-display);font-size:22px;line-height:1.25;color:#fff;text-shadow:0 2px 10px #000}
+.lv-desc{font-size:14.5px;line-height:1.55;color:#c9d9e6}
+.lv-go{align-self:flex-start;margin-top:6px;font-weight:700;font-size:14px;color:#031018;background:linear-gradient(180deg,#8ff0ff,#3bbfe6);border-radius:999px;padding:7px 16px;box-shadow:0 0 18px rgba(95,216,255,.45)}
+.lvcard.done .lv-go{background:linear-gradient(180deg,#ffe28a,#ffb43c);box-shadow:0 0 18px rgba(255,180,60,.45)}
+.lvcard.locked .lv-body{opacity:.55}
+/* HUD labels in Arabic: no monospace letter spacing */
+html[lang=ar] .hud,html[lang=ar] .vbtn{font-family:var(--f-body);letter-spacing:0}
+html[lang=ar] .hud .eyebrow{font-size:13px}
+@media (max-width:640px){
+  .screen{aspect-ratio:3/4;max-height:78vh}
+  .subtitle{bottom:64px;font-size:14px;padding:8px 12px;max-width:94%}
+  .hud.br{bottom:8px;right:8px;left:8px;justify-content:center}
+  .vbtn{font-size:13px;padding:7px 10px}
+}
 </style>
 </head>
 <body>
@@ -3515,7 +3551,13 @@ function llevel() {
     <p class="needline">${L(ok("NASA's JPL rates mission ideas with Concept Maturity Levels (CML). Each level here is a different mission, and each one is harder.", "معمل JPL بتاع ناسا بيقيّم أفكار المهمات بمستويات اسمها CML. هنا كل مستوى مهمة مختلفة، وكل واحدة أصعب من اللي قبلها."))}</p>
     <div class="planets">${CML.map(c => { const m = LAB_M[c.m]; const soon = m && m.soon; const locked = !soon && c.n > 1 && !A.unlockAll && !cmlDone(c.n - 1);
       const st = A.progress.stars["cml" + c.n] || 0;
-      return `<button class="pcard" type="button" data-llevel="${c.n}" ${locked || soon ? "disabled" : ""}><span class="cmlnum">CML ${c.n}</span><b>${L(c.t)}</b>${m ? `<span class="psub"><b>${L(m.name)}</b></span>` : ""}<span class="psub">${L(c.d)}</span>${st ? `<span class="pstars">${"★".repeat(st)}</span>` : ""}${soon ? `<span class="psub">⏳ ${L(ok("Coming next", "جاي قريب"))}</span>` : locked ? `<span class="psub">🔒 ${L(ok("Finish the level before", "خلّص المستوى اللي قبله"))}</span>` : ""}</button>`; }).join("")}</div>
+      const ph = m && m.real && m.real.photos ? m.real.photos[0][0] : null, nm = m ? L(m.name) : "", desc = L(c.d).replace(nm + ". ", "").replace(nm + ".", "");
+      return `<button class="lvcard${locked ? " locked" : ""}${st ? " done" : ""}" type="button" data-llevel="${c.n}" ${locked || soon ? "disabled" : ""}>
+        <span class="lv-art"${ph ? ` style="background-image:url('img/real/${ph}.jpg')"` : ""}></span>
+        <span class="lv-top"><span class="lv-badge">CML ${c.n}</span><span class="lv-stars">${[0, 1, 2].map(k => IC(k < st ? "star" : "starO")).join("")}</span></span>
+        ${locked ? `<span class="lv-lock">${IC("lock")}<small>${L(ok("Finish the level before", "خلّص المستوى اللي قبله"))}</small></span>` : soon ? `<span class="lv-lock">${IC("hourglass")}<small>${L(ok("Coming next", "جاي قريب"))}</small></span>` : ""}
+        <span class="lv-body"><span class="lv-kick">${L(c.t).replace(/^CML\s*\d+\s*·\s*/, "")}</span><b class="lv-name">${nm}</b><span class="lv-desc">${desc}</span>
+        ${!locked && !soon ? `<span class="lv-go">${st ? L(ok("Play again", "العب تاني")) : L(ok("Start mission", "ابدأ المهمة"))}</span>` : ""}</span></button>`; }).join("")}</div>
     <label class="opt inline"><input type="checkbox" id="ula2" ${A.unlockAll ? "checked" : ""}> ${L(ok("Unlock all levels (judges and teachers)", "افتح كل المستويات (للحكام والمدرسين)"))}</label></section>`;
 }
 function lonline() {

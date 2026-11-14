@@ -459,7 +459,13 @@ function llevel() {
     <p class="needline">${L(ok("NASA's JPL rates mission ideas with Concept Maturity Levels (CML). Each level here is a different mission, and each one is harder.", "معمل JPL بتاع ناسا بيقيّم أفكار المهمات بمستويات اسمها CML. هنا كل مستوى مهمة مختلفة، وكل واحدة أصعب من اللي قبلها."))}</p>
     <div class="planets">${CML.map(c => { const m = LAB_M[c.m]; const soon = m && m.soon; const locked = !soon && c.n > 1 && !A.unlockAll && !cmlDone(c.n - 1);
       const st = A.progress.stars["cml" + c.n] || 0;
-      return `<button class="pcard" type="button" data-llevel="${c.n}" ${locked || soon ? "disabled" : ""}><span class="cmlnum">CML ${c.n}</span><b>${L(c.t)}</b>${m ? `<span class="psub"><b>${L(m.name)}</b></span>` : ""}<span class="psub">${L(c.d)}</span>${st ? `<span class="pstars">${"★".repeat(st)}</span>` : ""}${soon ? `<span class="psub">⏳ ${L(ok("Coming next", "جاي قريب"))}</span>` : locked ? `<span class="psub">🔒 ${L(ok("Finish the level before", "خلّص المستوى اللي قبله"))}</span>` : ""}</button>`; }).join("")}</div>
+      const ph = m && m.real && m.real.photos ? m.real.photos[0][0] : null, nm = m ? L(m.name) : "", desc = L(c.d).replace(nm + ". ", "").replace(nm + ".", "");
+      return `<button class="lvcard${locked ? " locked" : ""}${st ? " done" : ""}" type="button" data-llevel="${c.n}" ${locked || soon ? "disabled" : ""}>
+        <span class="lv-art"${ph ? ` style="background-image:url('img/real/${ph}.jpg')"` : ""}></span>
+        <span class="lv-top"><span class="lv-badge">CML ${c.n}</span><span class="lv-stars">${[0, 1, 2].map(k => IC(k < st ? "star" : "starO")).join("")}</span></span>
+        ${locked ? `<span class="lv-lock">${IC("lock")}<small>${L(ok("Finish the level before", "خلّص المستوى اللي قبله"))}</small></span>` : soon ? `<span class="lv-lock">${IC("hourglass")}<small>${L(ok("Coming next", "جاي قريب"))}</small></span>` : ""}
+        <span class="lv-body"><span class="lv-kick">${L(c.t).replace(/^CML\s*\d+\s*·\s*/, "")}</span><b class="lv-name">${nm}</b><span class="lv-desc">${desc}</span>
+        ${!locked && !soon ? `<span class="lv-go">${st ? L(ok("Play again", "العب تاني")) : L(ok("Start mission", "ابدأ المهمة"))}</span>` : ""}</span></button>`; }).join("")}</div>
     <label class="opt inline"><input type="checkbox" id="ula2" ${A.unlockAll ? "checked" : ""}> ${L(ok("Unlock all levels (judges and teachers)", "افتح كل المستويات (للحكام والمدرسين)"))}</label></section>`;
 }
 function lonline() {
