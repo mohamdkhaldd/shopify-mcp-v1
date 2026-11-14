@@ -2883,7 +2883,7 @@ const M_STORM = {
 const nf = n => Number(n).toLocaleString("en-US");
 const BODY_KG = 1500, BODY_W = 1400;
 const M_DELTA = {
-  board: ok("WHAT THE MISSION NEEDS:\n1. Pixel 50 m or smaller (small fields)\n2. See near-infrared, in sunlight (plant health)\n3. Same light every time: 10 a.m. AND an orbit that passes at the same time every day\n4. Work 5 years: an orbit that stays up, and a battery longer than the 35-minute shadow\nThe bar above adds up power, weight and data for you. Pick what is ENOUGH, not the biggest: extra costs points.", "المهمة محتاجة إيه:\n1. البيكسل 50 متر أو أقل (أراضي صغيرة)\n2. نشوف النير إنفرا ريد، في الشمس (صحة الزرع)\n3. نفس الإضاءة كل مرة: الساعة 10 الصبح، وأوربت بيعدّي في نفس الساعة كل يوم\n4. يشتغل 5 سنين: أوربت مبيقعش، وبطارية أطول من ضل الـ 35 دقيقة\nالشريط اللي فوق بيجمع الكهربا والوزن والداتا ليك. اختار اللي يكفي، مش الأكبر: الزيادة بتخسّر نقط."),
+  board: ok("WHAT THE MISSION NEEDS:\n1. Pixel 50 m or smaller (small fields)\n2. See near-infrared, in sunlight (plant health)\n3. Same light every time: 10 a.m. AND an orbit that passes at the same time every day\n4. Work 5 years: an orbit that stays up, and a battery longer than the 35-minute shadow\nThe bar above adds up the numbers for you. YOU compare them: pick what is enough, not the biggest. Extra costs points.", "المهمة محتاجة إيه:\n1. البيكسل 50 متر أو أقل (أراضي صغيرة)\n2. نشوف النير إنفرا ريد، في الشمس (صحة الزرع)\n3. نفس الإضاءة كل مرة: الساعة 10 الصبح، وأوربت بيعدّي في نفس الساعة كل يوم\n4. يشتغل 5 سنين: أوربت مبيقعش، وبطارية أطول من ضل الـ 35 دقيقة\nالشريط اللي فوق بيجمع الأرقام ليك، وإنت اللي تقارن: اختار اللي يكفي، مش الأكبر. الزيادة بتخسّر نقط."),
   id: "delta", base: "delta", model: "landsat8", days: 365 * 5, rings: true,
   name: ok("Nile Delta Crop Watch", "مراقب محاصيل الدلتا"),
   user: ok("Egypt's Ministry of Agriculture and the farmers of the Nile Delta", "وزارة الزراعة وفلاحين دلتا النيل"),
@@ -3424,11 +3424,12 @@ function lPtsHtml() {
 }
 function lPtsPaint() { const el = $("#ptsNow"); if (el) el.textContent = nf(1000 - lPenNow()); }
 function lCalcHtml() {
-  const c = lCompute(allPicks()), row = (icon, lab, a, b, okk, unit) => `<div class="calc ${a == null || b == null ? "" : okk ? "okc" : "badc"}"><span>${icon} ${L(lab)}</span><b>${a == null ? "?" : nf(Math.round(a))} ${unit}</b><span class="psub">/</span><b>${b == null ? "?" : nf(Math.round(b))} ${unit}</b><span>${a == null || b == null ? "" : okk ? (b > a * (unit === "W" ? 1.3 : 5) && unit !== "kg" && unit !== "min" ? "💸 " + L(ok("much more than needed", "أكتر بكتير من اللازم")) : "✅") : "⚠️"}</span></div>`;
-  return row("⚡", ok("Power used / panel makes", "الكهربا المستهلكة / البانل بيطلّع"), c.cam.k || c.ant.k ? c.need : null, c.pan.k ? c.supply : null, c.need <= c.supply, "W")
-    + row("⚖️", ok("Satellite weight / rocket lifts", "وزن القمر / الصاروخ بيشيل"), c.mass, c.rkt.k ? c.rkt.lift : null, c.mass <= (c.rkt.lift || 0), "kg")
-    + row("📡", ok("Camera data / antenna sends", "داتا الكاميرا / الأنتينا بتبعت"), c.cam.k ? c.made : null, c.ant.k ? c.down : null, c.made <= c.down, "Mbit/s")
-    + row("🔋", ok("Battery lasts / shadow", "البطارية بتقعد / الضل"), c.bat.k ? c.bat.min : null, 35, (c.bat.min || 0) >= 35, "min");
+  const c = lCompute(allPicks()), num = (v, unit) => `<b>${v == null ? "?" : nf(Math.round(v))} ${unit}</b>`;
+  const row = (icon, la, a, lb, b, unit) => `<div class="calc"><span>${icon} ${L(la)}</span>${num(a, unit)}<span class="psub">·</span><span>${L(lb)}</span>${num(b, unit)}</div>`;
+  return row("⚡", ok("Power used", "الكهربا المستهلكة"), c.cam.k || c.ant.k ? c.need : null, ok("Panel makes", "البانل بيطلّع"), c.pan.k ? c.supply : null, "W")
+    + row("⚖️", ok("Satellite weight", "وزن القمر"), c.mass, ok("Rocket lifts", "الصاروخ بيشيل"), c.rkt.k ? c.rkt.lift : null, "kg")
+    + row("📡", ok("Camera data", "داتا الكاميرا"), c.cam.k ? c.made : null, ok("Antenna sends", "الأنتينا بتبعت"), c.ant.k ? c.down : null, "Mbit/s")
+    + row("🔋", ok("Battery lasts", "البطارية بتقعد"), c.bat.k ? c.bat.min : null, ok("Shadow", "الضل"), 35, "min");
 }
 function lStepBtns() {
   if (LB.mode === "online") return "";
