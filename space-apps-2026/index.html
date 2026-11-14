@@ -3424,7 +3424,7 @@ function lPtsHtml() {
 }
 function lPtsPaint() { const el = $("#ptsNow"); if (el) el.textContent = nf(1000 - lPenNow()); }
 function lCalcHtml() {
-  const c = lCompute(allPicks()), row = (icon, lab, a, b, okk, unit) => `<div class="calc ${a == null || b == null ? "" : okk ? "okc" : "badc"}"><span>${icon} ${L(lab)}</span><b>${a == null ? "?" : nf(Math.round(a))} ${unit}</b><span class="psub">/</span><b>${b == null ? "?" : nf(Math.round(b))} ${unit}</b><span>${a == null || b == null ? "" : okk ? (b > a * 1.3 && unit !== "kg" && unit !== "min" ? "💸 " + L(ok("much more than needed", "أكتر بكتير من اللازم")) : "✅") : "⚠️"}</span></div>`;
+  const c = lCompute(allPicks()), row = (icon, lab, a, b, okk, unit) => `<div class="calc ${a == null || b == null ? "" : okk ? "okc" : "badc"}"><span>${icon} ${L(lab)}</span><b>${a == null ? "?" : nf(Math.round(a))} ${unit}</b><span class="psub">/</span><b>${b == null ? "?" : nf(Math.round(b))} ${unit}</b><span>${a == null || b == null ? "" : okk ? (b > a * (unit === "W" ? 1.3 : 5) && unit !== "kg" && unit !== "min" ? "💸 " + L(ok("much more than needed", "أكتر بكتير من اللازم")) : "✅") : "⚠️"}</span></div>`;
   return row("⚡", ok("Power used / panel makes", "الكهربا المستهلكة / البانل بيطلّع"), c.cam.k || c.ant.k ? c.need : null, c.pan.k ? c.supply : null, c.need <= c.supply, "W")
     + row("⚖️", ok("Satellite weight / rocket lifts", "وزن القمر / الصاروخ بيشيل"), c.mass, c.rkt.k ? c.rkt.lift : null, c.mass <= (c.rkt.lift || 0), "kg")
     + row("📡", ok("Camera data / antenna sends", "داتا الكاميرا / الأنتينا بتبعت"), c.cam.k ? c.made : null, c.ant.k ? c.down : null, c.made <= c.down, "Mbit/s")
