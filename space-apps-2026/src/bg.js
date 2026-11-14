@@ -27,7 +27,7 @@
     const count = Math.round(Math.min(900, (W * H) / 1300));
     stars = Array.from({ length: count }, () => {
       const z = Math.pow(Math.random(), 2.2); // most stars far and faint
-      return { x: rnd(0, W), y: rnd(0, H), z, r: .5 + z * 1.9, a: .45 + z * .55, c: TINT[(Math.random() * TINT.length) | 0], tw: rnd(.4, 2.2), ph: rnd(0, 6.3) };
+      return { x: rnd(0, W), y: rnd(0, H), z, r: .6 + z * 2.1, a: .55 + z * .45, c: TINT[(Math.random() * TINT.length) | 0], tw: rnd(.4, 2.2), ph: rnd(0, 6.3) };
     });
     neb = nebula(); draw(performance.now(), true);
   }

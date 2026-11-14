@@ -431,10 +431,10 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .calc b{color:var(--hl);font-size:15px}.calc.okc{border-color:#7dffb088}.calc.badc{border-color:#ff7a85aa;background:rgba(60,10,16,.5)}
 
 /* ===== live star background ===== */
-#starbg{position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;display:block}
-html,body{background:#02040a!important}
-body{background-image:none!important}
-.wrap{position:relative;z-index:0}
+#starbg{position:fixed;inset:0;width:100vw;height:100vh;z-index:0;pointer-events:none;display:block}
+html{background:#02040a!important}
+body{background:transparent!important;background-image:none!important}
+.wrap{position:relative;z-index:1}
 /* ===== readability pass (tester audit) ===== */
 .chint{font-size:14px;line-height:1.5;color:#ffe6a0}
 .chint.spec{color:#d4efff}
@@ -528,6 +528,16 @@ html[lang=ar] .hud .eyebrow{font-size:13px}
   .hud.br{bottom:8px;right:8px;left:8px;justify-content:center}
   .vbtn{font-size:13px;padding:7px 10px}
 }
+
+/* home hero: realistic render fills the card, text sits on a dark fade */
+.cine{min-height:600px;background:#000}
+.cine canvas.hero3d{position:absolute;inset:0;width:100%;height:100%}
+.cine::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(0,0,0,.82) 0,rgba(0,0,0,.55) 38%,transparent 65%)}
+[dir=rtl] .cine::after{background:linear-gradient(270deg,rgba(0,0,0,.82) 0,rgba(0,0,0,.55) 38%,transparent 65%)}
+.cine-txt,.cine .how{z-index:2}
+@media (max-width:760px){.cine{min-height:760px}.cine::after{background:linear-gradient(0deg,rgba(0,0,0,.9) 0,rgba(0,0,0,.6) 55%,transparent 80%)!important}}
+.cine canvas.hero3d,[dir=rtl] .cine canvas.hero3d{left:0;right:0;top:0;bottom:0;width:100%;height:100%;opacity:1}
+@media (max-width:760px){.cine{min-height:0;padding-top:300px}.cine-txt{padding:22px}}
 </style>
 </head>
 <body>
@@ -584,7 +594,7 @@ html[lang=ar] .hud .eyebrow{font-size:13px}
     const count = Math.round(Math.min(900, (W * H) / 1300));
     stars = Array.from({ length: count }, () => {
       const z = Math.pow(Math.random(), 2.2); // most stars far and faint
-      return { x: rnd(0, W), y: rnd(0, H), z, r: .5 + z * 1.9, a: .45 + z * .55, c: TINT[(Math.random() * TINT.length) | 0], tw: rnd(.4, 2.2), ph: rnd(0, 6.3) };
+      return { x: rnd(0, W), y: rnd(0, H), z, r: .6 + z * 2.1, a: .55 + z * .45, c: TINT[(Math.random() * TINT.length) | 0], tw: rnd(.4, 2.2), ph: rnd(0, 6.3) };
     });
     neb = nebula(); draw(performance.now(), true);
   }
@@ -2072,7 +2082,41 @@ const Space3D = (() => {
       setAlert(v) { alert = !!v; }, dispose() { alive = false; renderer.dispose(); }
     };
   }
-  return { ok: webgl, createView, createHolo, setQuality(q) { quality = q; }, get quality() { return quality; } };
+  /* ---------- realistic home hero: real satellite over a real Earth ---------- */
+  function createHero(canvas, key) {
+    if (!webgl) return null;
+    const renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: false }); renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
+    MAT = MAT || mats();
+    const world = new T.Scene(); world.background = skyBg(); lights(world, .05);
+    const earth = makeEarth(); earth.rotation.set(.35, -2.2, .1); world.add(earth);
+    const ship = new T.Scene(); const sun = new T.DirectionalLight(0xfff3e6, 2.6); sun.position.copy(SUN_DIR).multiplyScalar(50); ship.add(sun); ship.add(new T.AmbientLight(0x8fa4cc, .55));
+    const earthLight = new T.DirectionalLight(0x5a8fd8, .5); earthLight.position.set(0, -50, 0); ship.add(earthLight);
+    const holder = new T.Group(); ship.add(holder);
+    const wcam = new T.PerspectiveCamera(34, 1, .002, 3000), scam = new T.PerspectiveCamera(34, 1, .1, 500);
+    let model = null, R = 6, yaw = .7, pitch = .12, drag = null, alive = true, t0 = performance.now();
+    loadModel(key || "landsat8").then(o => { const b = new T.Box3().setFromObject(o); R = b.getSize(new T.Vector3()).length() / 2; o.position.sub(b.getCenter(new T.Vector3())); holder.add(o); model = o; }).catch(() => {});
+    canvas.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener("pointermove", e => { if (!drag) return; yaw -= (e.clientX - drag[0]) * .006; pitch = Math.max(-.5, Math.min(.8, pitch + (e.clientY - drag[1]) * .004)); drag = [e.clientX, e.clientY]; });
+    canvas.addEventListener("pointerup", () => drag = null);
+    function frame(now) {
+      if (!alive) return; if (!canvas.isConnected) { alive = false; renderer.dispose(); return; } requestAnimationFrame(frame);
+      const w = canvas.clientWidth || 600, h = canvas.clientHeight || 400; if (canvas.width !== Math.round(w * renderer.getPixelRatio())) renderer.setSize(w, h, false);
+      const t = (now - t0) / 1000, wide = w / h > 1.2, sx = document.documentElement.dir === "rtl" ? -1 : 1;
+      wcam.aspect = scam.aspect = w / h; wcam.updateProjectionMatrix(); scam.updateProjectionMatrix();
+      earth.rotation.y = -2.2 + t * .006; earth.userData.clouds.rotation.y = t * .002;
+      // Earth fills the lower part of the frame, the horizon glows
+      { const P = SUN_DIR.clone().multiplyScalar(.55).add(V(0, 1, 0)).normalize(), side = new T.Vector3().crossVectors(P, SUN_DIR).normalize();
+        wcam.position.copy(P).multiplyScalar(RE * 1.09); wcam.up.copy(P); wcam.lookAt(wcam.position.clone().add(side.multiplyScalar(RE)).add(P.clone().multiplyScalar(-RE * .2)).add(SUN_DIR.clone().multiplyScalar(-RE * .25))); } renderer.autoClear = true; renderer.render(world, wcam);
+      if (!drag) yaw += .0018;
+      holder.rotation.set(Math.sin(t * .3) * .06, yaw, Math.sin(t * .23) * .05); holder.position.y = Math.sin(t * .5) * R * .03;
+      const d = R * 3.7 * Math.max(1, .95 / (w / h)); scam.position.set(wide ? -R * 1.15 * sx : 0, Math.sin(pitch) * d * .6 + (wide ? 0 : -R * 2.1), d); scam.lookAt(wide ? -R * 1.15 * sx : 0, wide ? 0 : -R * 2.1, 0);
+      renderer.autoClear = false; renderer.clearDepth(); renderer.render(ship, scam);
+    }
+    requestAnimationFrame(frame);
+    return { stop() { alive = false; } };
+  }
+  return { ok: webgl, createView, createHolo, createHero, setQuality(q) { quality = q; }, get quality() { return quality; } };
 })();
 
 /* ================= STATE ================= */
@@ -3525,7 +3569,7 @@ const roleTag = r => `<span class="rolechip" style="--sc:${CREW[r].col}">${L(CRE
 function crewImg(r) { return `<img src="img/${CREW[r].img}" alt="">`; }
 function lhome() {
   return `<section class="cine notr">
-    <canvas id="holoHome" class="holo" aria-label="Hologram of a NASA satellite"></canvas>
+    <canvas id="holoHome" class="holo hero3d" aria-label="NASA Landsat 8 satellite above Earth (drag to turn it)"></canvas>
     <div class="cine-txt"><div class="kick">NASA SPACE APPS 2026 · TEAM STELLAROP</div>
       <h1 class="cine-h">MISSION <span>LAB</span></h1>
       <p class="cine-p">${L(ok("You are a space mission team. Each of you gets a role and a guide. Watch your guide's video, write what you learn on the team board, talk together, and design a real satellite.", "إنتوا تيم مهمة فضاء. كل واحد فيكم ليه دور ومرشد. اتفرج على فيديو المرشد بتاعك، واكتب اللي اتعلمته على سبورة التيم، واتكلموا مع بعض، وصمموا قمر صناعي حقيقي."))}</p>
@@ -3875,7 +3919,7 @@ function lreport() {
 }
 Object.assign(SIMPLE, { lhome, llocal, llevel, lonline, lroom, lvideo, ldesign, lfly, lusers, lreport });
 Object.assign(SIMPLE_AFTER, {
-  lhome() { const cv = $("#holoHome"); if (!Space3D.ok || !cv) return; const h = Space3D.createHolo(cv); h && h.setModel("landsat8"); },
+  lhome() { const cv = $("#holoHome"); if (!Space3D.ok || !cv) return; Space3D.createHero(cv, "landsat8"); },
   lonline() { onlineAvailable().then(okk => { const el = $("#olstat"); if (!el) return; el.innerHTML = okk ? L(ok("Connected. Write your name, then create or join a room.", "متوصل. اكتب اسمك، وبعدين اعمل غرفة أو ادخل واحدة.")) : L(ok("Online play can't connect here. Open the public game link (GitHub Pages), or play on one computer.", "اللعب الأونلاين مش قادر يتوصل هنا. افتح لينك اللعبة العام (GitHub Pages)، أو العبوا على جهاز واحد.")); if (!okk) document.querySelectorAll("[data-act=ocreate],[data-act=ojoin]").forEach(b => b.disabled = true); }); },
   lroom() { lChatPaint(); },
   lvideo() { clearInterval(LB.vt); if (LB.mode === "online" && LB.room && LB.room.state.videoAt && LB.level > 1) { const lim = (LB.level === 2 ? 9 : 7) * 60000, end = LB.room.state.videoAt + lim;
@@ -3892,7 +3936,7 @@ function lAcctChip() {
   const stars = CML.reduce((a, c) => a + (A.progress.stars["cml" + c.n] || 0), 0);
   const st = `<span class="chip-stars">${IC("star")}<b>${stars}</b><small>/${CML.length * 3}</small></span>`;
   if (A.user) { const n = A.user.name || "?"; return `<button class="acct in" type="button" data-act="acct" aria-label="${L(ok("Your account", "حسابك"))}">${st}<span class="ava">${esc(n.trim().charAt(0).toUpperCase())}</span><span class="acct-n">${esc(n)}</span></button>`; }
-  return `<button class="acct" type="button" data-act="acct">${st}${IC("user")}<span class="acct-n">${L(ok("Sign in", "تسجيل الدخول"))}</span></button>`;
+  return `<button class="acct" type="button" data-act="acct">${st}${IC("user")}<span class="acct-n">${L(ok("Sign in", "دخول"))}</span></button>`;
 }
 function lAcctPaint() {
   let m = document.getElementById("acctm");

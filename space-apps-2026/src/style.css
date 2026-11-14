@@ -422,10 +422,10 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .calc b{color:var(--hl);font-size:15px}.calc.okc{border-color:#7dffb088}.calc.badc{border-color:#ff7a85aa;background:rgba(60,10,16,.5)}
 
 /* ===== live star background ===== */
-#starbg{position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;display:block}
-html,body{background:#02040a!important}
-body{background-image:none!important}
-.wrap{position:relative;z-index:0}
+#starbg{position:fixed;inset:0;width:100vw;height:100vh;z-index:0;pointer-events:none;display:block}
+html{background:#02040a!important}
+body{background:transparent!important;background-image:none!important}
+.wrap{position:relative;z-index:1}
 /* ===== readability pass (tester audit) ===== */
 .chint{font-size:14px;line-height:1.5;color:#ffe6a0}
 .chint.spec{color:#d4efff}
@@ -519,3 +519,13 @@ html[lang=ar] .hud .eyebrow{font-size:13px}
   .hud.br{bottom:8px;right:8px;left:8px;justify-content:center}
   .vbtn{font-size:13px;padding:7px 10px}
 }
+
+/* home hero: realistic render fills the card, text sits on a dark fade */
+.cine{min-height:600px;background:#000}
+.cine canvas.hero3d{position:absolute;inset:0;width:100%;height:100%}
+.cine::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(0,0,0,.82) 0,rgba(0,0,0,.55) 38%,transparent 65%)}
+[dir=rtl] .cine::after{background:linear-gradient(270deg,rgba(0,0,0,.82) 0,rgba(0,0,0,.55) 38%,transparent 65%)}
+.cine-txt,.cine .how{z-index:2}
+@media (max-width:760px){.cine{min-height:760px}.cine::after{background:linear-gradient(0deg,rgba(0,0,0,.9) 0,rgba(0,0,0,.6) 55%,transparent 80%)!important}}
+.cine canvas.hero3d,[dir=rtl] .cine canvas.hero3d{left:0;right:0;top:0;bottom:0;width:100%;height:100%;opacity:1}
+@media (max-width:760px){.cine{min-height:0;padding-top:300px}.cine-txt{padding:22px}}

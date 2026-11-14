@@ -740,5 +740,39 @@ const Space3D = (() => {
       setAlert(v) { alert = !!v; }, dispose() { alive = false; renderer.dispose(); }
     };
   }
-  return { ok: webgl, createView, createHolo, setQuality(q) { quality = q; }, get quality() { return quality; } };
+  /* ---------- realistic home hero: real satellite over a real Earth ---------- */
+  function createHero(canvas, key) {
+    if (!webgl) return null;
+    const renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: false }); renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
+    MAT = MAT || mats();
+    const world = new T.Scene(); world.background = skyBg(); lights(world, .05);
+    const earth = makeEarth(); earth.rotation.set(.35, -2.2, .1); world.add(earth);
+    const ship = new T.Scene(); const sun = new T.DirectionalLight(0xfff3e6, 2.6); sun.position.copy(SUN_DIR).multiplyScalar(50); ship.add(sun); ship.add(new T.AmbientLight(0x8fa4cc, .55));
+    const earthLight = new T.DirectionalLight(0x5a8fd8, .5); earthLight.position.set(0, -50, 0); ship.add(earthLight);
+    const holder = new T.Group(); ship.add(holder);
+    const wcam = new T.PerspectiveCamera(34, 1, .002, 3000), scam = new T.PerspectiveCamera(34, 1, .1, 500);
+    let model = null, R = 6, yaw = .7, pitch = .12, drag = null, alive = true, t0 = performance.now();
+    loadModel(key || "landsat8").then(o => { const b = new T.Box3().setFromObject(o); R = b.getSize(new T.Vector3()).length() / 2; o.position.sub(b.getCenter(new T.Vector3())); holder.add(o); model = o; }).catch(() => {});
+    canvas.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener("pointermove", e => { if (!drag) return; yaw -= (e.clientX - drag[0]) * .006; pitch = Math.max(-.5, Math.min(.8, pitch + (e.clientY - drag[1]) * .004)); drag = [e.clientX, e.clientY]; });
+    canvas.addEventListener("pointerup", () => drag = null);
+    function frame(now) {
+      if (!alive) return; if (!canvas.isConnected) { alive = false; renderer.dispose(); return; } requestAnimationFrame(frame);
+      const w = canvas.clientWidth || 600, h = canvas.clientHeight || 400; if (canvas.width !== Math.round(w * renderer.getPixelRatio())) renderer.setSize(w, h, false);
+      const t = (now - t0) / 1000, wide = w / h > 1.2, sx = document.documentElement.dir === "rtl" ? -1 : 1;
+      wcam.aspect = scam.aspect = w / h; wcam.updateProjectionMatrix(); scam.updateProjectionMatrix();
+      earth.rotation.y = -2.2 + t * .006; earth.userData.clouds.rotation.y = t * .002;
+      // Earth fills the lower part of the frame, the horizon glows
+      { const P = SUN_DIR.clone().multiplyScalar(.55).add(V(0, 1, 0)).normalize(), side = new T.Vector3().crossVectors(P, SUN_DIR).normalize();
+        wcam.position.copy(P).multiplyScalar(RE * 1.09); wcam.up.copy(P); wcam.lookAt(wcam.position.clone().add(side.multiplyScalar(RE)).add(P.clone().multiplyScalar(-RE * .2)).add(SUN_DIR.clone().multiplyScalar(-RE * .25))); } renderer.autoClear = true; renderer.render(world, wcam);
+      if (!drag) yaw += .0018;
+      holder.rotation.set(Math.sin(t * .3) * .06, yaw, Math.sin(t * .23) * .05); holder.position.y = Math.sin(t * .5) * R * .03;
+      const d = R * 3.7 * Math.max(1, .95 / (w / h)); scam.position.set(wide ? -R * 1.15 * sx : 0, Math.sin(pitch) * d * .6 + (wide ? 0 : -R * 2.1), d); scam.lookAt(wide ? -R * 1.15 * sx : 0, wide ? 0 : -R * 2.1, 0);
+      renderer.autoClear = false; renderer.clearDepth(); renderer.render(ship, scam);
+    }
+    requestAnimationFrame(frame);
+    return { stop() { alive = false; } };
+  }
+  return { ok: webgl, createView, createHolo, createHero, setQuality(q) { quality = q; }, get quality() { return quality; } };
 })();

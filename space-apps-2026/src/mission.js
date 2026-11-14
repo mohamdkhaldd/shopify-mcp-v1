@@ -433,7 +433,7 @@ const roleTag = r => `<span class="rolechip" style="--sc:${CREW[r].col}">${L(CRE
 function crewImg(r) { return `<img src="img/${CREW[r].img}" alt="">`; }
 function lhome() {
   return `<section class="cine notr">
-    <canvas id="holoHome" class="holo" aria-label="Hologram of a NASA satellite"></canvas>
+    <canvas id="holoHome" class="holo hero3d" aria-label="NASA Landsat 8 satellite above Earth (drag to turn it)"></canvas>
     <div class="cine-txt"><div class="kick">NASA SPACE APPS 2026 · TEAM STELLAROP</div>
       <h1 class="cine-h">MISSION <span>LAB</span></h1>
       <p class="cine-p">${L(ok("You are a space mission team. Each of you gets a role and a guide. Watch your guide's video, write what you learn on the team board, talk together, and design a real satellite.", "إنتوا تيم مهمة فضاء. كل واحد فيكم ليه دور ومرشد. اتفرج على فيديو المرشد بتاعك، واكتب اللي اتعلمته على سبورة التيم، واتكلموا مع بعض، وصمموا قمر صناعي حقيقي."))}</p>
@@ -783,7 +783,7 @@ function lreport() {
 }
 Object.assign(SIMPLE, { lhome, llocal, llevel, lonline, lroom, lvideo, ldesign, lfly, lusers, lreport });
 Object.assign(SIMPLE_AFTER, {
-  lhome() { const cv = $("#holoHome"); if (!Space3D.ok || !cv) return; const h = Space3D.createHolo(cv); h && h.setModel("landsat8"); },
+  lhome() { const cv = $("#holoHome"); if (!Space3D.ok || !cv) return; Space3D.createHero(cv, "landsat8"); },
   lonline() { onlineAvailable().then(okk => { const el = $("#olstat"); if (!el) return; el.innerHTML = okk ? L(ok("Connected. Write your name, then create or join a room.", "متوصل. اكتب اسمك، وبعدين اعمل غرفة أو ادخل واحدة.")) : L(ok("Online play can't connect here. Open the public game link (GitHub Pages), or play on one computer.", "اللعب الأونلاين مش قادر يتوصل هنا. افتح لينك اللعبة العام (GitHub Pages)، أو العبوا على جهاز واحد.")); if (!okk) document.querySelectorAll("[data-act=ocreate],[data-act=ojoin]").forEach(b => b.disabled = true); }); },
   lroom() { lChatPaint(); },
   lvideo() { clearInterval(LB.vt); if (LB.mode === "online" && LB.room && LB.room.state.videoAt && LB.level > 1) { const lim = (LB.level === 2 ? 9 : 7) * 60000, end = LB.room.state.videoAt + lim;
@@ -800,7 +800,7 @@ function lAcctChip() {
   const stars = CML.reduce((a, c) => a + (A.progress.stars["cml" + c.n] || 0), 0);
   const st = `<span class="chip-stars">${IC("star")}<b>${stars}</b><small>/${CML.length * 3}</small></span>`;
   if (A.user) { const n = A.user.name || "?"; return `<button class="acct in" type="button" data-act="acct" aria-label="${L(ok("Your account", "حسابك"))}">${st}<span class="ava">${esc(n.trim().charAt(0).toUpperCase())}</span><span class="acct-n">${esc(n)}</span></button>`; }
-  return `<button class="acct" type="button" data-act="acct">${st}${IC("user")}<span class="acct-n">${L(ok("Sign in", "تسجيل الدخول"))}</span></button>`;
+  return `<button class="acct" type="button" data-act="acct">${st}${IC("user")}<span class="acct-n">${L(ok("Sign in", "دخول"))}</span></button>`;
 }
 function lAcctPaint() {
   let m = document.getElementById("acctm");
