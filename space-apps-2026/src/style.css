@@ -420,3 +420,24 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .calcbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;margin:8px 0}
 .calc{display:flex;gap:6px;align-items:center;flex-wrap:wrap;border:1px solid var(--edge);border-radius:8px;padding:7px 10px;background:rgba(4,10,22,.7);font-size:13px}
 .calc b{color:var(--hl);font-size:15px}.calc.okc{border-color:#7dffb088}.calc.badc{border-color:#ff7a85aa;background:rgba(60,10,16,.5)}
+
+/* ===== live star background ===== */
+#starbg{position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;display:block}
+html,body{background:#02040a!important}
+body{background-image:none!important}
+.wrap{position:relative;z-index:0}
+/* ===== readability pass (tester audit) ===== */
+.chint{font-size:14px;line-height:1.5;color:#ffe6a0}
+.chint.spec{color:#d4efff}
+.calc{font-size:14px}.calc b{font-size:16px;white-space:nowrap}
+.sciline b,.calc b,td b{white-space:nowrap}
+.vbtn{font-size:14px;padding:8px 12px;min-height:38px;white-space:nowrap}
+.views{display:flex;gap:6px}
+.psub{color:#a9c3d8}
+.kick{line-height:1.6}
+.cine-p{color:#d3e3f2}
+@media (max-width:520px){.cine-txt{padding:22px}.how b{font-size:13px}}
+
+.hpanel,.build,.cine{background:rgba(6,14,30,.42);backdrop-filter:none}
+.cine{background:linear-gradient(90deg,rgba(2,6,14,.15),rgba(2,6,14,.55))}
+body::after{background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.45) 100%)}
