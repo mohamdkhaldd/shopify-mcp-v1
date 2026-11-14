@@ -441,3 +441,11 @@ body{background-image:none!important}
 .hpanel,.build,.cine{background:rgba(6,14,30,.42);backdrop-filter:none}
 .cine{background:linear-gradient(90deg,rgba(2,6,14,.15),rgba(2,6,14,.55))}
 body::after{background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.45) 100%)}
+
+/* ===== SVG icons (no emoji) ===== */
+.icw{display:inline}
+.ic{width:1.15em;height:1.15em;vertical-align:-.2em;flex:none;display:inline-block}
+.ic-star,.ic-starO{color:#ffc94d;filter:drop-shadow(0 0 4px rgba(255,190,60,.55))}
+.ic-check{color:#6dffa8}.ic-xc,.ic-x{color:#ff7a85}.ic-alert{color:#ffb84d}.ic-lock{color:#9fb8cd}.ic-unlock{color:#6dffa8}
+.ic-bulb{color:#ffe08a}.ic-ruler,.ic-bolt,.ic-scale,.ic-dish,.ic-battery{color:#7fdcff}
+.pstars .ic,.stars .ic{width:1.4em;height:1.4em}
