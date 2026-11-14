@@ -417,3 +417,6 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .script{margin-top:12px;background:rgba(4,10,22,.7);border:1px solid var(--edge);border-radius:8px;padding:10px 14px}
 .script summary{cursor:pointer;color:var(--hl);font-weight:700}.script ol{margin:8px 0 0;padding-inline-start:22px;display:grid;gap:6px;font-size:14.5px;line-height:1.5;user-select:text}
 .chint.spec{color:#bfe8ff}
+.calcbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;margin:8px 0}
+.calc{display:flex;gap:6px;align-items:center;flex-wrap:wrap;border:1px solid var(--edge);border-radius:8px;padding:7px 10px;background:rgba(4,10,22,.7);font-size:13px}
+.calc b{color:var(--hl);font-size:15px}.calc.okc{border-color:#7dffb088}.calc.badc{border-color:#ff7a85aa;background:rgba(60,10,16,.5)}

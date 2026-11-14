@@ -426,6 +426,9 @@ html[lang=ar] .holotag{letter-spacing:0;font-family:var(--f-body);right:12px;lef
 .script{margin-top:12px;background:rgba(4,10,22,.7);border:1px solid var(--edge);border-radius:8px;padding:10px 14px}
 .script summary{cursor:pointer;color:var(--hl);font-weight:700}.script ol{margin:8px 0 0;padding-inline-start:22px;display:grid;gap:6px;font-size:14.5px;line-height:1.5;user-select:text}
 .chint.spec{color:#bfe8ff}
+.calcbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;margin:8px 0}
+.calc{display:flex;gap:6px;align-items:center;flex-wrap:wrap;border:1px solid var(--edge);border-radius:8px;padding:7px 10px;background:rgba(4,10,22,.7);font-size:13px}
+.calc b{color:var(--hl);font-size:15px}.calc.okc{border-color:#7dffb088}.calc.badc{border-color:#ff7a85aa;background:rgba(60,10,16,.5)}
 </style>
 </head>
 <body>
@@ -2880,24 +2883,25 @@ const M_STORM = {
 const nf = n => Number(n).toLocaleString("en-US");
 const BODY_KG = 1500, BODY_W = 1400;
 const M_DELTA = {
+  board: ok("WHAT THE MISSION NEEDS:\n1. Pixel 50 m or smaller (small fields)\n2. See near-infrared, in sunlight (plant health)\n3. Same light every time: 10 a.m. AND an orbit that passes at the same time every day\n4. Work 5 years: an orbit that stays up, and a battery longer than the 35-minute shadow\nThe bar above adds up power, weight and data for you. Pick what is ENOUGH, not the biggest: extra costs points.", "المهمة محتاجة إيه:\n1. البيكسل 50 متر أو أقل (أراضي صغيرة)\n2. نشوف النير إنفرا ريد، في الشمس (صحة الزرع)\n3. نفس الإضاءة كل مرة: الساعة 10 الصبح، وأوربت بيعدّي في نفس الساعة كل يوم\n4. يشتغل 5 سنين: أوربت مبيقعش، وبطارية أطول من ضل الـ 35 دقيقة\nالشريط اللي فوق بيجمع الكهربا والوزن والداتا ليك. اختار اللي يكفي، مش الأكبر: الزيادة بتخسّر نقط."),
   id: "delta", base: "delta", model: "landsat8", days: 365 * 5, rings: true,
   name: ok("Nile Delta Crop Watch", "مراقب محاصيل الدلتا"),
   user: ok("Egypt's Ministry of Agriculture and the farmers of the Nile Delta", "وزارة الزراعة وفلاحين دلتا النيل"),
   rules: [{ k: "fields", en: "See each small field", ar: "يشوف كل أرض صغيرة" }, { k: "health", en: "See plant health", ar: "يشوف صحة الزرع" }, { k: "light", en: "Same place, same light", ar: "نفس المكان ونفس الإضاءة" }, { k: "life", en: "Work for 5 years", ar: "يشتغل 5 سنين" }],
   decisions: {
     science: [
-      { k: "cam", t: ok("Which camera?", "أنهي كاميرا؟"), o: [lopt("A", "cam3", "MODIS", "MODIS", { res: 250, nir: true, mass: 230, w: 160, data: 10.6, instr: "cam_med" }), lopt("B", "weather", "TIRS", "TIRS", { res: 100, nir: false, mass: 240, w: 380, data: 3, instr: "thermal" }), lopt("C", "leaf", "OLI", "OLI", { res: 30, nir: true, mass: 470, w: 400, data: 200, instr: "multispec" })] },
-      { k: "time", t: ok("When do we take pictures?", "هنصوّر إمتى؟"), o: [lopt("A", "radar", "At night", "بالليل", { day: false }), lopt("B", "weather", "10 a.m. every day", "10 الصبح كل يوم", { day: true, light: true }), lopt("C", "cam1", "Any time of day", "أي وقت", { day: true, light: false })] }],
+      { k: "cam", t: ok("Which camera?", "أنهي كاميرا؟"), o: [lopt("A", "cam3", "MODIS", "MODIS", { res: 250, nir: true, mass: 230, w: 160, data: 10.6, instr: "cam_med", spec: ok("Pixel 250 m · near-infrared · 230 kg · 160 W · 10 Mbit/s", "بيكسل 250 م · نير إنفرا ريد · 230 كيلو · 160 وات · 10 ميجابت/ث") }), lopt("B", "weather", "TIRS", "TIRS", { res: 100, nir: false, mass: 240, w: 380, data: 3, instr: "thermal", spec: ok("Pixel 100 m · heat only, no near-infrared · 240 kg · 380 W · 3 Mbit/s", "بيكسل 100 م · حرارة بس، مفيش نير إنفرا ريد · 240 كيلو · 380 وات · 3 ميجابت/ث") }), lopt("C", "leaf", "OLI", "OLI", { res: 30, nir: true, mass: 470, w: 400, data: 200, instr: "multispec", spec: ok("Pixel 30 m · near-infrared · 470 kg · 400 W · 200 Mbit/s", "بيكسل 30 م · نير إنفرا ريد · 470 كيلو · 400 وات · 200 ميجابت/ث") })] },
+      { k: "time", t: ok("When do we take pictures?", "هنصوّر إمتى؟"), o: [lopt("A", "radar", "At night", "بالليل", { day: false, spec: ok("No sunlight", "مفيش شمس") }), lopt("B", "weather", "10 a.m. every day", "10 الصبح كل يوم", { day: true, light: true, spec: ok("The Sun is at the same height every time", "الشمس في نفس الارتفاع كل مرة") }), lopt("C", "cam1", "Any time of day", "أي وقت", { day: true, light: false, spec: ok("More pictures, but the light changes every time", "صور أكتر، بس الإضاءة بتتغير كل مرة") })] }],
     comms: [
-      { k: "ant", t: ok("Which antenna?", "أنهي أنتينا؟"), o: [lopt("A", "dish3", "Ka-band", "Ka-band", { rate: 3500, w: 350, mass: 30, few: true, eng: "large" }), lopt("B", "dish1", "S-band", "S-band", { rate: .25, w: 50, mass: 10, eng: "small" }), lopt("C", "dish2", "X-band", "X-band", { rate: 384, w: 150, mass: 20, eng: "medium" })] },
-      { k: "st", t: ok("How many ground stations?", "كام جراوند ستيشن؟"), o: [lopt("A", "relay", "1 station", "محطة واحدة", { n: 1 }), lopt("B", "relay", "2 stations", "محطتين", { n: 2 }), lopt("C", "relay", "3 stations", "3 محطات", { n: 3 })] }],
+      { k: "ant", t: ok("Which antenna?", "أنهي أنتينا؟"), o: [lopt("A", "dish3", "Ka-band", "Ka-band", { rate: 3500, w: 350, mass: 30, few: true, eng: "large", spec: ok("Sends 3,500 Mbit/s · 350 W · 30 kg · few stations hear it", "بيبعت 3,500 ميجابت/ث · 350 وات · 30 كيلو · محطات قليلة بتسمعه") }), lopt("B", "dish1", "S-band", "S-band", { rate: .25, w: 50, mass: 10, eng: "small", spec: ok("Sends 0.25 Mbit/s · 50 W · 10 kg", "بيبعت ربع ميجابت/ث · 50 وات · 10 كيلو") }), lopt("C", "dish2", "X-band", "X-band", { rate: 384, w: 150, mass: 20, eng: "medium", spec: ok("Sends 384 Mbit/s · 150 W · 20 kg", "بيبعت 384 ميجابت/ث · 150 وات · 20 كيلو") })] },
+      { k: "st", t: ok("How many ground stations?", "كام جراوند ستيشن؟"), o: [lopt("A", "relay", "1 station", "محطة واحدة", { n: 1, spec: ok("Cheapest · no backup if it stops", "الأرخص · مفيش احتياطي لو وقفت") }), lopt("B", "relay", "2 stations", "محطتين", { n: 2, spec: ok("One backup station", "محطة احتياطي واحدة") }), lopt("C", "relay", "3 stations", "3 محطات", { n: 3, spec: ok("Two backups · costs the most every year", "احتياطيين · الأغلى كل سنة") })] }],
     engineer: [
-      { k: "pan", t: ok("Which solar panel?", "أنهي سولار بانل؟"), o: [lopt("A", "panel2", "Panel A · 2,600 W", "البانل A · 2,600 وات", { supply: 2600, mass: 200 }), lopt("B", "panel3", "Panel B · 3,200 W", "البانل B · 3,200 وات", { supply: 3200, mass: 300 }), lopt("C", "panel1", "Panel C · 2,000 W", "البانل C · 2,000 وات", { supply: 2000, mass: 120 })] },
-      { k: "bat", t: ok("Which battery?", "أنهي بطارية؟"), o: [lopt("A", "rtg", "Battery A · 60 min", "البطارية A · 60 دقيقة", { min: 60, mass: 150 }), lopt("B", "rtg", "Battery B · 40 min", "البطارية B · 40 دقيقة", { min: 40, mass: 70 }), lopt("C", "rtg", "Battery C · 25 min", "البطارية C · 25 دقيقة", { min: 25, mass: 40 })] }],
+      { k: "pan", t: ok("Which solar panel?", "أنهي سولار بانل؟"), o: [lopt("A", "panel2", "Panel A · 2,600 W", "البانل A · 2,600 وات", { supply: 2600, mass: 200, spec: ok("Makes 2,600 W · 200 kg", "بيطلّع 2,600 وات · 200 كيلو") }), lopt("B", "panel3", "Panel B · 3,200 W", "البانل B · 3,200 وات", { supply: 3200, mass: 300, spec: ok("Makes 3,200 W · 300 kg", "بيطلّع 3,200 وات · 300 كيلو") }), lopt("C", "panel1", "Panel C · 2,000 W", "البانل C · 2,000 وات", { supply: 2000, mass: 120, spec: ok("Makes 2,000 W · 120 kg", "بيطلّع 2,000 وات · 120 كيلو") })] },
+      { k: "bat", t: ok("Which battery?", "أنهي بطارية؟"), o: [lopt("A", "rtg", "Battery A · 60 min", "البطارية A · 60 دقيقة", { min: 60, mass: 150, spec: ok("Lasts 60 min · 150 kg", "بتقعد 60 دقيقة · 150 كيلو") }), lopt("B", "rtg", "Battery B · 40 min", "البطارية B · 40 دقيقة", { min: 40, mass: 70, spec: ok("Lasts 40 min · 70 kg", "بتقعد 40 دقيقة · 70 كيلو") }), lopt("C", "rtg", "Battery C · 25 min", "البطارية C · 25 دقيقة", { min: 25, mass: 40, spec: ok("Lasts 25 min · 40 kg", "بتقعد 25 دقيقة · 40 كيلو") })] }],
     planner: [
-      { k: "orb", t: ok("Which orbit?", "أنهي أوربت؟"), o: [lopt("A", "ice", "Orbit A · 400 km", "الأوربت A · 400 كم", { resF: .57, life: false, sso: false }), lopt("B", "ice", "Orbit B · 705 km", "الأوربت B · 705 كم", { resF: 1, life: true, sso: true }), lopt("C", "ice", "Orbit C · 1,500 km", "الأوربت C · 1,500 كم", { resF: 2.13, life: true, sso: false, rad: true })] },
-      { k: "rkt", t: ok("Which rocket?", "أنهي صاروخ؟"), o: [lopt("A", "rocket2", "Falcon 9", "Falcon 9", { lift: 10000, cost: 69, lv: "medium" }), lopt("B", "rocket1", "Pegasus XL", "Pegasus XL", { lift: 450, cost: 56, lv: "small" }), lopt("C", "rocket2", "Vega C", "Vega C", { lift: 2300, cost: 48, lv: "medium" })] },
-      { k: "eom", t: ok("End of the mission?", "نهاية المهمة؟"), o: [lopt("A", "radar", "Leave it up there", "نسيبه فوق", { clean: false }), lopt("B", "cam3", "Use all fuel for pictures", "نصرف الوقود كله على الصور", { clean: false, more: true }), lopt("C", "rocket1", "Save fuel, bring it down", "نسيب وقود وننزّله", { clean: true })] }] },
+      { k: "orb", t: ok("Which orbit?", "أنهي أوربت؟"), o: [lopt("A", "ice", "Orbit A · 400 km", "الأوربت A · 400 كم", { resF: .57, life: false, sso: false, spec: ok("Falls in a few years · time changes every day · pixels smaller", "بيقع في كام سنة · الساعة بتتغير كل يوم · بيكسل أصغر") }), lopt("B", "ice", "Orbit B · 705 km", "الأوربت B · 705 كم", { resF: 1, life: true, sso: true, spec: ok("Same time every day · pixels as on the cameras", "نفس الساعة كل يوم · البيكسل زي اللي على الكاميرات") }), lopt("C", "ice", "Orbit C · 1,500 km", "الأوربت C · 1,500 كم", { resF: 2.13, life: true, sso: false, rad: true, spec: ok("Pixels 2× bigger · time changes every day · more radiation", "البيكسل الضعف · الساعة بتتغير كل يوم · ريدياشن أكتر") })] },
+      { k: "rkt", t: ok("Which rocket?", "أنهي صاروخ؟"), o: [lopt("A", "rocket2", "Falcon 9", "Falcon 9", { lift: 10000, cost: 69, lv: "medium", spec: ok("Lifts 10,000+ kg · about $69 million", "بيشيل 10,000+ كيلو · حوالي 69 مليون دولار") }), lopt("B", "rocket1", "Pegasus XL", "Pegasus XL", { lift: 450, cost: 56, lv: "small", spec: ok("Lifts about 450 kg · about $56 million", "بيشيل حوالي 450 كيلو · حوالي 56 مليون دولار") }), lopt("C", "rocket2", "Vega C", "Vega C", { lift: 2300, cost: 48, lv: "medium", spec: ok("Lifts about 2,300 kg · cheaper than Falcon 9", "بيشيل حوالي 2,300 كيلو · أرخص من Falcon 9") })] },
+      { k: "eom", t: ok("End of the mission?", "نهاية المهمة؟"), o: [lopt("A", "radar", "Leave it up there", "نسيبه فوق", { clean: false, spec: ok("Stays up as space junk", "بيفضل فوق زبالة فضائية") }), lopt("B", "cam3", "Use all fuel for pictures", "نصرف الوقود كله على الصور", { clean: false, more: true, spec: ok("10% more pictures · stays up as space junk", "صور أكتر بـ 10% · بيفضل فوق زبالة فضائية") }), lopt("C", "rocket1", "Save fuel, bring it down", "نسيب وقود وننزّله", { clean: true, spec: ok("Comes down safely at the end", "بينزل بأمان في الآخر") })] }] },
   compute(p) {
     const g = (r, k) => pickOpt(this, p, r, k) || {};
     const cam = g("science", "cam"), time = g("science", "time"), ant = g("comms", "ant"), st = g("comms", "st"), pan = g("engineer", "pan"), bat = g("engineer", "bat"), orb = g("planner", "orb"), rkt = g("planner", "rkt"), eom = g("planner", "eom");
@@ -3401,6 +3405,7 @@ function ldesign() {
     <div class="buildhead"><div><div class="kick">${L(m.name)} · ${L(lvl().t)}</div>
       <div class="rulesrow">${m.rules.map(x => `<span class="rulechip">${L(x)}</span>`).join("")}</div>
       ${lPtsHtml()}
+      ${LB.level === 3 ? `<div class="calcbar" id="calcbar">${lCalcHtml()}</div>` : ""}
       <div class="stepper">${tabs}</div></div></div>
     <div class="buildgrid"><div class="holowrap"><canvas id="holoBuild" class="holo"></canvas><div class="holotag">${L(ok("Your satellite", "القمر بتاعك"))}</div></div>
       <div class="choose"><div class="steptitle" style="--sc:${CREW[r].col}">${roleTag(r)}<span class="psub">${L(SEGMENT[r])} · ${L(ok("Guide", "المرشد"))}: ${CREW[r].name}</span></div>
@@ -3418,6 +3423,13 @@ function lPtsHtml() {
     <div class="psub">${L(ok("You lose points for: each need not met · each wasted part (−70) · damage in flight · space junk (−100) · extra design reviews (−30) · rewatching a video (−20). Keep as many as you can!", "بتخسر نقط لو: طلب متحققش · كل قطعة زيادة عن اللزوم (−70) · أي ضرر وإنتوا طايرين · زبالة فضائية (−100) · مراجعة تصميم زيادة (−30) · تتفرج على فيديو تاني (−20). حافظوا على أكبر عدد نقط!"))}</div></div>`;
 }
 function lPtsPaint() { const el = $("#ptsNow"); if (el) el.textContent = nf(1000 - lPenNow()); }
+function lCalcHtml() {
+  const c = lCompute(allPicks()), row = (icon, lab, a, b, okk, unit) => `<div class="calc ${a == null || b == null ? "" : okk ? "okc" : "badc"}"><span>${icon} ${L(lab)}</span><b>${a == null ? "?" : nf(Math.round(a))} ${unit}</b><span class="psub">/</span><b>${b == null ? "?" : nf(Math.round(b))} ${unit}</b><span>${a == null || b == null ? "" : okk ? (b > a * 1.3 && unit !== "kg" && unit !== "min" ? "💸 " + L(ok("much more than needed", "أكتر بكتير من اللازم")) : "✅") : "⚠️"}</span></div>`;
+  return row("⚡", ok("Power used / panel makes", "الكهربا المستهلكة / البانل بيطلّع"), c.cam.k || c.ant.k ? c.need : null, c.pan.k ? c.supply : null, c.need <= c.supply, "W")
+    + row("⚖️", ok("Satellite weight / rocket lifts", "وزن القمر / الصاروخ بيشيل"), c.mass, c.rkt.k ? c.rkt.lift : null, c.mass <= (c.rkt.lift || 0), "kg")
+    + row("📡", ok("Camera data / antenna sends", "داتا الكاميرا / الأنتينا بتبعت"), c.cam.k ? c.made : null, c.ant.k ? c.down : null, c.made <= c.down, "Mbit/s")
+    + row("🔋", ok("Battery lasts / shadow", "البطارية بتقعد / الضل"), c.bat.k ? c.bat.min : null, 35, (c.bat.min || 0) >= 35, "min");
+}
 function lStepBtns() {
   if (LB.mode === "online") return "";
   const i = TEAM_ROLES.indexOf(LB.tab), prev = TEAM_ROLES[i - 1], next = TEAM_ROLES[i + 1];
@@ -3446,7 +3458,7 @@ function lPartial() {
     document.querySelectorAll(".ccard[disabled]").forEach(b => { /* teammates' cards are shown via tabs */ });
     document.querySelectorAll(".stp[data-ltab]").forEach(b => b.classList.toggle("done", decisionsFor([b.dataset.ltab]).every(({ role, d }) => picks[role + "." + d.k])));
     const rb = document.querySelector(".reviewbar .lnav"); if (rb) rb.lastElementChild.outerHTML = lLaunchBtn(picks);
-    const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); lHolo(); lPtsPaint(); }
+    const box = $("#reviewbox"); if (box) box.innerHTML = lReviewHtml(); const cb = $("#calcbar"); if (cb) cb.innerHTML = lCalcHtml(); lHolo(); lPtsPaint(); }
 }
 let holoL = null;
 function lEngineDesign(c) { const m = LM(), base = MISSIONS.find(x => x.id === m.base); return { base, d: Object.assign(structuredClone(base.def), m.engine(c, base)) }; }
