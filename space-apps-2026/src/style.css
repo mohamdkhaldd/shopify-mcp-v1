@@ -548,3 +548,5 @@ html[lang=ar] .hud .eyebrow{font-size:13px}
 [dir=rtl] .lfilm-cap{left:auto;right:12px}
 .lfilm-skip{position:absolute;top:12px;right:12px;padding:8px 14px;font-size:15px;background:rgba(0,0,0,.55)}
 [dir=rtl] .lfilm-skip{right:auto;left:12px}
+
+.dlink{margin:2px 0 8px;font-size:14px;color:#ffd77a;display:flex;gap:6px;align-items:center}.dlink .ic{color:#ffd77a}
