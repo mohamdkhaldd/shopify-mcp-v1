@@ -3615,7 +3615,8 @@ function lhome() {
       ${LB.mode === "online" && LB.room ? `<div class="needline">🛰 ${L(ok("You are still in room", "إنت لسه في الغرفة"))} <b class="code">${LB.room.code}</b> <button class="hbtn" type="button" data-act="oagain">${L(ok("Back to the room", "ارجع للغرفة"))}</button> <button class="linkbtn" type="button" data-act="oleave">${L(ok("Leave it", "اخرج منها"))}</button></div>` : ""}
       <div class="row"><button class="hbtn" type="button" data-lmode="solo">${L(ok("Play solo", "العب لوحدك"))}</button>
         <button class="hbtn ghost" type="button" data-lmode="local">${L(ok("Team on one computer", "تيم على جهاز واحد"))}</button>
-        <button class="hbtn ghost" type="button" data-lmode="online">${L(ok("Online team (each on own laptop)", "تيم أونلاين (كل واحد على اللابتوب بتاعه)"))}</button></div>
+        <button class="hbtn ghost" type="button" data-lmode="online">${L(ok("Online team (each on own laptop)", "تيم أونلاين (كل واحد على اللابتوب بتاعه)"))}</button>
+        <button class="hbtn ghost" type="button" data-act="advanced">${L(ok("Mission Architect: 6 missions + Sandbox", "Mission Architect: 6 مهمات + Sandbox"))}</button></div>
           <p class="psub legal"><a href="privacy.html" target="_blank" rel="noopener">${L(ok("Privacy Policy", "سياسة الخصوصية"))}</a> · <a href="terms.html" target="_blank" rel="noopener">${L(ok("Terms of Use", "شروط الاستخدام"))}</a></p>
 </div>
     <div class="how">${[[1, ok("Watch your guide", "اتفرج على المرشد")], [2, ok("Write on the team board", "اكتب على السبورة")], [3, ok("Decide together", "قرروا مع بعض")], [4, ok("Launch and see who you helped", "اطلق وشوف ساعدت مين")]].map(([n, t]) => `<div><span>0${n}</span><b>${L(t)}</b></div>`).join("")}</div>
@@ -4018,6 +4019,7 @@ function lAcctPaint() {
 { const _render = render; render = function () { _render(); const nav = $("#nav"); if (nav) nav.insertAdjacentHTML("afterbegin", lAcctChip()); lAcctPaint(); }; }
 document.addEventListener("keydown", e => { if (e.key === "Escape" && A.acctOpen) { A.acctOpen = false; lAcctPaint(); } });
 function lClick(t) {
+  if (t.dataset.act === "advanced") { A.simple = false; go("select"); return true; }
   if (t.dataset.act === "acct") { A.acctOpen = true; lAcctPaint(); const f = document.querySelector("#acctm button, #acctm input"); if (f) setTimeout(() => (document.querySelector("#aemail") || f).focus(), 30); return true; }
   if (t.dataset.act === "acctclose") { A.acctOpen = false; lAcctPaint(); return true; }
   const a = t.dataset.act;
