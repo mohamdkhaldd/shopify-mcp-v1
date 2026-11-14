@@ -20,10 +20,10 @@ const M_STORM = {
   user: ok("Egypt's weather forecasters, airports, and people with asthma", "خبراء الأرصاد في مصر، والمطارات، والناس اللي عندهم حساسية صدر"),
   rules: [{ k: "always", en: "Watch Egypt all the time", ar: "يراقب مصر طول الوقت" }, { k: "night", en: "See storms day and night", ar: "يشوف العاصفة بالليل والنهار" }, { k: "fresh", en: "New picture every 15 minutes", ar: "صورة جديدة كل ربع ساعة" }],
   decisions: {
-    science: [{ k: "cam", t: ok("Which camera?", "أنهي كاميرا؟"), o: [lopt("A", "cam1", "Color camera", "كاميرا ألوان", { ir: false }), lopt("B", "weather", "Infrared camera", "كاميرا إنفرا ريد", { ir: true })] }],
-    comms: [{ k: "ant", t: ok("Which antenna?", "أنهي أنتينا؟"), o: [lopt("A", "dish1", "Slow antenna", "أنتينا بطيئة", { fast: false }), lopt("B", "dish3", "Fast antenna", "أنتينا سريعة", { fast: true })] }],
-    engineer: [{ k: "pow", t: ok("Where does the power come from?", "الكهربا هتيجي منين؟"), o: [lopt("A", "panel2", "Solar panels", "سولار بانلز", { rtg: false }), lopt("B", "rtg", "RTG nuclear battery", "بطارية نووية RTG", { rtg: true })] }],
-    planner: [{ k: "orb", t: ok("Which orbit?", "أنهي أوربت؟"), o: [lopt("A", "ice", "Low orbit · 700 km", "أوربت واطي · 700 كم", { geo: false }), lopt("B", "relay", "Geostationary · 36,000 km", "جيوستيشنري · 36,000 كم", { geo: true })] }] },
+    science: [{ k: "cam", t: ok("Which camera?", "أنهي كاميرا؟"), o: [lopt("A", "cam1", "Color camera", "كاميرا ألوان", { ir: false, hint: ok("Real colors, but needs sunlight. At night it sees almost nothing.", "ألوان حقيقية، بس محتاجة شمس. بالليل تقريباً مش بتشوف حاجة.") }), lopt("B", "weather", "Infrared camera", "كاميرا إنفرا ريد", { ir: true, hint: ok("Sees heat, so it works in the day AND at night.", "بتشوف الحرارة، فبتشتغل بالنهار وبالليل.") })] }],
+    comms: [{ k: "ant", t: ok("Which antenna?", "أنهي أنتينا؟"), o: [lopt("A", "dish1", "Slow antenna", "أنتينا بطيئة", { fast: false, hint: ok("Good for small messages. One big picture takes a very long time.", "كويسة للرسايل الصغيرة. الصورة الكبيرة بتاخد وقت طويل قوي.") }), lopt("B", "dish3", "Fast antenna", "أنتينا سريعة", { fast: true, hint: ok("Sends big pictures quickly, so a new picture every 15 minutes is easy.", "بتبعت الصور الكبيرة بسرعة، فصورة كل ربع ساعة سهلة.") })] }],
+    engineer: [{ k: "pow", t: ok("Where does the power come from?", "الكهربا هتيجي منين؟"), o: [lopt("A", "panel2", "Solar panels", "سولار بانلز", { rtg: false, hint: ok("Near Earth the Sun is strong. Light and simple, with a battery for the shadow.", "جنب الأرض الشمس قوية. خفيفة وسهلة، ومعاها بطارية للضل.") }), lopt("B", "rtg", "RTG nuclear battery", "بطارية نووية RTG", { rtg: true, hint: ok("Works anywhere, but its fuel is very rare. Made for places far from the Sun.", "بتشتغل في أي مكان، بس وقودها نادر جداً. معمولة للأماكن البعيدة عن الشمس.") })] }],
+    planner: [{ k: "orb", t: ok("Which orbit?", "أنهي أوربت؟"), o: [lopt("A", "ice", "Low orbit · 700 km", "أوربت واطي · 700 كم", { geo: false, hint: ok("Sharp pictures, but it sees Egypt only a few minutes at a time.", "صور واضحة، بس بيشوف مصر كام دقيقة بس كل مرة.") }), lopt("B", "relay", "Geostationary · 36,000 km", "جيوستيشنري · 36,000 كم", { geo: true, hint: ok("Stays above Egypt all the time, day and night.", "فاضل فوق مصر طول الوقت، بالليل والنهار.") })] }] },
   compute(p) {
     const g = (r, k) => pickOpt(this, p, r, k) || {}; const cam = g("science", "cam"), ant = g("comms", "ant"), pow = g("engineer", "pow"), orb = g("planner", "orb");
     const rules = { always: !!orb.geo, night: !!cam.ir, fresh: !!ant.fast };
@@ -532,7 +532,8 @@ function lChatPaint() { const el = $("#chatlog"); if (!el) return; el.innerHTML 
 
 /* ---- team board: players write what they learned; the game never fills it in ---- */
 function lBoard() {
-  const mine = LB.mode === "online" ? ((LB.me && LB.me.data && LB.me.data.notes) || "") : LB.notes;
+  let mine = LB.mode === "online" ? ((LB.me && LB.me.data && LB.me.data.notes) || "") : LB.notes;
+  if (!mine && LB.level === 1) mine = L(ok("WHAT THE MISSION NEEDS:", "المهمة محتاجة إيه:")) + "\n" + LM().rules.map((r, i) => (i + 1) + ". " + L(r)).join("\n") + "\n\n" + L(ok("Tip: pick the choice that meets the most needs.", "نصيحة: اختار اللي بيحقق أكتر طلبات."));
   return `<section class="hpanel notr board"><div class="kick">${L(ok("Team board", "سبورة التيم"))}</div>
     <p class="psub">${L(ok("Write what you learned from your video: names, numbers, good and bad points. Your team can read it.", "اكتب اللي اتعلمته من الفيديو بتاعك: الأسامي، والأرقام، والميزة والعيب. والتيم كله يقدر يقراه."))}</p>
     <textarea id="lnotes" rows="5" maxlength="1500" placeholder="${L(ok("e.g. Camera A: sees … / needs …", "مثلاً: الكاميرا A: بتشوف … / محتاجة …"))}">${esc(mine)}</textarea>
@@ -556,12 +557,13 @@ function lvideo() {
     <video id="brief" class="briefvid" src="video/${LM().id}_${r}.mp4" controls playsinline preload="auto"></video>
     <div class="row">${i < list.length - 1 ? `<button class="hbtn" type="button" data-act="vnext" id="vnext" ${LB.watched[LM().id + r] ? "" : "disabled"}>${L(ok("Next briefing", "الشرح اللي بعده"))}</button>`
       : `<button class="hbtn" type="button" data-act="vdone" id="vnext" ${LB.watched[LM().id + r] ? "" : "disabled"}>${L(ok("I'm ready to decide", "أنا جاهز أقرر"))}</button>`}
-      <span class="psub">${L(ok("The button unlocks when the video ends.", "الزرار بيتفتح لما الفيديو يخلص."))}</span></div></section>${lBoard()}`;
+      <span class="psub">${L(ok("The button unlocks when the video ends.", "الزرار بيتفتح لما الفيديو يخلص."))}</span></div>
+    ${(TRANSCRIPT[LM().id] || {})[r] ? `<details class="script" open><summary>📜 ${L(ok("Video script (read it, or copy the numbers to the team board)", "سكريبت الفيديو (اقراه، أو انسخ الأرقام للسبورة)"))}</summary><ol>${TRANSCRIPT[LM().id][r].map(t => `<li>${esc(t).replace(/(\$?\d[\d,.]*\s?(?:%|km|kg|m|W|Wh|Mbit\/s|megabits|minutes|million|billion|meters|kilometers|kilograms|watts|watt-hours|degrees|hours|days|years|months)?)/g, '<b class="hl">$1</b>')}</li>`).join("")}</ol></details>` : ""}</section>${lBoard()}`;
 }
 function lCard(role, d, o, picks, mine) {
   const sel = picks[role + "." + d.k] === o.k, orph = lOrphan(role), key = role + "." + d.k;
   const myv = orph && LB.me && LB.me.data && LB.me.data.rv && LB.me.data.rv[key] === o.k, nv = orph ? lVotesFor(key, o.k) : 0;
-  return `<button type="button" class="ccard ${sel ? "sel" : ""} ${myv ? "myvote" : ""}" ${mine ? `data-lpick="${role}.${d.k}.${o.k}"` : "disabled"}><span class="cnum">${o.k}</span><span class="cicon">${sIcon(o.icon)}</span><b>${L(o.n)}</b>${orph ? `<span class="vcount">🗳 ${nv}${myv ? " · " + L(ok("your vote", "صوتك")) : ""}</span>` : ""}</button>`;
+  return `<button type="button" class="ccard ${sel ? "sel" : ""} ${myv ? "myvote" : ""}" ${mine ? `data-lpick="${role}.${d.k}.${o.k}"` : "disabled"}><span class="cnum">${o.k}</span><span class="cicon">${sIcon(o.icon)}</span><b>${L(o.n)}</b>${o.hint && LB.level === 1 ? `<span class="chint">💡 ${L(o.hint)}</span>` : ""}${orph ? `<span class="vcount">🗳 ${nv}${myv ? " · " + L(ok("your vote", "صوتك")) : ""}</span>` : ""}</button>`;
 }
 function ldesign() {
   const picks = allPicks(), mine = myRoles(), m = LM();
