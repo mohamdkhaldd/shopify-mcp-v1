@@ -1,4 +1,5 @@
-import { createContext, ReactNode, useContext, useState } from "react";
+import { createContext, FormEvent, ReactNode, useContext, useState } from "react";
+import { shell } from "../shell";
 import Icon from "./Icon";
 
 // إخفاء أرقام الصفحة الرئيسية: كل حاجة عليها بلور لحد ما تدوس العين جنبها،
@@ -12,16 +13,75 @@ interface PrivacyState {
 
 const PrivacyContext = createContext<PrivacyState | null>(null);
 
+// إظهار الأرقام محتاج باسورد الشركة — مرة واحدة لحد ما البرنامج يتقفل/يتقفل ويتفتح
+let revealOk = false;
+
 export function PrivacyProvider({ children }: { children: ReactNode }) {
   const [allHidden, setAllHidden] = useState(true);
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [asking, setAsking] = useState<null | (() => void)>(null);
   const isHidden = (id: string) => overrides[id] ?? allHidden;
-  const toggle = (id: string) => setOverrides((o) => ({ ...o, [id]: !(o[id] ?? allHidden) }));
-  const toggleAll = () => {
-    setAllHidden((h) => !h);
-    setOverrides({});
+  // أي إظهار بيعدّي على الباسورد الأول
+  const reveal = (then: () => void) => (revealOk ? then() : setAsking(() => then));
+  const toggle = (id: string) => {
+    const showing = overrides[id] ?? allHidden;
+    const flip = () => setOverrides((o) => ({ ...o, [id]: !(o[id] ?? allHidden) }));
+    if (showing) reveal(flip);
+    else flip();
   };
-  return <PrivacyContext.Provider value={{ isHidden, toggle, allHidden, toggleAll }}>{children}</PrivacyContext.Provider>;
+  const toggleAll = () => {
+    const flip = () => {
+      setAllHidden((h) => !h);
+      setOverrides({});
+    };
+    if (allHidden) reveal(flip);
+    else flip();
+  };
+  return (
+    <PrivacyContext.Provider value={{ isHidden, toggle, allHidden, toggleAll }}>
+      {children}
+      {asking && (
+        <RevealPassword
+          onClose={() => setAsking(null)}
+          onOk={() => {
+            revealOk = true;
+            const then = asking;
+            setAsking(null);
+            then();
+          }}
+        />
+      )}
+    </PrivacyContext.Provider>
+  );
+}
+
+function RevealPassword({ onOk, onClose }: { onOk: () => void; onClose: () => void }) {
+  const [pw, setPw] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    const r = await shell.checkPassword(pw).catch(() => ({ ok: false, message: "مفيش نت — جرّب تاني" }) as { ok: boolean; message?: string; noPassword?: boolean });
+    setBusy(false);
+    // الشركة لسه معملتش باسورد: الأرقام بتظهر عادي (الإعدادات ← باسورد الشركة)
+    if (r.ok || r.noPassword) onOk();
+    else setError(r.message || "الباسورد غلط");
+  }
+  return (
+    <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={onClose}>
+      <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="bg-white rounded-card shadow-xl p-6 w-full max-w-xs space-y-3 text-center">
+        <div className="text-3xl">🔒</div>
+        <div className="font-bold text-slate-800">اكتب باسورد الشركة عشان تظهر الأرقام</div>
+        <input type="password" autoFocus value={pw} onChange={(e) => setPw(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-center" />
+        {error && <div className="text-xs font-semibold text-rose-600">{error}</div>}
+        <button type="submit" disabled={busy} className="w-full bg-primary text-white rounded-lg py-2 text-sm font-bold disabled:opacity-50">
+          {busy ? "بنتأكد…" : "اظهر"}
+        </button>
+      </form>
+    </div>
+  );
 }
 
 export function usePrivacy() {

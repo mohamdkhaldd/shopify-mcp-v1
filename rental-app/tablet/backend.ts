@@ -161,6 +161,9 @@ export async function startBackend(): Promise<{ page: Page; api: NonNullable<Win
       flush().then(() => location.replace(location.pathname));
       return { ok: true };
     },
+    // باسورد الشركة من غير ما يقفل/يفتح حاجة: صفحة الكوميشن، إظهار الأرقام، ونسيت الباسورد
+    "shell:checkPassword": ({ password }: { password: string }) =>
+      hasPassword() ? license.checkPassword(password ?? "") : { ok: false, noPassword: true, message: "مفيش باسورد للشركة — اعمله من الإعدادات" },
     "shell:unlock": async ({ password }: { password: string }) => {
       const r = await license.checkPassword(password);
       if (r.ok) unlocked = true;

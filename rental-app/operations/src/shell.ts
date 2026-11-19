@@ -15,6 +15,9 @@ export const shell = {
   info: (): Promise<ShellInfo | null> => window.api?.invoke("shell:info") ?? Promise.resolve(null),
   /** "قفل": the lock screen until the company password is typed */
   lock: () => window.api?.invoke("shell:lock"),
+  /** باسورد الشركة (بيتأكد منه من السحابة) — noPassword لو الشركة معملتلهاش باسورد */
+  checkPassword: (password: string): Promise<{ ok: boolean; noPassword?: boolean; message?: string }> =>
+    window.api ? window.api.invoke("shell:checkPassword", { password }) : Promise.resolve({ ok: false, noPassword: true }),
   setPassword: (current: string, next: string): Promise<ShellResult> => window.api!.invoke("shell:setPassword", { current, next }),
   signOut: (force = false): Promise<ShellResult | { ok: false; pending: number }> => window.api!.invoke("shell:signOut", { force }),
 };

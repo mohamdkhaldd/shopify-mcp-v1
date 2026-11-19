@@ -1,6 +1,7 @@
 import { useState } from "react";
 import FundsTab from "./hassan/FundsTab";
 import InstallmentsTab from "./hassan/InstallmentsTab";
+import HassanGate from "./hassan/HassanGate";
 import MonthPicker from "../components/equipment/MonthPicker";
 import PrintButton from "../components/PrintButton";
 import { PrintHeader, PrintSignoff } from "../components/PrintSignoff";
@@ -32,6 +33,8 @@ export default function Hassan() {
           : `كوميشن ${person()}`;
 
   return (
+    <HassanGate>
+      {(lock) => (
     <div className="space-y-6">
       <PrintHeader title={printTitle} subtitle={`${monthLabel(month)} ${month.slice(0, 4)}`} />
 
@@ -122,12 +125,14 @@ export default function Hassan() {
       {tab === "commission" && <CommissionTab month={month} />}
       {tab === "treasury" && <TreasuryTab month={month} />}
       {tab === "funds" && <FundsTab month={month} />}
-      {tab === "installments" && <InstallmentsTab />}
+      {tab === "installments" && <InstallmentsTab onLock={lock} />}
       {tab === "expenses" && <ExpensesTab month={month} />}
       {tab === "workers" && <WorkersTab month={month} />}
       {tab === "ledger" && <LedgerTab month={month} />}
 
       <PrintSignoff />
     </div>
+      )}
+    </HassanGate>
   );
 }

@@ -726,6 +726,8 @@ export const installmentsApi = {
   checkLock: async (pin: string): Promise<boolean> => (await invoke("installments:checkLock", { hash: await hashPin(pin) })).ok,
   setLock: async (oldPin: string | null, newPin: string | null) =>
     invoke("installments:setLock", { oldHash: oldPin ? await hashPin(oldPin) : null, hash: newPin ? await hashPin(newPin) : null }),
+  /** نسيت الباسورد: بعد باسورد الشركة — يشيله أو يحط واحد جديد */
+  resetLock: async (newPin: string | null) => invoke("installments:setLock", { force: true, hash: newPin ? await hashPin(newPin) : null }),
   list: (): Promise<HassanInstallment[]> => invoke("installments:list"),
   create: (i: { title: string; amount: number; count: number | null; start_date: string; note: string | null }) => invoke("installments:create", i),
   update: (i: { id: number; title: string; amount: number; count: number | null; start_date: string; note: string | null }) =>

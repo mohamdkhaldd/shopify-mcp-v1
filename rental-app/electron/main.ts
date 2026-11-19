@@ -198,6 +198,10 @@ app.whenReady().then(async () => {
     restart();
     return { ok: true };
   });
+  // باسورد الشركة من غير ما يقفل/يفتح حاجة: صفحة الكوميشن، إظهار الأرقام، ونسيت الباسورد
+  ipcMain.handle("shell:checkPassword", async (_e, { password }: { password: string }) =>
+    hasPassword() ? license.checkPassword(password ?? "") : { ok: false, noPassword: true, message: "مفيش باسورد للشركة — اعمله من الإعدادات" },
+  );
   ipcMain.handle("shell:unlock", async (_e, { password }: { password: string }) => {
     const r = await license.checkPassword(password);
     if (r.ok) unlocked = true;

@@ -293,7 +293,7 @@ function LockBar({ locked, onLock }: { locked: boolean; onLock: () => void }) {
 
   return (
     <div className="no-print bg-white rounded-card shadow-card px-5 py-3 flex flex-wrap items-center gap-3 text-sm">
-      <span className="font-semibold text-slate-600">{locked ? "🔒 الأقساط مقفولة بباسورد" : "🔓 الأقساط من غير باسورد"}</span>
+      <span className="font-semibold text-slate-600">{locked ? "🔒 الصفحة دي مقفولة بباسورد" : "🔓 الصفحة دي من غير باسورد"}</span>
       {locked ? (
         <>
           <button onClick={onLock} className="rounded-lg bg-slate-800 text-white px-3 py-1 text-xs font-bold">
@@ -308,7 +308,7 @@ function LockBar({ locked, onLock }: { locked: boolean; onLock: () => void }) {
         </>
       ) : (
         <button onClick={() => setMode(mode === "set" ? "" : "set")} className="rounded-lg bg-primary text-white px-3 py-1 text-xs font-bold">
-          اعمل باسورد للأقساط
+          اعمل باسورد للصفحة
         </button>
       )}
       {mode && (
@@ -332,62 +332,16 @@ function LockBar({ locked, onLock }: { locked: boolean; onLock: () => void }) {
   );
 }
 
-// الأقساط مقفولة بباسورد: كل حاجة عليها بلور لحد ما تكتب الباسورد (بيتقفل
-// تاني لما تسيب التاب أو تدوس "اقفل دلوقتي").
-export default function InstallmentsTab() {
+// القفل بقى على صفحة صاحب الكوميشن كلها (HassanGate) — هنا الأقساط بس،
+// وأزرار الباسورد فوقها لسه بتعمل/تغيّر/تشيل باسورد الصفحة.
+export default function InstallmentsTab({ onLock }: { onLock: () => void }) {
   const [locked, setLocked] = useState<boolean | null>(null);
-  const [open, setOpen] = useState(false);
-  const [pin, setPin] = useState("");
-  const [error, setError] = useState("");
-
-  const load = () => installmentsApi.lockStatus().then((s) => setLocked(s.locked));
   useEffect(() => {
+    const load = () => installmentsApi.lockStatus().then((s) => setLocked(s.locked));
     load();
-    const onChange = () => load();
-    window.addEventListener("installments-lock-changed", onChange);
-    return () => window.removeEventListener("installments-lock-changed", onChange);
+    window.addEventListener("installments-lock-changed", load);
+    return () => window.removeEventListener("installments-lock-changed", load);
   }, []);
-
-  async function unlock(e: FormEvent) {
-    e.preventDefault();
-    setError("");
-    if (await installmentsApi.checkLock(pin)) {
-      setOpen(true);
-      setPin("");
-    } else setError("الباسورد غلط");
-  }
-
   if (locked == null) return <div className="text-sm text-slate-400">جاري التحميل...</div>;
-  if (!locked || open) return <InstallmentsContent locked={locked} onLock={() => setOpen(false)} />;
-  return (
-    <div className="relative">
-      {/* مكان الأقساط متغطي — البيانات نفسها مبتتحملش لحد ما الباسورد يتكتب */}
-      <div className="blur-md select-none pointer-events-none space-y-4" aria-hidden>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white rounded-card shadow-card h-24" />
-          <div className="bg-white rounded-card shadow-card h-24" />
-        </div>
-        <div className="bg-white rounded-card shadow-card h-40" />
-        <div className="bg-white rounded-card shadow-card h-40" />
-      </div>
-      <div className="absolute inset-0 flex items-start justify-center pt-16">
-        <form onSubmit={unlock} className="bg-white rounded-card shadow-card p-6 w-full max-w-xs space-y-3 text-center">
-          <div className="text-3xl">🔒</div>
-          <div className="font-bold text-slate-800">الأقساط مقفولة</div>
-          <input
-            type="password"
-            autoFocus
-            value={pin}
-            onChange={(e) => setPin(e.target.value)}
-            placeholder="اكتب الباسورد"
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-center"
-          />
-          {error && <div className="text-xs font-semibold text-rose-600">{error}</div>}
-          <button type="submit" className="w-full bg-primary text-white rounded-lg py-2 text-sm font-bold">
-            افتح
-          </button>
-        </form>
-      </div>
-    </div>
-  );
+  return <InstallmentsContent locked={locked} onLock={onLock} />;
 }

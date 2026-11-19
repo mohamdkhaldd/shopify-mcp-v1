@@ -11,7 +11,7 @@ interface PrintHeaderProps {
 export function PrintHeader({ title, subtitle }: PrintHeaderProps) {
   const brand = useBrand();
   return (
-    <div className="print-only mb-4 pb-3 border-b-2 border-slate-800">
+    <div className="print-only mb-4 pb-3 border-b-2 border-slate-800" data-pdf-title={title} data-pdf-sub={subtitle ?? ""}>
       <div className="flex items-center justify-between">
         <div>
           <div className="font-extrabold text-lg">{brand.customer}</div>

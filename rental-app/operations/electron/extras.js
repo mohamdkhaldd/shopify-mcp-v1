@@ -350,9 +350,10 @@ function registerExtraHandlers(db, owed) {
   const lockHash = () => db.prepare("SELECT value FROM app_settings WHERE key = 'installments_lock'").get()?.value || null;
   ipcMain.handle("installments:lockStatus", () => ({ locked: !!lockHash() }));
   ipcMain.handle("installments:checkLock", (_e, { hash }) => ({ ok: !!hash && hash === lockHash() }));
-  ipcMain.handle("installments:setLock", (_e, { oldHash, hash }) => {
+  // force: «نسيت الباسورد» بعد ما باسورد الشركة يتأكد من الشاشة
+  ipcMain.handle("installments:setLock", (_e, { oldHash, hash, force }) => {
     const current = lockHash();
-    if (current && oldHash !== current) throw new Error("الباسورد القديم غلط");
+    if (current && !force && oldHash !== current) throw new Error("الباسورد القديم غلط");
     if (hash) {
       db.prepare(
         "INSERT INTO app_settings (key, value) VALUES ('installments_lock', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
