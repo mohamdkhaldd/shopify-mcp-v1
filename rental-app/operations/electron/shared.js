@@ -343,6 +343,16 @@ module.exports = function makeShared(db) {
       .all(account)
       .forEach((r) => add(r.date, "in", `دفعة من المقاول: ${r.contractor_name}`, r.amount, { src: "contractor_payments", src_id: r.id }));
 
+    // الالتزامات والمستحقات: دفعة على التزام (إيجار…) أو فلوس استلمناها
+    db.prepare("SELECT op.id, op.date, op.amount, o.title, o.direction, o.party FROM obligation_payments op JOIN obligations o ON o.id = op.obligation_id WHERE op.method = ?")
+      .all(account)
+      .forEach((r) =>
+        add(r.date, r.direction === "receive" ? "in" : "out", `${r.direction === "receive" ? "استلمنا" : "التزام"}: ${r.title}${r.party ? ` — ${r.party}` : ""}`, r.amount, {
+          src: "obligation_payments",
+          src_id: r.id,
+        })
+      );
+
     db.prepare("SELECT * FROM other_income WHERE method = ?")
       .all(account)
       .forEach((r) => add(r.date, "in", `إيراد آخر${r.description ? `: ${r.description}` : ""}`, r.amount, { other_income_id: r.id, src: "other_income", src_id: r.id }));

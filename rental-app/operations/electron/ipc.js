@@ -30,6 +30,7 @@ const SECTIONS = [
   require("./handlers/dashboard"),
   require("./handlers/cashLedger"),
   require("./handlers/system"),
+  require("./handlers/dues"),
 ];
 
 function registerIpcHandlers(db) {

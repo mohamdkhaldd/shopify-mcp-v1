@@ -499,6 +499,18 @@ function setupDatabase(db, { seed = true } = {}) {
   if (!expenseCols.includes("method")) db.exec("ALTER TABLE hassan_treasury_expenses ADD COLUMN method TEXT");
   // الشيت اللي السطر متسجل فيه: مصاريف التشغيل (فاضي) / صدقات / هالك — كلهم بيتخصموا من الكوميشن
   if (!expenseCols.includes("kind")) db.exec("ALTER TABLE hassan_treasury_expenses ADD COLUMN kind TEXT");
+  // الالتزامات والمستحقات: التزام ممكن يبقى "ندفع" أو "نستلم"، ويتدفع على دفعات
+  const oblCols = db.prepare("PRAGMA table_info(obligations)").all().map((c) => c.name);
+  if (!oblCols.includes("direction")) db.exec("ALTER TABLE obligations ADD COLUMN direction TEXT NOT NULL DEFAULT 'pay'");
+  if (!oblCols.includes("party")) db.exec("ALTER TABLE obligations ADD COLUMN party TEXT");
+  db.exec(`CREATE TABLE IF NOT EXISTS obligation_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    obligation_id INTEGER NOT NULL REFERENCES obligations(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    amount REAL NOT NULL,
+    method TEXT NOT NULL DEFAULT 'cash',
+    note TEXT
+  )`);
   // الحساب الشخصي: الحركة اتدفعت/اتقبضت من أنهي حساب في خزنة الشركة (فاضي = تسجيل بس).
   const ledgerCols = db.prepare("PRAGMA table_info(hassan_ledger)").all().map((c) => c.name);
   if (!ledgerCols.includes("method")) db.exec("ALTER TABLE hassan_ledger ADD COLUMN method TEXT");

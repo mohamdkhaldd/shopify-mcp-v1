@@ -1,8 +1,13 @@
 import { FormEvent, useEffect, useState } from "react";
-import { obligationsApi } from "../api/client";
-import { Obligation } from "../api/types";
+import { DueBoard, DueItem, duesApi, obligationsApi } from "../api/client";
+import Modal from "../components/Modal";
+import MonthPicker from "../components/equipment/MonthPicker";
+import PrintButton from "../components/PrintButton";
+import { PrintHeader } from "../components/PrintSignoff";
 import { formatEGP } from "../utils/format";
-import { monthLabel } from "../utils/months";
+import { currentMonthKey, monthLabel } from "../utils/months";
+import { PAYMENT_METHODS } from "../utils/paymentMethods";
+import { useUndo } from "../context/UndoContext";
 
 export const OBLIGATION_KINDS: { value: string; label: string }[] = [
   { value: "salaries", label: "مرتبات" },
@@ -30,202 +35,315 @@ export function dueText(days: number) {
   return `بعد ${days} أيام`;
 }
 
-// مرتبات وشركاء: لو المبلغ فاضي، البرنامج بيحسب "عليك كام" لوحده
-const AUTO_KINDS = ["salaries", "partners"];
-function amountCell(o: Obligation) {
-  if (o.amount != null) return formatEGP(o.amount);
-  if (o.auto_amount == null) return "—";
-  return (
-    <>
-      {formatEGP(o.auto_amount)}
-      <span className="block text-[11px] font-normal text-slate-400">
-        {o.kind === "salaries" && o.for_month ? `الباقي من مرتبات ${monthLabel(o.for_month)}` : "الباقي للشركاء كلهم"}
-      </span>
-    </>
-  );
-}
-
+const DAY_GROUPS: { key: string; label: string }[] = [
+  { key: "drivers", label: "مرتبات السواقين" },
+  { key: "partners", label: "الشركاء" },
+  { key: "contractors", label: "المقاولين" },
+  { key: "suppliers", label: "الموردين" },
+];
+const WEEKDAYS = ["الأحد", "الاتنين", "التلات", "الأربع", "الخميس", "الجمعة", "السبت"];
 const inputCls = "rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white";
 
-// مواعيد الاستحقاقات والالتزامات: بتسجل "عليك تدفع كذا قبل يوم كذا"، والصفحة
-// الرئيسية بتنبهك قبلها بـ 3 أيام ويوم الميعاد ولو اتأخرت.
+// الالتزامات والمستحقات: شيت شهري بالأيام — كل يوم عليك تدفع/تستلم إيه،
+// وجنب كل واحد زرار «ادفع» أو «استلمت».
 export default function Obligations() {
-  const [list, setList] = useState<Obligation[]>([]);
-  const [title, setTitle] = useState("");
-  const [kind, setKind] = useState("salaries");
-  const [amount, setAmount] = useState("");
-  const [due, setDue] = useState(todayISO());
-  const [repeat, setRepeat] = useState(true);
-  const [note, setNote] = useState("");
-
-  const refresh = () => obligationsApi.list().then(setList);
+  const [month, setMonth] = useState(currentMonthKey());
+  const [board, setBoard] = useState<DueBoard | null>(null);
+  const [paying, setPaying] = useState<DueItem | null>(null);
+  const [adding, setAdding] = useState(false);
+  const refresh = () => duesApi.board(month).then(setBoard);
   useEffect(() => {
     refresh();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month]);
 
-  async function add(e: FormEvent) {
-    e.preventDefault();
-    const t = title.trim() || obligationKindLabel(kind);
-    await obligationsApi.create({ title: t, kind, amount: amount ? Number(amount) : null, due_date: due, repeat_monthly: repeat, note: note || null });
-    setTitle("");
-    setAmount("");
-    setNote("");
+  async function setDay(group: string, day: string) {
+    if (!day) return;
+    await duesApi.setDay(group, Number(day));
     refresh();
   }
-
-  async function done(o: Obligation) {
-    await obligationsApi.done(o.id);
-    refresh();
-  }
-  async function reopen(o: Obligation) {
-    await obligationsApi.reopen(o.id);
-    refresh();
-  }
-  async function remove(o: Obligation) {
-    if (!window.confirm(`تمسح "${o.title}"؟`)) return;
-    await obligationsApi.remove(o.id);
-    refresh();
-  }
-
-  const pending = list.filter((o) => !o.done_at);
-  const finished = list.filter((o) => o.done_at).slice(0, 30);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold text-slate-900">المواعيد والالتزامات</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          سجّل أي حاجة لازم تدفعها قبل يوم معيّن (مرتبات، شركاء، إيجار...). الصفحة الرئيسية هتنبهك قبلها بـ 3 أيام ويوم الميعاد ولو اتأخرت.
-        </p>
-        <p className="text-sm text-slate-500 mt-1">
-          <b>المرتبات والشركاء:</b> اختار اليوم بس وسيب المبلغ فاضي — البرنامج بيحسب عليك كام لوحده من شيت المرتبات ومن أرصدة الشركاء. ميعاد المرتبات قبل يوم ٢٠ بيحسب مرتبات الشهر اللي فات، ومن يوم ٢٠ بيحسب الشهر نفسه.
-        </p>
+      <PrintHeader title="الالتزامات والمستحقات" subtitle={`${monthLabel(month)} ${month.slice(0, 4)}`} />
+      <div className="no-print flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold text-slate-900">الالتزامات والمستحقات</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            كل يوم في الشهر عليك تدفع إيه أو هتستلم إيه. المرتبات والشركاء والمقاولين والموردين والأقساط بيتكتبوا لوحدهم — انت بتحدد يوم الدفع بس.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => setAdding(true)} className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-bold hover:bg-primary-dark">
+            + التزام / فلوس جاية
+          </button>
+          <PrintButton />
+          <MonthPicker month={month} onChange={setMonth} />
+        </div>
       </div>
 
-      <form onSubmit={add} className="bg-white rounded-card shadow-card p-5 flex flex-wrap items-end gap-2">
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">النوع</label>
-          <select value={kind} onChange={(e) => setKind(e.target.value)} className={inputCls}>
-            {OBLIGATION_KINDS.map((k) => (
-              <option key={k.value} value={k.value}>
-                {k.label}
+      {!board ? (
+        <div className="text-sm text-slate-400">جاري التحميل...</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white rounded-card shadow-card p-5">
+              <div className="text-sm font-semibold text-slate-500">عليك تدفع الشهر ده</div>
+              <div className="mt-1 text-2xl font-extrabold text-rose-600">{formatEGP(board.totals.pay)}</div>
+            </div>
+            <div className="bg-white rounded-card shadow-card p-5">
+              <div className="text-sm font-semibold text-slate-500">هتستلم الشهر ده</div>
+              <div className="mt-1 text-2xl font-extrabold text-primary-dark">{formatEGP(board.totals.receive)}</div>
+            </div>
+          </div>
+
+          <div className="no-print bg-white rounded-card shadow-card p-4 flex flex-wrap items-center gap-3 text-sm">
+            <b className="text-slate-700">أيام الدفع كل شهر:</b>
+            {DAY_GROUPS.map((g) => (
+              <label key={g.key} className="flex items-center gap-1.5 text-slate-600">
+                {g.label} يوم
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  defaultValue={board.settings[g.key]}
+                  key={`${g.key}-${board.settings[g.key]}`}
+                  onBlur={(e) => e.target.value !== String(board.settings[g.key]) && setDay(g.key, e.target.value)}
+                  className={`${inputCls} w-16 text-center`}
+                />
+              </label>
+            ))}
+          </div>
+
+          {board.days.length === 0 && <div className="bg-white rounded-card shadow-card p-8 text-center text-slate-400">مفيش حاجة عليك ولا ليك الشهر ده 👍</div>}
+
+          {board.days.map((d) => {
+            const day = Number(d.date.slice(8, 10));
+            const wd = WEEKDAYS[new Date(`${d.date}T12:00:00`).getDay()];
+            const days = daysUntil(d.date);
+            return (
+              <section key={d.date} className="bg-white rounded-card shadow-card overflow-hidden">
+                <header className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 bg-slate-50 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-primary text-white flex flex-col items-center justify-center leading-none">
+                      <span className="text-lg font-extrabold">{day}</span>
+                      <span className="text-[10px] opacity-80">{monthLabel(month)}</span>
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-slate-800">{d.title}</div>
+                      <div className="text-xs text-slate-500">
+                        {wd} — <span className={days < 0 ? "text-rose-600 font-bold" : days <= 3 ? "text-amber-600 font-bold" : ""}>{dueText(days)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-sm font-bold">
+                    {d.pay > 0 && <span className="text-rose-600">ندفع {formatEGP(d.pay)}</span>}
+                    {d.pay > 0 && d.receive > 0 && " · "}
+                    {d.receive > 0 && <span className="text-primary-dark">نستلم {formatEGP(d.receive)}</span>}
+                  </div>
+                </header>
+                <ul className="divide-y divide-slate-100">
+                  {d.items.map((x) => (
+                    <li key={`${x.group}-${x.ref}`} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                      <div className="flex-1 min-w-[180px]">
+                        <div className="font-bold text-slate-800">
+                          {x.label}
+                          {x.party && <span className="text-slate-500 font-semibold"> — {x.party}</span>}
+                          {x.late && <span className="ms-2 text-[11px] rounded bg-rose-50 text-rose-600 px-1.5 py-0.5">متأخر من الشهر اللي فات</span>}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {x.paid > 0.005 ? `${x.direction === "receive" ? "اتستلم" : "اتدفع"} ${formatEGP(x.paid)} من ${formatEGP(x.amount)} — ` : ""}
+                          {x.breakdown.length > 0 && x.paid <= 0.005 ? x.breakdown.map((b) => `${b.label} ${formatEGP(b.amount)}`).join(" · ") : ""}
+                        </div>
+                      </div>
+                      <div className={`text-lg font-extrabold ${x.direction === "receive" ? "text-primary-dark" : "text-slate-900"}`}>{formatEGP(x.remaining)}</div>
+                      <button
+                        onClick={() => setPaying(x)}
+                        className={`no-print rounded-lg px-4 py-2 text-sm font-bold text-white ${x.direction === "receive" ? "bg-sky-600 hover:bg-sky-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                      >
+                        {x.direction === "receive" ? "استلمت" : "ادفع"}
+                      </button>
+                      {x.group === "manual" && (
+                        <button
+                          title="امسح"
+                          onClick={async () => {
+                            if (!window.confirm(`تمسح «${x.label}»؟`)) return;
+                            await obligationsApi.remove(x.ref);
+                            refresh();
+                          }}
+                          className="no-print text-xs font-bold text-rose-500 px-1"
+                        >
+                          🗑
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
+        </>
+      )}
+
+      {paying && <PayDialog item={paying} onClose={() => setPaying(null)} onDone={() => { setPaying(null); refresh(); }} />}
+      {adding && <AddDialog month={month} onClose={() => setAdding(false)} onDone={() => { setAdding(false); refresh(); }} />}
+    </div>
+  );
+}
+
+function PayDialog({ item, onClose, onDone }: { item: DueItem; onClose: () => void; onDone: () => void }) {
+  const [amount, setAmount] = useState(String(Math.round(item.remaining * 100) / 100));
+  const [method, setMethod] = useState("cash");
+  const [date, setDate] = useState(todayISO());
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+  const { pushUndo } = useUndo();
+  const receive = item.direction === "receive";
+
+  async function pay(value: number) {
+    setError("");
+    if (!(value > 0)) return setError("اكتب المبلغ");
+    let undo;
+    try {
+      undo = await duesApi.pay({ group: item.group, ref: item.ref, forMonth: item.forMonth, date, amount: value, method, note: note || null });
+    } catch (e) {
+      return setError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ""));
+    }
+    pushUndo(`${receive ? "استلمت" : "دفعت"} ${formatEGP(value)} — ${item.label}`, async () => {
+      await duesApi.undo(undo);
+      onDone();
+    });
+    onDone();
+  }
+
+  const cls = "rounded-lg border border-slate-200 px-2 py-1.5 text-sm w-full";
+  return (
+    <Modal title={`${receive ? "استلمت من" : "ادفع لـ"} ${item.label}`} onClose={onClose}>
+      {item.breakdown.length > 0 && (
+        <table className="w-full text-sm mb-4">
+          <tbody>
+            {item.breakdown.map((b) => (
+              <tr key={b.label} className="border-b border-slate-100">
+                <td className="py-1.5 text-slate-600">{b.label}</td>
+                <td className={`py-1.5 text-end font-bold ${b.amount < 0 ? "text-rose-600" : "text-slate-800"}`}>{formatEGP(b.amount)}</td>
+              </tr>
+            ))}
+            <tr>
+              <td className="pt-2 font-extrabold">{receive ? "الباقي ليك" : "الباقي عليك"}</td>
+              <td className="pt-2 text-end font-extrabold">{formatEGP(item.remaining)}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1 text-sm font-semibold text-slate-600">
+          المبلغ
+          <input type="number" min="0" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} className={cls} />
+        </label>
+        <label className="grid gap-1 text-sm font-semibold text-slate-600">
+          {receive ? "دخلت فين" : "هتدفع من"}
+          <select value={method} onChange={(e) => setMethod(e.target.value)} className={cls}>
+            {PAYMENT_METHODS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">الوصف</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={obligationKindLabel(kind)} className={`${inputCls} min-w-[180px]`} />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">المبلغ</label>
-          <input
-            type="number"
-            min="0"
-            step="any"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder={AUTO_KINDS.includes(kind) ? "بيتحسب لوحده" : "اختياري"}
-            className={`${inputCls} w-32`}
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">قبل يوم</label>
-          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={inputCls} />
-        </div>
-        <label className="flex items-center gap-1.5 text-sm text-slate-600 pb-1.5">
-          <input type="checkbox" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} />
-          يتكرر كل شهر
         </label>
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">ملاحظة</label>
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" className={inputCls} />
-        </div>
-        <button type="submit" className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold">
-          سجّل الميعاد
-        </button>
-      </form>
-
-      <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-3">جاية</h2>
-        {pending.length === 0 ? (
-          <div className="text-sm text-slate-400">مفيش التزامات مستنية.</div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-slate-400 border-b border-slate-100">
-                <th className="text-start font-semibold py-2">الميعاد</th>
-                <th className="text-start font-semibold py-2">الالتزام</th>
-                <th className="text-start font-semibold py-2">المبلغ</th>
-                <th className="text-start font-semibold py-2">فاضل</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {pending.map((o) => {
-                const d = daysUntil(o.due_date);
-                return (
-                  <tr key={o.id} className="border-b border-slate-50 last:border-0">
-                    <td className="py-2 text-slate-600 whitespace-nowrap">{o.due_date}</td>
-                    <td className="py-2">
-                      <span className="font-semibold text-slate-800">{o.title}</span>
-                      <span className="text-xs text-slate-400">
-                        {" "}
-                        — {obligationKindLabel(o.kind)}
-                        {o.repeat_monthly ? " — كل شهر" : ""}
-                        {o.note ? ` — ${o.note}` : ""}
-                      </span>
-                    </td>
-                    <td className="py-2 font-semibold text-slate-700">{amountCell(o)}</td>
-                    <td className="py-2">
-                      <span
-                        className={[
-                          "rounded px-2 py-0.5 text-xs font-bold",
-                          d <= 0 ? "bg-rose-100 text-rose-700" : d <= 3 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600",
-                        ].join(" ")}
-                      >
-                        {dueText(d)}
-                      </span>
-                    </td>
-                    <td className="py-2 whitespace-nowrap text-end">
-                      <button onClick={() => done(o)} className="bg-primary text-white rounded-lg px-2.5 py-1 text-xs font-semibold me-2">
-                        ✓ اتدفع
-                      </button>
-                      <button onClick={() => remove(o)} className="text-xs text-rose-500 font-semibold">
-                        مسح
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-        <p className="text-[11px] text-slate-400 mt-3">لما تدوس "اتدفع" على التزام بيتكرر كل شهر، ميعاد الشهر الجاي بيتسجل لوحده.</p>
+        <label className="grid gap-1 text-sm font-semibold text-slate-600">
+          التاريخ
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={cls} />
+        </label>
+        <label className="grid gap-1 text-sm font-semibold text-slate-600">
+          البيان
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" className={cls} />
+        </label>
       </div>
+      {error && <div className="mt-3 text-sm text-rose-600 font-semibold">{error}</div>}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button onClick={() => pay(item.remaining)} className="bg-emerald-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-emerald-700">
+          {receive ? "استلمت كله" : "دفعت كامل"} ({formatEGP(item.remaining)})
+        </button>
+        <button onClick={() => pay(Number(amount))} className="bg-primary text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-primary-dark">
+          {receive ? "استلمت المبلغ ده" : "ادفع المبلغ ده"}
+        </button>
+        <button onClick={onClose} className="bg-slate-100 text-slate-600 rounded-lg px-4 py-2 text-sm font-bold">
+          إلغاء
+        </button>
+      </div>
+    </Modal>
+  );
+}
 
-      {finished.length > 0 && (
-        <div className="bg-white rounded-card shadow-card p-5">
-          <h2 className="font-bold text-slate-800 mb-3">اتدفعت</h2>
-          <table className="w-full text-sm">
-            <tbody>
-              {finished.map((o) => (
-                <tr key={o.id} className="border-b border-slate-50 last:border-0 text-slate-500">
-                  <td className="py-1.5">{o.due_date}</td>
-                  <td className="py-1.5">{o.title}</td>
-                  <td className="py-1.5">{o.amount != null ? formatEGP(o.amount) : "—"}</td>
-                  <td className="py-1.5">اتدفع يوم {o.done_at}</td>
-                  <td className="py-1.5 text-end">
-                    <button onClick={() => reopen(o)} className="text-xs font-semibold text-slate-500">
-                      رجّعه
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+function AddDialog({ month, onClose, onDone }: { month: string; onClose: () => void; onDone: () => void }) {
+  const [direction, setDirection] = useState<"pay" | "receive">("pay");
+  const [title, setTitle] = useState("");
+  const [party, setParty] = useState("");
+  const [amount, setAmount] = useState("");
+  const [due, setDue] = useState(todayISO().slice(0, 7) === month ? todayISO() : `${month}-01`);
+  const [repeat, setRepeat] = useState(false);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    try {
+      await duesApi.addManual({ title, party: party || null, amount: Number(amount), due_date: due, direction, repeat_monthly: repeat, note: note || null });
+      onDone();
+    } catch (err) {
+      setError((err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ""));
+    }
+  }
+  const cls = "rounded-lg border border-slate-200 px-2 py-1.5 text-sm w-full";
+  return (
+    <Modal title="التزام جديد أو فلوس جاية" onClose={onClose}>
+      <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2 flex gap-2">
+          {(["pay", "receive"] as const).map((d) => (
+            <button
+              type="button"
+              key={d}
+              onClick={() => setDirection(d)}
+              className={`flex-1 rounded-lg py-2 text-sm font-bold ${direction === d ? (d === "pay" ? "bg-emerald-600 text-white" : "bg-sky-600 text-white") : "bg-slate-100 text-slate-600"}`}
+            >
+              {d === "pay" ? "هندفع" : "هنستلم"}
+            </button>
+          ))}
         </div>
-      )}
-    </div>
+        <label className="grid gap-1 text-sm font-semibold text-slate-600">
+          ده إيه
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={direction === "pay" ? "زي: إيجار المخزن" : "زي: فلوس من مورد"} className={cls} />
+        </label>
+        <label className="grid gap-1 text-sm font-semibold text-slate-600">
+          {direction === "pay" ? "لمين" : "من مين"}
+          <input value={party} onChange={(e) => setParty(e.target.value)} placeholder="اختياري" className={cls} />
+        </label>
+        <label className="grid gap-1 text-sm font-semibold text-slate-600">
+          المبلغ
+          <input type="number" min="0" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} className={cls} />
+        </label>
+        <label className="grid gap-1 text-sm font-semibold text-slate-600">
+          {direction === "pay" ? "ميعاد الدفع" : "هيجيلي امتى"}
+          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={cls} />
+        </label>
+        <label className="grid gap-1 text-sm font-semibold text-slate-600 sm:col-span-2">
+          ملاحظة
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" className={cls} />
+        </label>
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-600 sm:col-span-2">
+          <input type="checkbox" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} />
+          بيتكرر كل شهر
+        </label>
+        {error && <div className="sm:col-span-2 text-sm text-rose-600 font-semibold">{error}</div>}
+        <div className="sm:col-span-2 flex gap-2">
+          <button type="submit" disabled={!title.trim() || !amount} className="bg-primary text-white rounded-lg px-4 py-2 text-sm font-bold disabled:opacity-50">
+            سجّل
+          </button>
+          <button type="button" onClick={onClose} className="bg-slate-100 text-slate-600 rounded-lg px-4 py-2 text-sm font-bold">
+            إلغاء
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }

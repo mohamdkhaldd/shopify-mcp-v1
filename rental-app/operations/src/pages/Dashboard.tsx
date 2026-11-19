@@ -14,41 +14,24 @@ import {
 } from "recharts";
 import DayCountBadge from "../components/DayCountBadge";
 import EquipmentTick from "../components/EquipmentTick";
-import KpiCard from "../components/KpiCard";
-import Modal from "../components/Modal";
 import { Blurrable, EyeAllButton, PrivacyProvider } from "../components/Privacy";
 import DashboardAlerts from "../components/DashboardAlerts";
 import DashboardPeriods from "../components/DashboardPeriods";
 import { useTheme } from "../theme";
-import { contractorsDashboardApi, dashboardApi, partnersDashboardApi, suppliersApi } from "../api/client";
-import { ContractorSummary, DashboardMonthDues, DashboardSummary, MonthDueRow, PartnerSummary, SupplierDashboardRow } from "../api/types";
-import { currentMonthKey } from "../utils/months";
+import { dashboardApi } from "../api/client";
+import { DashboardSummary } from "../api/types";
 import { formatEGP } from "../utils/format";
 import { SectionId } from "../nav";
-
-type DrilldownKind = "expense" | "contractors" | "partners" | "suppliers" | "monthContractors" | "monthPartners" | null;
 
 export default function Dashboard({ onNavigate }: { onNavigate?: (id: SectionId) => void }) {
   const { theme } = useTheme();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [drilldown, setDrilldown] = useState<DrilldownKind>(null);
-  const [contractorRows, setContractorRows] = useState<ContractorSummary[] | null>(null);
-  const [partnerRows, setPartnerRows] = useState<PartnerSummary[] | null>(null);
-  const [supplierRows, setSupplierRows] = useState<SupplierDashboardRow[] | null>(null);
 
-  const [monthDues, setMonthDues] = useState<DashboardMonthDues | null>(null);
 
   useEffect(() => {
     dashboardApi.summary().then(setSummary);
-    dashboardApi.monthDues(currentMonthKey()).then(setMonthDues);
   }, []);
 
-  function openDrilldown(kind: DrilldownKind) {
-    setDrilldown(kind);
-    if (kind === "contractors" && !contractorRows) contractorsDashboardApi.summary().then(setContractorRows);
-    if (kind === "partners" && !partnerRows) partnersDashboardApi.summary().then(setPartnerRows);
-    if (kind === "suppliers" && !supplierRows) suppliersApi.dashboard().then(setSupplierRows);
-  }
 
   const gridStroke = theme === "dark" ? "#243057" : "#EEF2F0";
   const tickFill = theme === "dark" ? "#94A0C9" : "#64748B";
@@ -211,177 +194,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (id: SectionId)
         </div>
       </Blurrable>
 
-      {drilldown === "expense" && (
-        <Modal title="مصروف كل معدة (سنويًا)" onClose={() => setDrilldown(null)}>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-slate-400 border-b border-slate-100">
-                <th className="text-start font-semibold py-2">المعدة</th>
-                <th className="text-start font-semibold py-2">المصروف السنوي</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summary.equipmentExpenses.map((eq) => (
-                <tr key={eq.name} className="border-b border-slate-50 last:border-0">
-                  <td className="py-2.5 font-semibold text-slate-700">{eq.name}</td>
-                  <td className="py-2.5 text-slate-500">{formatEGP(eq.annualExpense)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Modal>
-      )}
-
-      {drilldown === "monthContractors" && (
-        <Modal title={`المستحق من كل مقاول — شهر ${summary.currentMonthLabel}`} onClose={() => setDrilldown(null)}>
-          <MonthDuesTable rows={monthDues?.contractors} nameLabel="المقاول" dueLabel="شغله الشهر ده" paidLabel="دفع الشهر ده" />
-        </Modal>
-      )}
-
-      {drilldown === "monthPartners" && (
-        <Modal title={`المستحق لكل شريك — شهر ${summary.currentMonthLabel}`} onClose={() => setDrilldown(null)}>
-          <MonthDuesTable rows={monthDues?.partners} nameLabel="الشريك" dueLabel="نصيبه من ربح الشهر" paidLabel="اتدفعله الشهر ده" />
-        </Modal>
-      )}
-
-      {drilldown === "contractors" && (
-        <Modal title="المستحق من كل مقاول" onClose={() => setDrilldown(null)}>
-          {!contractorRows ? (
-            <div className="text-sm text-slate-400">جاري التحميل...</div>
-          ) : contractorRows.length === 0 ? (
-            <div className="text-sm text-slate-400">لسه مفيش مقاولين مسجلين.</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-slate-400 border-b border-slate-100">
-                  <th className="text-start font-semibold py-2">المقاول</th>
-                  <th className="text-start font-semibold py-2">عليه</th>
-                  <th className="text-start font-semibold py-2">دفع</th>
-                  <th className="text-start font-semibold py-2">الباقي</th>
-                </tr>
-              </thead>
-              <tbody>
-                {contractorRows.map((c) => (
-                  <tr key={c.id} className="border-b border-slate-50 last:border-0">
-                    <td className="py-2.5 font-semibold text-slate-700">{c.name}</td>
-                    <td className="py-2.5 text-slate-500">{formatEGP(c.totalWork)}</td>
-                    <td className="py-2.5 text-slate-500">{formatEGP(c.totalPaid)}</td>
-                    <td className="py-2.5 font-semibold text-primary-dark">{formatEGP(c.remaining)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Modal>
-      )}
-
-      {drilldown === "partners" && (
-        <Modal title="المستحق لكل شريك" onClose={() => setDrilldown(null)}>
-          {!partnerRows ? (
-            <div className="text-sm text-slate-400">جاري التحميل...</div>
-          ) : partnerRows.length === 0 ? (
-            <div className="text-sm text-slate-400">لسه مفيش شركاء مسجلين.</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-slate-400 border-b border-slate-100">
-                  <th className="text-start font-semibold py-2">الشريك</th>
-                  <th className="text-start font-semibold py-2">له</th>
-                  <th className="text-start font-semibold py-2">اتدفع له</th>
-                  <th className="text-start font-semibold py-2">الباقي</th>
-                </tr>
-              </thead>
-              <tbody>
-                {partnerRows.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-50 last:border-0">
-                    <td className="py-2.5 font-semibold text-slate-700">{p.name}</td>
-                    <td className="py-2.5 text-slate-500">{formatEGP(p.totalDue)}</td>
-                    <td className="py-2.5 text-slate-500">{formatEGP(p.totalPaid)}</td>
-                    <td className="py-2.5 font-semibold text-primary-dark">{formatEGP(p.remaining)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Modal>
-      )}
-
-      {drilldown === "suppliers" && (
-        <Modal title="المستحق لكل مورد" onClose={() => setDrilldown(null)}>
-          {!supplierRows ? (
-            <div className="text-sm text-slate-400">جاري التحميل...</div>
-          ) : supplierRows.length === 0 ? (
-            <div className="text-sm text-slate-400">لسه مفيش موردين مسجلين.</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-slate-400 border-b border-slate-100">
-                  <th className="text-start font-semibold py-2">المورد</th>
-                  <th className="text-start font-semibold py-2">المشتريات</th>
-                  <th className="text-start font-semibold py-2">اتدفع</th>
-                  <th className="text-start font-semibold py-2">الباقي</th>
-                </tr>
-              </thead>
-              <tbody>
-                {supplierRows.map((s) => (
-                  <tr key={s.id} className="border-b border-slate-50 last:border-0">
-                    <td className="py-2.5 font-semibold text-slate-700">{s.name}</td>
-                    <td className="py-2.5 text-slate-500">{formatEGP(s.totalPurchases)}</td>
-                    <td className="py-2.5 text-slate-500">{formatEGP(s.totalPaid)}</td>
-                    <td className="py-2.5 font-semibold text-primary-dark">{formatEGP(s.remaining)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Modal>
-      )}
     </div>
     </PrivacyProvider>
-  );
-}
-
-function MonthDuesTable({
-  rows,
-  nameLabel,
-  dueLabel,
-  paidLabel,
-}: {
-  rows: MonthDueRow[] | undefined;
-  nameLabel: string;
-  dueLabel: string;
-  paidLabel: string;
-}) {
-  if (!rows) return <div className="text-sm text-slate-400">جاري التحميل...</div>;
-  if (rows.length === 0) return <div className="text-sm text-slate-400">مفيش حاجة مسجلة الشهر ده.</div>;
-  return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-slate-400 border-b border-slate-100">
-          <th className="text-start font-semibold py-2">{nameLabel}</th>
-          <th className="text-start font-semibold py-2">{dueLabel}</th>
-          <th className="text-start font-semibold py-2">{paidLabel}</th>
-          <th className="text-start font-semibold py-2">الباقي</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.id} className="border-b border-slate-50 last:border-0">
-            <td className="py-2.5 font-semibold text-slate-700">{r.name}</td>
-            <td className="py-2.5 text-slate-500">{formatEGP(r.due)}</td>
-            <td className="py-2.5 text-slate-500">{formatEGP(r.paid)}</td>
-            <td className="py-2.5 font-semibold text-primary-dark">{formatEGP(r.remaining)}</td>
-          </tr>
-        ))}
-      </tbody>
-      <tfoot>
-        <tr className="border-t border-slate-100">
-          <td className="pt-3 font-bold text-slate-700">الإجمالي</td>
-          <td className="pt-3 font-bold text-slate-600">{formatEGP(rows.reduce((s, r) => s + r.due, 0))}</td>
-          <td className="pt-3 font-bold text-slate-600">{formatEGP(rows.reduce((s, r) => s + r.paid, 0))}</td>
-          <td className="pt-3 font-bold text-primary-dark">{formatEGP(rows.reduce((s, r) => s + r.remaining, 0))}</td>
-        </tr>
-      </tfoot>
-    </table>
   );
 }

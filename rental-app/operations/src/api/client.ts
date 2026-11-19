@@ -690,6 +690,42 @@ export const carApi = {
   removeFuel: (id: number) => invoke("carFuel:delete", { id }),
 };
 
+export interface DueItem {
+  group: "installments" | "drivers" | "partners" | "contractors" | "suppliers" | "manual";
+  ref: number;
+  forMonth?: string;
+  label: string;
+  party?: string | null;
+  direction: "pay" | "receive";
+  due: string;
+  late?: boolean;
+  amount: number;
+  paid: number;
+  remaining: number;
+  note?: string | null;
+  breakdown: { label: string; amount: number }[];
+}
+export interface DueUndo {
+  src: string;
+  src_id: number;
+  obligation_id?: number;
+  spawned?: number | null;
+}
+export interface DueBoard {
+  month: string;
+  days: { date: string; title: string; pay: number; receive: number; items: DueItem[] }[];
+  settings: Record<string, number>;
+  totals: { pay: number; receive: number };
+}
+export const duesApi = {
+  board: (month: string): Promise<DueBoard> => invoke("dues:board", { month }),
+  setDay: (group: string, day: number) => invoke("dues:setDay", { group, day }),
+  pay: (p: { group: string; ref: number; forMonth?: string; date: string; amount: number; method: string; note?: string | null }): Promise<DueUndo> => invoke("dues:pay", p),
+  undo: (u: DueUndo) => invoke("dues:undo", u),
+  addManual: (o: { title: string; party?: string | null; amount: number; due_date: string; direction: "pay" | "receive"; repeat_monthly: boolean; note?: string | null }) =>
+    invoke("dues:addManual", o),
+};
+
 export const obligationsApi = {
   list: (): Promise<Obligation[]> => invoke("obligations:list"),
   create: (o: { title: string; kind: string; amount: number | null; due_date: string; repeat_monthly: boolean; note: string | null }) =>

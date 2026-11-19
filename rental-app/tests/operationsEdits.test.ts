@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { setupOperationsDatabase } from "../electron/operationsDb";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const makeShared = require("../operations/electron/shared.js");
-const sections = ["dailyLogs", "treasury", "hassanWorkers", "dashboard"].map((n) => require(`../operations/electron/handlers/${n}.js`));
+const sections = ["dailyLogs", "treasury", "hassanWorkers", "dashboard", "dues"].map((n) => require(`../operations/electron/handlers/${n}.js`));
 
 // شاشات التشغيل بتنادي على الدوال دي بنفس الأسماء (ipcMain.handle)
 function ops() {
@@ -116,5 +116,51 @@ describe("التشغيل: عهدة من شريك أو مقاول", () => {
     call("custodies:delete", { id: b.id });
     expect(db.prepare("SELECT COUNT(*) AS n FROM contractor_payments").get()).toEqual({ n: 0 });
     expect(db.prepare("SELECT COUNT(*) AS n FROM partner_payments").get()).toEqual({ n: 0 });
+  });
+});
+
+describe("التشغيل: الالتزامات والمستحقات", () => {
+  it("بالأيام، ادفع/استلمت بيتسجلوا صح، والجزئي بيفضل باقي", () => {
+    const { db, call } = ops();
+    db.prepare("INSERT INTO contractors (id, name, opening_balance) VALUES (1, 'المقاول', 0)").run();
+    db.prepare("INSERT INTO equipment (id, name) VALUES (1, 'لودر')").run();
+    call("dailyLogs:upsert", { equipment_id: 1, date: "2026-11-02", role: "contractor", shift_label: "", person_name: "المقاول", actual_hours: 8, base_hours: 8, day_rate: 1000 });
+    db.prepare("INSERT INTO hassan_installments (id, title, amount, count, start_date) VALUES (1, 'العربية', 2000, 10, '2026-11-01')").run();
+    call("dues:addManual", { title: "إيجار المخزن", amount: 3000, due_date: "2026-11-20", direction: "pay", repeat_monthly: true });
+
+    let b = call("dues:board", { month: "2026-11" });
+    const find = (g: string) => b.days.flatMap((d: { items: { group: string }[] }) => d.items).find((x: { group: string }) => x.group === g);
+    expect(b.days[0]).toMatchObject({ date: "2026-11-01", title: "الأقساط" });
+    expect(find("contractors")).toMatchObject({ direction: "receive", remaining: 1000, due: "2026-11-10" });
+    expect(find("manual")).toMatchObject({ remaining: 3000, due: "2026-11-20" });
+
+    // استلمت من المقاول
+    call("dues:pay", { group: "contractors", ref: 1, date: "2026-11-10", amount: 1000, method: "cash" });
+    // إيجار: جزء وبعدين الباقي
+    const rent = find("manual");
+    call("dues:pay", { group: "manual", ref: rent.ref, date: "2026-11-20", amount: 1000, method: "cash" });
+    b = call("dues:board", { month: "2026-11" });
+    expect(find("manual")).toMatchObject({ paid: 1000, remaining: 2000 });
+    call("dues:pay", { group: "manual", ref: rent.ref, date: "2026-11-21", amount: 2000, method: "cash" });
+    b = call("dues:board", { month: "2026-11" });
+    expect(find("manual")).toBeUndefined();
+    expect(find("contractors")).toBeUndefined();
+    // شهري: الشهر الجاي اتعمل لوحده
+    expect(call("dues:board", { month: "2026-12" }).days.some((d: { title: string }) => d.title.includes("التزامات"))).toBe(true);
+    // القسط: ادفع
+    call("dues:pay", { group: "installments", ref: 1, date: "2026-11-01", amount: 2000, method: "cash" });
+    expect(db.prepare("SELECT COUNT(*) AS n FROM hassan_installment_payments").get()).toEqual({ n: 1 });
+
+    // تراجع: الإيجار اللي اتقفل يرجع مفتوح، والشهر الجاي اللي اتعمل يتشال
+    const rent2 = db.prepare("SELECT * FROM obligations WHERE title = 'إيجار المخزن' AND done_at IS NULL").get() as { id: number };
+    const last = db.prepare("SELECT id FROM obligation_payments ORDER BY id DESC").get() as { id: number };
+    call("dues:undo", { src: "obligation_payments", src_id: last.id, obligation_id: rent.ref, spawned: rent2.id });
+    b = call("dues:board", { month: "2026-11" });
+    expect(find("manual")).toMatchObject({ remaining: 2000 });
+    expect(db.prepare("SELECT COUNT(*) AS n FROM obligations").get()).toEqual({ n: 1 });
+
+    // يوم الدفع بيتغيّر
+    call("dues:setDay", { group: "contractors", day: 25 });
+    expect(call("dues:board", { month: "2026-11" }).settings.contractors).toBe(25);
   });
 });
