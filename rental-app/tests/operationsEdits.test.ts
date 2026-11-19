@@ -12,6 +12,7 @@ function ops() {
   const ipc = { handle: (c: string, f: (e: unknown, a: unknown) => unknown) => (h[c] = f) };
   const shared = { ...makeShared(db), pushToCloud() {} };
   for (const s of sections) s(db, ipc, shared);
+  require("../operations/electron/extras.js").registerExtraHandlers(db, { payrollSummary: shared.payrollSummary, partnersSummary: shared.partnersSummary }, ipc);
   const call = (c: string, a: unknown) => h[c](null, a) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
   return { db, call };
 }
@@ -98,5 +99,22 @@ describe("التشغيل: الرئيسية بالشهر وبعدين بالسن�
     const company = (p: { dues: { key: string; amount: number }[] }) => p.dues.find((d) => d.key === "company")!.amount;
     expect(company(r.monthly)).toBe(2000);
     expect(company(r.yearly)).toBe(2500);
+  });
+});
+
+describe("التشغيل: عهدة من شريك أو مقاول", () => {
+  it("المقاول: دفعة منه، الشريك: بتزوّد اللي ليه، والخزنة متلمستش — والمسح بيشيلهم", () => {
+    const { db, call } = ops();
+    db.prepare("INSERT INTO partners (id, name) VALUES (1, 'سامي')").run();
+    db.prepare("INSERT INTO contractors (id, name, opening_balance) VALUES (1, 'المقاول', 0)").run();
+    const a = call("custodies:create", { holder: "أحمد", date: "2026-11-05", amount: 3000, funded_by: "contractor", funder_id: 1 });
+    expect(db.prepare("SELECT amount, method FROM contractor_payments").get()).toEqual({ amount: 3000, method: "custody" });
+    const b = call("custodies:create", { holder: "محمود", date: "2026-11-06", amount: 2000, funded_by: "partner", funder_id: 1 });
+    expect(db.prepare("SELECT amount FROM partner_payments").get()).toEqual({ amount: -2000 });
+    expect(db.prepare("SELECT method FROM custodies WHERE id = ?").get(a.id)).toEqual({ method: "external" });
+    call("custodies:delete", { id: a.id });
+    call("custodies:delete", { id: b.id });
+    expect(db.prepare("SELECT COUNT(*) AS n FROM contractor_payments").get()).toEqual({ n: 0 });
+    expect(db.prepare("SELECT COUNT(*) AS n FROM partner_payments").get()).toEqual({ n: 0 });
   });
 });

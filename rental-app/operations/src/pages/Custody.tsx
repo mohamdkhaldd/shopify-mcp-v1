@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import PrintButton from "../components/PrintButton";
 import { PrintHeader, PrintSignoff } from "../components/PrintSignoff";
-import { custodyApi, employeesApi, equipmentApi, expenseCategoriesApi, suppliersApi } from "../api/client";
+import { contractorsApi, custodyApi, employeesApi, equipmentApi, expenseCategoriesApi, partnersApi, suppliersApi } from "../api/client";
 import { Custody as CustodyRow, CustodyStatement, CustodyTarget, Driver, Equipment, ExpenseCategory } from "../api/types";
 import { formatEGP } from "../utils/format";
 import { PAYMENT_METHODS, paymentMethodLabel } from "../utils/paymentMethods";
@@ -417,6 +417,11 @@ export default function Custody() {
   const [date, setDate] = useState(todayISO());
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
+  // الفلوس جاية منين: خزنة الشركة، أو شريك/مقاول اداها من عنده
+  const [fundedBy, setFundedBy] = useState<"" | "partner" | "contractor">("");
+  const [funderId, setFunderId] = useState<number | "">("");
+  const [partners, setPartners] = useState<{ id: number; name: string }[]>([]);
+  const [contractors, setContractors] = useState<{ id: number; name: string }[]>([]);
   const [warn, setWarn] = useState("");
   const [note, setNote] = useState("");
   const [notice, setNotice] = useState<{ ok: boolean; low?: boolean; text: string } | null>(null);
@@ -428,18 +433,37 @@ export default function Custody() {
     expenseCategoriesApi.list().then(setCategories);
     suppliersApi.names().then(setSuppliers);
     employeesApi.list().then(setEmployees);
+    partnersApi.list().then(setPartners);
+    contractorsApi.list().then(setContractors);
   }, []);
 
   async function create(e: FormEvent) {
     e.preventDefault();
     if (!holder.trim() || !amount) return;
     try {
-      const c = await custodyApi.create({ holder, date, amount: Number(amount), method, warn_amount: warn === "" ? "" : Number(warn), note: note || null });
+      const c = await custodyApi.create({
+        holder,
+        date,
+        amount: Number(amount),
+        method,
+        warn_amount: warn === "" ? "" : Number(warn),
+        note: note || null,
+        funded_by: fundedBy || null,
+        funder_id: funderId === "" ? null : funderId,
+      });
       setHolder("");
       setAmount("");
       setWarn("");
       setNote("");
-      setNotice({ ok: true, text: `اتسلمت عهدة ${c.holder} بـ ${formatEGP(c.amount)} — اتخصمت من ${paymentMethodLabel(c.method)}` });
+      const funder = fundedBy === "partner" ? partners.find((x) => x.id === funderId)?.name : contractors.find((x) => x.id === funderId)?.name;
+      setNotice({
+        ok: true,
+        text: fundedBy
+          ? `اتسلمت عهدة ${c.holder} بـ ${formatEGP(c.amount)} من ${fundedBy === "partner" ? "الشريك" : "المقاول"} ${funder} — ${fundedBy === "partner" ? "اتزودت على اللي ليه" : "اتسجلت دفعة منه"}، والخزنة متلمستش`
+          : `اتسلمت عهدة ${c.holder} بـ ${formatEGP(c.amount)} — اتخصمت من ${paymentMethodLabel(c.method)}`,
+      });
+      setFundedBy("");
+      setFunderId("");
       refresh();
       setOpenId(c.id);
     } catch (err) {
@@ -468,7 +492,7 @@ export default function Custody() {
       <div className="no-print">
         <h1 className="text-2xl font-extrabold text-slate-900">العهد</h1>
         <p className="text-sm text-slate-500 mt-1">
-          بتسلّم عهدة لشخص (بتتخصم كاملة من الخزنة)، وكل اللي بيصرفه بيتخصم من العهدة مش من الخزنة. لما تقرب تخلص بينبّهك في الصفحة الرئيسية.
+          بتسلّم عهدة لشخص (بتتخصم كاملة من الخزنة — أو شريك/مقاول بيديها من عنده)، وكل اللي بيصرفه بيتخصم من العهدة مش من الخزنة. لما تقرب تخلص بينبّهك في الصفحة الرئيسية.
         </p>
       </div>
 
@@ -500,15 +524,44 @@ export default function Custody() {
           <input type="number" min="0" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} className={`${inputCls} w-28`} />
         </div>
         <div>
-          <label className="block text-xs text-slate-400 mb-1">طالعة من</label>
-          <select value={method} onChange={(e) => setMethod(e.target.value)} className={inputCls}>
-            {PAYMENT_METHODS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
+          <label className="block text-xs text-slate-400 mb-1">الفلوس من</label>
+          <select
+            value={fundedBy}
+            onChange={(e) => {
+              setFundedBy(e.target.value as "" | "partner" | "contractor");
+              setFunderId("");
+            }}
+            className={inputCls}
+          >
+            <option value="">خزنة الشركة</option>
+            <option value="partner">شريك (من جيبه)</option>
+            <option value="contractor">مقاول</option>
           </select>
         </div>
+        {fundedBy === "" ? (
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">طالعة من</label>
+            <select value={method} onChange={(e) => setMethod(e.target.value)} className={inputCls}>
+              {PAYMENT_METHODS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">{fundedBy === "partner" ? "الشريك" : "المقاول"}</label>
+            <select value={funderId} onChange={(e) => setFunderId(e.target.value ? Number(e.target.value) : "")} className={inputCls}>
+              <option value="">اختار…</option>
+              {(fundedBy === "partner" ? partners : contractors).map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="block text-xs text-slate-400 mb-1">نبّهني لما الباقي يوصل</label>
           <input
@@ -525,7 +578,7 @@ export default function Custody() {
           <label className="block text-xs text-slate-400 mb-1">ملاحظة</label>
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" className={inputCls} />
         </div>
-        <button type="submit" disabled={!holder.trim() || !amount} className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold disabled:opacity-50">
+        <button type="submit" disabled={!holder.trim() || !amount || (fundedBy !== "" && funderId === "")} className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold disabled:opacity-50">
           سلّم العهدة
         </button>
       </form>
@@ -545,7 +598,10 @@ export default function Custody() {
             <button onClick={() => setOpenId(openId === c.id ? null : c.id)} className="w-full text-start">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-800">{c.holder}</span>
-                <span className="text-xs text-slate-400">{c.date}</span>
+                <span className="text-xs text-slate-400">
+                  {c.funded_by && <span className="me-1 rounded bg-amber-50 text-amber-700 px-1.5 py-0.5 font-bold">من {c.funded_by === "partner" ? "شريك" : "مقاول"}</span>}
+                  {c.date}
+                </span>
               </div>
               <div className="flex items-baseline justify-between mt-1">
                 <span className="text-xs text-slate-500">الباقي</span>

@@ -1,5 +1,12 @@
 const { wrapIpc } = require("./fees");
-const ipcMain = wrapIpc(require("electron").ipcMain);
+// على Electron/التابلت: ipcMain الحقيقي؛ الاختبارات بتبعت واحد بتاعها
+const defaultIpc = (() => {
+  try {
+    return wrapIpc(require("electron").ipcMain);
+  } catch {
+    return null;
+  }
+})();
 
 // اسم نوع المصروف اللي بيتسجل بيه مشوار العربية الملاكي على معدة.
 const CAR_CATEGORY = "عربية ملاكي";
@@ -135,7 +142,8 @@ function owedFor(o, owed) {
   return {};
 }
 
-function registerExtraHandlers(db, owed) {
+function registerExtraHandlers(db, owed, ipcOverride) {
+  const ipcMain = ipcOverride || defaultIpc;
   // مشاوير العربية اللي اتسجلت قبل كده بطريقة دفع من الخزنة — بقت من فلوس
   // العربية (مبتتخصمش من الخزنة).
   const carCat = carCategoryId(db);
@@ -143,15 +151,35 @@ function registerExtraHandlers(db, owed) {
 
   // ===== العهد =====
   ipcMain.handle("custodies:list", () => custodyBalances(db));
-  ipcMain.handle("custodies:create", (_e, { holder, date, amount, method, warn_amount, note }) => {
+  ipcMain.handle("custodies:create", (_e, { holder, date, amount, method, warn_amount, note, funded_by, funder_id }) => {
     const name = (holder ?? "").trim();
     if (!name) throw new Error("لازم اسم الشخص اللي واخد العهدة");
     if (!(Number(amount) > 0)) throw new Error("لازم مبلغ العهدة");
     const warn = warn_amount === "" || warn_amount == null ? Math.round(Number(amount) * 0.2) : Number(warn_amount) || 0;
-    const info = db
-      .prepare("INSERT INTO custodies (holder, date, amount, method, warn_amount, note) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(name, date, Number(amount), method || "cash", warn, note?.trim() || null);
-    return custodyBalances(db).find((c) => c.id === Number(info.lastInsertRowid));
+    const by = funded_by === "partner" || funded_by === "contractor" ? funded_by : null;
+    if (by && !funder_id) throw new Error(by === "partner" ? "اختار الشريك اللي ادى الفلوس" : "اختار المقاول اللي ادى الفلوس");
+    const tx = db.transaction(() => {
+      // من شريك/مقاول: الفلوس مدخلتش خزنة الشركة، فالعهدة مبتتخصمش منها
+      const info = db
+        .prepare("INSERT INTO custodies (holder, date, amount, method, warn_amount, note, funded_by, funder_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(name, date, Number(amount), by ? "external" : method || "cash", warn, note?.trim() || null, by, by ? funder_id : null);
+      const id = Number(info.lastInsertRowid);
+      if (by === "contractor") {
+        const pay = db
+          .prepare("INSERT INTO contractor_payments (contractor_id, date, amount, method, note) VALUES (?, ?, ?, 'custody', ?)")
+          .run(funder_id, date, Number(amount), `اداها عهدة لـ ${name}`);
+        db.prepare("UPDATE custodies SET funder_payment_id = ? WHERE id = ?").run(pay.lastInsertRowid, id);
+      } else if (by === "partner") {
+        // دفعة بالسالب = الشريك اللي دفع من جيبه، فاللي ليه بيزيد
+        const pay = db
+          .prepare("INSERT INTO partner_payments (partner_id, date, amount, method, note) VALUES (?, ?, ?, 'custody', ?)")
+          .run(funder_id, date, -Number(amount), `اداها عهدة لـ ${name} من جيبه`);
+        db.prepare("UPDATE custodies SET funder_payment_id = ? WHERE id = ?").run(pay.lastInsertRowid, id);
+      }
+      return id;
+    });
+    const id = tx();
+    return custodyBalances(db).find((c) => c.id === id);
   });
   ipcMain.handle("custodies:update", (_e, { id, holder, warn_amount, note }) => {
     db.prepare("UPDATE custodies SET holder = ?, warn_amount = ?, note = ? WHERE id = ?").run(
@@ -182,6 +210,10 @@ function registerExtraHandlers(db, owed) {
           db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(r.v);
         }
       }
+      // الدفعة اللي اتسجلت للمقاول/الشريك مع العهدة بتتمسح معاها
+      const head = db.prepare("SELECT funded_by, funder_payment_id FROM custodies WHERE id = ?").get(id);
+      if (head?.funder_payment_id && head.funded_by === "contractor") db.prepare("DELETE FROM contractor_payments WHERE id = ?").run(head.funder_payment_id);
+      if (head?.funder_payment_id && head.funded_by === "partner") db.prepare("DELETE FROM partner_payments WHERE id = ?").run(head.funder_payment_id);
       db.prepare("DELETE FROM custodies WHERE id = ?").run(id);
     });
     tx();

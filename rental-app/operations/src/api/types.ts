@@ -803,6 +803,9 @@ export interface CreditorStatement extends CreditorBalance {
 export interface Custody {
   id: number;
   holder: string;
+  /** العهدة جاية من شريك أو مقاول (مش من الخزنة) */
+  funded_by?: "partner" | "contractor" | null;
+  funder_id?: number | null;
   date: string;
   amount: number;
   method: string;

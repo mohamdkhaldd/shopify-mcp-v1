@@ -659,7 +659,7 @@ export const creditorsApi = {
 
 export const custodyApi = {
   list: (): Promise<Custody[]> => invoke("custodies:list"),
-  create: (c: { holder: string; date: string; amount: number; method: string; warn_amount: number | ""; note: string | null }): Promise<Custody> =>
+  create: (c: { holder: string; date: string; amount: number; method: string; warn_amount: number | ""; note: string | null; funded_by?: "partner" | "contractor" | null; funder_id?: number | null }): Promise<Custody> =>
     invoke("custodies:create", c),
   update: (c: { id: number; holder: string; warn_amount: number; note: string | null }) => invoke("custodies:update", c),
   setClosed: (id: number, closed: boolean) => invoke("custodies:setClosed", { id, closed }),

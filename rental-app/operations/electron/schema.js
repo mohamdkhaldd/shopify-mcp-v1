@@ -510,6 +510,12 @@ function setupDatabase(db, { seed = true } = {}) {
   // كل واحد بيتسجل في مكانه ومربوط بسطر العهدة.
   const custodyCols = db.prepare("PRAGMA table_info(custody_entries)").all().map((c) => c.name);
   if (!custodyCols.includes("target")) db.exec("ALTER TABLE custody_entries ADD COLUMN target TEXT");
+  // العهدة ممكن تيجي من شريك أو مقاول (مش من خزنة الشركة): بيتسجل معاها
+  // دفعة للمقاول (بتنزّل اللي عليه) أو دفعة بالسالب للشريك (بتزوّد اللي ليه)
+  const custodyHeadCols = db.prepare("PRAGMA table_info(custodies)").all().map((c) => c.name);
+  if (!custodyHeadCols.includes("funded_by")) db.exec("ALTER TABLE custodies ADD COLUMN funded_by TEXT");
+  if (!custodyHeadCols.includes("funder_id")) db.exec("ALTER TABLE custodies ADD COLUMN funder_id INTEGER");
+  if (!custodyHeadCols.includes("funder_payment_id")) db.exec("ALTER TABLE custodies ADD COLUMN funder_payment_id INTEGER");
   const custodyLinks = {
     supplier_payment_id: "supplier_payments",
     car_fuel_id: "car_fuel",
