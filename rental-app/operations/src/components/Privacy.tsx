@@ -1,5 +1,6 @@
 import { createContext, FormEvent, ReactNode, useContext, useState } from "react";
 import { shell } from "../shell";
+import ForgotPassword from "./ForgotPassword";
 import Icon from "./Icon";
 
 // إخفاء أرقام الصفحة الرئيسية: كل حاجة عليها بلور لحد ما تدوس العين جنبها،
@@ -77,6 +78,7 @@ function RevealPassword({ onOk, onClose }: { onOk: () => void; onClose: () => vo
         <button type="submit" disabled={busy} className="w-full bg-primary text-white rounded-lg py-2 text-sm font-bold disabled:opacity-50">
           {busy ? "بنتأكد…" : "اظهر"}
         </button>
+        <ForgotPassword />
       </form>
     </div>
   );

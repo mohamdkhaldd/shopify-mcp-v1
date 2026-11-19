@@ -18,6 +18,9 @@ export const shell = {
   /** باسورد الشركة (بيتأكد منه من السحابة) — noPassword لو الشركة معملتلهاش باسورد */
   checkPassword: (password: string): Promise<{ ok: boolean; noPassword?: boolean; message?: string }> =>
     window.api ? window.api.invoke("shell:checkPassword", { password }) : Promise.resolve({ ok: false, noPassword: true }),
+  /** نسيت الباسورد: طلب لـ MK-Tech (تنبيه على موبايلهم) */
+  passwordHelp: (what: "company" | "hassan" = "company"): Promise<{ ok: boolean; message: string }> =>
+    window.api ? window.api.invoke("shell:passwordHelp", { what }) : Promise.resolve({ ok: false, message: "من البرنامج نفسه بس" }),
   setPassword: (current: string, next: string): Promise<ShellResult> => window.api!.invoke("shell:setPassword", { current, next }),
   signOut: (force = false): Promise<ShellResult | { ok: false; pending: number }> => window.api!.invoke("shell:signOut", { force }),
 };

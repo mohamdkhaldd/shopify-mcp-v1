@@ -202,6 +202,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("shell:checkPassword", async (_e, { password }: { password: string }) =>
     hasPassword() ? license.checkPassword(password ?? "") : { ok: false, noPassword: true, message: "مفيش باسورد للشركة — اعمله من الإعدادات" },
   );
+  ipcMain.handle("shell:passwordHelp", (_e, { what }: { what?: "company" | "hassan" } = {}) => license.passwordHelp(what));
   ipcMain.handle("shell:unlock", async (_e, { password }: { password: string }) => {
     const r = await license.checkPassword(password);
     if (r.ok) unlocked = true;

@@ -2,6 +2,7 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { installmentsApi } from "../../api/client";
 import { shell } from "../../shell";
 import { person } from "../../person";
+import ForgotPassword from "../../components/ForgotPassword";
 
 // صفحة صاحب الكوميشن كلها مقفولة بباسورد (مش الأقساط بس). بتتقفل تاني لما
 // تسيب الصفحة أو تدوس «اقفل دلوقتي». نسيت الباسورد؟ ← باسورد الشركة بيفتحه
@@ -88,13 +89,17 @@ export default function HassanGate({ children }: { children: (lock: () => void) 
           <form onSubmit={reset} className="bg-white rounded-card shadow-card p-6 w-full max-w-xs space-y-3 text-center">
             <div className="text-3xl">🔑</div>
             <div className="font-bold text-slate-800">نسيت الباسورد</div>
-            <p className="text-xs text-slate-500">اكتب باسورد الشركة (اللي بتفتح بيه البرنامج)، واكتب باسورد جديد للصفحة — أو سيبه فاضي لو مش عايز باسورد.</p>
+            <p className="text-xs text-slate-500">باسورد الشركة (اللي بتفتح بيه البرنامج) بيفتح الصفحة دي. اكتبه، واكتب باسورد جديد للصفحة — أو سيبه فاضي لو مش عايز باسورد.</p>
             <input type="password" autoFocus value={company} onChange={(e) => setCompany(e.target.value)} placeholder="باسورد الشركة" className={inputCls} />
             <input type="password" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder="الباسورد الجديد للصفحة" className={inputCls} />
             {error && <div className="text-xs font-semibold text-rose-600">{error}</div>}
             <button type="submit" disabled={busy || !company} className="w-full bg-primary text-white rounded-lg py-2 text-sm font-bold disabled:opacity-50">
               {busy ? "بنتأكد…" : "افتح وغيّر الباسورد"}
             </button>
+            <div className="border-t border-slate-100 pt-2 space-y-1">
+              <div className="text-[11px] text-slate-400">ناسي باسورد الشركة كمان؟</div>
+              <ForgotPassword what="hassan" />
+            </div>
             <button type="button" onClick={() => { setForgot(false); setError(""); }} className="text-xs font-semibold text-slate-500 underline">
               رجوع
             </button>

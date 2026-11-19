@@ -350,6 +350,16 @@ export function createLicenseManager(o: LicenseOptions) {
     return { ok: true };
   }
 
+  /** «نسيت الباسورد»: تنبيه على موبايل MK فيه اسم الشركة وتليفونها — MK بتغيّر باسورد الشركة. */
+  async function passwordHelp(what: "company" | "hassan" = "company"): Promise<{ ok: boolean; message: string }> {
+    const key = get("license_key");
+    if (!key) return { ok: false, message: "البرنامج مش متفعّل" };
+    const a = await call<{ ok: boolean; already?: boolean; error?: string }>({ action: "passwordHelp", key, what }, 10_000);
+    if (!a) return { ok: false, message: "مفيش نت — جرّب تاني لما النت يرجع" };
+    if (!a.ok) return { ok: false, message: "مقدرناش نبعت — كلّم MK-Tech" };
+    return { ok: true, message: a.already ? "الطلب اتبعت لـ MK-Tech من شوية — هيكلموك قريب" : "اتبعت لـ MK-Tech ✓ — هيكلموك ويغيّروا الباسورد" };
+  }
+
   /** The lock screen: the server decides; without internet, the last password typed on this device. */
   async function checkPassword(password: string): Promise<PasswordResult> {
     const key = get("license_key");
@@ -489,7 +499,7 @@ export function createLicenseManager(o: LicenseOptions) {
     return { ok: true, text: String(a.text ?? "").trim() };
   }
 
-  return { status, activate, refresh, credentials, setPassword, checkPassword, signOut, readSarki, askAssistant, transcribe, speak, resetCompany, savedKey: () => get("license_key") };
+  return { status, activate, refresh, credentials, setPassword, checkPassword, passwordHelp, signOut, readSarki, askAssistant, transcribe, speak, resetCompany, savedKey: () => get("license_key") };
 }
 
 export type LicenseManager = ReturnType<typeof createLicenseManager>;
