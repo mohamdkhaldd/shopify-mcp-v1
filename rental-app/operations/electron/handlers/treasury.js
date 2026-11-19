@@ -111,6 +111,7 @@ module.exports = function register(db, ipcMain, shared) {
     transfer_fees: { method: "account" },
     car_fuel: { method: "method" },
     car_income: { method: "method" },
+    tax_payments: { method: "method" },
     obligation_payments: { method: "method" },
     employee_deductions: { method: null },
   };

@@ -1,4 +1,4 @@
-const { computeDayValue, contractorMonthBreakdown } = require("../calc");
+const { computeDayValue, contractorMonthBreakdown, contractorWorkTotal } = require("../calc");
 
 // دفعات المقاولين
 module.exports = function register(db, ipcMain, shared) {
@@ -43,7 +43,7 @@ module.exports = function register(db, ipcMain, shared) {
       "SELECT COALESCE(SUM(amount), 0) AS total FROM contractor_payments WHERE contractor_id = ?"
     );
     return contractors.map((c) => {
-      const totalWork = c.opening_balance + workStmt.all(c.name).reduce((sum, l) => sum + computeDayValue(l), 0);
+      const totalWork = c.opening_balance + contractorWorkTotal(db, c, workStmt.all(c.name));
       const totalPaid = paidStmt.get(c.id).total;
       return {
         id: c.id,

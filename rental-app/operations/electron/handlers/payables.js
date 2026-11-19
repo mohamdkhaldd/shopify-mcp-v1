@@ -1,4 +1,4 @@
-const { computeDayValue, equipmentMonthNetProfit } = require("../calc");
+const { computeDayValue, equipmentMonthNetProfit, contractorWorkTotal } = require("../calc");
 
 // الآجل والدائنين
 module.exports = function register(db, ipcMain, shared) {
@@ -154,7 +154,7 @@ module.exports = function register(db, ipcMain, shared) {
       .prepare("SELECT * FROM contractors ORDER BY name")
       .all()
       .map((c) => {
-        const work = contractorWorkStmt.all(c.name).reduce((sum, l) => sum + computeDayValue(l), 0);
+        const work = contractorWorkTotal(db, c, contractorWorkStmt.all(c.name));
         const paid = contractorPaidStmt.get(c.id).total;
         return { id: c.id, name: c.name, openingBalance: c.opening_balance ?? 0, work, paid, remaining: (c.opening_balance ?? 0) + work - paid };
       })

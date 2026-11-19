@@ -343,6 +343,11 @@ module.exports = function makeShared(db) {
       .all(account)
       .forEach((r) => add(r.date, "in", `دفعة من المقاول: ${r.contractor_name}`, r.amount, { src: "contractor_payments", src_id: r.id }));
 
+    // الضرايب اللي اتوردت (قيمة مضافة / تانية)
+    db.prepare("SELECT id, date, amount, kind, for_month FROM tax_payments WHERE method = ?")
+      .all(account)
+      .forEach((r) => add(r.date, "out", `دفع ضرايب ${r.kind === "wht" ? "" : "قيمة مضافة "}${r.for_month ? `عن ${r.for_month}` : ""}`.trim(), r.amount, { src: "tax_payments", src_id: r.id }));
+
     // عربيات الشغل: مصاريفها طالعة من الخزنة، واللي بتدخّله داخل الخزنة
     db.prepare("SELECT f.id, f.date, f.amount, f.kind, c.name FROM car_fuel f LEFT JOIN cars c ON c.id = f.car_id WHERE f.method = ?")
       .all(account)

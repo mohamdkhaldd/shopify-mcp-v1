@@ -1,4 +1,4 @@
-const { computeDayValue, contractorMonthBreakdown, equipmentDayCounts, driverSalaryForEquipment, equipmentMonthNetProfit } = require("../calc");
+const { computeDayValue, contractorWorkTotal, contractorMonthBreakdown, equipmentDayCounts, driverSalaryForEquipment, equipmentMonthNetProfit } = require("../calc");
 
 // الرئيسية
 module.exports = function register(db, ipcMain, shared) {
@@ -130,11 +130,7 @@ module.exports = function register(db, ipcMain, shared) {
     const contractors = db.prepare("SELECT * FROM contractors").all();
     const totalReceivables = contractors.reduce((sum, c) => {
       const totalWork =
-        c.opening_balance +
-        db
-          .prepare("SELECT * FROM daily_logs WHERE role = 'contractor' AND person_name = ?")
-          .all(c.name)
-          .reduce((s, l) => s + computeDayValue(l), 0);
+        c.opening_balance + contractorWorkTotal(db, c, db.prepare("SELECT * FROM daily_logs WHERE role = 'contractor' AND person_name = ?").all(c.name));
       const totalPaid = db
         .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM contractor_payments WHERE contractor_id = ?")
         .get(c.id).total;

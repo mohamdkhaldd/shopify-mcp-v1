@@ -523,6 +523,23 @@ function setupDatabase(db, { seed = true } = {}) {
     const meCols = db.prepare("PRAGMA table_info(monthly_expenses)").all().map((c) => c.name);
     if (!meCols.includes("car_id")) db.exec("ALTER TABLE monthly_expenses ADD COLUMN car_id INTEGER");
   }
+  // الضرايب (زي التأجير): المقاول شركة بضرايب ولا مقاول باطن من غيرها.
+  // الشركة: ١٤٪ قيمة مضافة على الفاتورة (بتتورد للضرايب)، و٣٪ استقطاع بتخصمه هي.
+  {
+    const cCols = db.prepare("PRAGMA table_info(contractors)").all().map((c) => c.name);
+    if (!cCols.includes("is_company")) db.exec("ALTER TABLE contractors ADD COLUMN is_company INTEGER NOT NULL DEFAULT 0");
+    if (!cCols.includes("vat_applies")) db.exec("ALTER TABLE contractors ADD COLUMN vat_applies INTEGER NOT NULL DEFAULT 0");
+    if (!cCols.includes("wht_applies")) db.exec("ALTER TABLE contractors ADD COLUMN wht_applies INTEGER NOT NULL DEFAULT 0");
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS tax_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'vat',
+    for_month TEXT,
+    amount REAL NOT NULL,
+    method TEXT NOT NULL DEFAULT 'cash',
+    note TEXT
+  )`);
   // الالتزامات والمستحقات: التزام ممكن يبقى "ندفع" أو "نستلم"، ويتدفع على دفعات
   const oblCols = db.prepare("PRAGMA table_info(obligations)").all().map((c) => c.name);
   if (!oblCols.includes("direction")) db.exec("ALTER TABLE obligations ADD COLUMN direction TEXT NOT NULL DEFAULT 'pay'");

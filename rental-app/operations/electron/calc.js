@@ -31,6 +31,25 @@ function computeDayValue(log) {
 // اخترت إنها "عن شهر كذا" بتروح للشهر ده؛ والدفعة من غير شهر بتسدد الشهور
 // اللي فاتت الأول (الأقدم فالأحدث).
 // "opening" = الرصيد القديم قبل أول شهر.
+// نسب الضرايب (من الإعدادات): القيمة المضافة والاستقطاع
+function taxRates(db) {
+  const get = (k, d) => {
+    const v = Number(db.prepare("SELECT value FROM app_settings WHERE key = ?").get(k)?.value);
+    return Number.isFinite(v) && v >= 0 ? v : d;
+  };
+  return { vat: get("ops_vat_rate", 14), wht: get("ops_wht_rate", 3) };
+}
+// المقاول الشركة بيدفع قيمة الشغل + ١٤٪ − ٣٪ اللي بيستقطعها (لو متعلّم عليهم)
+function contractorTaxFactor(db, contractor) {
+  if (!contractor?.is_company) return 1;
+  const r = taxRates(db);
+  return 1 + (contractor.vat_applies ? r.vat / 100 : 0) - (contractor.wht_applies ? r.wht / 100 : 0);
+}
+// قيمة شغل المقاول كلها (بالضرايب) من أيام شيت المقاول
+function contractorWorkTotal(db, contractor, logs) {
+  return logs.reduce((s, l) => s + computeDayValue(l), 0) * contractorTaxFactor(db, contractor);
+}
+
 function contractorMonthBreakdown(db, contractor) {
   const logs = db
     .prepare("SELECT * FROM daily_logs WHERE role = 'contractor' AND person_name = ?")
@@ -44,7 +63,8 @@ function contractorMonthBreakdown(db, contractor) {
     return rows.get(month);
   };
   if (contractor.opening_balance) row("opening").work += contractor.opening_balance;
-  for (const l of logs) row(l.date.slice(0, 7)).work += computeDayValue(l);
+  const factor = contractorTaxFactor(db, contractor);
+  for (const l of logs) row(l.date.slice(0, 7)).work += computeDayValue(l) * factor;
   // "opening" < أي "YYYY-MM"؟ لأ — فبنرتب بإيدينا: الرصيد القديم الأول.
   const ordered = [...rows.values()].sort((a, b) =>
     a.month === "opening" ? -1 : b.month === "opening" ? 1 : a.month.localeCompare(b.month)
@@ -291,4 +311,4 @@ function equipmentShiftIncomeBreakdown(db, equipmentId, monthKey) {
   return [...byShift.entries()].map(([shift_label, income]) => ({ shift_label, income }));
 }
 
-module.exports = { computeDayValue, contractorMonthBreakdown, computeDriverWageValue, getEmployeeStateForMonth, daysInMonthList, monthlyEmployeeGrossPay, equipmentDayCounts, equipmentDaysNote, driverWageForLog, driverBonusShares, driverSalaryForEquipment, driverSalaryBreakdownForEquipment, equipmentMonthNetProfit, equipmentShiftIncomeBreakdown };
+module.exports = { computeDayValue, taxRates, contractorTaxFactor, contractorWorkTotal, contractorMonthBreakdown, computeDriverWageValue, getEmployeeStateForMonth, daysInMonthList, monthlyEmployeeGrossPay, equipmentDayCounts, equipmentDaysNote, driverWageForLog, driverBonusShares, driverSalaryForEquipment, driverSalaryBreakdownForEquipment, equipmentMonthNetProfit, equipmentShiftIncomeBreakdown };

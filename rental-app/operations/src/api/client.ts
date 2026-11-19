@@ -683,6 +683,31 @@ export const custodyApi = {
   removeEntry: (id: number) => invoke("custodyEntries:delete", { id }),
 };
 
+export interface TaxMonth {
+  month: string;
+  rows: { id: number; name: string; base: number; vat: number; wht: number; invoice: number; collect: number }[];
+  base: number;
+  vat: number;
+  wht: number;
+  invoice: number;
+  vatPaid: number;
+  vatDue: number;
+}
+export interface TaxSummary {
+  rates: { vat: number; wht: number };
+  month: TaxMonth;
+  year: { year: string; months: TaxMonth[]; base: number; vat: number; wht: number; vatPaid: number; vatDue: number };
+  payments: { id: number; date: string; kind: string; for_month: string | null; amount: number; method: string; note: string | null }[];
+  contractors: { id: number; name: string; is_company: number; vat_applies: number; wht_applies: number }[];
+}
+export const taxApi = {
+  summary: (month: string): Promise<TaxSummary> => invoke("tax:summary", { month }),
+  setRates: (vat: number, wht: number) => invoke("tax:setRates", { vat, wht }),
+  setContractor: (c: { id: number; is_company: boolean; vat_applies: boolean; wht_applies: boolean }) => invoke("contractors:setTax", c),
+  pay: (p: { date: string; kind: "vat" | "wht"; for_month: string | null; amount: number; method: string; note: string | null }) => invoke("taxPayments:create", p),
+  removePayment: (id: number) => invoke("taxPayments:delete", { id }),
+};
+
 export interface Car {
   id: number;
   name: string;

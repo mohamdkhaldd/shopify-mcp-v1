@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { setupOperationsDatabase } from "../electron/operationsDb";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const makeShared = require("../operations/electron/shared.js");
-const sections = ["dailyLogs", "treasury", "hassanWorkers", "dashboard", "dues"].map((n) => require(`../operations/electron/handlers/${n}.js`));
+const sections = ["dailyLogs", "treasury", "hassanWorkers", "dashboard", "dues", "tax"].map((n) => require(`../operations/electron/handlers/${n}.js`));
 
 // شاشات التشغيل بتنادي على الدوال دي بنفس الأسماء (ipcMain.handle)
 function ops() {
@@ -185,5 +185,23 @@ describe("التشغيل: كذا عربية", () => {
     // الخزنة: مصروف الشغل طالع ودخله داخل
     const moves = call("treasury:monthMovements", { month: "2026-11" }).filter((m: { src: string }) => m.src === "car_fuel" || m.src === "car_income");
     expect(moves.map((m: { direction: string; amount: number }) => `${m.direction}:${m.amount}`).sort()).toEqual(["in:1200", "out:300"]);
+  });
+});
+
+describe("التشغيل: الضرايب زي التأجير", () => {
+  it("الشركة: الشغل + ١٤٪ − ٣٪، مقاول الباطن زي ما هو، والتوريد بيطلع من الخزنة", () => {
+    const { db, call } = ops();
+    db.prepare("INSERT INTO equipment (id, name) VALUES (1, 'لودر')").run();
+    db.prepare("INSERT INTO contractors (id, name, opening_balance) VALUES (1, 'شركة النور', 0), (2, 'أبو أحمد', 0)").run();
+    const day = (who: string) => call("dailyLogs:upsert", { equipment_id: 1, date: who === "شركة النور" ? "2026-11-02" : "2026-11-03", role: "contractor", shift_label: "", person_name: who, actual_hours: 8, base_hours: 8, day_rate: 1000 });
+    day("شركة النور"); day("أبو أحمد");
+    call("contractors:setTax", { id: 1, is_company: true, vat_applies: true, wht_applies: true });
+    const t = call("tax:summary", { month: "2026-11" });
+    expect(t.month.rows).toEqual([expect.objectContaining({ name: "شركة النور", base: 1000, vat: 140, wht: 30, collect: 1110 })]);
+    const owed = call("dues:board", { month: "2026-11" }).days.flatMap((d: { items: { group: string; label: string; remaining: number }[] }) => d.items).filter((x: { group: string }) => x.group === "contractors");
+    expect(Object.fromEntries(owed.map((x: { label: string; remaining: number }) => [x.label, Math.round(x.remaining)]))).toEqual({ "شركة النور": 1110, "أبو أحمد": 1000 });
+    call("taxPayments:create", { date: "2026-12-05", kind: "vat", for_month: "2026-11", amount: 140, method: "cash" });
+    expect(call("tax:summary", { month: "2026-11" }).month.vatDue).toBe(0);
+    expect(call("treasury:monthMovements", { month: "2026-12" }).some((m: { src: string; direction: string }) => m.src === "tax_payments" && m.direction === "out")).toBe(true);
   });
 });

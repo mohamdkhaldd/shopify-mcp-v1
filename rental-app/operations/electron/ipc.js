@@ -31,6 +31,7 @@ const SECTIONS = [
   require("./handlers/cashLedger"),
   require("./handlers/system"),
   require("./handlers/dues"),
+  require("./handlers/tax"),
 ];
 
 function registerIpcHandlers(db) {
