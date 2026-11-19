@@ -893,7 +893,7 @@ export interface Obligation {
 }
 
 export interface DashboardAlert {
-  kind: "custody" | "obligation" | "installment";
+  kind: "custody" | "obligation" | "installment" | "certificate";
   level: "warn" | "danger";
   id: number;
   title: string;

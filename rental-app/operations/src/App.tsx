@@ -18,6 +18,7 @@ import Custody from "./pages/Custody";
 import Car from "./pages/Car";
 import Obligations from "./pages/Obligations";
 import Tax from "./pages/Tax";
+import Certificates from "./pages/Certificates";
 import { syncApi } from "./api/client";
 import { SyncLoginBar, TabletUpdatePrompt } from "./components/DeviceBars";
 import ExpiredBar from "./components/ExpiredBar";
@@ -123,6 +124,7 @@ export default function App() {
           {active === "car" && <Car />}
           {active === "obligations" && <Obligations />}
           {active === "tax" && <Tax />}
+          {active === "certificates" && <Certificates />}
         </main>
       </div>
       {isTablet && <TabletUpdatePrompt />}

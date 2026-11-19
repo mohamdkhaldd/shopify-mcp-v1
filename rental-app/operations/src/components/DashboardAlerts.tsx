@@ -11,7 +11,8 @@ function dueText(days: number) {
   return `بعد ${days} أيام`;
 }
 
-// إنذارات الصفحة الرئيسية: عهدة قربت تخلص، والتزام ميعاده قرب أو عدّى.
+// إنذارات الصفحة الرئيسية: عهدة قربت تخلص، والتزام ميعاده قرب أو عدّى،
+// وشهادة معايرة/ضمان فاضلها ٥ أيام أو أقل.
 export default function DashboardAlerts({ onNavigate }: { onNavigate?: (id: SectionId) => void }) {
   const [alerts, setAlerts] = useState<DashboardAlert[]>([]);
 
@@ -28,15 +29,15 @@ export default function DashboardAlerts({ onNavigate }: { onNavigate?: (id: Sect
       {alerts.map((a) => (
         <button
           key={`${a.kind}-${a.id}`}
-          onClick={() => onNavigate?.(a.kind === "custody" ? "custody" : a.kind === "installment" ? "hassan" : "obligations")}
+          onClick={() => onNavigate?.(a.kind === "custody" ? "custody" : a.kind === "installment" ? "hassan" : a.kind === "certificate" ? "certificates" : "obligations")}
           className={[
             "w-full flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm text-start border",
             a.level === "danger" ? "bg-rose-50 border-rose-200 text-rose-800" : "bg-amber-50 border-amber-200 text-amber-900",
           ].join(" ")}
         >
           <span className="font-bold">
-            {a.kind === "custody" ? "💼 " : a.kind === "installment" ? "💳 " : "⏰ "}
-            {a.kind === "obligation" ? `عليك التزام: ${a.title}` : a.kind === "installment" ? `عليك ${a.title}` : a.title}
+            {a.kind === "custody" ? "💼 " : a.kind === "installment" ? "💳 " : a.kind === "certificate" ? "📄 " : "⏰ "}
+            {a.kind === "obligation" ? `عليك التزام: ${a.title}` : a.kind === "installment" ? `عليك ${a.title}` : a.kind === "certificate" && a.days != null && a.days >= 0 ? `${a.title} — ناقص ${a.days} يوم` : a.title}
             {a.amount != null && <span className="font-extrabold"> {a.kind !== "custody" ? "بقيمة " : ""}{formatEGP(a.amount)}</span>}
             {a.kind !== "custody" && a.due_date && <span className="font-semibold"> — ميعاده {a.due_date}</span>}
           </span>

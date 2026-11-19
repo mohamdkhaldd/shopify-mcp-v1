@@ -708,6 +708,23 @@ export const taxApi = {
   removePayment: (id: number) => invoke("taxPayments:delete", { id }),
 };
 
+export interface Certificate {
+  id: number;
+  kind: string;
+  title: string | null;
+  equipment_id: number | null;
+  equipment_name?: string | null;
+  start_date: string | null;
+  end_date: string;
+  image: string | null;
+  note: string | null;
+}
+export const certificatesApi = {
+  list: (): Promise<Certificate[]> => invoke("certificates:list"),
+  save: (c: Partial<Certificate>): Promise<{ id: number }> => invoke("certificates:save", c),
+  remove: (id: number) => invoke("certificates:delete", { id }),
+};
+
 export interface Car {
   id: number;
   name: string;

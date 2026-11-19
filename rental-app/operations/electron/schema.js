@@ -540,6 +540,18 @@ function setupDatabase(db, { seed = true } = {}) {
     method TEXT NOT NULL DEFAULT 'cash',
     note TEXT
   )`);
+  // شهادات المعايرة وضمان البطاريات (وأي ورقة ليها تاريخ انتهاء): صورة +
+  // تاريخ بداية ونهاية، والرئيسية بتنبّه قبل ما تخلص بـ ٥ أيام
+  db.exec(`CREATE TABLE IF NOT EXISTS certificates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL DEFAULT 'calibration',
+    title TEXT,
+    equipment_id INTEGER REFERENCES equipment(id) ON DELETE SET NULL,
+    start_date TEXT,
+    end_date TEXT NOT NULL,
+    image TEXT,
+    note TEXT
+  )`);
   // الالتزامات والمستحقات: التزام ممكن يبقى "ندفع" أو "نستلم"، ويتدفع على دفعات
   const oblCols = db.prepare("PRAGMA table_info(obligations)").all().map((c) => c.name);
   if (!oblCols.includes("direction")) db.exec("ALTER TABLE obligations ADD COLUMN direction TEXT NOT NULL DEFAULT 'pay'");

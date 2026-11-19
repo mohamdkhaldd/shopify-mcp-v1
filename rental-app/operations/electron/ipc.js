@@ -32,6 +32,7 @@ const SECTIONS = [
   require("./handlers/system"),
   require("./handlers/dues"),
   require("./handlers/tax"),
+  require("./handlers/certificates"),
 ];
 
 function registerIpcHandlers(db) {

@@ -656,6 +656,22 @@ function registerExtraHandlers(db, owed, ipcOverride) {
       if (c.remaining <= 0.005) alerts.push({ kind: "custody", level: "danger", id: c.id, title: `عهدة ${c.holder} خلصت`, amount: c.remaining });
       else if (c.low) alerts.push({ kind: "custody", level: "warn", id: c.id, title: `عهدة ${c.holder} قربت تخلص — باقي فيها`, amount: c.remaining });
     }
+    // شهادة معايرة / ضمان قرب يخلص (قبلها بـ ٥ أيام) أو خلص
+    const CERT = { calibration: "شهادة معايرة", battery: "ضمان بطارية", other: "ورقة" };
+    for (const c of db.prepare("SELECT c.*, e.name AS equipment_name FROM certificates c LEFT JOIN equipment e ON e.id = c.equipment_id ORDER BY c.end_date").all()) {
+      const d = daysBetween(now, c.end_date);
+      if (d > 5 || d < -30) continue;
+      const what = `${CERT[c.kind] ?? "ورقة"}${c.equipment_name ? ` معدة ${c.equipment_name}` : ""}${c.title ? ` (${c.title})` : ""}`;
+      alerts.push({
+        kind: "certificate",
+        level: d <= 0 ? "danger" : "warn",
+        id: c.id,
+        title: d < 0 ? `${what} خلصت` : `${what} قربت تخلص`,
+        amount: null,
+        due_date: c.end_date,
+        days: d,
+      });
+    }
     for (const o of db.prepare("SELECT * FROM obligations WHERE done_at IS NULL ORDER BY due_date").all()) {
       const d = daysBetween(now, o.due_date);
       if (d > 3) continue;

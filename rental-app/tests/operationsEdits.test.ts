@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { setupOperationsDatabase } from "../electron/operationsDb";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const makeShared = require("../operations/electron/shared.js");
-const sections = ["dailyLogs", "treasury", "hassanWorkers", "dashboard", "dues", "tax"].map((n) => require(`../operations/electron/handlers/${n}.js`));
+const sections = ["dailyLogs", "treasury", "hassanWorkers", "dashboard", "dues", "tax", "certificates"].map((n) => require(`../operations/electron/handlers/${n}.js`));
 
 // شاشات التشغيل بتنادي على الدوال دي بنفس الأسماء (ipcMain.handle)
 function ops() {
@@ -203,5 +203,18 @@ describe("التشغيل: الضرايب زي التأجير", () => {
     call("taxPayments:create", { date: "2026-12-05", kind: "vat", for_month: "2026-11", amount: 140, method: "cash" });
     expect(call("tax:summary", { month: "2026-11" }).month.vatDue).toBe(0);
     expect(call("treasury:monthMovements", { month: "2026-12" }).some((m: { src: string; direction: string }) => m.src === "tax_payments" && m.direction === "out")).toBe(true);
+  });
+});
+
+describe("التشغيل: شهادات المعايرة والضمان", () => {
+  it("بتتسجل، والرئيسية بتنبّه قبلها بـ ٥ أيام بس", () => {
+    const { db, call } = ops();
+    db.prepare("INSERT INTO equipment (id, name) VALUES (1, 'ونش 50')").run();
+    const iso = (days: number) => { const d = new Date(); d.setDate(d.getDate() + days); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+    call("certificates:save", { kind: "calibration", equipment_id: 1, start_date: iso(-360), end_date: iso(4) });
+    call("certificates:save", { kind: "battery", title: "فارتا", end_date: iso(40) });
+    expect(call("certificates:list", {})).toHaveLength(2);
+    const alerts = call("alerts:dashboard", {}).filter((a: { kind: string }) => a.kind === "certificate");
+    expect(alerts).toEqual([expect.objectContaining({ title: "شهادة معايرة معدة ونش 50 قربت تخلص", days: 4 })]);
   });
 });

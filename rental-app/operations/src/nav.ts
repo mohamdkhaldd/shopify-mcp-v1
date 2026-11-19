@@ -17,6 +17,7 @@ export type SectionId =
   | "car"
   | "obligations"
   | "tax"
+  | "certificates"
   | "settings";
 
 export interface NavItem {
@@ -37,6 +38,7 @@ export const navItems: NavItem[] = [
   { id: "custody", label: "العهد", icon: "custody" },
   { id: "car", label: "السيارات", icon: "car" },
   { id: "obligations", label: "الالتزامات والمستحقات", icon: "calendar", group: "المتابعة" },
+  { id: "certificates", label: "شهادات المعايرة والضمان", icon: "reports" },
   { id: "suppliers", label: "الموردين", icon: "suppliers" },
   { id: "outgoingIncoming", label: "الصادر والوارد", icon: "flow" },
   { id: "reports", label: "التقارير", icon: "reports" },
