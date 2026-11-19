@@ -18,6 +18,7 @@ import KpiCard from "../components/KpiCard";
 import Modal from "../components/Modal";
 import { Blurrable, EyeAllButton, PrivacyProvider } from "../components/Privacy";
 import DashboardAlerts from "../components/DashboardAlerts";
+import DashboardPeriods from "../components/DashboardPeriods";
 import { useTheme } from "../theme";
 import { contractorsDashboardApi, dashboardApi, partnersDashboardApi, suppliersApi } from "../api/client";
 import { ContractorSummary, DashboardMonthDues, DashboardSummary, MonthDueRow, PartnerSummary, SupplierDashboardRow } from "../api/types";
@@ -76,86 +77,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (id: SectionId)
 
       <DashboardAlerts onNavigate={onNavigate} />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        <KpiCard
-          privacyId="kpi1"
-          label="صافي الربح السنوي"
-          value={formatEGP(summary.totalAnnualProfit)}
-          icon={summary.totalAnnualProfit >= 0 ? "trendUp" : "trendDown"}
-          tone={summary.totalAnnualProfit >= 0 ? "positive" : "negative"}
-          sub="إجمالي كل المعدات — السنة الحالية"
-        />
-        <KpiCard
-          privacyId="kpi2"
-          label="عدد المعدات"
-          value={summary.equipmentCount.toLocaleString("en-US")}
-          icon="equipment"
-          tone="neutral"
-          sub="معدات مسجلة في النظام"
-        />
-        <KpiCard
-          privacyId="kpi3"
-          label="إجمالي المصروف السنوي"
-          value={formatEGP(summary.totalAnnualExpense)}
-          icon="treasury"
-          tone="neutral"
-          sub="كل بنود مصاريف المعدات"
-          onClick={() => openDrilldown("expense")}
-        />
-        <KpiCard
-          privacyId="kpi4"
-          label={`صافي ربح شهر ${summary.currentMonthLabel}`}
-          value={formatEGP(summary.currentMonthProfit)}
-          icon={summary.currentMonthProfit >= 0 ? "trendUp" : "trendDown"}
-          tone={summary.currentMonthProfit >= 0 ? "positive" : "negative"}
-          sub="أحدث شهر مسجّل"
-        />
-        <KpiCard
-          privacyId="kpi5"
-          label="مستحق للشركة"
-          value={formatEGP(summary.totalReceivables)}
-          icon="contractors"
-          tone="neutral"
-          sub="فلوس على المقاولين لحد النهاردة"
-          onClick={() => openDrilldown("contractors")}
-        />
-        <KpiCard
-          privacyId="kpi6"
-          label="مستحق للشركاء"
-          value={formatEGP(summary.totalPartnersDue)}
-          icon="partners"
-          tone="neutral"
-          sub="نصيب الشركاء من الأرباح لحد النهاردة"
-          onClick={() => openDrilldown("partners")}
-        />
-        <KpiCard
-          privacyId="kpi7"
-          label={`مستحق للشركة — شهر ${summary.currentMonthLabel}`}
-          value={monthDues ? formatEGP(monthDues.contractorsRemaining) : "..."}
-          icon="contractors"
-          tone="neutral"
-          sub="شغل المقاولين الشهر ده اللي لسه متدفعش (الدفعات بتسدد الأقدم الأول)"
-          onClick={() => openDrilldown("monthContractors")}
-        />
-        <KpiCard
-          privacyId="kpi8"
-          label={`مستحق للشركاء — شهر ${summary.currentMonthLabel}`}
-          value={monthDues ? formatEGP(monthDues.partnersRemaining) : "..."}
-          icon="partners"
-          tone="neutral"
-          sub="نصيبهم من ربح الشهر ده اللي لسه متدفعش (الدفعات بتسدد الأقدم الأول)"
-          onClick={() => openDrilldown("monthPartners")}
-        />
-        <KpiCard
-          privacyId="kpi9"
-          label="مستحق للموردين"
-          value={formatEGP(summary.totalSuppliersDue)}
-          icon="suppliers"
-          tone="neutral"
-          sub="مشتريات من الموردين لسه ما اتدفعتش"
-          onClick={() => openDrilldown("suppliers")}
-        />
-      </div>
+      <DashboardPeriods />
 
       <Blurrable id="sec142" className="bg-white rounded-card shadow-card p-5">
         <div className="flex items-center justify-between mb-4">

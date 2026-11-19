@@ -945,3 +945,21 @@ export interface MonthMovement {
   src?: string;
   src_id?: number;
 }
+
+/** الرئيسية: أرقام فترة (شهر أو من أول السنة) */
+export interface DashboardPeriod {
+  equipmentCount: number;
+  working: number;
+  /** اللي المعدات اشتغلت بيه توتال قبل الكوميشن */
+  gross: number;
+  commission: number;
+  companyIncome: number;
+  expenses: { total: number; items: { label: string; amount: number }[] };
+  net: { total: number; items: { label: string; amount: number }[] };
+  dues: { key: string; label: string; amount: number; items: { label: string; amount: number }[] }[];
+}
+export interface DashboardPeriods {
+  month: string;
+  monthly: DashboardPeriod;
+  yearly: DashboardPeriod;
+}

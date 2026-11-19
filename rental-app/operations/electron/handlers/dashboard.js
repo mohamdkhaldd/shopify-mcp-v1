@@ -2,7 +2,7 @@ const { computeDayValue, contractorMonthBreakdown, equipmentDayCounts, driverSal
 
 // الرئيسية
 module.exports = function register(db, ipcMain, shared) {
-  const { equipmentAllTimeProfit } = shared;
+  const { equipmentAllTimeProfit, payrollSummary, computeCommissionRows } = shared;
 
   // --- Dashboard: live headline numbers for the home page, computed from
   // the real database for the current calendar year — replaces the old
@@ -15,7 +15,7 @@ module.exports = function register(db, ipcMain, shared) {
   // المستحق في شهر واحد بس (مش من أول التاريخ): للشركة من كل مقاول = قيمة
   // شغله في الشهر ده − اللي دفعه بتاريخ في الشهر ده؛ ولكل شريك = نصيبه من
   // صافي ربح معداته في الشهر ده − اللي اتدفعله بتاريخ في الشهر ده.
-  ipcMain.handle("dashboard:monthDues", (_e, { month }) => {
+  function monthDuesFor(month) {
     const contractors = db
       .prepare("SELECT * FROM contractors ORDER BY name")
       .all()
@@ -77,7 +77,8 @@ module.exports = function register(db, ipcMain, shared) {
       contractorsRemaining: contractors.reduce((sum, c) => sum + c.remaining, 0),
       partnersRemaining: partners.reduce((sum, p) => sum + p.remaining, 0),
     };
-  });
+  }
+  ipcMain.handle("dashboard:monthDues", (_e, { month }) => monthDuesFor(month));
 
   ipcMain.handle("dashboard:summary", () => {
     const now = new Date();
@@ -177,5 +178,106 @@ module.exports = function register(db, ipcMain, shared) {
       monthlyProfitTrend,
       equipmentExpenses,
     };
+  });
+
+
+  // ===== الرئيسية الجديدة: أرقام الشهر، وتحتها نفس الأرقام للسنة =====
+  // الدخل قبل الكوميشن = اللي المعدات اشتغلت بيه فعلاً (سعر المقاول + السوق
+  // كامل)، والكوميشن = الفرق بين المقاول والسركي (زي شيت الكوميشن بالظبط).
+  function periodMonth(month) {
+    const equipment = db.prepare("SELECT * FROM equipment ORDER BY name").all();
+    const logs = (eid, role) => db.prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND role = ? AND date LIKE ?").all(eid, role, `${month}%`);
+    let gross = 0;
+    let working = 0;
+    const net = [];
+    const expenseItems = new Map();
+    let driverSalaries = 0;
+    for (const e of equipment) {
+      const contractor = logs(e.id, "contractor");
+      const market = logs(e.id, "market");
+      const driver = logs(e.id, "driver");
+      const g =
+        contractor.reduce((s, l) => s + computeDayValue(l), 0) +
+        market.reduce((s, l) => s + (l.is_day_off ? 0 : l.fixed_value ?? 0), 0);
+      // معدة اشتغلت لوحدها من غير مقاول (سركي بس): دخلها هو السركي
+      const soloDriver = contractor.length ? 0 : driver.reduce((s, l) => s + computeDayValue(l), 0);
+      gross += g + soloDriver;
+      if (contractor.some((l) => !l.is_day_off) || market.some((l) => !l.is_day_off) || driver.some((l) => !l.is_day_off)) working++;
+      for (const x of db
+        .prepare(
+          `SELECT COALESCE(ec.name, 'مصروفات تانية') AS name, SUM(me.amount) AS amount FROM monthly_expenses me
+           LEFT JOIN expense_categories ec ON ec.id = me.category_id WHERE me.equipment_id = ? AND me.month = ? GROUP BY 1`
+        )
+        .all(e.id, month))
+        expenseItems.set(x.name, (expenseItems.get(x.name) ?? 0) + x.amount);
+      driverSalaries += driverSalaryForEquipment(db, e.id, month);
+      const p = equipmentMonthNetProfit(db, e.id, month);
+      if (p !== 0) net.push({ label: e.name, amount: p });
+    }
+    if (driverSalaries) expenseItems.set("مرتبات السواقين", (expenseItems.get("مرتبات السواقين") ?? 0) + driverSalaries);
+    const commission = computeCommissionRows(month).total;
+    const expenses = [...expenseItems.entries()].map(([label, amount]) => ({ label, amount })).sort((a, b) => b.amount - a.amount);
+
+    const dues = monthDuesFor(month);
+    const drivers = payrollSummary(month)
+      .map((r) => ({ label: r.name, amount: Math.max(0, r.remaining ?? 0) }))
+      .filter((r) => r.amount > 0.005);
+    const suppliers = db
+      .prepare(
+        `SELECT s.name AS label,
+           (SELECT COALESCE(SUM(amount),0) FROM supplier_purchases WHERE supplier_id = s.id AND date LIKE @m)
+         - (SELECT COALESCE(SUM(amount),0) FROM supplier_payments WHERE supplier_id = s.id AND date LIKE @m) AS amount
+         FROM suppliers s`
+      )
+      .all({ m: `${month}%` })
+      .filter((r) => r.amount > 0.005);
+    const sum = (a) => a.reduce((s, x) => s + x.amount, 0);
+    return {
+      equipmentCount: equipment.length,
+      working,
+      gross,
+      commission,
+      companyIncome: gross - commission,
+      expenses: { total: sum(expenses), items: expenses },
+      net: { total: sum(net), items: net.sort((a, b) => b.amount - a.amount) },
+      dues: [
+        { key: "company", label: "مستحق للشركة (عند المقاولين)", items: dues.contractors.filter((c) => c.remaining > 0.005).map((c) => ({ label: c.name, amount: c.remaining })) },
+        { key: "partners", label: "مستحق للشركاء", items: dues.partners.filter((c) => c.remaining > 0.005).map((c) => ({ label: c.name, amount: c.remaining })) },
+        { key: "drivers", label: "مستحق للسواقين", items: drivers },
+        { key: "suppliers", label: "مستحق للموردين", items: suppliers },
+      ].map((d) => ({ ...d, amount: sum(d.items) })),
+    };
+  }
+
+  function mergePeriods(list) {
+    const merge = (arrays) => {
+      const m = new Map();
+      for (const a of arrays) for (const x of a) m.set(x.label, (m.get(x.label) ?? 0) + x.amount);
+      return [...m.entries()].map(([label, amount]) => ({ label, amount })).sort((a, b) => b.amount - a.amount);
+    };
+    const sum = (a) => a.reduce((s, x) => s + x.amount, 0);
+    const exp = merge(list.map((p) => p.expenses.items));
+    const net = merge(list.map((p) => p.net.items));
+    return {
+      equipmentCount: list[0]?.equipmentCount ?? 0,
+      working: Math.max(0, ...list.map((p) => p.working)),
+      gross: list.reduce((s, p) => s + p.gross, 0),
+      commission: list.reduce((s, p) => s + p.commission, 0),
+      companyIncome: list.reduce((s, p) => s + p.companyIncome, 0),
+      expenses: { total: sum(exp), items: exp },
+      net: { total: sum(net), items: net },
+      dues: (list[0]?.dues ?? []).map((d) => {
+        const items = merge(list.map((p) => p.dues.find((x) => x.key === d.key)?.items ?? []));
+        return { key: d.key, label: d.label, items, amount: sum(items) };
+      }),
+    };
+  }
+
+  ipcMain.handle("dashboard:period", (_e, { month }) => {
+    const year = month.slice(0, 4);
+    const last = Number(month.slice(5, 7));
+    const months = Array.from({ length: last }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
+    const byMonth = months.map(periodMonth);
+    return { month, monthly: byMonth[byMonth.length - 1], yearly: mergePeriods(byMonth) };
   });
 };

@@ -632,6 +632,7 @@ export const reportsApi = {
 export const dashboardApi = {
   summary: (): Promise<DashboardSummary> => invoke("dashboard:summary"),
   monthDues: (month: string): Promise<DashboardMonthDues> => invoke("dashboard:monthDues", { month }),
+  period: (month: string): Promise<import("./types").DashboardPeriods> => invoke("dashboard:period", { month }),
 };
 
 export const wasteApi = {

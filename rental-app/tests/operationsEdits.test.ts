@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { setupOperationsDatabase } from "../electron/operationsDb";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const makeShared = require("../operations/electron/shared.js");
-const sections = ["dailyLogs", "treasury", "hassanWorkers"].map((n) => require(`../operations/electron/handlers/${n}.js`));
+const sections = ["dailyLogs", "treasury", "hassanWorkers", "dashboard"].map((n) => require(`../operations/electron/handlers/${n}.js`));
 
 // شاشات التشغيل بتنادي على الدوال دي بنفس الأسماء (ipcMain.handle)
 function ops() {
@@ -67,5 +67,36 @@ describe("التشغيل: صدقات وهالك صاحب الكوميشن", () =
     expect(list("charity")).toEqual([50]);
     expect(list("waste")).toEqual([70]);
     expect(call("hassanTreasury:categories", { kind: "waste" })).toEqual(["عدة باظت"]);
+  });
+});
+
+describe("التشغيل: الرئيسية بالشهر وبعدين بالسنة", () => {
+  it("الدخل قبل الكوميشن، المصروفات، الصافي، والمستحقات", () => {
+    const { db, call } = ops();
+    db.prepare("INSERT INTO equipment (id, name) VALUES (1, 'لودر')").run();
+    db.prepare("INSERT INTO contractors (id, name, opening_balance) VALUES (1, 'المقاول', 0)").run();
+    // أكتوبر: يوم واحد — المقاول ١٠٠٠ والسركي ٨٠٠ (كوميشن ٢٠٠)
+    const day = (date: string, role: string, rate: number) =>
+      call("dailyLogs:upsert", { equipment_id: 1, date, role, shift_label: "", person_name: role === "contractor" ? "المقاول" : "", actual_hours: 8, base_hours: 8, day_rate: rate });
+    day("2026-10-05", "contractor", 1000); day("2026-10-05", "driver", 800);
+    // نوفمبر: يومين
+    day("2026-11-02", "contractor", 1000); day("2026-11-02", "driver", 800);
+    day("2026-11-03", "contractor", 1000); day("2026-11-03", "driver", 800);
+    db.prepare("INSERT INTO monthly_expenses (equipment_id, month, date, amount) VALUES (1, '2026-11', '2026-11-04', 300)").run();
+    db.prepare("INSERT INTO contractor_payments (contractor_id, date, amount, method) VALUES (1, '2026-11-10', 500, 'cash')").run();
+
+    const r = call("dashboard:period", { month: "2026-11" });
+    expect(r.monthly.gross).toBe(2000);
+    expect(r.monthly.commission).toBe(400);
+    expect(r.monthly.companyIncome).toBe(1600);
+    expect(r.monthly.expenses.total).toBe(300);
+    expect(r.monthly.net.total).toBe(1300);
+    expect(r.monthly.working).toBe(1);
+    expect(r.yearly.gross).toBe(3000);
+    expect(r.yearly.net.total).toBe(2100);
+    // المقاول عليه: نوفمبر ٢٠٠٠ والدفعة ٥٠٠ بتسدد أكتوبر الأول (١٠٠٠) → نوفمبر كله لسه
+    const company = (p: { dues: { key: string; amount: number }[] }) => p.dues.find((d) => d.key === "company")!.amount;
+    expect(company(r.monthly)).toBe(2000);
+    expect(company(r.yearly)).toBe(2500);
   });
 });
