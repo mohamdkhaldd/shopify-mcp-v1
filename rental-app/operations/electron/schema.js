@@ -497,6 +497,8 @@ function setupDatabase(db, { seed = true } = {}) {
   // خزنة واحدة: الصرف من الكوميشن بقى طالع من حساب في خزنة الشركة (method).
   // الصرف القديم (قبل التغيير ده) فاضي — مبيأثرش على الخزنة بأثر رجعي.
   if (!expenseCols.includes("method")) db.exec("ALTER TABLE hassan_treasury_expenses ADD COLUMN method TEXT");
+  // الشيت اللي السطر متسجل فيه: مصاريف التشغيل (فاضي) / صدقات / هالك — كلهم بيتخصموا من الكوميشن
+  if (!expenseCols.includes("kind")) db.exec("ALTER TABLE hassan_treasury_expenses ADD COLUMN kind TEXT");
   // الحساب الشخصي: الحركة اتدفعت/اتقبضت من أنهي حساب في خزنة الشركة (فاضي = تسجيل بس).
   const ledgerCols = db.prepare("PRAGMA table_info(hassan_ledger)").all().map((c) => c.name);
   if (!ledgerCols.includes("method")) db.exec("ALTER TABLE hassan_ledger ADD COLUMN method TEXT");

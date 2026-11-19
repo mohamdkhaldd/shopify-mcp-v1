@@ -194,16 +194,19 @@ module.exports = function register(db, ipcMain, shared) {
     };
   });
 
-  ipcMain.handle("hassanTreasury:list", (_e, { month }) => {
+  // kind: null/ops = مصاريف التشغيل، charity = صدقات، waste = هالك
+  const kindSql = (kind) => (kind && kind !== "ops" ? "x.kind = @kind" : "(x.kind IS NULL OR x.kind = '' OR x.kind = 'ops')");
+  ipcMain.handle("hassanTreasury:list", (_e, { month, kind }) => {
     // البند: اللي اتكتب، ولو مفيش (مصاريف قديمة) — مرتبات العمال أو البيان نفسه
     const rows = db
       .prepare(
         `SELECT x.*, COALESCE(NULLIF(TRIM(x.category), ''),
            CASE WHEN EXISTS (SELECT 1 FROM hassan_worker_entries w WHERE w.treasury_expense_id = x.id) THEN 'مرتبات العمال' END,
            x.description) AS category
-         FROM hassan_treasury_expenses x WHERE x.date LIKE ? ORDER BY x.date DESC, x.id DESC`
+         FROM hassan_treasury_expenses x WHERE x.date LIKE @month AND ${kindSql(kind)} ORDER BY x.date DESC, x.id DESC`
       )
-      .all(`${month}%`);
+      .all({ month: `${month}%`, kind: kind ?? null });
+    if (kind && kind !== "ops") return rows;
     // سطر محسوب (مش متسجل): الخاص من العربية الملاكي الشهر ده.
     const car = carPersonalAllMonths(db).find((c) => c.month === month);
     if (car && car.personal > 0) {
@@ -218,10 +221,10 @@ module.exports = function register(db, ipcMain, shared) {
     }
     return rows;
   });
-  ipcMain.handle("hassanTreasury:categories", () =>
+  ipcMain.handle("hassanTreasury:categories", (_e, { kind } = {}) =>
     db
-      .prepare("SELECT category FROM hassan_treasury_expenses WHERE TRIM(COALESCE(category, '')) <> '' GROUP BY category ORDER BY MAX(date) DESC")
-      .all()
+      .prepare(`SELECT category FROM hassan_treasury_expenses x WHERE TRIM(COALESCE(category, '')) <> '' AND ${kindSql(kind)} GROUP BY category ORDER BY MAX(date) DESC`)
+      .all({ kind: kind ?? null })
       .map((r) => r.category)
   );
   ipcMain.handle("hassanTreasury:create", (_e, expense) => {
@@ -229,8 +232,8 @@ module.exports = function register(db, ipcMain, shared) {
     const description = (expense.description ?? "").trim() || category || "";
     if (!description) throw new Error("اكتب البند");
     const info = db
-      .prepare("INSERT INTO hassan_treasury_expenses (date, amount, description, category, method) VALUES (?, ?, ?, ?, ?)")
-      .run(expense.date, expense.amount, description, category, expense.method || "cash");
+      .prepare("INSERT INTO hassan_treasury_expenses (date, amount, description, category, method, kind) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(expense.date, expense.amount, description, category, expense.method || "cash", expense.kind && expense.kind !== "ops" ? expense.kind : null);
     const created = db.prepare("SELECT * FROM hassan_treasury_expenses WHERE id = ?").get(info.lastInsertRowid);
     pushToCloud("hassan_treasury_expenses", created.id, created);
     return created;

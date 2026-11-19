@@ -1,4 +1,4 @@
-import {
+import { HassanExpenseKind,
   MonthMovement,
   HassanInstallment,
   FundDetail,
@@ -500,11 +500,11 @@ export const hassanApi = {
   balance: (): Promise<HassanBalance> => invoke("hassanLedger:balance"),
   balanceByParty: (): Promise<HassanPartyBalance[]> => invoke("hassanLedger:balanceByParty"),
   treasuryBalance: (month: string): Promise<HassanTreasuryBalance> => invoke("hassan:treasuryBalance", { month }),
-  treasuryList: (month: string): Promise<HassanTreasuryExpense[]> => invoke("hassanTreasury:list", { month }),
+  treasuryList: (month: string, kind?: HassanExpenseKind): Promise<HassanTreasuryExpense[]> => invoke("hassanTreasury:list", { month, kind }),
   treasuryCreate: (expense: Omit<HassanTreasuryExpense, "id">): Promise<HassanTreasuryExpense> =>
     invoke("hassanTreasury:create", expense),
   treasuryRemove: (id: number): Promise<void> => invoke("hassanTreasury:delete", { id }),
-  treasuryCategories: (): Promise<string[]> => invoke("hassanTreasury:categories"),
+  treasuryCategories: (kind?: HassanExpenseKind): Promise<string[]> => invoke("hassanTreasury:categories", { kind }),
   penaltiesList: (month: string): Promise<HassanPenalty[]> => invoke("hassanPenalties:list", { month }),
   penaltyCreate: (penalty: Omit<HassanPenalty, "id">): Promise<HassanPenalty> => invoke("hassanPenalties:create", penalty),
   penaltyRemove: (id: number): Promise<void> => invoke("hassanPenalties:delete", { id }),

@@ -276,7 +276,11 @@ export interface HassanPartyBalance {
   netDue: number;
 }
 
+/** الشيت: مصاريف التشغيل / صدقات / هالك — كلهم بيتخصموا من الكوميشن */
+export type HassanExpenseKind = "ops" | "charity" | "waste";
+
 export interface HassanTreasuryExpense {
+  kind?: HassanExpenseKind | null;
   id: number | string;
   date: string;
   amount: number;

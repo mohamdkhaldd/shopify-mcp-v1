@@ -16,7 +16,7 @@ import WorkersTab from "./hassan/WorkersTab";
 
 export default function Hassan() {
   const [month, setMonth] = useState(currentMonthKey());
-  const [tab, setTab] = useState<"commission" | "treasury" | "funds" | "expenses" | "installments" | "workers" | "ledger">("commission");
+  const [tab, setTab] = useState<"commission" | "treasury" | "funds" | "expenses" | "charity" | "waste" | "installments" | "workers" | "ledger">("commission");
   const printTitle =
     tab === "ledger"
       ? `حساب ${person()} الشخصي`
@@ -28,6 +28,10 @@ export default function Hassan() {
           ? "الخزن (المكنيكي والسكن)"
         : tab === "expenses"
           ? `مصاريف التشغيل — ${person()}`
+        : tab === "charity"
+          ? `صدقات — ${person()}`
+        : tab === "waste"
+          ? `هالك — ${person()}`
         : tab === "workers"
           ? `مرتبات عمال ${person()}`
           : `كوميشن ${person()}`;
@@ -91,6 +95,26 @@ export default function Hassan() {
           مصاريف التشغيل
         </button>
         <button
+          onClick={() => setTab("charity")}
+          className={[
+            "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors",
+            tab === "charity" ? "bg-primary text-white shadow-sm" : "bg-white text-slate-600 hover:bg-primary-light hover:text-primary-dark shadow-card",
+          ].join(" ")}
+        >
+          <Icon name="partners" className="w-4 h-4" />
+          صدقات
+        </button>
+        <button
+          onClick={() => setTab("waste")}
+          className={[
+            "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors",
+            tab === "waste" ? "bg-primary text-white shadow-sm" : "bg-white text-slate-600 hover:bg-primary-light hover:text-primary-dark shadow-card",
+          ].join(" ")}
+        >
+          <Icon name="flow" className="w-4 h-4" />
+          هالك
+        </button>
+        <button
           onClick={() => setTab("installments")}
           className={[
             "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors",
@@ -127,6 +151,8 @@ export default function Hassan() {
       {tab === "funds" && <FundsTab month={month} />}
       {tab === "installments" && <InstallmentsTab onLock={lock} />}
       {tab === "expenses" && <ExpensesTab month={month} />}
+      {tab === "charity" && <ExpensesTab month={month} kind="charity" />}
+      {tab === "waste" && <ExpensesTab month={month} kind="waste" />}
       {tab === "workers" && <WorkersTab month={month} />}
       {tab === "ledger" && <LedgerTab month={month} />}
 

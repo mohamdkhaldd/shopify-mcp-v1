@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { setupOperationsDatabase } from "../electron/operationsDb";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const makeShared = require("../operations/electron/shared.js");
-const sections = ["dailyLogs", "treasury"].map((n) => require(`../operations/electron/handlers/${n}.js`));
+const sections = ["dailyLogs", "treasury", "hassanWorkers"].map((n) => require(`../operations/electron/handlers/${n}.js`));
 
 // شاشات التشغيل بتنادي على الدوال دي بنفس الأسماء (ipcMain.handle)
 function ops() {
@@ -53,5 +53,19 @@ describe("التشغيل: تعديل أي سطر فلوس", () => {
     db.prepare("INSERT INTO car_fuel (id, date, kind, amount) VALUES (1, '2026-11-01', 'بنزين', 300)").run();
     call("treasury:movementUpdate", { src: "car_fuel", src_id: 1, date: "2026-11-02", amount: 350, note: "تفويلة" });
     expect(db.prepare("SELECT date, amount, note FROM car_fuel").get()).toEqual({ date: "2026-11-02", amount: 350, note: "تفويلة" });
+  });
+});
+
+describe("التشغيل: صدقات وهالك صاحب الكوميشن", () => {
+  it("كل شيت لوحده، والمصاريف القديمة فاضلة في مصاريف التشغيل", () => {
+    const { call } = ops();
+    call("hassanTreasury:create", { date: "2026-11-03", amount: 100, category: "أكل", method: "cash" });
+    call("hassanTreasury:create", { date: "2026-11-03", amount: 50, category: "صدقة", method: "cash", kind: "charity" });
+    call("hassanTreasury:create", { date: "2026-11-04", amount: 70, category: "عدة باظت", method: "cash", kind: "waste" });
+    const list = (kind?: string) => call("hassanTreasury:list", { month: "2026-11", kind }).filter((r: { computed?: boolean }) => !r.computed).map((r: { amount: number }) => r.amount);
+    expect(list()).toEqual([100]);
+    expect(list("charity")).toEqual([50]);
+    expect(list("waste")).toEqual([70]);
+    expect(call("hassanTreasury:categories", { kind: "waste" })).toEqual(["عدة باظت"]);
   });
 });

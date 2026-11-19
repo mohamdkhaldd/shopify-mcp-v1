@@ -1,12 +1,19 @@
 import { FormEvent, useEffect, useState } from "react";
 import { hassanApi } from "../../api/client";
-import { HassanTreasuryExpense } from "../../api/types";
+import { HassanExpenseKind, HassanTreasuryExpense } from "../../api/types";
 import { monthLabel } from "../../utils/months";
 import { formatEGP } from "../../utils/format";
 import { person } from "../../person";
 import { PAYMENT_METHODS, paymentMethodLabel } from "../../utils/paymentMethods";
 
-export default function ExpensesTab({ month }: { month: string }) {
+const SHEET: Record<HassanExpenseKind, { title: string; hint: string; placeholder: string }> = {
+  ops: { title: "مصاريف التشغيل", hint: "بيصرفه من كوميشنه", placeholder: "زي: إيجار، قسط عربية، أكل" },
+  charity: { title: "صدقات", hint: "بيطلّعه صدقات من كوميشنه", placeholder: "زي: صدقة، زكاة، تبرع" },
+  waste: { title: "هالك", hint: "بيضيع أو بيتهلك (حاجة باظت، اتسرقت، خسارة)", placeholder: "زي: عدّة باظت، فلوس ضاعت" },
+};
+
+export default function ExpensesTab({ month, kind = "ops" }: { month: string; kind?: HassanExpenseKind }) {
+  const sheet = SHEET[kind];
   const [entries, setEntries] = useState<HassanTreasuryExpense[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -16,15 +23,15 @@ export default function ExpensesTab({ month }: { month: string }) {
   const [method, setMethod] = useState("cash");
 
   const refresh = () => {
-    hassanApi.treasuryList(month).then(setEntries);
-    hassanApi.treasuryCategories().then(setCategories);
+    hassanApi.treasuryList(month, kind).then(setEntries);
+    hassanApi.treasuryCategories(kind).then(setCategories);
   };
-  useEffect(refresh, [month]);
+  useEffect(refresh, [month, kind]);
 
   async function handleAdd(e: FormEvent) {
     e.preventDefault();
     if (!amount || !category.trim()) return;
-    await hassanApi.treasuryCreate({ date, amount: Number(amount), category: category.trim(), description: description.trim(), method });
+    await hassanApi.treasuryCreate({ date, amount: Number(amount), category: category.trim(), description: description.trim(), method, kind });
     setAmount("");
     setDescription("");
     refresh();
@@ -47,9 +54,9 @@ export default function ExpensesTab({ month }: { month: string }) {
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-card shadow-card p-5">
-        <h2 className="font-bold text-slate-800 mb-1">مصاريف التشغيل — {monthLabel(month)}</h2>
+        <h2 className="font-bold text-slate-800 mb-1">{sheet.title} — {monthLabel(month)}</h2>
         <p className="text-xs text-slate-400 mb-4">
-          اللي {person()} بيصرفه من كوميشنه — بيطلع من الحساب اللي تختاره في خزنة الشركة، وبيتخصم من كوميشنه.
+          اللي {person()} {sheet.hint} — بيطلع من الحساب اللي تختاره في خزنة الشركة، وبيتخصم من كوميشنه.
         </p>
         <form onSubmit={handleAdd} className="no-print flex flex-wrap items-end gap-2 mb-4 pb-4 border-b border-slate-100">
           <div>
@@ -71,13 +78,13 @@ export default function ExpensesTab({ month }: { month: string }) {
             <label className="block text-xs text-slate-400 mb-1">البند</label>
             <input
               type="text"
-              list="expense-categories"
-              placeholder="زي: إيجار، قسط عربية، أكل"
+              list={`expense-categories-${kind}`}
+              placeholder={sheet.placeholder}
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
             />
-            <datalist id="expense-categories">
+            <datalist id={`expense-categories-${kind}`}>
               {categories.map((c) => (
                 <option key={c} value={c} />
               ))}
