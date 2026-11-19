@@ -13,8 +13,7 @@ interface PrivacyState {
 
 const PrivacyContext = createContext<PrivacyState | null>(null);
 
-// إظهار الأرقام محتاج باسورد الشركة — مرة واحدة لحد ما البرنامج يتقفل/يتقفل ويتفتح
-let revealOk = false;
+// إظهار الأرقام محتاج باسورد الشركة — كل مرة
 
 export function PrivacyProvider({ children }: { children: ReactNode }) {
   const [allHidden, setAllHidden] = useState(true);
@@ -22,7 +21,7 @@ export function PrivacyProvider({ children }: { children: ReactNode }) {
   const [asking, setAsking] = useState<null | (() => void)>(null);
   const isHidden = (id: string) => overrides[id] ?? allHidden;
   // أي إظهار بيعدّي على الباسورد الأول
-  const reveal = (then: () => void) => (revealOk ? then() : setAsking(() => then));
+  const reveal = (then: () => void) => setAsking(() => then);
   const toggle = (id: string) => {
     const showing = overrides[id] ?? allHidden;
     const flip = () => setOverrides((o) => ({ ...o, [id]: !(o[id] ?? allHidden) }));
@@ -44,7 +43,6 @@ export function PrivacyProvider({ children }: { children: ReactNode }) {
         <RevealPassword
           onClose={() => setAsking(null)}
           onOk={() => {
-            revealOk = true;
             const then = asking;
             setAsking(null);
             then();
