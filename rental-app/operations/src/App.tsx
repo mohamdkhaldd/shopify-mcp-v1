@@ -69,18 +69,18 @@ export default function App() {
         {menuOpen && <div className="no-print fixed inset-0 z-40 bg-black/40 min-[1024px]:hidden" onClick={() => setMenuOpen(false)} aria-hidden />}
         <main key={`${pageKey}-${who}`} className="flex-1 min-w-0 p-6 xl:p-8 max-w-[1400px] mx-auto w-full max-[1023px]:px-3 max-[1023px]:pt-0">
           {/* phone / upright tablet: the company, the page, and ☰ for the menu */}
-          <div className="no-print min-[1024px]:hidden sticky top-0 z-30 -mx-3 mb-4 px-3 h-14 flex items-center gap-3 bg-white border-b border-slate-200 shadow-sm">
-            <button aria-label="القايمة" onClick={() => setMenuOpen(true)} className="w-10 h-10 -ms-1 rounded-lg flex items-center justify-center text-slate-700 hover:bg-slate-100">
+          <div className="no-print min-[1024px]:hidden sticky top-0 z-30 -mx-3 mb-4 px-3 h-14 flex items-center gap-3 bg-navy text-white shadow-sm">
+            <button aria-label="القايمة" onClick={() => setMenuOpen(true)} className="w-10 h-10 -ms-1 rounded-lg flex items-center justify-center text-white hover:bg-white/10">
               <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <path d="M4 7h16M4 12h16M4 17h16" />
               </svg>
             </button>
-            <div className="font-bold text-slate-900 truncate">{(() => {
+            <div className="font-bold text-white truncate">{(() => {
               const item = navItems.find((i) => i.id === active);
               return item && navLabel(item);
             })()}</div>
             <div className="ms-auto flex items-center gap-2 min-w-0">
-              <span className="text-xs text-slate-500 truncate">{brand.name}</span>
+              <span className="text-xs text-slate-300 truncate">{brand.name}</span>
               <CompanyLogo />
             </div>
           </div>

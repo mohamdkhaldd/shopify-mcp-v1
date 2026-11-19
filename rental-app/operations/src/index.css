@@ -1,3 +1,7 @@
+@import "@fontsource/ibm-plex-sans-arabic/400.css";
+@import "@fontsource/ibm-plex-sans-arabic/500.css";
+@import "@fontsource/ibm-plex-sans-arabic/600.css";
+@import "@fontsource/ibm-plex-sans-arabic/700.css";
 @import "@fontsource/cairo/400.css";
 @import "@fontsource/cairo/600.css";
 @import "@fontsource/cairo/700.css";
@@ -17,11 +21,31 @@ body,
 }
 
 body {
-  @apply font-cairo bg-[#F5F7F6] text-slate-800;
+  @apply font-cairo bg-[#F2F4F8] text-slate-800;
+  font-feature-settings: "tnum" 1;
+}
+
+/* الأرقام والعناوين: أتقل شوية في الخط الجديد */
+h1 {
+  letter-spacing: -0.01em;
 }
 
 .print-only {
   display: none;
+}
+
+/* الجداول: عناوين صغيرة رمادي، وخط خفيف، والصف بيتلوّن تحت الماوس */
+@media screen {
+  table thead th {
+    font-size: 12px;
+    letter-spacing: 0.01em;
+  }
+  table tbody tr {
+    transition: background-color 0.12s;
+  }
+  table tbody tr:hover {
+    background-color: rgba(29, 78, 137, 0.035);
+  }
 }
 
 /* ملف الشريك: كل شيت ورقة A4 كاملة والهامش جواها (10 مم)، وبتتطبع من غير

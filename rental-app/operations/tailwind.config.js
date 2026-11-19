@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 
-// The operations program keeps the old app's own look (green primary, Cairo),
-// separate from the rental program's theme.
+// شكل التشغيل: كحلي رسمي + لمسة كهرماني (ألوان شركات المعدات التقيلة)،
+// وخط IBM Plex Sans Arabic — منفصل عن شكل التأجير.
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 
 /** @type {import('tailwindcss').Config} */
@@ -12,19 +12,29 @@ export default {
     extend: {
       colors: {
         primary: {
-          DEFAULT: "#2F8F63",
-          dark: "#256F4D",
-          light: "#E8F5EF",
+          DEFAULT: "#1D4E89",
+          dark: "#123764",
+          light: "#E8EFF8",
+        },
+        navy: {
+          DEFAULT: "#0E2540",
+          soft: "#16314F",
+          line: "#23415F",
+        },
+        accent: {
+          DEFAULT: "#F2A516",
+          dark: "#C98505",
+          light: "#FEF5E2",
         },
       },
       fontFamily: {
-        cairo: ["Cairo", "sans-serif"],
+        cairo: ["IBM Plex Sans Arabic", "Cairo", "sans-serif"],
       },
       borderRadius: {
-        card: "16px",
+        card: "14px",
       },
       boxShadow: {
-        card: "0 2px 10px 0 rgba(16, 24, 40, 0.06)",
+        card: "0 1px 2px 0 rgba(15, 30, 55, 0.05), 0 0 0 1px rgba(15, 30, 55, 0.06)",
       },
     },
   },

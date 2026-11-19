@@ -71,15 +71,15 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (id: SectionId)
           <AreaChart data={summary.monthlyProfitTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#2F8F63" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="#2F8F63" stopOpacity={0.02} />
+                <stop offset="0%" stopColor="#1D4E89" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="#1D4E89" stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} />
             <XAxis dataKey="month" tick={{ fontSize: 12, fill: tickFill }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 12, fill: tickFill }} axisLine={false} tickLine={false} width={70} />
             <Tooltip formatter={(value: number) => formatEGP(value)} contentStyle={tooltipStyle} />
-            <Area type="monotone" dataKey="profit" stroke="#2F8F63" strokeWidth={2.5} fill="url(#profitFill)" />
+            <Area type="monotone" dataKey="profit" stroke="#1D4E89" strokeWidth={2.5} fill="url(#profitFill)" />
           </AreaChart>
         </ResponsiveContainer>
       </Blurrable>
