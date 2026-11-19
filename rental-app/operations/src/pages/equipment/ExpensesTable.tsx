@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import EditRowButton from "../../components/EditRowButton";
 import { equipmentApi, expenseCategoriesApi, monthlyExpensesApi } from "../../api/client";
 import { DriverSalaryBreakdownRow, ExpenseCategory, MonthlyExpense } from "../../api/types";
 import { formatEGP } from "../../utils/format";
@@ -283,6 +284,7 @@ export default function ExpensesTable({ equipmentId, month, onChanged }: Expense
                     {!exp.note && !exp.receipt_image && "—"}
                   </td>
                   <td className="py-2">
+                    <EditRowButton src="monthly_expenses" expenseTotal row={{ id: exp.id, date: exp.date, amount: exp.amount, method: exp.payment_method, note: exp.note }} onSaved={() => { refresh(); onChanged?.(); }} />
                     <button
                       onClick={() => handleDelete(exp.id)}
                       className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold"

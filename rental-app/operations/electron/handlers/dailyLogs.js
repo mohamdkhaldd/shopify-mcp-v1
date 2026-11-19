@@ -189,6 +189,47 @@ module.exports = function register(db, ipcMain, shared) {
     return created;
   });
 
+  // الشيفت اللي اتعمل بالغلط: يتغيّر اسمه أو يتمسح هو وأيامه (السركي والمقاول)
+  ipcMain.handle("equipmentShifts:rename", (_e, { id, label }) => {
+    const trimmed = (label ?? "").trim();
+    if (!trimmed) throw new Error("لازم اسم للشيفت");
+    const shift = db.prepare("SELECT * FROM equipment_shifts WHERE id = ?").get(id);
+    if (!shift) throw new Error("الشيفت مش موجود");
+    const tx = db.transaction(() => {
+      db.prepare("UPDATE equipment_shifts SET label = ? WHERE id = ?").run(trimmed, id);
+      db.prepare("UPDATE daily_logs SET shift_label = ? WHERE equipment_id = ? AND shift_label = ?").run(trimmed, shift.equipment_id, shift.label);
+    });
+    tx();
+    return { ...shift, label: trimmed };
+  });
+  ipcMain.handle("equipmentShifts:days", (_e, { id }) => {
+    const shift = db.prepare("SELECT * FROM equipment_shifts WHERE id = ?").get(id);
+    if (!shift) return 0;
+    return db.prepare("SELECT COUNT(*) AS n FROM daily_logs WHERE equipment_id = ? AND shift_label = ?").get(shift.equipment_id, shift.label).n;
+  });
+  ipcMain.handle("equipmentShifts:delete", (_e, { id }) => {
+    const shift = db.prepare("SELECT * FROM equipment_shifts WHERE id = ?").get(id);
+    if (!shift) return { ok: true, logs: [] };
+    const logs = db.prepare("SELECT * FROM daily_logs WHERE equipment_id = ? AND shift_label = ?").all(shift.equipment_id, shift.label);
+    const tx = db.transaction(() => {
+      db.prepare("DELETE FROM daily_logs WHERE equipment_id = ? AND shift_label = ?").run(shift.equipment_id, shift.label);
+      db.prepare("DELETE FROM equipment_shifts WHERE id = ?").run(id);
+    });
+    tx();
+    // بيرجّع اللي اتمسح عشان «تراجع» يرجّعه
+    return { ok: true, shift, logs };
+  });
+  ipcMain.handle("equipmentShifts:restore", (_e, { shift, logs }) => {
+    const tx = db.transaction(() => {
+      db.prepare("INSERT OR IGNORE INTO equipment_shifts (id, equipment_id, label, created_at) VALUES (?, ?, ?, ?)").run(shift.id, shift.equipment_id, shift.label, shift.created_at ?? null);
+      const cols = logs.length ? Object.keys(logs[0]) : [];
+      const ins = cols.length ? db.prepare(`INSERT OR REPLACE INTO daily_logs (${cols.join(",")}) VALUES (${cols.map((c) => "@" + c).join(",")})`) : null;
+      for (const l of logs) ins.run(l);
+    });
+    tx();
+    return { ok: true };
+  });
+
   // معدة جديدة غالبًا هتشتغل بنفس ساعات ودوام معدة قديمة (نفس مواعيد الورديات
   // والأوفر تايم) — بننسخ الساعات/الأساسية/الأوفر تايم/علامة "مشتغلش"/البيان
   // بس من شيت المقاول بتاع المعدة المصدر لنفس الشهر، وبيتزامنوا لشيت السركي

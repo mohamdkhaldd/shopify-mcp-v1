@@ -1,3 +1,4 @@
+import { useUndo } from "../../context/UndoContext";
 import { useEffect, useState } from "react";
 import Icon from "../../components/Icon";
 import MonthPicker from "../../components/equipment/MonthPicker";
@@ -45,6 +46,7 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
   const [activeShiftLabel, setActiveShiftLabel] = useState("");
   const [addingShift, setAddingShift] = useState(false);
   const [newShiftName, setNewShiftName] = useState("");
+  const { pushUndo } = useUndo();
 
   useEffect(() => {
     employeesApi.list().then(setEmployees);
@@ -69,6 +71,47 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
     setActiveShiftLabel(created.label);
     setNewShiftName("");
     setAddingShift(false);
+  }
+
+  const activeShift = shifts.find((x) => x.label === activeShiftLabel) ?? null;
+
+  async function handleRenameShift() {
+    if (!activeShift) return;
+    const label = window.prompt("الاسم الجديد للشيفت:", activeShift.label)?.trim();
+    if (!label || label === activeShift.label) return;
+    const old = activeShift.label;
+    try {
+      await equipmentShiftsApi.rename(activeShift.id, label);
+    } catch (e) {
+      alert((e as Error).message);
+      return;
+    }
+    refreshShifts();
+    setActiveShiftLabel(label);
+    pushUndo(`اتغيّر اسم الشيفت لـ «${label}»`, async () => {
+      await equipmentShiftsApi.rename(activeShift.id, old);
+      refreshShifts();
+      setActiveShiftLabel(old);
+    });
+  }
+
+  async function handleDeleteShift() {
+    if (!activeShift) return;
+    const days = await equipmentShiftsApi.days(activeShift.id);
+    const msg = days
+      ? `تمسح شيفت «${activeShift.label}» ومعاه ${days} يوم متسجل (في السركي والمقاول)؟\nتقدر ترجّعه بـ «تراجع» على طول.`
+      : `تمسح شيفت «${activeShift.label}»؟`;
+    if (!window.confirm(msg)) return;
+    const r = await equipmentShiftsApi.remove(activeShift.id);
+    setActiveShiftLabel("");
+    refreshShifts();
+    setRefreshKey((k) => k + 1);
+    pushUndo(`اتمسح شيفت «${r.shift.label}»`, async () => {
+      await equipmentShiftsApi.restore(r.shift, r.logs);
+      refreshShifts();
+      setActiveShiftLabel(r.shift.label);
+      setRefreshKey((k) => k + 1);
+    });
   }
 
   useEffect(() => {
@@ -196,6 +239,17 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
               {s.label}
             </button>
           ))}
+          {/* الشيفت المختار: تغيير اسمه أو مسحه لو اتعمل بالغلط */}
+          {activeShift && (
+            <>
+              <button onClick={handleRenameShift} title="غيّر اسم الشيفت" className="rounded-lg bg-white shadow-card px-2 py-1.5 text-xs font-bold text-slate-500 hover:text-primary-dark">
+                ✎ تعديل
+              </button>
+              <button onClick={handleDeleteShift} title="امسح الشيفت ده" className="rounded-lg bg-white shadow-card px-2 py-1.5 text-xs font-bold text-red-500 hover:bg-red-50">
+                🗑 مسح
+              </button>
+            </>
+          )}
           {addingShift ? (
             <div className="flex items-center gap-1">
               <input

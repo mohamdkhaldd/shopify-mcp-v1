@@ -109,8 +109,12 @@ module.exports = function register(db, ipcMain, shared) {
     treasury_transfers: { method: null },
     treasury_adjustments: { method: null },
     transfer_fees: { method: "account" },
+    car_fuel: { method: null },
+    employee_deductions: { method: null },
   };
-  ipcMain.handle("treasury:movementUpdate", (_e, { src, src_id, date, amount, account }) => {
+  // البيان بيتعدّل مع الحركة لو اتبعت (اسم العمود في كل جدول)
+  const NOTE_COLUMN = { employee_deductions: "reason", treasury_transfers: null, transfer_fees: null, treasury_adjustments: "note" };
+  ipcMain.handle("treasury:movementUpdate", (_e, { src, src_id, date, amount, account, note, expenseTotal }) => {
     const cfg = MOVEMENT_COLUMNS[src];
     if (!cfg) throw new Error("الحركة دي مينفعش تتعدّل من هنا");
     const value = Number(amount);
@@ -119,7 +123,9 @@ module.exports = function register(db, ipcMain, shared) {
       if (src === "monthly_expenses") {
         // المصروف: اللي اتدفع وقت التسجيل هو اللي بيطلع من الخزنة.
         const me = db.prepare("SELECT * FROM monthly_expenses WHERE id = ?").get(src_id);
-        if (me.paid_amount == null) db.prepare("UPDATE monthly_expenses SET amount = ? WHERE id = ?").run(value, src_id);
+        // من شيت مصروفات المعدة: المبلغ = إجمالي المصروف (اللي اتدفع ميزيدش عنه)
+        if (expenseTotal) db.prepare("UPDATE monthly_expenses SET amount = ?, paid_amount = CASE WHEN paid_amount IS NULL THEN NULL ELSE MIN(paid_amount, ?) END WHERE id = ?").run(value, value, src_id);
+        else if (me.paid_amount == null) db.prepare("UPDATE monthly_expenses SET amount = ? WHERE id = ?").run(value, src_id);
         else db.prepare("UPDATE monthly_expenses SET paid_amount = ? WHERE id = ?").run(Math.min(value, me.amount), src_id);
         db.prepare("UPDATE monthly_expenses SET date = ? WHERE id = ?").run(date, src_id);
       } else if (src === "treasury_adjustments") {
@@ -129,6 +135,11 @@ module.exports = function register(db, ipcMain, shared) {
         db.prepare(`UPDATE ${src} SET date = ?, amount = ? WHERE id = ?`).run(date, value, src_id);
       }
       if (account && cfg.method) db.prepare(`UPDATE ${src} SET ${cfg.method} = ? WHERE id = ?`).run(account, src_id);
+      const noteCol = src in NOTE_COLUMN ? NOTE_COLUMN[src] : "note";
+      if (note !== undefined && noteCol) {
+        const cols = db.prepare(`PRAGMA table_info(${src})`).all().map((c) => c.name);
+        if (cols.includes(noteCol)) db.prepare(`UPDATE ${src} SET ${noteCol} = ? WHERE id = ?`).run(noteCol === "reason" ? note || "" : note || null, src_id);
+      }
       // دفعة/سلفة عامل جاية من مرتبات العمال — المبلغ هناك يتظبط معاها.
       if (src === "hassan_treasury_expenses") {
         db.prepare("UPDATE hassan_worker_entries SET amount = ?, date = ? WHERE treasury_expense_id = ?").run(value, date, src_id);

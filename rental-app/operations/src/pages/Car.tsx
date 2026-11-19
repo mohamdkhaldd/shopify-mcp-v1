@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import EditRowButton from "../components/EditRowButton";
 import MonthPicker from "../components/equipment/MonthPicker";
 import PrintButton from "../components/PrintButton";
 import { PrintHeader, PrintSignoff } from "../components/PrintSignoff";
@@ -100,7 +101,7 @@ export default function Car() {
       <PrintHeader title="العربية الملاكي" subtitle={`${monthLabel(month)} ${month.slice(0, 4)}`} />
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">العربية الملاكي</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900">السيارات</h1>
           <p className="text-sm text-slate-500 mt-1">
             سجّل البنزين والزيت كل مرة. مشوار الشغل بيتسجل على المعدة ويتخصم من فلوس العربية (مش من الخزنة) — والباقي خاص بيتخصم من كوميشن {person()}.
           </p>
@@ -198,6 +199,7 @@ export default function Car() {
                     <td className="py-1.5 text-slate-500">{f.note ?? ""}</td>
                     <td className="py-1.5 font-semibold text-slate-800">{formatEGP(f.amount)}</td>
                     <td className="no-print py-1.5">
+                      <EditRowButton src="car_fuel" withMethod={false} row={{ id: f.id, date: f.date, amount: f.amount, note: f.note }} onSaved={refresh} />
                       <button onClick={() => removeFuel(f.id)} className="text-xs text-rose-500 font-semibold">
                         حذف
                       </button>
@@ -242,6 +244,7 @@ export default function Car() {
                     <td className="py-1.5 text-slate-500">{t.note ?? ""}</td>
                     <td className="py-1.5 font-semibold text-primary-dark">{formatEGP(t.amount)}</td>
                     <td className="no-print py-1.5">
+                      <EditRowButton src="monthly_expenses" withMethod={false} row={{ id: t.id, date: t.date, amount: t.amount, note: t.note }} onSaved={refresh} />
                       <button onClick={() => removeTrip(t.id)} className="text-xs text-rose-500 font-semibold">
                         حذف
                       </button>

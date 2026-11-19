@@ -382,6 +382,10 @@ export const equipmentShiftsApi = {
   list: (equipment_id: number): Promise<EquipmentShift[]> => invoke("equipmentShifts:list", { equipment_id }),
   create: (equipment_id: number, label: string): Promise<EquipmentShift> =>
     invoke("equipmentShifts:create", { equipment_id, label }),
+  rename: (id: number, label: string): Promise<EquipmentShift> => invoke("equipmentShifts:rename", { id, label }),
+  days: (id: number): Promise<number> => invoke("equipmentShifts:days", { id }),
+  remove: (id: number): Promise<{ ok: true; shift: EquipmentShift; logs: unknown[] }> => invoke("equipmentShifts:delete", { id }),
+  restore: (shift: EquipmentShift, logs: unknown[]): Promise<void> => invoke("equipmentShifts:restore", { shift, logs }),
 };
 
 export const monthlyExpensesApi = {
@@ -566,7 +570,7 @@ export const partnersDashboardApi = {
 
 export const treasuryApi = {
   monthMovements: (month: string, direction: "in" | "out"): Promise<MonthMovement[]> => invoke("treasury:monthMovements", { month, direction }),
-  movementUpdate: (m: { src: string; src_id: number; date: string; amount: number; account: string }) => invoke("treasury:movementUpdate", m),
+  movementUpdate: (m: { src: string; src_id: number; date: string; amount: number; account?: string; note?: string | null; expenseTotal?: boolean }) => invoke("treasury:movementUpdate", m),
   movementDelete: (src: string, src_id: number) => invoke("treasury:movementDelete", { src, src_id }),
   list: (): Promise<TreasuryAccount[]> => invoke("treasury:list"),
   setOpening: (id: number, opening_balance: number, opening_date: string | null): Promise<void> =>

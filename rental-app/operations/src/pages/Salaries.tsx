@@ -1,4 +1,5 @@
 import { Fragment, FormEvent, useEffect, useState } from "react";
+import EditRowButton from "../components/EditRowButton";
 import MonthPicker from "../components/equipment/MonthPicker";
 import Icon from "../components/Icon";
 import PrintButton from "../components/PrintButton";
@@ -220,6 +221,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
                       {p.date} — {formatEGP(p.amount)} — {paymentMethodLabel(p.payment_method)}{" "}
                       {p.note && <span className="text-slate-400">({p.note})</span>}
                     </span>
+                    <EditRowButton src="salary_payments" row={{ id: p.id, date: p.date, amount: p.amount, method: p.payment_method, note: p.note }} onSaved={() => { refresh(); onChanged(); }} />
                     <button onClick={() => handleDeletePayment(p.id)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
                       حذف
                     </button>
@@ -311,6 +313,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
                       {a.date} — {formatEGP(a.amount)} — {paymentMethodLabel(a.payment_method)}{" "}
                       {a.note && <span className="text-slate-400">({a.note})</span>}
                     </span>
+                    <EditRowButton src="employee_advances" row={{ id: a.id, date: a.date, amount: a.amount, method: a.payment_method, note: a.note }} onSaved={() => { refresh(); onChanged(); }} />
                     <button onClick={() => handleDeleteAdvance(a.id)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
                       حذف
                     </button>
@@ -368,6 +371,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
                       {b.date} — {formatEGP(b.amount)} — {paymentMethodLabel(b.payment_method)}{" "}
                       {b.note && <span className="text-slate-400">({b.note})</span>}
                     </span>
+                    <EditRowButton src="employee_bonuses" row={{ id: b.id, date: b.date, amount: b.amount, method: b.payment_method, note: b.note }} onSaved={() => { refresh(); onChanged(); }} />
                     <button onClick={() => handleDeleteBonus(b.id)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
                       حذف
                     </button>
@@ -424,6 +428,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
                     <span className="text-slate-600">
                       {d.date} — {formatEGP(d.amount)} <span className="text-slate-400">({d.reason})</span>
                     </span>
+                    <EditRowButton src="employee_deductions" withMethod={false} row={{ id: d.id, date: d.date, amount: d.amount, note: d.reason }} onSaved={() => { refresh(); onChanged(); }} />
                     <button onClick={() => handleDeleteDeduction(d.id)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
                       حذف
                     </button>
@@ -488,7 +493,7 @@ export default function Salaries() {
     <div className="space-y-6">
       <div className="no-print flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">الرواتب</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900">السائقين</h1>
           <p className="text-sm text-slate-500 mt-1">
             دوس على اسم أي سائق تشوف شيت مرتبه بالتفصيل — الأيام والمعدات والسلف والحافز — وتقدر تصوره وتبعتهوله.
           </p>

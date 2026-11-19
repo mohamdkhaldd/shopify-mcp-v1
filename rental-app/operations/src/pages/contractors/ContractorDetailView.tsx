@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import EditRowButton from "../../components/EditRowButton";
 import { contractorPaymentsApi, contractorsDashboardApi } from "../../api/client";
 import { ContractorDetail } from "../../api/types";
 import { formatEGP } from "../../utils/format";
@@ -271,6 +272,7 @@ export default function ContractorDetailView({ contractorId, onBack }: Contracto
                   <td className="py-2 text-slate-500">{paymentMethodLabel(p.method)}</td>
                   <td className="py-2 text-slate-500">{p.note ?? "—"}</td>
                   <td className="py-2">
+                    <EditRowButton src="contractor_payments" row={{ id: p.id, date: p.date, amount: p.amount, method: p.method, note: p.note }} onSaved={refresh} />
                     <button onClick={() => handleDeletePayment(p.id)} className="no-print text-xs text-rose-500 hover:text-rose-700 font-semibold">
                       حذف
                     </button>

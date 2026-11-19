@@ -49,8 +49,9 @@ export default function Sidebar({ active, onSelect, open = false }: SidebarProps
         {navItems.map((item) => {
           const isActive = item.id === active;
           return (
+            <div key={item.id}>
+            {item.group && <div className="px-3 pt-4 pb-1 text-[11px] font-bold tracking-wide text-slate-400">{item.group}</div>}
             <button
-              key={item.id}
               onClick={() => onSelect(item.id)}
               className={[
                 "w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors",
@@ -62,6 +63,7 @@ export default function Sidebar({ active, onSelect, open = false }: SidebarProps
               <Icon name={item.icon} className="w-5 h-5" />
               <span>{navLabel(item)}</span>
             </button>
+            </div>
           );
         })}
       </nav>
