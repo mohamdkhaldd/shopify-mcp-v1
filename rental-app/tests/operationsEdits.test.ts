@@ -164,3 +164,26 @@ describe("التشغيل: الالتزامات والمستحقات", () => {
     expect(call("dues:board", { month: "2026-11" }).settings.contractors).toBe(25);
   });
 });
+
+describe("التشغيل: كذا عربية", () => {
+  it("العربية القديمة بقت أول عربية، الملاكي بيتخصم من الكوميشن، والشغل من الخزنة وبيدخّل", () => {
+    const { db, call } = ops();
+    // بيانات قديمة قبل كذا عربية
+    db.prepare("INSERT INTO car_fuel (date, kind, amount) VALUES ('2026-11-02', 'بنزين', 500)").run();
+    const cars = call("cars:list", {});
+    expect(cars).toHaveLength(1);
+    expect(cars[0]).toMatchObject({ name: "العربية الملاكي", kind: "personal" });
+    expect(call("car:summary", { month: "2026-11" }).personal).toBe(500);
+
+    const { id: truck } = call("cars:save", { name: "النقل", kind: "work" });
+    call("carFuel:create", { date: "2026-11-03", kind: "بنزين", amount: 300, car_id: truck, method: "cash" });
+    call("carIncome:create", { car_id: truck, date: "2026-11-04", amount: 1200, method: "cash", note: "نقلة" });
+    const t = call("car:summary", { month: "2026-11", car_id: truck });
+    expect(t).toMatchObject({ fuelTotal: 300, incomeTotal: 1200, net: 900, personal: 0 });
+    // الملاكي متأثرش بعربية الشغل
+    expect(call("car:summary", { month: "2026-11", car_id: cars[0].id }).personal).toBe(500);
+    // الخزنة: مصروف الشغل طالع ودخله داخل
+    const moves = call("treasury:monthMovements", { month: "2026-11" }).filter((m: { src: string }) => m.src === "car_fuel" || m.src === "car_income");
+    expect(moves.map((m: { direction: string; amount: number }) => `${m.direction}:${m.amount}`).sort()).toEqual(["in:1200", "out:300"]);
+  });
+});

@@ -499,6 +499,30 @@ function setupDatabase(db, { seed = true } = {}) {
   if (!expenseCols.includes("method")) db.exec("ALTER TABLE hassan_treasury_expenses ADD COLUMN method TEXT");
   // الشيت اللي السطر متسجل فيه: مصاريف التشغيل (فاضي) / صدقات / هالك — كلهم بيتخصموا من الكوميشن
   if (!expenseCols.includes("kind")) db.exec("ALTER TABLE hassan_treasury_expenses ADD COLUMN kind TEXT");
+  // السيارات (كذا عربية): ملاكي/خاصة (الخاص بيتخصم من الكوميشن زي الأول)
+  // أو شغل (مصاريفها من الخزنة، وبتدخّل فلوس للخزنة)
+  db.exec(`CREATE TABLE IF NOT EXISTS cars (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    plate TEXT,
+    kind TEXT NOT NULL DEFAULT 'personal',
+    note TEXT
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS car_income (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    car_id INTEGER NOT NULL REFERENCES cars(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    amount REAL NOT NULL,
+    method TEXT NOT NULL DEFAULT 'cash',
+    note TEXT
+  )`);
+  {
+    const fuelCols = db.prepare("PRAGMA table_info(car_fuel)").all().map((c) => c.name);
+    if (!fuelCols.includes("car_id")) db.exec("ALTER TABLE car_fuel ADD COLUMN car_id INTEGER REFERENCES cars(id) ON DELETE CASCADE");
+    if (!fuelCols.includes("method")) db.exec("ALTER TABLE car_fuel ADD COLUMN method TEXT");
+    const meCols = db.prepare("PRAGMA table_info(monthly_expenses)").all().map((c) => c.name);
+    if (!meCols.includes("car_id")) db.exec("ALTER TABLE monthly_expenses ADD COLUMN car_id INTEGER");
+  }
   // الالتزامات والمستحقات: التزام ممكن يبقى "ندفع" أو "نستلم"، ويتدفع على دفعات
   const oblCols = db.prepare("PRAGMA table_info(obligations)").all().map((c) => c.name);
   if (!oblCols.includes("direction")) db.exec("ALTER TABLE obligations ADD COLUMN direction TEXT NOT NULL DEFAULT 'pay'");

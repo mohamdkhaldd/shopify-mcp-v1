@@ -104,6 +104,8 @@ export interface MonthlyExpense {
   // null = اتدفع كله وقت التسجيل؛ غير كده اللي اتدفع والباقي في الآجل.
   paid_amount: number | null;
   payee: string | null;
+  /** مشوار بعربية من السيارات */
+  car_id?: number | null;
   paid_total?: number;
   remaining?: number;
   /** عمولة التحويل (انستا باي) اللي اتدفعت عليه، لو اتبعت "تحويل" */
@@ -851,10 +853,18 @@ export interface CarFuel {
   kind: string;
   amount: number;
   note: string | null;
+  car_id?: number | null;
+  /** عربية شغل: طالع من أنهي حساب في الخزنة */
+  method?: string | null;
 }
 
 export interface CarSummary {
   month: string;
+  car: { id: number; name: string; plate: string | null; kind: "personal" | "work" } | null;
+  income: { id: number; date: string; amount: number; method: string; note: string | null }[];
+  incomeTotal: number;
+  /** عربية شغل: الدخل + المشاوير − المصاريف */
+  net: number | null;
   fuel: CarFuel[];
   trips: { id: number; date: string | null; month: string; amount: number; note: string | null; equipment_name: string }[];
   byEquipment: { equipment_name: string; amount: number }[];

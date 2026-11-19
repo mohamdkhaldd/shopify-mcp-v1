@@ -26,8 +26,8 @@ module.exports = function register(db, ipcMain, shared) {
     const expense = carCat && Number(input.category_id) === carCat ? { ...input, payment_method: "car", paid_amount: null } : input;
     const info = db
       .prepare(
-        `INSERT INTO monthly_expenses (equipment_id, month, date, category_id, amount, payment_method, note, receipt_image, paid_amount, payee)
-         VALUES (@equipment_id, @month, @date, @category_id, @amount, @payment_method, @note, @receipt_image, @paid_amount, @payee)`
+        `INSERT INTO monthly_expenses (equipment_id, month, date, category_id, amount, payment_method, note, receipt_image, paid_amount, payee, car_id)
+         VALUES (@equipment_id, @month, @date, @category_id, @amount, @payment_method, @note, @receipt_image, @paid_amount, @payee, @car_id)`
       )
       .run({
         ...expense,
@@ -40,6 +40,8 @@ module.exports = function register(db, ipcMain, shared) {
             ? null
             : Math.max(0, Number(expense.paid_amount) || 0),
         payee: expense.payee?.trim() || null,
+        // مشوار بعربية من السيارات (مصروف «عربية ملاكي» على المعدة)
+        car_id: expense.car_id ?? null,
       });
     const created = db
       .prepare(

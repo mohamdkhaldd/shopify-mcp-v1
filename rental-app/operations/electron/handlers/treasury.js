@@ -109,7 +109,8 @@ module.exports = function register(db, ipcMain, shared) {
     treasury_transfers: { method: null },
     treasury_adjustments: { method: null },
     transfer_fees: { method: "account" },
-    car_fuel: { method: null },
+    car_fuel: { method: "method" },
+    car_income: { method: "method" },
     obligation_payments: { method: "method" },
     employee_deductions: { method: null },
   };

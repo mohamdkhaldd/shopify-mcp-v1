@@ -83,42 +83,77 @@ function carCategoryId(db, create = false) {
 
 // الخاص في شهر = بنزين/زيت الشهر − مشاوير الشغل (مصروفات "عربية ملاكي" على
 // المعدات) في نفس الشهر — ده اللي بيتخصم من كوميشن حسن.
-function carMonth(db, month) {
-  const fuel = db.prepare("SELECT * FROM car_fuel WHERE date LIKE ? ORDER BY date, id").all(`${month}%`);
+// العربية القديمة (قبل كذا عربية): أول ما حد يفتح السيارات بتبقى «العربية الملاكي»
+function ensureCars(db) {
+  if (db.prepare("SELECT COUNT(*) AS n FROM cars").get().n) return;
+  const catId = carCategoryId(db);
+  const legacy = db.prepare("SELECT COUNT(*) AS n FROM car_fuel").get().n + (catId ? db.prepare("SELECT COUNT(*) AS n FROM monthly_expenses WHERE category_id = ?").get(catId).n : 0);
+  const id = db.prepare("INSERT INTO cars (name, kind) VALUES ('العربية الملاكي', 'personal')").run().lastInsertRowid;
+  if (legacy) {
+    db.prepare("UPDATE car_fuel SET car_id = ? WHERE car_id IS NULL").run(id);
+    if (catId) db.prepare("UPDATE monthly_expenses SET car_id = ? WHERE category_id = ? AND car_id IS NULL").run(id, catId);
+  }
+}
+const firstCarId = (db) => db.prepare("SELECT id FROM cars ORDER BY id LIMIT 1").get()?.id ?? null;
+
+// شهر عربية: البنزين/المصاريف، مشاوير الشغل على المعدات، واللي دخّلته (لو شغل).
+// الخاص (عربية ملاكي) = المصاريف − مشاوير الشغل — ده اللي بيتخصم من كوميشن حسن.
+function carMonth(db, month, carId = null) {
+  const car = carId ? db.prepare("SELECT * FROM cars WHERE id = ?").get(carId) : null;
+  const byCar = carId ? " AND (car_id = @car OR (car_id IS NULL AND @car = @first))" : "";
+  const args = { m: `${month}%`, month, car: carId, first: firstCarId(db) };
+  const fuel = db.prepare(`SELECT * FROM car_fuel WHERE date LIKE @m${byCar} ORDER BY date, id`).all(args);
   const catId = carCategoryId(db);
   const trips = catId
     ? db
         .prepare(
           `SELECT me.*, e.name AS equipment_name FROM monthly_expenses me
            JOIN equipment e ON e.id = me.equipment_id
-           WHERE me.category_id = ? AND me.month = ? ORDER BY COALESCE(me.date, me.month || '-01'), me.id`
+           WHERE me.category_id = @cat AND me.month = @month${byCar.replace(/car_id/g, "me.car_id")} ORDER BY COALESCE(me.date, me.month || '-01'), me.id`
         )
-        .all(catId, month)
+        .all({ ...args, cat: catId })
     : [];
+  const income = carId ? db.prepare("SELECT * FROM car_income WHERE car_id = @car AND date LIKE @m ORDER BY date, id").all(args) : [];
   const fuelTotal = fuel.reduce((s, f) => s + f.amount, 0);
   const tripsTotal = trips.reduce((s, t) => s + t.amount, 0);
+  const incomeTotal = income.reduce((s, x) => s + x.amount, 0);
   const byEquipment = new Map();
   for (const t of trips) byEquipment.set(t.equipment_name, (byEquipment.get(t.equipment_name) ?? 0) + t.amount);
+  const work = car?.kind === "work";
   return {
     month,
+    car: car ?? null,
     fuel,
     trips,
+    income,
     byEquipment: [...byEquipment.entries()].map(([equipment_name, amount]) => ({ equipment_name, amount })),
     fuelTotal,
     tripsTotal,
-    personal: Math.max(0, fuelTotal - tripsTotal),
-    over: Math.max(0, tripsTotal - fuelTotal),
+    incomeTotal,
+    // عربية شغل: ربحها = اللي دخّلته + مشاويرها على المعدات − مصاريفها
+    net: work ? incomeTotal + tripsTotal - fuelTotal : null,
+    personal: work ? 0 : Math.max(0, fuelTotal - tripsTotal),
+    over: work ? 0 : Math.max(0, tripsTotal - fuelTotal),
   };
 }
 
-// كل الشهور اللي فيها بنزين أو مشاوير — للخصم من خزنة حسن على كل الوقت.
+// الخاص من كل العربيات الملاكي، شهر بشهر (بيتخصم من كوميشن حسن)
 function carPersonalAllMonths(db) {
+  ensureCars(db);
+  const personalCars = db.prepare("SELECT id FROM cars WHERE kind <> 'work' ORDER BY id").all().map((c) => c.id);
   const months = new Set(db.prepare("SELECT DISTINCT substr(date, 1, 7) AS m FROM car_fuel").all().map((r) => r.m));
   const catId = carCategoryId(db);
   if (catId) db.prepare("SELECT DISTINCT month AS m FROM monthly_expenses WHERE category_id = ?").all(catId).forEach((r) => months.add(r.m));
   return [...months].sort().map((m) => {
-    const c = carMonth(db, m);
-    return { month: m, personal: c.personal, fuelTotal: c.fuelTotal, tripsTotal: c.tripsTotal, lastDate: c.fuel.at(-1)?.date ?? `${m}-01` };
+    const cs = personalCars.map((id) => carMonth(db, m, id));
+    const fuel = cs.flatMap((c) => c.fuel);
+    return {
+      month: m,
+      personal: cs.reduce((s, c) => s + c.personal, 0),
+      fuelTotal: cs.reduce((s, c) => s + c.fuelTotal, 0),
+      tripsTotal: cs.reduce((s, c) => s + c.tripsTotal, 0),
+      lastDate: fuel.map((f) => f.date).sort().at(-1) ?? `${m}-01`,
+    };
   });
 }
 
@@ -488,20 +523,63 @@ function registerExtraHandlers(db, owed, ipcOverride) {
   });
 
   // ===== العربية الملاكي =====
-  ipcMain.handle("car:summary", (_e, { month }) => {
-    const m = carMonth(db, month);
+  ipcMain.handle("cars:list", () => {
+    ensureCars(db);
+    return db.prepare("SELECT * FROM cars ORDER BY id").all();
+  });
+  ipcMain.handle("cars:save", (_e, { id, name, plate, kind, note }) => {
+    if (!(name ?? "").trim()) throw new Error("اكتب اسم العربية");
+    const k = kind === "work" ? "work" : "personal";
+    if (id) db.prepare("UPDATE cars SET name = ?, plate = ?, kind = ?, note = ? WHERE id = ?").run(name.trim(), plate?.trim() || null, k, note?.trim() || null, id);
+    else return { id: Number(db.prepare("INSERT INTO cars (name, plate, kind, note) VALUES (?, ?, ?, ?)").run(name.trim(), plate?.trim() || null, k, note?.trim() || null).lastInsertRowid) };
+    return { id };
+  });
+  ipcMain.handle("cars:delete", (_e, { id }) => {
+    const tx = db.transaction(() => {
+      db.prepare("DELETE FROM car_fuel WHERE car_id = ?").run(id);
+      db.prepare("DELETE FROM car_income WHERE car_id = ?").run(id);
+      db.prepare("UPDATE monthly_expenses SET car_id = NULL WHERE car_id = ?").run(id);
+      db.prepare("DELETE FROM cars WHERE id = ?").run(id);
+    });
+    tx();
+    return { ok: true };
+  });
+  ipcMain.handle("car:summary", (_e, { month, car_id }) => {
+    ensureCars(db);
+    const carId = car_id ?? firstCarId(db);
+    const m = carMonth(db, month, carId);
     const all = carPersonalAllMonths(db);
     return { ...m, categoryId: carCategoryId(db), yearPersonal: all.filter((x) => x.month.startsWith(month.slice(0, 4))).reduce((s, x) => s + x.personal, 0) };
   });
   ipcMain.handle("car:ensureCategory", () => ({ id: carCategoryId(db, true) }));
-  ipcMain.handle("carFuel:create", (_e, { date, kind, amount, note }) => {
+  // عربية شغل: المصروف طالع من الخزنة (method)؛ ملاكي: من غير method (حسابه الخاص)
+  ipcMain.handle("carFuel:create", (_e, { date, kind, amount, note, car_id, method }) => {
     if (!(Number(amount) > 0)) throw new Error("لازم مبلغ");
     carCategoryId(db, true);
-    db.prepare("INSERT INTO car_fuel (date, kind, amount, note) VALUES (?, ?, ?, ?)").run(date, (kind ?? "").trim() || "بنزين", Number(amount), note?.trim() || null);
-    return carMonth(db, date.slice(0, 7));
+    ensureCars(db);
+    const carId = car_id ?? firstCarId(db);
+    const work = db.prepare("SELECT kind FROM cars WHERE id = ?").get(carId)?.kind === "work";
+    db.prepare("INSERT INTO car_fuel (date, kind, amount, note, car_id, method) VALUES (?, ?, ?, ?, ?, ?)").run(
+      date,
+      (kind ?? "").trim() || "بنزين",
+      Number(amount),
+      note?.trim() || null,
+      carId,
+      work ? method || "cash" : null
+    );
+    return carMonth(db, date.slice(0, 7), carId);
   });
   ipcMain.handle("carFuel:delete", (_e, { id }) => {
     db.prepare("DELETE FROM car_fuel WHERE id = ?").run(id);
+    return { ok: true };
+  });
+  ipcMain.handle("carIncome:create", (_e, { car_id, date, amount, method, note }) => {
+    if (!(Number(amount) > 0)) throw new Error("لازم مبلغ");
+    db.prepare("INSERT INTO car_income (car_id, date, amount, method, note) VALUES (?, ?, ?, ?, ?)").run(car_id, date, Number(amount), method || "cash", note?.trim() || null);
+    return { ok: true };
+  });
+  ipcMain.handle("carIncome:delete", (_e, { id }) => {
+    db.prepare("DELETE FROM car_income WHERE id = ?").run(id);
     return { ok: true };
   });
 

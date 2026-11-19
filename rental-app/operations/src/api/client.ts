@@ -683,11 +683,24 @@ export const custodyApi = {
   removeEntry: (id: number) => invoke("custodyEntries:delete", { id }),
 };
 
+export interface Car {
+  id: number;
+  name: string;
+  plate: string | null;
+  /** personal = ملاكي (الخاص من الكوميشن)، work = شغل (من الخزنة وبتدخّل فلوس) */
+  kind: "personal" | "work";
+  note: string | null;
+}
 export const carApi = {
-  summary: (month: string): Promise<CarSummary> => invoke("car:summary", { month }),
+  list: (): Promise<Car[]> => invoke("cars:list"),
+  save: (c: { id?: number; name: string; plate?: string | null; kind: "personal" | "work"; note?: string | null }): Promise<{ id: number }> => invoke("cars:save", c),
+  remove: (id: number) => invoke("cars:delete", { id }),
+  summary: (month: string, car_id?: number): Promise<CarSummary> => invoke("car:summary", { month, car_id }),
   ensureCategory: (): Promise<{ id: number }> => invoke("car:ensureCategory"),
-  addFuel: (f: { date: string; kind: string; amount: number; note: string | null }): Promise<CarSummary> => invoke("carFuel:create", f),
+  addFuel: (f: { date: string; kind: string; amount: number; note: string | null; car_id?: number; method?: string }): Promise<CarSummary> => invoke("carFuel:create", f),
   removeFuel: (id: number) => invoke("carFuel:delete", { id }),
+  addIncome: (x: { car_id: number; date: string; amount: number; method: string; note: string | null }) => invoke("carIncome:create", x),
+  removeIncome: (id: number) => invoke("carIncome:delete", { id }),
 };
 
 export interface DueItem {
