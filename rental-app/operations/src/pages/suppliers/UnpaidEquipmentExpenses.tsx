@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Modal from "../../components/Modal";
 import MonthPicker from "../../components/equipment/MonthPicker";
-import { payablesApi } from "../../api/client";
+import { equipmentApi, expenseCategoriesApi, monthlyExpensesApi, payablesApi, suppliersApi } from "../../api/client";
 import { PayableExpense, PayablesSummary } from "../../api/types";
 import { currentMonthKey, monthLabel } from "../../utils/months";
 import { formatEGP } from "../../utils/format";
@@ -91,6 +91,125 @@ function PayModal({ expense, onClose, onDone }: { expense: PayableExpense; onClo
   );
 }
 
+// مصروف على معدة من عند مورد، ودفعت جزء بس: المعدة بتتحسب عليها القيمة كاملة،
+// والخزنة بيتخصم منها اللي اتدفع بس، والباقي بيفضل آجل للمورد هنا.
+function PartialExpenseForm({ onSaved }: { onSaved: () => void }) {
+  const [equipment, setEquipment] = useState<{ id: number; name: string }[]>([]);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+  const [suppliers, setSuppliers] = useState<string[]>([]);
+  const [payee, setPayee] = useState("");
+  const [equipmentId, setEquipmentId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [date, setDate] = useState(todayISO());
+  const [total, setTotal] = useState("");
+  const [paid, setPaid] = useState("");
+  const [method, setMethod] = useState("cash");
+  const [note, setNote] = useState("");
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    equipmentApi.list().then(setEquipment);
+    expenseCategoriesApi.list().then(setCategories);
+    suppliersApi.names().then(setSuppliers);
+  }, []);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const t = Number(total);
+    const p = paid === "" ? 0 : Number(paid);
+    if (!equipmentId || !(t > 0) || !payee.trim()) return;
+    if (p > t) return setMsg("المدفوع أكتر من القيمة");
+    await monthlyExpensesApi.create({
+      equipment_id: Number(equipmentId),
+      month: date.slice(0, 7),
+      date,
+      category_id: categoryId ? Number(categoryId) : null,
+      amount: t,
+      payment_method: method,
+      note: note || null,
+      receipt_image: null,
+      paid_amount: p,
+      payee: payee.trim(),
+    });
+    const eq = equipment.find((x) => x.id === Number(equipmentId))?.name;
+    setMsg(`اتسجل ${formatEGP(t)} على ${eq} — اتدفع ${formatEGP(p)} من ${paymentMethodLabel(method)}، والباقي ${formatEGP(t - p)} آجل لـ ${payee.trim()}`);
+    setTotal("");
+    setPaid("");
+    setNote("");
+    onSaved();
+  }
+
+  const cls = "rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white";
+  return (
+    <div className="no-print bg-white rounded-card shadow-card p-5">
+      <h2 className="font-bold text-slate-800 mb-1">مصروف على معدة من مورد (دفعت جزء)</h2>
+      <p className="text-xs text-slate-400 mb-3">المعدة بيتحسب عليها السعر كامل، والخزنة بيتخصم منها اللي دفعته بس — والباقي بيفضل للمورد تحت.</p>
+      <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">المورد</label>
+          <input list="partial-suppliers" value={payee} onChange={(e) => setPayee(e.target.value)} placeholder="اسم المورد" className={cls} />
+          <datalist id="partial-suppliers">
+            {suppliers.map((x) => (
+              <option key={x} value={x} />
+            ))}
+          </datalist>
+        </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">على أنهي معدة</label>
+          <select value={equipmentId} onChange={(e) => setEquipmentId(e.target.value)} className={cls}>
+            <option value="">اختار…</option>
+            {equipment.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">البند</label>
+          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={cls}>
+            <option value="">—</option>
+            {categories.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">التاريخ</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={cls} />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">القيمة كاملة</label>
+          <input type="number" min="0" step="any" value={total} onChange={(e) => setTotal(e.target.value)} className={`${cls} w-28`} />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">دفعت كام</label>
+          <input type="number" min="0" step="any" value={paid} onChange={(e) => setPaid(e.target.value)} placeholder="0" className={`${cls} w-28`} />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">دفعت من</label>
+          <select value={method} onChange={(e) => setMethod(e.target.value)} className={cls}>
+            {PAYMENT_METHODS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">البيان</label>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري" className={cls} />
+        </div>
+        <button type="submit" disabled={!equipmentId || !total || !payee.trim()} className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold disabled:opacity-50">
+          سجّل
+        </button>
+      </form>
+      {msg && <div className="mt-3 text-sm font-semibold text-primary-dark">{msg}</div>}
+    </div>
+  );
+}
+
 export default function UnpaidEquipmentExpenses() {
   const [month, setMonth] = useState(currentMonthKey());
   const [data, setData] = useState<PayablesSummary | null>(null);
@@ -116,6 +235,7 @@ export default function UnpaidEquipmentExpenses() {
 
   return (
     <>
+      <PartialExpenseForm onSaved={refresh} />
       <div className="bg-white rounded-card shadow-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h2 className="font-bold text-slate-800">مصروفات المعدات اللي لسه متدفعتش (آجل)</h2>
