@@ -725,6 +725,40 @@ export const certificatesApi = {
   remove: (id: number) => invoke("certificates:delete", { id }),
 };
 
+export interface GoldEntry {
+  id: number;
+  kind: "loan" | "save";
+  direction: "borrow" | "lend" | "repay" | "buy" | "sell";
+  ref_id: number | null;
+  party: string | null;
+  date: string;
+  grams: number;
+  price: number;
+  karat: string | null;
+  note: string | null;
+  gain?: number | null;
+  avg?: number | null;
+}
+export interface GoldLoan extends GoldEntry {
+  repays: (GoldEntry & { gain: number })[];
+  returned: number;
+  remaining: number;
+  gain: number;
+  value: number;
+}
+export interface GoldSummary {
+  loans: GoldLoan[];
+  savings: GoldEntry[];
+  holdings: { karat: string; grams: number; avg: number; cost: number; bought: number; sold: number; gain: number }[];
+  loanGain: number;
+  saveGain: number;
+}
+export const goldApi = {
+  summary: (): Promise<GoldSummary> => invoke("gold:summary"),
+  add: (g: { kind: "loan" | "save"; direction: string; ref_id?: number; party?: string; date: string; grams: number; price: number; karat?: string; note?: string }) => invoke("gold:add", g),
+  remove: (id: number) => invoke("gold:delete", { id }),
+};
+
 export interface Car {
   id: number;
   name: string;

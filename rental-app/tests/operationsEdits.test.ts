@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { setupOperationsDatabase } from "../electron/operationsDb";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const makeShared = require("../operations/electron/shared.js");
-const sections = ["dailyLogs", "treasury", "hassanWorkers", "dashboard", "dues", "tax", "certificates"].map((n) => require(`../operations/electron/handlers/${n}.js`));
+const sections = ["dailyLogs", "treasury", "hassanWorkers", "dashboard", "dues", "tax", "certificates", "gold"].map((n) => require(`../operations/electron/handlers/${n}.js`));
 
 // شاشات التشغيل بتنادي على الدوال دي بنفس الأسماء (ipcMain.handle)
 function ops() {
@@ -216,5 +216,28 @@ describe("التشغيل: شهادات المعايرة والضمان", () => {
     expect(call("certificates:list", {})).toHaveLength(2);
     const alerts = call("alerts:dashboard", {}).filter((a: { kind: string }) => a.kind === "certificate");
     expect(alerts).toEqual([expect.objectContaining({ title: "شهادة معايرة معدة ونش 50 قربت تخلص", days: 4 })]);
+  });
+});
+
+describe("التشغيل: دهب صاحب الكوميشن", () => {
+  it("السلفة: الفرق بين سعر يوم السلفة ويوم الرد، والتحويش: البيع − متوسط الشرا", () => {
+    const { call } = ops();
+    // استلفت ١٠ جرام والجرام بـ ٤٠٠٠، رديت ٦ والجرام بـ ٤٥٠٠ → خسرت ٣٠٠٠
+    const { id } = call("gold:add", { kind: "loan", direction: "borrow", party: "عم سيد", date: "2026-01-10", grams: 10, price: 4000, karat: "21" });
+    call("gold:add", { kind: "loan", direction: "repay", ref_id: id, date: "2026-06-01", grams: 6, price: 4500 });
+    // سلّفت ٥ جرام بـ ٤٢٠٠ ورجعولي ٥ بـ ٤٦٠٠ → كسبت ٢٠٠٠
+    const lend = call("gold:add", { kind: "loan", direction: "lend", party: "خالد", date: "2026-02-01", grams: 5, price: 4200, karat: "21" });
+    call("gold:add", { kind: "loan", direction: "repay", ref_id: lend.id, date: "2026-07-01", grams: 5, price: 4600 });
+    expect(() => call("gold:add", { kind: "loan", direction: "repay", ref_id: id, date: "2026-07-01", grams: 5, price: 4600 })).toThrow(/الباقي 4/);
+    // تحويش: اشتريت ١٠ بـ ٤٠٠٠ و١٠ بـ ٥٠٠٠ (متوسط ٤٥٠٠)، بعت ٥ بـ ٥٢٠٠ → كسبت ٣٥٠٠
+    call("gold:add", { kind: "save", direction: "buy", date: "2026-01-05", grams: 10, price: 4000, karat: "21" });
+    call("gold:add", { kind: "save", direction: "buy", date: "2026-03-05", grams: 10, price: 5000, karat: "21" });
+    call("gold:add", { kind: "save", direction: "sell", date: "2026-08-05", grams: 5, price: 5200, karat: "21" });
+    const g = call("gold:summary", {});
+    expect(g.loans.find((l: { id: number }) => l.id === id)).toMatchObject({ returned: 6, remaining: 4, gain: -3000 });
+    expect(g.loans.find((l: { id: number }) => l.id === lend.id)).toMatchObject({ remaining: 0, gain: 2000 });
+    expect(g.loanGain).toBe(-1000);
+    expect(g.holdings[0]).toMatchObject({ karat: "21", grams: 15, avg: 4500, gain: 3500 });
+    expect(() => call("gold:add", { kind: "save", direction: "sell", date: "2026-09-01", grams: 20, price: 5000, karat: "21" })).toThrow(/15/);
   });
 });

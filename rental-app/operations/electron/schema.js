@@ -552,6 +552,20 @@ function setupDatabase(db, { seed = true } = {}) {
     image TEXT,
     note TEXT
   )`);
+  // دهب صاحب الكوميشن: سلف دهب (استلفت/سلّفت وبعدين اترد) وتحويش (اشتريت/بعت)
+  // — بالجرام وسعر الجرام ساعتها، والمكسب/الخسارة من فرق السعر.
+  db.exec(`CREATE TABLE IF NOT EXISTS hassan_gold (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    ref_id INTEGER REFERENCES hassan_gold(id) ON DELETE CASCADE,
+    party TEXT,
+    date TEXT NOT NULL,
+    grams REAL NOT NULL,
+    price REAL NOT NULL,
+    karat TEXT,
+    note TEXT
+  )`);
   // الالتزامات والمستحقات: التزام ممكن يبقى "ندفع" أو "نستلم"، ويتدفع على دفعات
   const oblCols = db.prepare("PRAGMA table_info(obligations)").all().map((c) => c.name);
   if (!oblCols.includes("direction")) db.exec("ALTER TABLE obligations ADD COLUMN direction TEXT NOT NULL DEFAULT 'pay'");
