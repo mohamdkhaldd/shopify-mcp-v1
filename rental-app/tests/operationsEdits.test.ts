@@ -241,3 +241,36 @@ describe("التشغيل: دهب صاحب الكوميشن", () => {
     expect(() => call("gold:add", { kind: "save", direction: "sell", date: "2026-09-01", grams: 20, price: 5000, karat: "21" })).toThrow(/15/);
   });
 });
+
+describe("دهب صاحب الكوميشن من خزنة الشركة", () => {
+  it("الشرا طالع والبيع داخل الخزنة ومن رصيده، و«الخزنة فيها كذا منهم كذا»", () => {
+    const { db, call } = ops();
+    db.prepare("UPDATE treasury_accounts SET opening_balance = 100000, opening_date = '2026-01-01' WHERE name = 'cash'").run();
+    const before = call("hassan:cashStatus", {});
+    expect(before.total).toBe(100000);
+    expect(before.hassan).toBe(0);
+
+    call("gold:add", { kind: "save", direction: "buy", date: "2026-03-01", grams: 10, price: 5000, karat: "21", method: "cash" });
+    call("gold:add", { kind: "save", direction: "sell", date: "2026-04-01", grams: 4, price: 5500, karat: "21", method: "cash" });
+    // سلفة دهب بس (من غير فلوس) مالهاش دعوة بالخزنة
+    const loan = call("gold:add", { kind: "loan", direction: "borrow", party: "سيد", date: "2026-03-01", grams: 5, price: 5000, karat: "21" });
+    // رد السلفة بدهب اتشرى بفلوس من الخزنة
+    call("gold:add", { kind: "loan", direction: "repay", ref_id: loan.id, date: "2026-05-01", grams: 5, price: 5200, method: "cash" });
+
+    const s = call("hassan:cashStatus", {});
+    // -50000 + 22000 - 26000
+    expect(s.total).toBe(100000 - 54000);
+    expect(s.hassan).toBe(-54000);
+    expect(s.company).toBe(100000);
+    expect(call("hassan:treasuryBalance", { month: "2026-04" }).monthGold).toBe(22000);
+
+    const moves = call("treasury:monthMovements", { month: "2026-03" });
+    const buy = moves.find((m: { src: string }) => m.src === "hassan_gold");
+    expect(buy).toMatchObject({ direction: "out", amount: 50000, account: "cash" });
+
+    // تعديل المبلغ من الخزنة بيغيّر سعر الجرام
+    call("treasury:movementUpdate", { src: "hassan_gold", src_id: buy.src_id, date: "2026-03-01", amount: 48000, account: "cash" });
+    expect(db.prepare("SELECT price FROM hassan_gold WHERE id = ?").get(buy.src_id)).toEqual({ price: 4800 });
+    expect(call("hassan:cashStatus", {}).hassan).toBe(-52000);
+  });
+});

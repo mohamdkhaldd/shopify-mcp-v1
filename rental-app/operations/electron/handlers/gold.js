@@ -4,7 +4,16 @@
 //   يوم الرد) — لو الدهب غلي خسرت الفرق. سلّفت: العكس.
 // - تحويش: اشتريت جرامات بسعر، وبعت منها بسعر — المكسب = المباع × (سعر البيع
 //   − متوسط سعر الشرا). كل عيار لوحده.
-module.exports = function register(db, ipcMain) {
+// الفلوس: لو اتكتب الحساب (method) الحركة بتدخل/تطلع من خزنة الشركة ومن رصيد
+// صاحب الكوميشن اللي جواها — اشتريت = طالع، بعت = داخل، استلفت دهب وبعته =
+// داخل، رديته (اشتريت دهب ترده) = طالع، وسلّفت = العكس. المبلغ = الجرامات × السعر.
+function goldCashDirection(row, parentDirection) {
+  if (row.direction === "buy" || row.direction === "lend") return "out";
+  if (row.direction === "sell" || row.direction === "borrow") return "in";
+  return parentDirection === "lend" ? "in" : "out";
+}
+
+function register(db, ipcMain) {
   const round = (n) => Math.round(n * 100) / 100;
 
   function summary() {
@@ -87,19 +96,20 @@ module.exports = function register(db, ipcMain) {
       if (!h || grams > h.grams + 0.0001) throw new Error(`عندك ${h ? h.grams : 0} جرام بس من عيار ${g.karat || "21"}`);
     }
     const info = db
-      .prepare("INSERT INTO hassan_gold (kind, direction, ref_id, party, date, grams, price, karat, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(kind, g.direction, g.direction === "repay" ? g.ref_id : null, g.party?.trim() || null, g.date, grams, price, g.karat || null, g.note?.trim() || null);
+      .prepare("INSERT INTO hassan_gold (kind, direction, ref_id, party, date, grams, price, karat, note, method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(kind, g.direction, g.direction === "repay" ? g.ref_id : null, g.party?.trim() || null, g.date, grams, price, g.karat || null, g.note?.trim() || null, g.method || null);
     return { id: Number(info.lastInsertRowid) };
   });
   ipcMain.handle("gold:update", (_e, g) => {
     if (!(Number(g.grams) > 0) || !(Number(g.price) > 0)) throw new Error("الجرامات والسعر");
-    db.prepare("UPDATE hassan_gold SET party = ?, date = ?, grams = ?, price = ?, karat = ?, note = ? WHERE id = ?").run(
+    db.prepare("UPDATE hassan_gold SET party = ?, date = ?, grams = ?, price = ?, karat = ?, note = ?, method = ? WHERE id = ?").run(
       g.party?.trim() || null,
       g.date,
       Number(g.grams),
       Number(g.price),
       g.karat || null,
       g.note?.trim() || null,
+      g.method || null,
       g.id
     );
     return { ok: true };
@@ -108,4 +118,7 @@ module.exports = function register(db, ipcMain) {
     db.prepare("DELETE FROM hassan_gold WHERE id = ? OR ref_id = ?").run(id, id);
     return { ok: true };
   });
-};
+}
+
+module.exports = register;
+module.exports.goldCashDirection = goldCashDirection;

@@ -3,6 +3,7 @@ import FundsTab from "./hassan/FundsTab";
 import InstallmentsTab from "./hassan/InstallmentsTab";
 import HassanGate from "./hassan/HassanGate";
 import GoldTab from "./hassan/GoldTab";
+import HassanCashBar from "./hassan/HassanCashBar";
 import MonthPicker from "../components/equipment/MonthPicker";
 import PrintButton from "../components/PrintButton";
 import { PrintHeader, PrintSignoff } from "../components/PrintSignoff";
@@ -55,6 +56,8 @@ export default function Hassan() {
           <MonthPicker month={month} onChange={setMonth} />
         </div>
       </div>
+
+      <HassanCashBar />
 
       <div className="no-print flex flex-wrap gap-2">
         <button

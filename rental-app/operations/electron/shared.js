@@ -317,6 +317,22 @@ module.exports = function makeShared(db) {
         add(r.date, "out", `من الكوميشن: ${item}`, r.amount, { src: "hassan_treasury_expenses", src_id: r.id });
       });
 
+    // دهب صاحب الكوميشن: الشرا/البيع (والسلف لو اتحولت فلوس) من خزنة الشركة
+    const { goldCashDirection } = require("./handlers/gold");
+    db.prepare(
+      `SELECT g.id, g.date, g.direction, g.grams, g.price, g.karat, g.party, p.direction AS parent_direction, p.party AS parent_party
+       FROM hassan_gold g LEFT JOIN hassan_gold p ON p.id = g.ref_id WHERE g.method = ?`
+    )
+      .all(account)
+      .forEach((r) => {
+        const verb = { buy: "شرا دهب", sell: "بيع دهب", borrow: "سلفة دهب من", lend: "سلفة دهب لـ" }[r.direction] ?? (r.parent_direction === "lend" ? "رجوع دهب من" : "رد دهب لـ");
+        const who = r.party || r.parent_party;
+        add(r.date, goldCashDirection(r, r.parent_direction), `دهب الكوميشن: ${verb}${who ? ` ${who}` : ""} — ${Number(r.grams)} جم × ${Number(r.price).toLocaleString("en-US")}`, Math.round(r.grams * r.price * 100) / 100, {
+          src: "hassan_gold",
+          src_id: r.id,
+        });
+      });
+
     db.prepare("SELECT id, date, amount, holder FROM custodies WHERE method = ?")
       .all(account)
       .forEach((r) => add(r.date, "out", `عهدة لـ ${r.holder}`, r.amount, { src: "custodies", src_id: r.id }));

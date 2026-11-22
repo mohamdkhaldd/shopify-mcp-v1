@@ -298,10 +298,15 @@ async function withFeeChoice(channel: string, payload: unknown): Promise<unknown
   return { ...p, transfer_fee: choice === "transfer" };
 }
 
+// أي حركة في صفحة صاحب الكوميشن (أو تعديل حركة من الخزنة) → الشريط اللي فوق
+// بيتحدّث ويقول «الخزنة فيها كذا منهم كذا لـ…».
+const HASSAN_MONEY = /^(hassan[A-Za-z]*|gold|installments?|installmentPayments|treasury):(create|add|update|delete|pay|movementUpdate|movementDelete|deleteParty)$/;
 async function invoke(channel: string, payload?: unknown): Promise<any> {
   if (!confirmChange(channel, payload)) throw new CancelledError();
   const p = await withFeeChoice(channel, payload);
-  return rawInvoke(channel, p);
+  const result = await rawInvoke(channel, p);
+  if (HASSAN_MONEY.test(channel) && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("hassan-money-changed", { detail: channel }));
+  return result;
 }
 
 export const partnersApi = {
@@ -500,6 +505,7 @@ export const hassanApi = {
   balance: (): Promise<HassanBalance> => invoke("hassanLedger:balance"),
   balanceByParty: (): Promise<HassanPartyBalance[]> => invoke("hassanLedger:balanceByParty"),
   treasuryBalance: (month: string): Promise<HassanTreasuryBalance> => invoke("hassan:treasuryBalance", { month }),
+  cashStatus: (): Promise<{ total: number; hassan: number; company: number; accounts: { name: string; name_ar: string; balance: number }[] }> => invoke("hassan:cashStatus"),
   treasuryList: (month: string, kind?: HassanExpenseKind): Promise<HassanTreasuryExpense[]> => invoke("hassanTreasury:list", { month, kind }),
   treasuryCreate: (expense: Omit<HassanTreasuryExpense, "id">): Promise<HassanTreasuryExpense> =>
     invoke("hassanTreasury:create", expense),
@@ -736,6 +742,7 @@ export interface GoldEntry {
   price: number;
   karat: string | null;
   note: string | null;
+  method?: string | null;
   gain?: number | null;
   avg?: number | null;
 }
@@ -755,7 +762,7 @@ export interface GoldSummary {
 }
 export const goldApi = {
   summary: (): Promise<GoldSummary> => invoke("gold:summary"),
-  add: (g: { kind: "loan" | "save"; direction: string; ref_id?: number; party?: string; date: string; grams: number; price: number; karat?: string; note?: string }) => invoke("gold:add", g),
+  add: (g: { kind: "loan" | "save"; direction: string; ref_id?: number; party?: string; date: string; grams: number; price: number; karat?: string; note?: string; method?: string | null }) => invoke("gold:add", g),
   remove: (id: number) => invoke("gold:delete", { id }),
 };
 

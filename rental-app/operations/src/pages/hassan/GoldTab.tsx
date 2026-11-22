@@ -3,6 +3,24 @@ import { GoldEntry, GoldLoan, GoldSummary, goldApi } from "../../api/client";
 import Modal from "../../components/Modal";
 import { formatEGP } from "../../utils/format";
 import { person } from "../../person";
+import { PAYMENT_METHODS, paymentMethodLabel } from "../../utils/paymentMethods";
+
+// الفلوس من/لـ خزنة الشركة (من رصيد صاحب الكوميشن جواها) — أو دهب بس من غير فلوس
+function MethodSelect({ value, onChange, cashIn, allowNone }: { value: string; onChange: (v: string) => void; cashIn: boolean; allowNone?: boolean }) {
+  return (
+    <label className="grid gap-0.5 text-[11px] text-slate-400">
+      {cashIn ? "الفلوس دخلت الخزنة في" : "الفلوس طلعت من الخزنة من"}
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={cls}>
+        {PAYMENT_METHODS.map((m) => (
+          <option key={m.value} value={m.value}>{m.label}</option>
+        ))}
+        {allowNone && <option value="">دهب بس — مفيش فلوس</option>}
+      </select>
+    </label>
+  );
+}
+const cashNote = (r: { method?: string | null }, cashIn: boolean) =>
+  r.method ? <span className="text-[11px] text-slate-400"> · {cashIn ? "دخلت" : "طلعت"} {paymentMethodLabel(r.method)}</span> : null;
 
 const cls = "rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-white";
 const todayISO = () => {
@@ -57,6 +75,7 @@ export default function GoldTab() {
 
 function LoansSection({ data, onChanged, onRepay }: { data: GoldSummary; onChanged: () => void; onRepay: (l: GoldLoan) => void }) {
   const [direction, setDirection] = useState<"borrow" | "lend">("borrow");
+  const [method, setMethod] = useState("");
   const [party, setParty] = useState("");
   const [date, setDate] = useState(todayISO());
   const [grams, setGrams] = useState("");
@@ -68,7 +87,7 @@ function LoansSection({ data, onChanged, onRepay }: { data: GoldSummary; onChang
     e.preventDefault();
     setErr("");
     try {
-      await goldApi.add({ kind: "loan", direction, party, date, grams: Number(grams), price: Number(price), karat, note });
+      await goldApi.add({ kind: "loan", direction, party, date, grams: Number(grams), price: Number(price), karat, note, method: method || null });
       setGrams("");
       setPrice("");
       setNote("");
@@ -81,7 +100,8 @@ function LoansSection({ data, onChanged, onRepay }: { data: GoldSummary; onChang
     <div className="bg-white rounded-card shadow-card p-5">
       <h2 className="font-bold text-slate-800 mb-1">سلف الدهب</h2>
       <p className="text-xs text-slate-400 mb-3">
-        استلفت دهب: لو الدهب غلي لما ترده بتخسر الفرق، ولو رخص بتكسب. سلّفت دهب: العكس. حساب {person()} الشخصي — مش من الخزنة.
+        استلفت دهب: لو الدهب غلي لما ترده بتخسر الفرق، ولو رخص بتكسب. سلّفت دهب: العكس. لو الدهب اتحوّل فلوس (بعته أو اشتريته)
+        اختار الحساب — الفلوس بتدخل/تطلع من الخزنة ومن رصيد {person()} اللي جواها. «دهب بس» = مفيش فلوس اتحركت.
       </p>
       <form onSubmit={add} className="no-print flex flex-wrap items-end gap-2 mb-4">
         <select value={direction} onChange={(e) => setDirection(e.target.value as "borrow" | "lend")} className={cls}>
@@ -98,6 +118,7 @@ function LoansSection({ data, onChanged, onRepay }: { data: GoldSummary; onChang
         </select>
         <input type="number" min="0" step="any" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="سعر الجرام يومها" className={`${cls} w-32`} />
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="ملاحظة" className={cls} />
+        <MethodSelect value={method} onChange={setMethod} cashIn={direction === "borrow"} allowNone />
         <button type="submit" disabled={!party.trim() || !grams || !price} className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold disabled:opacity-50">
           سجّل
         </button>
@@ -116,6 +137,7 @@ function LoansSection({ data, onChanged, onRepay }: { data: GoldSummary; onChang
                   </b>
                   <div className="text-xs text-slate-500">
                     يوم {l.date} والجرام بـ {formatEGP(l.price)} (قيمتها ساعتها {formatEGP(l.value)}){l.note ? ` — ${l.note}` : ""}
+                    {cashNote(l, l.direction === "borrow")}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -138,7 +160,7 @@ function LoansSection({ data, onChanged, onRepay }: { data: GoldSummary; onChang
                       <tr key={r.id} className="border-t border-slate-100">
                         <td className="py-1.5 text-slate-500">{r.date}</td>
                         <td className="py-1.5">{l.direction === "borrow" ? "رديت" : "رجعولي"} {gr(r.grams)}</td>
-                        <td className="py-1.5 text-slate-500">والجرام بـ {formatEGP(r.price)}</td>
+                        <td className="py-1.5 text-slate-500">والجرام بـ {formatEGP(r.price)}{cashNote(r, l.direction === "lend")}</td>
                         <td className="py-1.5"><Gain v={r.gain} /></td>
                         <td className="py-1.5 no-print text-end"><DeleteButton id={r.id} what="الرد ده" onChanged={onChanged} /></td>
                       </tr>
@@ -156,6 +178,7 @@ function LoansSection({ data, onChanged, onRepay }: { data: GoldSummary; onChang
 
 function SavingsSection({ data, onChanged }: { data: GoldSummary; onChanged: () => void }) {
   const [direction, setDirection] = useState<"buy" | "sell">("buy");
+  const [method, setMethod] = useState("cash");
   const [date, setDate] = useState(todayISO());
   const [grams, setGrams] = useState("");
   const [price, setPrice] = useState("");
@@ -166,7 +189,7 @@ function SavingsSection({ data, onChanged }: { data: GoldSummary; onChanged: () 
     e.preventDefault();
     setErr("");
     try {
-      await goldApi.add({ kind: "save", direction, date, grams: Number(grams), price: Number(price), karat, note });
+      await goldApi.add({ kind: "save", direction, date, grams: Number(grams), price: Number(price), karat, note, method: method || null });
       setGrams("");
       setPrice("");
       setNote("");
@@ -178,7 +201,7 @@ function SavingsSection({ data, onChanged }: { data: GoldSummary; onChanged: () 
   return (
     <div className="bg-white rounded-card shadow-card p-5">
       <h2 className="font-bold text-slate-800 mb-1">تحويش الدهب</h2>
-      <p className="text-xs text-slate-400 mb-3">كل ما تشتري بيتحسب متوسط سعر الجرام، ولما تبيع بيطلعلك كسبت أو خسرت كام — كل عيار لوحده.</p>
+      <p className="text-xs text-slate-400 mb-3">كل ما تشتري بيتحسب متوسط سعر الجرام، ولما تبيع بيطلعلك كسبت أو خسرت كام — كل عيار لوحده. الشرا بيطلع من الخزنة (من رصيد {person()})، والبيع بيدخلها.</p>
       <form onSubmit={add} className="no-print flex flex-wrap items-end gap-2 mb-4">
         <select value={direction} onChange={(e) => setDirection(e.target.value as "buy" | "sell")} className={cls}>
           <option value="buy">اشتريت</option>
@@ -193,6 +216,7 @@ function SavingsSection({ data, onChanged }: { data: GoldSummary; onChanged: () 
         </select>
         <input type="number" min="0" step="any" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="سعر الجرام" className={`${cls} w-28`} />
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="ملاحظة" className={cls} />
+        <MethodSelect value={method} onChange={setMethod} cashIn={direction === "sell"} allowNone />
         <button type="submit" disabled={!grams || !price} className="bg-primary text-white rounded-lg px-4 py-1.5 text-sm font-semibold disabled:opacity-50">
           سجّل
         </button>
@@ -218,7 +242,7 @@ function SavingsSection({ data, onChanged }: { data: GoldSummary; onChanged: () 
             {data.savings.map((r: GoldEntry) => (
               <tr key={r.id} className="border-b border-slate-50">
                 <td className="py-1.5 text-slate-500">{r.date}</td>
-                <td className="py-1.5 font-semibold">{r.direction === "buy" ? "اشتريت" : "بعت"} {gr(r.grams)} عيار {r.karat ?? "21"}</td>
+                <td className="py-1.5 font-semibold">{r.direction === "buy" ? "اشتريت" : "بعت"} {gr(r.grams)} عيار {r.karat ?? "21"}{cashNote(r, r.direction === "sell")}</td>
                 <td className="py-1.5 text-slate-500">الجرام بـ {formatEGP(r.price)}{r.avg != null ? ` (متوسط الشرا ${formatEGP(r.avg)})` : ""}</td>
                 <td className="py-1.5">{r.gain != null ? <Gain v={r.gain} /> : <span className="text-slate-400">{formatEGP(r.grams * r.price)}</span>}</td>
                 <td className="py-1.5 no-print text-end"><DeleteButton id={r.id} what="السطر ده" onChanged={onChanged} /></td>
@@ -235,6 +259,7 @@ function RepayDialog({ loan, onClose, onDone }: { loan: GoldLoan; onClose: () =>
   const [grams, setGrams] = useState(String(loan.remaining));
   const [price, setPrice] = useState("");
   const [date, setDate] = useState(todayISO());
+  const [method, setMethod] = useState(loan.method ?? "");
   const [err, setErr] = useState("");
   const g = Number(grams) || 0;
   const p = Number(price) || 0;
@@ -242,7 +267,7 @@ function RepayDialog({ loan, onClose, onDone }: { loan: GoldLoan; onClose: () =>
   async function save(e: FormEvent) {
     e.preventDefault();
     try {
-      await goldApi.add({ kind: "loan", direction: "repay", ref_id: loan.id, date, grams: g, price: p });
+      await goldApi.add({ kind: "loan", direction: "repay", ref_id: loan.id, date, grams: g, price: p, method: method || null });
       onDone();
     } catch (x) {
       setErr((x as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ""));
@@ -259,6 +284,7 @@ function RepayDialog({ loan, onClose, onDone }: { loan: GoldLoan; onClose: () =>
           <input type="number" min="0" step="any" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="سعر الجرام النهارده" className={`${cls} w-40`} autoFocus />
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={cls} />
         </div>
+        <MethodSelect value={method} onChange={setMethod} cashIn={loan.direction === "lend"} allowNone />
         {gain != null && <div className="text-base">كده <Gain v={gain} /></div>}
         {err && <div className="text-rose-600 font-semibold">{err}</div>}
         <button type="submit" disabled={!g || !p} className="bg-emerald-600 text-white rounded-lg px-4 py-2 font-bold disabled:opacity-50">

@@ -566,6 +566,8 @@ function setupDatabase(db, { seed = true } = {}) {
     karat TEXT,
     note TEXT
   )`);
+  // الدهب بيدخل/يطلع من خزنة الشركة (من رصيد صاحب الكوميشن) لو اتكتب الحساب
+  if (!db.prepare("PRAGMA table_info(hassan_gold)").all().some((c) => c.name === "method")) db.exec("ALTER TABLE hassan_gold ADD COLUMN method TEXT");
   // الالتزامات والمستحقات: التزام ممكن يبقى "ندفع" أو "نستلم"، ويتدفع على دفعات
   const oblCols = db.prepare("PRAGMA table_info(obligations)").all().map((c) => c.name);
   if (!oblCols.includes("direction")) db.exec("ALTER TABLE obligations ADD COLUMN direction TEXT NOT NULL DEFAULT 'pay'");

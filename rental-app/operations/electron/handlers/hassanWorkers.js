@@ -2,7 +2,8 @@ const { carPersonalAllMonths } = require("../extras");
 
 // عمال حسن ومرتباتهم
 module.exports = function register(db, ipcMain, shared) {
-  const { computeCommissionRows, pushToCloud } = shared;
+  const { computeCommissionRows, pushToCloud, accountBalance, ACCOUNT_NAME_AR } = shared;
+  const { goldCashDirection } = require("./gold");
 
   // --- مرتبات عمال حسن: نفس فكرة شيت المرتبات بس الفلوس طالعة من خزنة حسن. ---
   ipcMain.handle("hassanWorkers:list", () =>
@@ -156,7 +157,7 @@ module.exports = function register(db, ipcMain, shared) {
     };
   });
 
-  ipcMain.handle("hassan:treasuryBalance", (_e, { month }) => {
+  function treasuryBalance(month) {
     const allTimePenalties = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_penalties").get().total;
     const monthPenalties = db
       .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM hassan_penalties WHERE date LIKE ?")
@@ -181,8 +182,17 @@ module.exports = function register(db, ipcMain, shared) {
         .get(...args).total;
     const allTimeLedger = ledgerCash("");
     const monthLedger = ledgerCash("AND date LIKE ?", `${month}%`);
+    // الدهب اللي اتشرى/اتباع بفلوس من الخزنة
+    const goldRows = db
+      .prepare("SELECT g.date, g.direction, g.grams, g.price, p.direction AS parent_direction FROM hassan_gold g LEFT JOIN hassan_gold p ON p.id = g.ref_id WHERE g.method IS NOT NULL")
+      .all();
+    const goldCash = (rows) => Math.round(rows.reduce((s, r) => s + (goldCashDirection(r, r.parent_direction) === "in" ? 1 : -1) * r.grams * r.price, 0) * 100) / 100;
+    const allTimeGold = goldCash(goldRows);
+    const monthGold = goldCash(goldRows.filter((r) => r.date.startsWith(month)));
     return {
-      balance: allTimeCommission - allTimeSpent + allTimeLedger,
+      balance: allTimeCommission - allTimeSpent + allTimeLedger + allTimeGold,
+      allTimeGold,
+      monthGold,
       allTimeLedger,
       monthLedger,
       allTimeCommission,
@@ -192,6 +202,15 @@ module.exports = function register(db, ipcMain, shared) {
       monthPenalties,
       allTimePenalties,
     };
+  }
+  ipcMain.handle("hassan:treasuryBalance", (_e, { month }) => treasuryBalance(month));
+
+  // «الخزنة فيها كذا، منهم كذا لصاحب الكوميشن» — بيظهر بعد كل حركة في صفحته
+  ipcMain.handle("hassan:cashStatus", () => {
+    const accounts = db.prepare("SELECT * FROM treasury_accounts ORDER BY id").all().map((a) => ({ name: a.name, name_ar: ACCOUNT_NAME_AR[a.name] ?? a.name, balance: accountBalance(a) }));
+    const total = Math.round(accounts.reduce((s, a) => s + a.balance, 0) * 100) / 100;
+    const hassan = Math.round(treasuryBalance(new Date().toISOString().slice(0, 7)).balance * 100) / 100;
+    return { total, hassan, company: Math.round((total - hassan) * 100) / 100, accounts };
   });
 
   // kind: null/ops = مصاريف التشغيل، charity = صدقات، waste = هالك

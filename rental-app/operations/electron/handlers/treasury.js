@@ -114,6 +114,7 @@ module.exports = function register(db, ipcMain, shared) {
     tax_payments: { method: "method" },
     obligation_payments: { method: "method" },
     employee_deductions: { method: null },
+    hassan_gold: { method: "method" },
   };
   // البيان بيتعدّل مع الحركة لو اتبعت (اسم العمود في كل جدول)
   const NOTE_COLUMN = { employee_deductions: "reason", treasury_transfers: null, transfer_fees: null, treasury_adjustments: "note" };
@@ -131,6 +132,10 @@ module.exports = function register(db, ipcMain, shared) {
         else if (me.paid_amount == null) db.prepare("UPDATE monthly_expenses SET amount = ? WHERE id = ?").run(value, src_id);
         else db.prepare("UPDATE monthly_expenses SET paid_amount = ? WHERE id = ?").run(Math.min(value, me.amount), src_id);
         db.prepare("UPDATE monthly_expenses SET date = ? WHERE id = ?").run(date, src_id);
+      } else if (src === "hassan_gold") {
+        // الدهب متسجل جرامات × سعر — المبلغ الجديد بيغيّر سعر الجرام
+        const g = db.prepare("SELECT grams FROM hassan_gold WHERE id = ?").get(src_id);
+        db.prepare("UPDATE hassan_gold SET date = ?, price = ? WHERE id = ?").run(date, value / g.grams, src_id);
       } else if (src === "treasury_adjustments") {
         const adj = db.prepare("SELECT amount FROM treasury_adjustments WHERE id = ?").get(src_id);
         db.prepare("UPDATE treasury_adjustments SET date = ?, amount = ? WHERE id = ?").run(date, adj.amount < 0 ? -value : value, src_id);
@@ -171,6 +176,7 @@ module.exports = function register(db, ipcMain, shared) {
           }
         }
       }
+      if (src === "hassan_gold") db.prepare("DELETE FROM hassan_gold WHERE ref_id = ?").run(src_id);
       db.prepare(`DELETE FROM ${src} WHERE id = ?`).run(src_id);
     });
     tx();

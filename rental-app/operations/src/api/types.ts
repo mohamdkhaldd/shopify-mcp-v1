@@ -297,6 +297,8 @@ export interface HassanTreasuryExpense {
 
 export interface HassanTreasuryBalance {
   balance: number;
+  allTimeGold?: number;
+  monthGold?: number;
   allTimeCommission: number;
   allTimeSpent: number;
   monthCommission: number;
