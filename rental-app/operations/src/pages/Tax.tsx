@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { ask } from "../components/Dialogs";
 import { TaxSummary, taxApi } from "../api/client";
 import MonthPicker from "../components/equipment/MonthPicker";
 import PrintButton from "../components/PrintButton";
@@ -145,7 +146,7 @@ export default function Tax() {
                     <td className="no-print py-1.5">
                       <button
                         onClick={async () => {
-                          if (!window.confirm("تمسح التوريد ده؟")) return;
+                          if (!(await ask("تمسح التوريد ده؟"))) return;
                           await taxApi.removePayment(p.id);
                           refresh();
                         }}

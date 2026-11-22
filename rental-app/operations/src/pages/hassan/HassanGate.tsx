@@ -1,4 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useState } from "react";
+import Icon from "../../components/Icon";
 import { installmentsApi } from "../../api/client";
 import { shell } from "../../shell";
 import { person } from "../../person";
@@ -74,7 +75,7 @@ export default function HassanGate({ children }: { children: (lock: () => void) 
       <div className="absolute inset-0 flex items-start justify-center pt-12 px-3">
         {!forgot ? (
           <form onSubmit={unlock} className="bg-white rounded-card shadow-card p-6 w-full max-w-xs space-y-3 text-center">
-            <div className="text-3xl">🔒</div>
+            <div className="mx-auto w-12 h-12 rounded-full bg-primary-light text-primary flex items-center justify-center"><Icon name="lock" className="w-6 h-6" /></div>
             <div className="font-bold text-slate-800">صفحة {person()} مقفولة</div>
             <input type="password" autoFocus value={pin} onChange={(e) => setPin(e.target.value)} placeholder="اكتب الباسورد" className={inputCls} />
             {error && <div className="text-xs font-semibold text-rose-600">{error}</div>}
@@ -87,7 +88,7 @@ export default function HassanGate({ children }: { children: (lock: () => void) 
           </form>
         ) : (
           <form onSubmit={reset} className="bg-white rounded-card shadow-card p-6 w-full max-w-xs space-y-3 text-center">
-            <div className="text-3xl">🔑</div>
+            <div className="mx-auto w-12 h-12 rounded-full bg-primary-light text-primary flex items-center justify-center"><Icon name="lock" className="w-6 h-6" /></div>
             <div className="font-bold text-slate-800">نسيت الباسورد</div>
             <p className="text-xs text-slate-500">باسورد الشركة (اللي بتفتح بيه البرنامج) بيفتح الصفحة دي. اكتبه، واكتب باسورد جديد للصفحة — أو سيبه فاضي لو مش عايز باسورد.</p>
             <input type="password" autoFocus value={company} onChange={(e) => setCompany(e.target.value)} placeholder="باسورد الشركة" className={inputCls} />

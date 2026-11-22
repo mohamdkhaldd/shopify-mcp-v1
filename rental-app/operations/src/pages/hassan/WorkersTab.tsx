@@ -1,4 +1,5 @@
 import { Fragment, FormEvent, useEffect, useState } from "react";
+import { ask } from "../../components/Dialogs";
 import PrintButton from "../../components/PrintButton";
 import Icon from "../../components/Icon";
 import { attendanceApi, hassanApi } from "../../api/client";
@@ -302,7 +303,7 @@ function WorkerSlip({
               notePlaceholder="الحافز ده عشان إيه؟"
               noteRequired
               buttonLabel="إضافة حافز"
-              buttonClass="bg-emerald-600 hover:bg-emerald-700"
+              buttonClass="bg-emerald-600 hover:bg-primary-dark"
               onSaved={onChanged}
             />
           )}
@@ -415,7 +416,7 @@ export default function WorkersTab({ month }: { month: string }) {
   }
 
   async function handleRemoveWorker(w: HassanWorker) {
-    if (!window.confirm(`تشيل ${w.name} من قائمة عمال ${person()}؟ حركاته القديمة هتفضل زي ما هي.`)) return;
+    if (!(await ask(`تشيل ${w.name} من قائمة عمال ${person()}؟ حركاته القديمة هتفضل زي ما هي.`))) return;
     await hassanApi.workerRemove(w.id);
     refresh();
   }

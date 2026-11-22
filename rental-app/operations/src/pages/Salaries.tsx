@@ -413,7 +413,7 @@ function PayslipPanel({ row, month, onChanged }: { row: PayrollRow; month: strin
                 onChange={(e) => setBonusNote(e.target.value)}
                 className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
               />
-              <button type="submit" className="bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-emerald-700">
+              <button type="submit" className="bg-primary text-white rounded-lg px-3 py-1.5 text-sm font-semibold hover:bg-primary-dark">
                 إضافة حافز
               </button>
             </form>

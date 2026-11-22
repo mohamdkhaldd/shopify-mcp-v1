@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { ask } from "../../components/Dialogs";
 import { fundsApi } from "../../api/client";
 import { FundDetail, FundSummary } from "../../api/types";
 import { formatEGP } from "../../utils/format";
@@ -34,7 +35,7 @@ function FundCard({ fund, month, onChanged }: { fund: FundSummary; month: string
   }
 
   async function remove(id: number) {
-    if (!window.confirm("تمسح الصرف ده؟")) return;
+    if (!(await ask("تمسح الصرف ده؟"))) return;
     await fundsApi.removeExpense(id);
     onChanged();
   }

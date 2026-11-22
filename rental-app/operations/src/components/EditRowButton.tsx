@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Icon from "./Icon";
 import Modal from "./Modal";
 import { treasuryApi } from "../api/client";
 import { PAYMENT_METHODS } from "../utils/paymentMethods";
@@ -80,7 +81,7 @@ export default function EditRowButton({
         }}
         className="no-print text-xs font-bold text-slate-500 hover:text-primary-dark px-1.5"
       >
-        ✎ تعديل
+        <Icon name="edit" className="w-3.5 h-3.5" /> تعديل
       </button>
       {open && (
         <Modal title="تعديل" onClose={() => setOpen(false)}>

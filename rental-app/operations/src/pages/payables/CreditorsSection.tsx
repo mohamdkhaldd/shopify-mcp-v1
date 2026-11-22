@@ -1,4 +1,5 @@
 import { FormEvent, Fragment, useEffect, useState } from "react";
+import { ask } from "../../components/Dialogs";
 import PrintButton from "../../components/PrintButton";
 import { PrintSignoff } from "../../components/PrintSignoff";
 import { useBrand } from "../../brand";
@@ -62,7 +63,7 @@ function CreditorStatementPanel({ id, onChanged }: { id: number; onChanged: () =
   }
 
   async function removeEntry(entryId: number, type: string) {
-    if (!window.confirm(type === "payment" ? "تمسح السداد ده؟ الفلوس هترجع الخزنة." : "تمسح الدين ده؟")) return;
+    if (!(await ask(type === "payment" ? "تمسح السداد ده؟ الفلوس هترجع الخزنة." : "تمسح الدين ده؟"))) return;
     await creditorsApi.removeEntry(entryId);
     after();
   }
@@ -309,7 +310,7 @@ export default function CreditorsSection({
   }
 
   async function removeCreditor(c: CreditorBalance) {
-    if (!window.confirm(`تمسح "${c.name}" وكل حركاته؟ السدادات اللي اتسجلت هترجع الخزنة.`)) return;
+    if (!(await ask(`تمسح "${c.name}" وكل حركاته؟ السدادات اللي اتسجلت هترجع الخزنة.`))) return;
     await creditorsApi.remove(c.id);
     if (openId === c.id) setOpenId(null);
     changed();

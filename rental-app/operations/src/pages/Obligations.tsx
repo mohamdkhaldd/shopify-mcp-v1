@@ -1,4 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
+import Icon from "../components/Icon";
+import { ask } from "../components/Dialogs";
 import { DueBoard, DueItem, duesApi, obligationsApi } from "../api/client";
 import Modal from "../components/Modal";
 import MonthPicker from "../components/equipment/MonthPicker";
@@ -115,7 +117,7 @@ export default function Obligations() {
             ))}
           </div>
 
-          {board.days.length === 0 && <div className="bg-white rounded-card shadow-card p-8 text-center text-slate-400">مفيش حاجة عليك ولا ليك الشهر ده 👍</div>}
+          {board.days.length === 0 && <div className="bg-white rounded-card shadow-card p-8 text-center text-slate-400">مفيش حاجة عليك ولا ليك الشهر ده</div>}
 
           {board.days.map((d) => {
             const day = Number(d.date.slice(8, 10));
@@ -159,7 +161,7 @@ export default function Obligations() {
                       <div className={`text-lg font-extrabold ${x.direction === "receive" ? "text-primary-dark" : "text-slate-900"}`}>{formatEGP(x.remaining)}</div>
                       <button
                         onClick={() => setPaying(x)}
-                        className={`no-print rounded-lg px-4 py-2 text-sm font-bold text-white ${x.direction === "receive" ? "bg-sky-600 hover:bg-sky-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                        className={`no-print rounded-lg px-4 py-2 text-sm font-bold text-white ${x.direction === "receive" ? "bg-sky-600 hover:bg-primary-dark" : "bg-emerald-600 hover:bg-primary-dark"}`}
                       >
                         {x.direction === "receive" ? "استلمت" : "ادفع"}
                       </button>
@@ -167,13 +169,13 @@ export default function Obligations() {
                         <button
                           title="امسح"
                           onClick={async () => {
-                            if (!window.confirm(`تمسح «${x.label}»؟`)) return;
+                            if (!(await ask(`تمسح «${x.label}»؟`))) return;
                             await obligationsApi.remove(x.ref);
                             refresh();
                           }}
                           className="no-print text-xs font-bold text-rose-500 px-1"
                         >
-                          🗑
+                          <Icon name="trash" className="w-4 h-4" />
                         </button>
                       )}
                     </li>
@@ -261,7 +263,7 @@ function PayDialog({ item, onClose, onDone }: { item: DueItem; onClose: () => vo
       </div>
       {error && <div className="mt-3 text-sm text-rose-600 font-semibold">{error}</div>}
       <div className="mt-4 flex flex-wrap gap-2">
-        <button onClick={() => pay(item.remaining)} className="bg-emerald-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-emerald-700">
+        <button onClick={() => pay(item.remaining)} className="bg-primary text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-primary-dark">
           {receive ? "استلمت كله" : "دفعت كامل"} ({formatEGP(item.remaining)})
         </button>
         <button onClick={() => pay(Number(amount))} className="bg-primary text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-primary-dark">
@@ -304,7 +306,7 @@ function AddDialog({ month, onClose, onDone }: { month: string; onClose: () => v
               type="button"
               key={d}
               onClick={() => setDirection(d)}
-              className={`flex-1 rounded-lg py-2 text-sm font-bold ${direction === d ? (d === "pay" ? "bg-emerald-600 text-white" : "bg-sky-600 text-white") : "bg-slate-100 text-slate-600"}`}
+              className={`flex-1 rounded-lg py-2 text-sm font-bold ${direction === d ? (d === "pay" ? "bg-primary text-white" : "bg-primary text-white") : "bg-slate-100 text-slate-600"}`}
             >
               {d === "pay" ? "هندفع" : "هنستلم"}
             </button>

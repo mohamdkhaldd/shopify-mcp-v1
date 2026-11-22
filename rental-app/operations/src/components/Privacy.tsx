@@ -71,7 +71,7 @@ function RevealPassword({ onOk, onClose }: { onOk: () => void; onClose: () => vo
   return (
     <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" onClick={onClose}>
       <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="bg-white rounded-card shadow-xl p-6 w-full max-w-xs space-y-3 text-center">
-        <div className="text-3xl">🔒</div>
+        <div className="mx-auto w-12 h-12 rounded-full bg-primary-light text-primary flex items-center justify-center"><Icon name="lock" className="w-6 h-6" /></div>
         <div className="font-bold text-slate-800">اكتب باسورد الشركة عشان تظهر الأرقام</div>
         <input type="password" autoFocus value={pw} onChange={(e) => setPw(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-center" />
         {error && <div className="text-xs font-semibold text-rose-600">{error}</div>}

@@ -1,3 +1,4 @@
+import { ask } from "./components/Dialogs";
 // MK-Tech's shell (one app, two programs): locking, signing out and the
 // company password. The rental screens have the same calls (src/api/client.ts).
 export type ShellInfo = { product: string | null; products: string[]; locked?: boolean; hasPassword?: boolean };
@@ -30,10 +31,10 @@ export const shell = {
  * Asks first, and again if some changes haven't reached the cloud yet.
  */
 export async function signOutOfDevice() {
-  if (!window.confirm("تخرج من الجهاز ده؟\n\nهتحتاج كود التفعيل عشان تدخل تاني، ومكان الجهاز ده على الكود هيفضى.")) return;
+  if (!(await ask("تخرج من الجهاز ده؟\n\nهتحتاج كود التفعيل عشان تدخل تاني، ومكان الجهاز ده على الكود هيفضى."))) return;
   let r = await shell.signOut();
   if (!r.ok && "pending" in r) {
-    const ok = window.confirm(
+    const ok = await ask(
       `فيه ${r.pending} تعديل لسه ماتبعتش للسحابة — لو خرجت دلوقتي هيضيعوا.\nاتأكد إن النت شغال واستنى المزامنة.\n\nتخرج برضه؟`,
     );
     if (!ok) return;

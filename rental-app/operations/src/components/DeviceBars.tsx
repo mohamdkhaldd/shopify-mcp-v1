@@ -88,7 +88,7 @@ export function TabletUpdatePrompt() {
   return (
     <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir="rtl">
       <div className="bg-white rounded-card shadow-card p-6 max-w-sm w-full space-y-3">
-        <div className="font-extrabold text-slate-900 text-lg">فيه تحديث جديد 🎉</div>
+        <div className="font-extrabold text-slate-900 text-lg">فيه تحديث جديد</div>
         <p className="text-sm text-slate-600">نسخة {update.version} نزلت. تحمّلها دلوقتي؟</p>
         <ApkUpdateButton update={update} />
         <button onClick={() => setDismissed(update.version ?? "")} className="text-xs text-slate-500 font-semibold">

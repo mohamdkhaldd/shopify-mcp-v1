@@ -1,4 +1,5 @@
 import { Fragment, FormEvent, useEffect, useState } from "react";
+import { ask } from "../../components/Dialogs";
 import { hassanApi } from "../../api/client";
 import { HassanBalance, HassanLedgerEntry, HassanLedgerType, HassanPartyBalance } from "../../api/types";
 import { monthLabel } from "../../utils/months";
@@ -19,7 +20,7 @@ function LedgerEntryRow({ e, onChanged }: { e: HassanLedgerEntry; onChanged: () 
     onChanged();
   }
   async function remove() {
-    if (!window.confirm("تمسح الحركة دي؟")) return;
+    if (!(await ask("تمسح الحركة دي؟"))) return;
     await hassanApi.ledgerRemove(e.id);
     onChanged();
   }
@@ -138,7 +139,7 @@ export default function LedgerTab({ month }: { month: string }) {
     refreshAll();
   }
   async function deleteParty(name: string) {
-    if (!window.confirm(`تمسح "${name}" وكل حركاته في الحساب الشخصي؟`)) return;
+    if (!(await ask(`تمسح "${name}" وكل حركاته في الحساب الشخصي؟`))) return;
     await hassanApi.deleteParty(name);
     if (openParty === name) setOpenParty(null);
     refreshAll();

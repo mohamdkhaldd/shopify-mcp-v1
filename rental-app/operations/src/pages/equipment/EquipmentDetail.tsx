@@ -1,4 +1,5 @@
 import { useUndo } from "../../context/UndoContext";
+import { ask } from "../../components/Dialogs";
 import { useEffect, useState } from "react";
 import Icon from "../../components/Icon";
 import MonthPicker from "../../components/equipment/MonthPicker";
@@ -101,7 +102,7 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
     const msg = days
       ? `تمسح شيفت «${activeShift.label}» ومعاه ${days} يوم متسجل (في السركي والمقاول)؟\nتقدر ترجّعه بـ «تراجع» على طول.`
       : `تمسح شيفت «${activeShift.label}»؟`;
-    if (!window.confirm(msg)) return;
+    if (!(await ask(msg))) return;
     const r = await equipmentShiftsApi.remove(activeShift.id);
     setActiveShiftLabel("");
     refreshShifts();
@@ -171,7 +172,7 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
             onClick={() => setShowPackage(true)}
             className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold bg-primary text-white hover:bg-primary-dark shadow-card"
           >
-            📄 ملف الشريك
+            <Icon name="doc" className="w-4 h-4" /> ملف الشريك
           </button>
           <PrintButton />
           <MonthPicker month={month} onChange={setMonth} />
@@ -243,10 +244,10 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
           {activeShift && (
             <>
               <button onClick={handleRenameShift} title="غيّر اسم الشيفت" className="rounded-lg bg-white shadow-card px-2 py-1.5 text-xs font-bold text-slate-500 hover:text-primary-dark">
-                ✎ تعديل
+                <Icon name="edit" className="w-3.5 h-3.5" /> تعديل
               </button>
               <button onClick={handleDeleteShift} title="امسح الشيفت ده" className="rounded-lg bg-white shadow-card px-2 py-1.5 text-xs font-bold text-red-500 hover:bg-red-50">
-                🗑 مسح
+                <Icon name="trash" className="w-3.5 h-3.5" /> مسح
               </button>
             </>
           )}

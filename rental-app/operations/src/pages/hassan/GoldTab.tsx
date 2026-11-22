@@ -1,4 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
+import Icon from "../../components/Icon";
+import { ask } from "../../components/Dialogs";
 import { GoldEntry, GoldLoan, GoldSummary, goldApi } from "../../api/client";
 import Modal from "../../components/Modal";
 import { formatEGP } from "../../utils/format";
@@ -146,7 +148,7 @@ function LoansSection({ data, onChanged, onRepay }: { data: GoldSummary; onChang
                   </span>
                   {l.repays.length > 0 && <Gain v={l.gain} />}
                   {l.remaining > 0.0005 && (
-                    <button onClick={() => onRepay(l)} className="no-print rounded-lg bg-emerald-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-emerald-700">
+                    <button onClick={() => onRepay(l)} className="no-print rounded-lg bg-primary text-white px-3 py-1.5 text-xs font-bold hover:bg-primary-dark">
                       {l.direction === "borrow" ? "رديت" : "رجعولي"}
                     </button>
                   )}
@@ -287,7 +289,7 @@ function RepayDialog({ loan, onClose, onDone }: { loan: GoldLoan; onClose: () =>
         <MethodSelect value={method} onChange={setMethod} cashIn={loan.direction === "lend"} allowNone />
         {gain != null && <div className="text-base">كده <Gain v={gain} /></div>}
         {err && <div className="text-rose-600 font-semibold">{err}</div>}
-        <button type="submit" disabled={!g || !p} className="bg-emerald-600 text-white rounded-lg px-4 py-2 font-bold disabled:opacity-50">
+        <button type="submit" disabled={!g || !p} className="bg-primary text-white rounded-lg px-4 py-2 font-bold disabled:opacity-50">
           سجّل
         </button>
       </form>
@@ -299,14 +301,14 @@ function DeleteButton({ id, what, onChanged }: { id: number; what: string; onCha
   return (
     <button
       onClick={async () => {
-        if (!window.confirm(`تمسح ${what}؟`)) return;
+        if (!(await ask(`تمسح ${what}؟`))) return;
         await goldApi.remove(id);
         onChanged();
       }}
       className="no-print text-xs font-bold text-rose-500"
       title="مسح"
     >
-      🗑
+      <Icon name="trash" className="w-4 h-4" />
     </button>
   );
 }

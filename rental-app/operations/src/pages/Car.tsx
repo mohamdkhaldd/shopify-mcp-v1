@@ -1,4 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
+import Icon from "../components/Icon";
+import { ask } from "../components/Dialogs";
 import EditRowButton from "../components/EditRowButton";
 import MonthPicker from "../components/equipment/MonthPicker";
 import PrintButton from "../components/PrintButton";
@@ -72,7 +74,7 @@ export default function Car() {
     setCarId(r.id);
   }
   async function removeCar() {
-    if (!car || !window.confirm(`تمسح «${car.name}» وكل مصاريفها ودخلها؟`)) return;
+    if (!car || !(await ask(`تمسح «${car.name}» وكل مصاريفها ودخلها؟`))) return;
     await carApi.remove(car.id);
     setCarId(null);
     loadCars();
@@ -131,13 +133,13 @@ export default function Car() {
   }
 
   async function removeFuel(id: number) {
-    if (!window.confirm("تمسح السطر ده؟")) return;
+    if (!(await ask("تمسح السطر ده؟"))) return;
     await carApi.removeFuel(id);
     refresh();
   }
 
   async function removeTrip(id: number) {
-    if (!window.confirm("تمسح المشوار ده؟ هيتمسح من مصروفات المعدة كمان.")) return;
+    if (!(await ask("تمسح المشوار ده؟ هيتمسح من مصروفات المعدة كمان."))) return;
     await monthlyExpensesApi.remove(id);
     refresh();
   }
@@ -170,7 +172,7 @@ export default function Car() {
               c.id === carId ? "bg-primary text-white shadow-sm" : "bg-white text-slate-600 shadow-card hover:text-primary-dark",
             ].join(" ")}
           >
-            🚗 {c.name}
+            <Icon name="car" className="w-4 h-4 inline -mt-0.5" /> {c.name}
             <span className="ms-1.5 text-[11px] opacity-80">{c.kind === "work" ? "شغل" : "ملاكي"}</span>
           </button>
         ))}
@@ -180,10 +182,10 @@ export default function Car() {
         {car && (
           <>
             <button onClick={() => setEditCar(car)} className="text-xs font-bold text-slate-500 hover:text-primary-dark px-2">
-              ✎ تعديل
+              <Icon name="edit" className="w-3.5 h-3.5" /> تعديل
             </button>
             <button onClick={removeCar} className="text-xs font-bold text-rose-500 px-2">
-              🗑 مسح
+              <Icon name="trash" className="w-3.5 h-3.5" /> مسح
             </button>
           </>
         )}
@@ -278,7 +280,7 @@ export default function Car() {
       )}
       {data && !work && data.over > 0 && (
         <div className="rounded-xl bg-amber-50 text-amber-800 px-4 py-2.5 text-sm font-semibold">
-          ⚠ المشاوير الشهر ده أكتر من البنزين بـ {formatEGP(data.over)} — اتأكد إنك سجلت كل البنزين.
+          <Icon name="warn" className="w-4 h-4 inline -mt-0.5" /> المشاوير الشهر ده أكتر من البنزين بـ {formatEGP(data.over)} — اتأكد إنك سجلت كل البنزين.
         </div>
       )}
 
@@ -436,7 +438,7 @@ export default function Car() {
                       <EditRowButton src="car_income" row={{ id: x.id, date: x.date, amount: x.amount, method: x.method, note: x.note }} onSaved={refresh} />
                       <button
                         onClick={async () => {
-                          if (!window.confirm("تمسح السطر ده؟")) return;
+                          if (!(await ask("تمسح السطر ده؟"))) return;
                           await carApi.removeIncome(x.id);
                           refresh();
                         }}

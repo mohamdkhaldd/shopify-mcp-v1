@@ -1,3 +1,7 @@
+@import "@fontsource/readex-pro/300.css";
+@import "@fontsource/readex-pro/400.css";
+@import "@fontsource/readex-pro/500.css";
+@import "@fontsource/readex-pro/600.css";
 @import "@fontsource/cairo/400.css";
 @import "@fontsource/cairo/600.css";
 @import "@fontsource/cairo/700.css";
@@ -16,8 +20,32 @@ body,
   height: 100%;
 }
 
+/* الألوان: لون أساسي واحد (بيتغيّر من القايمة) والباقي رمادي بارد */
+:root {
+  --accent: 47 91 234;
+  --accent-dark: 31 68 196;
+  --accent-light: 234 239 253;
+}
+:root[data-accent="green"] { --accent: 19 138 94; --accent-dark: 13 108 73; --accent-light: 228 244 237; }
+:root[data-accent="teal"] { --accent: 11 143 163; --accent-dark: 8 112 128; --accent-light: 226 243 246; }
+:root[data-accent="orange"] { --accent: 234 106 12; --accent-dark: 194 84 6; --accent-light: 253 239 228; }
+:root[data-accent="indigo"] { --accent: 81 69 224; --accent-dark: 62 51 190; --accent-light: 237 236 252; }
+:root[data-accent="rose"] { --accent: 212 51 95; --accent-dark: 176 36 76; --accent-light: 251 232 237; }
+:root[data-accent="ink"] { --accent: 29 36 48; --accent-dark: 15 20 28; --accent-light: 236 238 241; }
+
 body {
-  @apply font-cairo bg-[#F5F7F6] text-slate-800;
+  @apply font-cairo bg-[#F5F6F8] text-slate-800;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* الخط الجديد أوضح — الأوزان التقيلة بتبان زحمة، فبنهدّيها في البرنامج كله */
+@media screen {
+  .font-extrabold { font-weight: 600; }
+  .font-bold { font-weight: 600; }
+  .font-semibold { font-weight: 500; }
+  h1.text-2xl { letter-spacing: -0.01em; }
 }
 
 .print-only {
@@ -164,70 +192,70 @@ body {
   }
 }
 
-/* Dark mode ("الوضع الليلي") — a navy palette applied by overriding the
+/* Dark mode ("الوضع الليلي") — a neutral graphite palette applied by overriding the
    Tailwind utility classes the app already uses everywhere, instead of
    adding dark: variants to every component. Wrapped in @media screen so
    printed sheets always stay plain black-on-white regardless of theme. */
 @media screen {
   .dark body {
-    background: #0b1224;
-    color: #e7ecfb;
+    background: #0f1115;
+    color: #eef0f3;
   }
 
   .dark .bg-white {
-    background-color: #121b3a;
+    background-color: #171a20;
   }
 
   .dark .bg-slate-50,
   .dark .bg-slate-100 {
-    background-color: #18213f;
+    background-color: #1e222a;
   }
 
   .dark .bg-slate-50\/40 {
-    background-color: rgba(24, 33, 63, 0.55);
+    background-color: rgba(30, 34, 42, 0.6);
   }
 
   .dark .shadow-card {
-    box-shadow: 0 2px 10px 0 rgba(0, 0, 0, 0.35);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.3);
   }
 
   .dark .border-slate-50,
   .dark .border-slate-100 {
-    border-color: #212c4f;
+    border-color: #252a33;
   }
 
   .dark .border-slate-200,
   .dark .border-slate-400 {
-    border-color: #2b3a63;
+    border-color: #2f3540;
   }
 
   .dark input,
   .dark select,
   .dark textarea {
-    background-color: #121b3a;
-    color: #e7ecfb;
-    border-color: #2b3a63;
+    background-color: #171a20;
+    color: #eef0f3;
+    border-color: #2f3540;
   }
 
   .dark .text-slate-900,
   .dark .text-slate-800 {
-    color: #eef1fb;
+    color: #f1f3f6;
   }
 
   .dark .text-slate-700 {
-    color: #d7ddf3;
+    color: #d9dde3;
   }
 
   .dark .text-slate-600 {
-    color: #b4bede;
+    color: #b3b9c3;
   }
 
   .dark .text-slate-500 {
-    color: #94a0c9;
+    color: #959ca8;
   }
 
   .dark .text-slate-400 {
-    color: #7683ac;
+    color: #737a86;
   }
 
   .dark .bg-rose-50 {
@@ -255,20 +283,19 @@ body {
   }
 
   .dark .bg-primary-light {
-    background-color: rgba(47, 143, 99, 0.18);
+    background-color: rgb(var(--accent) / 0.18);
   }
 
-  .dark .text-primary-dark {
-    color: #6ee7b7;
+  .dark .text-primary-dark,
+  .dark .hover\:text-primary-dark:hover {
+    color: color-mix(in srgb, rgb(var(--accent)) 45%, white);
   }
 
   .dark .hover\:bg-primary-light:hover {
-    background-color: rgba(47, 143, 99, 0.22);
+    background-color: rgb(var(--accent) / 0.22);
   }
 
-  .dark .hover\:text-primary-dark:hover {
-    color: #6ee7b7;
-  }
+  .dark body { background: #0f1115; }
 }
 
 /* Phone / upright tablet: wide tables scroll sideways inside their card
@@ -281,3 +308,8 @@ body {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* إطار الاختيار: بلون البرنامج، وبيظهر بس مع الكيبورد */
+button:focus:not(:focus-visible) { outline: none; }
+button:focus-visible, a:focus-visible, [role="button"]:focus-visible { outline: 2px solid rgb(var(--accent) / 0.6); outline-offset: 2px; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: rgb(var(--accent)); box-shadow: 0 0 0 3px rgb(var(--accent) / 0.15); }

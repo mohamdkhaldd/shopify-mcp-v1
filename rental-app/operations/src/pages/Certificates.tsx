@@ -1,4 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
+import Icon from "../components/Icon";
+import { ask } from "../components/Dialogs";
 import { Certificate, certificatesApi, equipmentApi } from "../api/client";
 import Modal from "../components/Modal";
 import PrintButton from "../components/PrintButton";
@@ -57,7 +59,7 @@ export default function Certificates() {
                     <img src={c.image} alt="" className="w-full h-full object-cover" />
                   </button>
                 ) : (
-                  <div className="h-24 bg-slate-50 flex items-center justify-center text-3xl text-slate-300">📄</div>
+                  <div className="h-24 bg-slate-50 flex items-center justify-center text-slate-300"><Icon name="doc" className="w-8 h-8" /></div>
                 )}
                 <div className="p-4 space-y-1 flex-1">
                   <div className="flex items-center justify-between gap-2">
@@ -75,17 +77,17 @@ export default function Certificates() {
                 </div>
                 <div className="no-print flex gap-3 px-4 pb-3">
                   <button onClick={() => setEdit(c)} className="text-xs font-bold text-slate-500 hover:text-primary-dark">
-                    ✎ تعديل
+                    <Icon name="edit" className="w-3.5 h-3.5" /> تعديل
                   </button>
                   <button
                     onClick={async () => {
-                      if (!window.confirm("تمسح الشهادة دي؟")) return;
+                      if (!(await ask("تمسح الشهادة دي؟"))) return;
                       await certificatesApi.remove(c.id);
                       refresh();
                     }}
                     className="text-xs font-bold text-rose-500"
                   >
-                    🗑 مسح
+                    <Icon name="trash" className="w-3.5 h-3.5" /> مسح
                   </button>
                 </div>
               </div>

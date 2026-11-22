@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ask } from "../components/Dialogs";
 import { syncApi } from "../api/client";
 import { SyncActivity, SyncActivityRow } from "../api/types";
 import { formatEGP } from "../utils/format";
@@ -138,7 +139,7 @@ function Row({ r, currentDevice, onUndo }: { r: SyncActivityRow; currentDevice: 
             isThis ? "bg-primary-light text-primary-dark" : "bg-sky-100 text-sky-800",
           ].join(" ")}
         >
-          {isThis ? "💻" : "📱"} {r.device_name || "—"}
+          {isThis ? "(الجهاز ده) " : ""}{r.device_name || "—"}
         </span>
       </td>
       <td
@@ -203,7 +204,7 @@ export default function Activity() {
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function handleUndo(r: SyncActivityRow) {
-    if (!window.confirm(undoQuestion(r))) return;
+    if (!(await ask(undoQuestion(r)))) return;
     try {
       await syncApi.undo(r.id);
       setMessage({ ok: true, text: `اترجع: ${describe(r)}` });

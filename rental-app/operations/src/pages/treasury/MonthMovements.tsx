@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ask } from "../../components/Dialogs";
 import Modal from "../../components/Modal";
 import { treasuryApi } from "../../api/client";
 import { MonthMovement } from "../../api/types";
@@ -27,7 +28,7 @@ function Row({ m, onChanged }: { m: MonthMovement; onChanged: () => void }) {
     }
   }
   async function remove() {
-    if (!window.confirm(`تمسح "${m.label}" (${formatEGP(m.amount)})؟ هتتمسح من مكانها الأصلي كمان.`)) return;
+    if (!(await ask(`تمسح "${m.label}" (${formatEGP(m.amount)})؟ هتتمسح من مكانها الأصلي كمان.`))) return;
     await treasuryApi.movementDelete(m.src!, m.src_id!);
     onChanged();
   }

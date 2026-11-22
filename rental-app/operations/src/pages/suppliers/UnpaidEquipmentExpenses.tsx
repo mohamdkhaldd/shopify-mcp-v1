@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { ask } from "../../components/Dialogs";
 import Modal from "../../components/Modal";
 import MonthPicker from "../../components/equipment/MonthPicker";
 import { equipmentApi, expenseCategoriesApi, monthlyExpensesApi, payablesApi, suppliersApi } from "../../api/client";
@@ -221,7 +222,7 @@ export default function UnpaidEquipmentExpenses() {
   }, [month]);
 
   async function removePayment(id: number) {
-    if (!window.confirm("تمسح الدفعة دي؟ الباقي هيرجع زي ما كان والخزنة هترجع.")) return;
+    if (!(await ask("تمسح الدفعة دي؟ الباقي هيرجع زي ما كان والخزنة هترجع."))) return;
     await payablesApi.removePayment(id);
     refresh();
   }

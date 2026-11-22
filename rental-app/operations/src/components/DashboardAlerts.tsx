@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Icon from "./Icon";
 import { alertsApi } from "../api/client";
 import { DashboardAlert } from "../api/types";
 import { SectionId } from "../nav";
@@ -36,7 +37,7 @@ export default function DashboardAlerts({ onNavigate }: { onNavigate?: (id: Sect
           ].join(" ")}
         >
           <span className="font-bold">
-            {a.kind === "custody" ? "💼 " : a.kind === "installment" ? "💳 " : a.kind === "certificate" ? "📄 " : "⏰ "}
+            <Icon name={a.kind === "custody" ? "briefcase" : a.kind === "installment" ? "card" : a.kind === "certificate" ? "doc" : "clock"} className="w-4 h-4 inline -mt-0.5 me-1" />
             {a.kind === "obligation" ? `عليك التزام: ${a.title}` : a.kind === "installment" ? `عليك ${a.title}` : a.kind === "certificate" && a.days != null && a.days >= 0 ? `${a.title} — ناقص ${a.days} يوم` : a.title}
             {a.amount != null && <span className="font-extrabold"> {a.kind !== "custody" ? "بقيمة " : ""}{formatEGP(a.amount)}</span>}
             {a.kind !== "custody" && a.due_date && <span className="font-semibold"> — ميعاده {a.due_date}</span>}

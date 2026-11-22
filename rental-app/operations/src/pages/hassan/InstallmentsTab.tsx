@@ -1,4 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
+import Icon from "../../components/Icon";
+import { ask } from "../../components/Dialogs";
 import { installmentsApi } from "../../api/client";
 import { HassanInstallment } from "../../api/types";
 import { person } from "../../person";
@@ -40,13 +42,13 @@ function InstallmentCard({ inst, onChanged }: { inst: HassanInstallment; onChang
     onChanged();
   }
   async function remove() {
-    if (!window.confirm(`تمسح "${inst.title}"؟`)) return;
-    const withPayments = inst.paidCount > 0 && window.confirm(`تمسح كمان الأقساط اللي اتدفعت منه (${inst.paidCount})؟ لو "إلغاء" هتفضل متسجلة صرف من الكوميشن.`);
+    if (!(await ask(`تمسح "${inst.title}"؟`))) return;
+    const withPayments = inst.paidCount > 0 && await ask(`تمسح كمان الأقساط اللي اتدفعت منه (${inst.paidCount})؟ لو "إلغاء" هتفضل متسجلة صرف من الكوميشن.`);
     await installmentsApi.remove(inst.id, withPayments);
     onChanged();
   }
   async function undoPayment(id: number) {
-    if (!window.confirm("ترجّع الدفعة دي؟ الفلوس هترجع الخزنة والقسط يرجع مستني.")) return;
+    if (!(await ask("ترجّع الدفعة دي؟ الفلوس هترجع الخزنة والقسط يرجع مستني."))) return;
     await installmentsApi.removePayment(id);
     onChanged();
   }
@@ -293,7 +295,7 @@ function LockBar({ locked, onLock }: { locked: boolean; onLock: () => void }) {
 
   return (
     <div className="no-print bg-white rounded-card shadow-card px-5 py-3 flex flex-wrap items-center gap-3 text-sm">
-      <span className="font-semibold text-slate-600">{locked ? "🔒 الصفحة دي مقفولة بباسورد" : "🔓 الصفحة دي من غير باسورد"}</span>
+      <span className="font-semibold text-slate-600"><Icon name={locked ? "lock" : "unlock"} className="w-4 h-4 inline -mt-0.5 me-1" />{locked ? "الصفحة دي مقفولة بباسورد" : "الصفحة دي من غير باسورد"}</span>
       {locked ? (
         <>
           <button onClick={onLock} className="rounded-lg bg-slate-800 text-white px-3 py-1 text-xs font-bold">

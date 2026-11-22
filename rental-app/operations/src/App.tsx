@@ -26,6 +26,7 @@ import { navItems, navLabel, SectionId } from "./nav";
 import { loadPerson, usePerson } from "./person";
 import CompanyLogo from "./components/CompanyLogo";
 import { useBrand } from "./brand";
+import { DialogHost } from "./components/Dialogs";
 
 // نسخة التابلت (Capacitor) — التحديث فيها بيسأل قبل ما يحمّل.
 const isTablet = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
@@ -64,6 +65,7 @@ export default function App() {
 
   return (
     <UndoProvider>
+      <DialogHost />
       <div className="flex min-h-screen" dir="rtl">
         <Sidebar active={active} onSelect={go} open={menuOpen} />
         {menuOpen && <div className="no-print fixed inset-0 z-40 bg-black/40 min-[1024px]:hidden" onClick={() => setMenuOpen(false)} aria-hidden />}
@@ -89,7 +91,7 @@ export default function App() {
           {remote && (
             <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-sky-50 border border-sky-200 px-4 py-2.5 text-sm text-sky-900">
               <span>
-                📱 وصل {remote.count} تعديل جديد من {remote.devices.join(" و") || "جهاز تاني"}
+                وصل {remote.count} تعديل جديد من {remote.devices.join(" و") || "جهاز تاني"}
               </span>
               <span className="flex items-center gap-3">
                 <button
@@ -97,7 +99,7 @@ export default function App() {
                     setRemote(null);
                     setPageKey((k) => k + 1);
                   }}
-                  className="rounded-lg bg-sky-600 text-white px-3 py-1 text-xs font-bold hover:bg-sky-700"
+                  className="rounded-lg bg-primary text-white px-3 py-1 text-xs font-bold hover:bg-primary-dark"
                 >
                   حدّث الصفحة
                 </button>

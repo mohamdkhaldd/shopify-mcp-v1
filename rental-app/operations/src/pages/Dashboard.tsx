@@ -17,7 +17,7 @@ import EquipmentTick from "../components/EquipmentTick";
 import { Blurrable, EyeAllButton, PrivacyProvider } from "../components/Privacy";
 import DashboardAlerts from "../components/DashboardAlerts";
 import DashboardPeriods from "../components/DashboardPeriods";
-import { useTheme } from "../theme";
+import { useAccentColor, useTheme } from "../theme";
 import { dashboardApi } from "../api/client";
 import { DashboardSummary } from "../api/types";
 import { formatEGP } from "../utils/format";
@@ -33,13 +33,14 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (id: SectionId)
   }, []);
 
 
-  const gridStroke = theme === "dark" ? "#243057" : "#EEF2F0";
-  const tickFill = theme === "dark" ? "#94A0C9" : "#64748B";
-  const categoryTickFill = theme === "dark" ? "#D7DDF3" : "#334155";
+  const accent = useAccentColor();
+  const gridStroke = theme === "dark" ? "#252a33" : "#EEF0F3";
+  const tickFill = theme === "dark" ? "#959ca8" : "#8a919c";
+  const categoryTickFill = theme === "dark" ? "#d9dde3" : "#334155";
   const tooltipStyle =
     theme === "dark"
-      ? { direction: "rtl" as const, fontFamily: "Cairo", borderRadius: 12, border: "1px solid #2B3A63", background: "#121B3A", color: "#E7ECFB" }
-      : { direction: "rtl" as const, fontFamily: "Cairo", borderRadius: 12, border: "1px solid #E2E8F0" };
+      ? { direction: "rtl" as const, fontFamily: "Readex Pro", borderRadius: 10, border: "1px solid #2f3540", background: "#171a20", color: "#eef0f3" }
+      : { direction: "rtl" as const, fontFamily: "Readex Pro", borderRadius: 10, border: "1px solid #E6E8EC", boxShadow: "0 4px 14px rgba(20,23,28,.06)" };
 
   if (!summary) {
     return <div className="text-sm text-slate-400">جاري التحميل...</div>;
@@ -52,8 +53,8 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (id: SectionId)
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">لوحة التحكم الرئيسية</h1>
-          <p className="text-sm text-slate-500 mt-1">نظرة عامة على أداء الشركة — أرقام حية من بيانات النظام الفعلية</p>
+          <h1 className="text-2xl font-semibold text-slate-900">الرئيسية</h1>
+          <p className="text-sm text-slate-500 mt-1">أداء الشركة الشهر ده ومن أول السنة — من بيانات البرنامج على طول</p>
         </div>
         <EyeAllButton />
       </div>
@@ -64,22 +65,22 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (id: SectionId)
 
       <Blurrable id="sec142" className="bg-white rounded-card shadow-card p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-slate-800">اتجاه صافي الربح الشهري</h2>
+          <h2 className="font-semibold text-slate-900">اتجاه صافي الربح الشهري</h2>
           <span className="text-xs text-slate-400">السنة الحالية</span>
         </div>
         <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={summary.monthlyProfitTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#2F8F63" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="#2F8F63" stopOpacity={0.02} />
+                <stop offset="0%" stopColor={accent} stopOpacity={0.35} />
+                <stop offset="100%" stopColor={accent} stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} />
             <XAxis dataKey="month" tick={{ fontSize: 12, fill: tickFill }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 12, fill: tickFill }} axisLine={false} tickLine={false} width={70} />
             <Tooltip formatter={(value: number) => formatEGP(value)} contentStyle={tooltipStyle} />
-            <Area type="monotone" dataKey="profit" stroke="#2F8F63" strokeWidth={2.5} fill="url(#profitFill)" />
+            <Area type="monotone" dataKey="profit" stroke={accent} strokeWidth={2.5} fill="url(#profitFill)" />
           </AreaChart>
         </ResponsiveContainer>
       </Blurrable>
@@ -87,7 +88,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (id: SectionId)
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Blurrable id="sec165" className="bg-white rounded-card shadow-card p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-slate-800">مصروف كل معدة (سنويًا)</h2>
+            <h2 className="font-semibold text-slate-900">مصروف كل معدة (سنويًا)</h2>
           </div>
           <ResponsiveContainer width="100%" height={equipmentChartHeight}>
             <BarChart data={summary.equipmentExpenses} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }} barCategoryGap={10}>
@@ -103,14 +104,14 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (id: SectionId)
                 interval={0}
               />
               <Tooltip formatter={(value: number) => [formatEGP(value), "المصروف"]} contentStyle={tooltipStyle} />
-              <Bar dataKey="annualExpense" fill="#C2853A" radius={[0, 6, 6, 0]} barSize={14} />
+              <Bar dataKey="annualExpense" fill={theme === "dark" ? "#4a515d" : "#c9ced6"} radius={[0, 6, 6, 0]} barSize={14} />
             </BarChart>
           </ResponsiveContainer>
         </Blurrable>
 
         <Blurrable id="sec188" className="bg-white rounded-card shadow-card p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-slate-800">صافي ربح كل معدة (سنويًا)</h2>
+            <h2 className="font-semibold text-slate-900">صافي ربح كل معدة (سنويًا)</h2>
             <span className="text-xs text-slate-400">الدخل − المصروف</span>
           </div>
           <ResponsiveContainer width="100%" height={equipmentChartHeight}>
@@ -130,7 +131,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (id: SectionId)
               <Tooltip formatter={(value: number) => [formatEGP(value), "صافي الربح"]} contentStyle={tooltipStyle} />
               <Bar dataKey="annualProfit" radius={[0, 6, 6, 0]} barSize={14}>
                 {summary.equipmentExpenses.map((eq) => (
-                  <Cell key={eq.name} fill={eq.annualProfit >= 0 ? "#2F8F63" : "#E11D48"} />
+                  <Cell key={eq.name} fill={eq.annualProfit >= 0 ? accent : "#e0413a"} />
                 ))}
               </Bar>
             </BarChart>

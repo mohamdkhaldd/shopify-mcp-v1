@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ask } from "../components/Dialogs";
 import { appApi, confirmSetting, feeAmount, feeRulesApi, syncApi, systemApi } from "../api/client";
 import { AppUpdateStatus, SyncStatus } from "../api/types";
 import Icon from "../components/Icon";
@@ -227,7 +228,7 @@ function ConfirmToggle() {
             confirmSetting.set(e.target.checked);
             setOn(e.target.checked);
           }}
-          className="w-5 h-5 accent-[#2F8F63]"
+          className="w-5 h-5 accent-primary"
         />
         {on ? "شغال" : "مقفول"}
       </label>
@@ -287,11 +288,11 @@ export default function Settings() {
   }
 
   async function handleResetAll() {
-    const step1 = window.confirm(
+    const step1 = await ask(
       `هتمسح كل السركي والمقاول ومصروفات المعدات والسلف والحوافز ودفعات المقاولين والشركاء وحساب ${person()} — المعدات والشركاء والسائقين والمقاولين هيفضلوا زي ما هما. متأكد؟`
     );
     if (!step1) return;
-    const step2 = window.confirm("تأكيد أخير: مفيش رجوع بعد كده. تمسح كل السركي والمصروفات فعلاً؟");
+    const step2 = await ask("تأكيد أخير: مفيش رجوع بعد كده. تمسح كل السركي والمصروفات فعلاً؟");
     if (!step2) return;
     setResetting(true);
     await systemApi.resetAll();
@@ -424,7 +425,7 @@ export default function Settings() {
               <div className={`rounded-xl py-2.5 text-center ${syncStatus.online ? "bg-primary-light" : "bg-rose-50"}`}>
                 <div className="text-xs text-slate-500">الحالة</div>
                 <div className={`font-bold ${syncStatus.online ? "text-primary-dark" : "text-rose-600"}`}>
-                  {syncStatus.online ? "● متصل" : syncStatus.needsLogin ? "🔒 محتاج الباسورد" : "● مش متصل"}
+                  {syncStatus.online ? "● متصل" : syncStatus.needsLogin ? "محتاج الباسورد" : "● مش متصل"}
                 </div>
               </div>
               <div className="rounded-xl py-2.5 text-center bg-slate-50">
@@ -450,7 +451,7 @@ export default function Settings() {
               disabled={syncing}
               className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
             >
-              {syncing ? "جاري المزامنة..." : "🔄 زامن دلوقتي"}
+              {syncing ? "جاري المزامنة..." : "زامن دلوقتي"}
             </button>
           </div>
         )}

@@ -27,15 +27,17 @@ export default function DashboardPeriods() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-extrabold text-slate-800">شهر {monthLabel(month)} {year}</h2>
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">شهر {monthLabel(month)} {year}</h2>
+          <p className="text-xs text-slate-400">أرقام الشهر — دوس على أي رقم تشوف تفاصيله</p>
+        </div>
         <MonthPicker month={month} onChange={setMonth} />
       </div>
       <Period p={data.monthly} tag="m" sub={`شهر ${monthLabel(month)}`} onDetail={setDetail} />
 
-      <div className="flex items-center gap-3 pt-2">
-        <div className="h-px flex-1 bg-slate-300" />
-        <h2 className="text-lg font-extrabold text-slate-800">سنة {year} — من يناير لحد {monthLabel(month)}</h2>
-        <div className="h-px flex-1 bg-slate-300" />
+      <div className="pt-4 border-t border-slate-200/80">
+        <h2 className="text-base font-semibold text-slate-900">سنة {year}</h2>
+        <p className="text-xs text-slate-400">من يناير لحد {monthLabel(month)}</p>
       </div>
       <Period p={data.yearly} tag="y" sub={`من أول ${year}`} onDetail={setDetail} />
 
@@ -70,7 +72,17 @@ export default function DashboardPeriods() {
 function Period({ p, tag, sub, onDetail }: { p: DashboardPeriod; tag: string; sub: string; onDetail: (d: Detail) => void }) {
   const open = (title: string, items: { label: string; amount: number }[], total: number) => onDetail({ title: `${title} — ${sub}`, items, total });
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+      <KpiCard
+        privacyId={`${tag}-net`}
+        label="صافي الربح"
+        hero={p.net.total >= 0}
+        value={formatEGP(p.net.total)}
+        icon={p.net.total >= 0 ? "trendUp" : "trendDown"}
+        tone={p.net.total >= 0 ? "positive" : "negative"}
+        sub="بعد الكوميشن والمصروفات — بالمعدة"
+        onClick={() => open("صافي الربح", p.net.items, p.net.total)}
+      />
       <KpiCard
         privacyId={`${tag}-eq`}
         label="عدد المعدات"
@@ -104,15 +116,6 @@ function Period({ p, tag, sub, onDetail }: { p: DashboardPeriod; tag: string; su
         icon="treasury"
         sub="مصاريف المعدات ومرتبات السواقين"
         onClick={() => open("المصروفات", p.expenses.items, p.expenses.total)}
-      />
-      <KpiCard
-        privacyId={`${tag}-net`}
-        label="صافي الربح"
-        value={formatEGP(p.net.total)}
-        icon={p.net.total >= 0 ? "trendUp" : "trendDown"}
-        tone={p.net.total >= 0 ? "positive" : "negative"}
-        sub="بعد الكوميشن والمصروفات — بالمعدة"
-        onClick={() => open("صافي الربح", p.net.items, p.net.total)}
       />
       {p.dues.map((d) => (
         <KpiCard

@@ -1,4 +1,5 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { ask } from "../../components/Dialogs";
 import { paperSheetsApi } from "../../api/client";
 import { PaperSheet } from "../../api/types";
 import { compressImageFile, rotateImage } from "../../utils/image";
@@ -51,7 +52,7 @@ export default function PaperSheets({ equipmentId, month }: { equipmentId: numbe
   }
 
   async function remove(s: PaperSheet) {
-    if (!window.confirm("تمسح صورة السركي دي؟")) return;
+    if (!(await ask("تمسح صورة السركي دي؟"))) return;
     await paperSheetsApi.remove(s.id);
     refresh();
   }
@@ -70,7 +71,7 @@ export default function PaperSheets({ equipmentId, month }: { equipmentId: numbe
             disabled={busy}
             className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
           >
-            {busy ? "جاري الحفظ..." : "📷 ارفع صورة السركي"}
+            {busy ? "جاري الحفظ..." : "ارفع صورة السركي"}
           </button>
         </div>
       </div>
@@ -101,7 +102,7 @@ export default function PaperSheets({ equipmentId, month }: { equipmentId: numbe
                 disabled={busy || !!reading}
                 title="البرنامج يقرا الأيام والساعات والأوفر من الصورة، وانت تراجع وتكتب السعر"
               >
-                🤖 اقرا وسجّل في شيت المقاول
+                اقرا وسجّل في شيت المقاول
               </button>
               <button onClick={() => rotate(s, false)} className="text-slate-500 hover:text-primary" disabled={busy}>
                 ↺ لف شمال

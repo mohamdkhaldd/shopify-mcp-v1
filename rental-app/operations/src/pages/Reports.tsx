@@ -88,7 +88,7 @@ export default function Reports() {
               />
               <Tooltip formatter={(value: number) => formatEGP(value)} contentStyle={tooltipStyle} />
               <Legend wrapperStyle={{ fontFamily: "Cairo", fontSize: 12 }} />
-              <Bar dataKey="income" name="الدخل" fill="#2F8F63" radius={[0, 5, 5, 0]} barSize={10} />
+              <Bar dataKey="income" name="الدخل" fill="rgb(var(--accent))" radius={[0, 5, 5, 0]} barSize={10} />
               <Bar dataKey="expense" name="المصروف" fill="#C2853A" radius={[0, 5, 5, 0]} barSize={10} />
             </BarChart>
           </ResponsiveContainer>
@@ -113,7 +113,7 @@ export default function Reports() {
               <Tooltip formatter={(value: number) => [formatEGP(value), "صافي الربح"]} contentStyle={tooltipStyle} />
               <Bar dataKey="netProfit" radius={[0, 5, 5, 0]} barSize={14}>
                 {report.equipmentRows.map((e) => (
-                  <Cell key={e.equipment_name} fill={e.netProfit >= 0 ? "#2F8F63" : "#E11D48"} />
+                  <Cell key={e.equipment_name} fill={e.netProfit >= 0 ? "rgb(var(--accent))" : "#e0413a"} />
                 ))}
               </Bar>
             </BarChart>

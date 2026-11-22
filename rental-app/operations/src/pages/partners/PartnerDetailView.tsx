@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import Icon from "../../components/Icon";
 import EditRowButton from "../../components/EditRowButton";
 import { partnerPaymentsApi, partnersDashboardApi } from "../../api/client";
 import { PartnerDetail } from "../../api/types";
@@ -66,7 +67,7 @@ export default function PartnerDetailView({ partnerId, onBack }: PartnerDetailVi
             onClick={() => setShowFile(true)}
             className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold bg-primary text-white hover:bg-primary-dark shadow-card"
           >
-            📄 ملف الشريك
+            <Icon name="doc" className="w-4 h-4" /> ملف الشريك
           </button>
           <PrintButton />
           <MonthPicker month={month} onChange={setMonth} />

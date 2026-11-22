@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { ask } from "../components/Dialogs";
 import PrintButton from "../components/PrintButton";
 import { PrintHeader, PrintSignoff } from "../components/PrintSignoff";
 import { contractorsApi, custodyApi, employeesApi, equipmentApi, expenseCategoriesApi, partnersApi, suppliersApi } from "../api/client";
@@ -150,7 +151,7 @@ function CustodyPanel({
   }
 
   async function removeEntry(entryId: number) {
-    if (!window.confirm("تمسح الحركة دي؟")) return;
+    if (!(await ask("تمسح الحركة دي؟"))) return;
     await custodyApi.removeEntry(entryId);
     await refresh();
     onChanged();
@@ -472,13 +473,13 @@ export default function Custody() {
   }
 
   async function toggleClosed(c: CustodyRow) {
-    if (!c.closed && c.remaining > 0.005 && !window.confirm(`لسه فيها ${formatEGP(c.remaining)} — تقفلها كده؟ (لو الفلوس رجعت سجّل "رجّع الباقي" الأول)`)) return;
+    if (!c.closed && c.remaining > 0.005 && !(await ask(`لسه فيها ${formatEGP(c.remaining)} — تقفلها كده؟ (لو الفلوس رجعت سجّل "رجّع الباقي" الأول)`))) return;
     await custodyApi.setClosed(c.id, !c.closed);
     refresh();
   }
 
   async function remove(c: CustodyRow) {
-    if (!window.confirm(`تمسح عهدة ${c.holder} وكل حركاتها؟ المبلغ هيرجع الخزنة، والمصروفات اللي اتسجلت منها على المعدات هتتمسح.`)) return;
+    if (!(await ask(`تمسح عهدة ${c.holder} وكل حركاتها؟ المبلغ هيرجع الخزنة، والمصروفات اللي اتسجلت منها على المعدات هتتمسح.`))) return;
     await custodyApi.remove(c.id);
     if (openId === c.id) setOpenId(null);
     refresh();

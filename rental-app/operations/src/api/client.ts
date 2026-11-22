@@ -68,6 +68,7 @@ import { HassanExpenseKind,
   SyncStatus,
   WasteEntry,
 } from "./types";
+import { ask, lastAskedAt, toast } from "../components/Dialogs";
 import { person } from "../person";
 
 declare global {
@@ -184,15 +185,8 @@ function describePayload(payload: unknown): string {
   return parts.join(" — ");
 }
 
-let lastNativeConfirm = 0;
 let lastApproved = { channel: "", at: 0 };
 if (typeof window !== "undefined" && !(window as unknown as { __confirmWrapped?: boolean }).__confirmWrapped) {
-  const nativeConfirm = window.confirm.bind(window);
-  window.confirm = (message?: string) => {
-    const ok = nativeConfirm(message);
-    lastNativeConfirm = Date.now();
-    return ok;
-  };
   (window as unknown as { __confirmWrapped?: boolean }).__confirmWrapped = true;
   // إلغاء التأكيد مش خطأ — منطلعش رسالة خطأ في الكونسول.
   window.addEventListener("unhandledrejection", (e) => {
@@ -200,7 +194,7 @@ if (typeof window !== "undefined" && !(window as unknown as { __confirmWrapped?:
   });
 }
 
-function confirmChange(channel: string, payload: unknown): boolean {
+async function confirmChange(channel: string, payload: unknown): Promise<boolean> {
   const kind = changeKind(channel);
   if (!kind || !confirmSetting.get()) return true;
   const now = Date.now();
@@ -208,14 +202,11 @@ function confirmChange(channel: string, payload: unknown): boolean {
     lastApproved.at = now;
     return true;
   }
-  if (kind === "delete" && now - lastNativeConfirm < 4000) return true;
+  if (kind === "delete" && now - lastAskedAt < 4000) return true;
   const label = entityLabels()[channel.split(":")[0]];
   const details = describePayload(payload);
-  const message =
-    kind === "add"
-      ? `إنت بتسجّل ${label}${details ? `:\n${details}` : ""}\n\nموافق؟`
-      : `إنت بتمسح ${label}.\n\nموافق؟`;
-  const ok = window.confirm(message);
+  const message = kind === "add" ? `تسجّل ${label}؟${details ? `\n${details}` : ""}` : `تمسح ${label}؟`;
+  const ok = await ask(message, kind === "add" ? { okLabel: "سجّل", danger: false } : {});
   if (ok) lastApproved = { channel, at: Date.now() };
   return ok;
 }
@@ -302,9 +293,11 @@ async function withFeeChoice(channel: string, payload: unknown): Promise<unknown
 // بيتحدّث ويقول «الخزنة فيها كذا منهم كذا لـ…».
 const HASSAN_MONEY = /^(hassan[A-Za-z]*|gold|installments?|installmentPayments|treasury):(create|add|update|delete|pay|movementUpdate|movementDelete|deleteParty)$/;
 async function invoke(channel: string, payload?: unknown): Promise<any> {
-  if (!confirmChange(channel, payload)) throw new CancelledError();
+  if (!(await confirmChange(channel, payload))) throw new CancelledError();
   const p = await withFeeChoice(channel, payload);
   const result = await rawInvoke(channel, p);
+  const kind = changeKind(channel);
+  if (kind) toast(kind === "add" ? "اتسجل" : "اتمسح");
   if (HASSAN_MONEY.test(channel) && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("hassan-money-changed", { detail: channel }));
   return result;
 }

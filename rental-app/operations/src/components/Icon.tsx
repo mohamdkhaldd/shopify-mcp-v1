@@ -5,6 +5,15 @@ interface IconProps {
 
 // Minimal hand-rolled line icon set (no external icon library needed).
 const paths: Record<string, JSX.Element> = {
+  trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
+  edit: <path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4" />,
+  doc: <path d="M7 3h7l5 5v13H7V3ZM14 3v5h5M10 13h6M10 17h4" />,
+  warn: <path d="M12 4 2.5 20h19L12 4ZM12 10v4.5M12 17.5v.5" />,
+  briefcase: <path d="M3 8h18v11H3V8ZM9 8V5h6v3M3 13h18" />,
+  card: <path d="M3 6h18v12H3V6ZM3 10h18M7 15h3" />,
+  clock: <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7v5l3 2" />,
+  unlock: <path d="M6 11h12v9H6v-9ZM9 11V8a3 3 0 0 1 5.8-1" />,
+  check: <path d="M5 12.5 10 17l9-10" />,
   home: (
     <path d="M4 11.5 12 5l8 6.5M6 10v9h12v-9M10 19v-5h4v5" />
   ),
