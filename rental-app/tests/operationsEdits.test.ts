@@ -120,22 +120,30 @@ describe("التشغيل: عهدة من شريك أو مقاول", () => {
 });
 
 describe("التشغيل: الالتزامات والمستحقات", () => {
-  it("بالأيام، ادفع/استلمت بيتسجلوا صح، والجزئي بيفضل باقي", () => {
+  it("كل شهر لوحده: الحاجة بتظهر في شهرها بس (اتدفعت أو لسه)، والجزئي بيفضل باقي", () => {
     const { db, call } = ops();
     db.prepare("INSERT INTO contractors (id, name, opening_balance) VALUES (1, 'المقاول', 0)").run();
     db.prepare("INSERT INTO equipment (id, name) VALUES (1, 'لودر')").run();
-    call("dailyLogs:upsert", { equipment_id: 1, date: "2026-11-02", role: "contractor", shift_label: "", person_name: "المقاول", actual_hours: 8, base_hours: 8, day_rate: 1000 });
+    call("dailyLogs:upsert", { equipment_id: 1, date: "2026-10-02", role: "contractor", shift_label: "", person_name: "المقاول", actual_hours: 8, base_hours: 8, day_rate: 1000 });
+    call("dailyLogs:upsert", { equipment_id: 1, date: "2026-11-02", role: "contractor", shift_label: "", person_name: "المقاول", actual_hours: 8, base_hours: 8, day_rate: 1500 });
     db.prepare("INSERT INTO hassan_installments (id, title, amount, count, start_date) VALUES (1, 'العربية', 2000, 10, '2026-11-01')").run();
     call("dues:addManual", { title: "إيجار المخزن", amount: 3000, due_date: "2026-11-20", direction: "pay", repeat_monthly: true });
 
     let b = call("dues:board", { month: "2026-11" });
-    const find = (g: string) => b.days.flatMap((d: { items: { group: string }[] }) => d.items).find((x: { group: string }) => x.group === g);
+    const all = () => b.days.flatMap((d: { items: { group: string }[] }) => d.items);
+    const find = (g: string) => all().find((x: { group: string }) => x.group === g);
     expect(b.days[0]).toMatchObject({ date: "2026-11-01", title: "الأقساط" });
-    expect(find("contractors")).toMatchObject({ direction: "receive", remaining: 1000, due: "2026-11-10" });
+    // يوم ١٠ نوفمبر = شغل أكتوبر بس (مش تراكمي)
+    expect(find("contractors")).toMatchObject({ direction: "receive", amount: 1000, remaining: 1000, due: "2026-11-10", forMonth: "2026-10" });
+    expect(find("contractors").details[0].rows[0]).toMatchObject({ label: "لودر: 1 يوم", amount: 1000 });
     expect(find("manual")).toMatchObject({ remaining: 3000, due: "2026-11-20" });
 
-    // استلمت من المقاول
-    call("dues:pay", { group: "contractors", ref: 1, date: "2026-11-10", amount: 1000, method: "cash" });
+    // استلمت شغل أكتوبر — بيفضل ظاهر في نوفمبر «اتستلم»، وشغل نوفمبر في ديسمبر لوحده
+    call("dues:pay", { group: "contractors", ref: 1, forMonth: "2026-10", date: "2026-11-10", amount: 1000, method: "cash" });
+    b = call("dues:board", { month: "2026-11" });
+    expect(find("contractors")).toMatchObject({ paid: 1000, remaining: 0, done: true });
+    expect(call("dues:board", { month: "2026-12" }).days.flatMap((d: { items: { group: string }[] }) => d.items).find((x: { group: string }) => x.group === "contractors")).toMatchObject({ amount: 1500, remaining: 1500, paid: 0 });
+
     // إيجار: جزء وبعدين الباقي
     const rent = find("manual");
     call("dues:pay", { group: "manual", ref: rent.ref, date: "2026-11-20", amount: 1000, method: "cash" });
@@ -143,13 +151,16 @@ describe("التشغيل: الالتزامات والمستحقات", () => {
     expect(find("manual")).toMatchObject({ paid: 1000, remaining: 2000 });
     call("dues:pay", { group: "manual", ref: rent.ref, date: "2026-11-21", amount: 2000, method: "cash" });
     b = call("dues:board", { month: "2026-11" });
-    expect(find("manual")).toBeUndefined();
-    expect(find("contractors")).toBeUndefined();
+    expect(find("manual")).toMatchObject({ done: true, remaining: 0 });
+    expect(find("manual").details[1].rows).toHaveLength(2);
     // شهري: الشهر الجاي اتعمل لوحده
     expect(call("dues:board", { month: "2026-12" }).days.some((d: { title: string }) => d.title.includes("التزامات"))).toBe(true);
-    // القسط: ادفع
+    // القسط: ادفع — وقسط ديسمبر لسه
     call("dues:pay", { group: "installments", ref: 1, date: "2026-11-01", amount: 2000, method: "cash" });
-    expect(db.prepare("SELECT COUNT(*) AS n FROM hassan_installment_payments").get()).toEqual({ n: 1 });
+    b = call("dues:board", { month: "2026-11" });
+    expect(find("installments")).toMatchObject({ done: true, covers: "قسط رقم 1 من 10" });
+    const dec = call("dues:board", { month: "2026-12" });
+    expect(dec.days.flatMap((d: { items: { group: string }[] }) => d.items).find((x: { group: string }) => x.group === "installments")).toMatchObject({ remaining: 2000, canPay: true, covers: "قسط رقم 2 من 10" });
 
     // تراجع: الإيجار اللي اتقفل يرجع مفتوح، والشهر الجاي اللي اتعمل يتشال
     const rent2 = db.prepare("SELECT * FROM obligations WHERE title = 'إيجار المخزن' AND done_at IS NULL").get() as { id: number };
@@ -162,6 +173,32 @@ describe("التشغيل: الالتزامات والمستحقات", () => {
     // يوم الدفع بيتغيّر
     call("dues:setDay", { group: "contractors", day: 25 });
     expect(call("dues:board", { month: "2026-11" }).settings.contractors).toBe(25);
+  });
+
+  it("السواق: تفاصيل المرتب والسلف والخصم والدفعات، والشريك نصيب شهر واحد", () => {
+    const { db, call } = ops();
+    db.prepare("INSERT INTO equipment (id, name) VALUES (1, 'لودر')").run();
+    db.prepare("INSERT INTO employees (id, name, wage_type, rate, fixed_salary) VALUES (1, 'سعيد', 'monthly', 6000, 1)").run();
+    db.prepare("INSERT INTO employee_advances (employee_id, month, date, amount, note) VALUES (1, '2026-10', '2026-10-12', 1000, 'علاج')").run();
+    db.prepare("INSERT INTO employee_deductions (employee_id, month, date, amount, reason) VALUES (1, '2026-10', '2026-10-15', 200, 'تأخير')").run();
+    db.prepare("INSERT INTO salary_payments (employee_id, month, date, amount, payment_method) VALUES (1, '2026-10', '2026-11-01', 2000, 'cash')").run();
+    const b = call("dues:board", { month: "2026-11" });
+    const d = b.days.flatMap((x: { items: { group: string }[] }) => x.items).find((x: { group: string }) => x.group === "drivers");
+    expect(d).toMatchObject({ forMonth: "2026-10", covers: "مرتب 2026-10", amount: 4800, paid: 2000, remaining: 2800 });
+    const titles = d.details.map((s: { title: string }) => s.title);
+    expect(titles).toEqual(expect.arrayContaining(["سلف", "خصومات", "اتدفعله من المرتب"]));
+    expect(d.details.find((s: { title: string }) => s.title === "سلف").rows[0]).toMatchObject({ date: "2026-10-12", label: "سلفة — علاج", amount: -1000 });
+
+    // الشريك: ٥٠٪ من صافي أكتوبر بس، ودفعة «عن أكتوبر» بتروحله
+    db.prepare("INSERT INTO partners (id, name, opening_balance) VALUES (1, 'سامي', 0)").run();
+    db.prepare("INSERT INTO equipment_partner_shares (equipment_id, partner_id, percentage) VALUES (1, 1, 50)").run();
+    call("dailyLogs:upsert", { equipment_id: 1, date: "2026-10-02", role: "driver", shift_label: "", person_name: "", actual_hours: 8, base_hours: 8, day_rate: 4000 });
+    call("dailyLogs:upsert", { equipment_id: 1, date: "2026-11-02", role: "driver", shift_label: "", person_name: "", actual_hours: 8, base_hours: 8, day_rate: 9000 });
+    const partner = (m: string) => call("dues:board", { month: m }).days.flatMap((x: { items: { group: string }[] }) => x.items).find((x: { group: string }) => x.group === "partners");
+    expect(partner("2026-11")).toMatchObject({ forMonth: "2026-10", amount: 2000 });
+    call("dues:pay", { group: "partners", ref: 1, forMonth: "2026-10", date: "2026-11-05", amount: 2000, method: "cash" });
+    expect(partner("2026-11")).toMatchObject({ done: true });
+    expect(partner("2026-12")).toMatchObject({ forMonth: "2026-11", amount: 4500, paid: 0 });
   });
 });
 
@@ -198,7 +235,7 @@ describe("التشغيل: الضرايب زي التأجير", () => {
     call("contractors:setTax", { id: 1, is_company: true, vat_applies: true, wht_applies: true });
     const t = call("tax:summary", { month: "2026-11" });
     expect(t.month.rows).toEqual([expect.objectContaining({ name: "شركة النور", base: 1000, vat: 140, wht: 30, collect: 1110 })]);
-    const owed = call("dues:board", { month: "2026-11" }).days.flatMap((d: { items: { group: string; label: string; remaining: number }[] }) => d.items).filter((x: { group: string }) => x.group === "contractors");
+    const owed = call("dues:board", { month: "2026-12" }).days.flatMap((d: { items: { group: string; label: string; remaining: number }[] }) => d.items).filter((x: { group: string }) => x.group === "contractors");
     expect(Object.fromEntries(owed.map((x: { label: string; remaining: number }) => [x.label, Math.round(x.remaining)]))).toEqual({ "شركة النور": 1110, "أبو أحمد": 1000 });
     call("taxPayments:create", { date: "2026-12-05", kind: "vat", for_month: "2026-11", amount: 140, method: "cash" });
     expect(call("tax:summary", { month: "2026-11" }).month.vatDue).toBe(0);

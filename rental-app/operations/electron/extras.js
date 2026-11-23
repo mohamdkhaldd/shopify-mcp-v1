@@ -706,4 +706,4 @@ function registerExtraHandlers(db, owed, ipcOverride) {
   });
 }
 
-module.exports = { registerExtraHandlers, custodyBalances, carPersonalAllMonths, CAR_CATEGORY, salaryMonthFor, installmentState, nextMonthSameDay };
+module.exports = { registerExtraHandlers, custodyBalances, carPersonalAllMonths, CAR_CATEGORY, salaryMonthFor, installmentState, nextMonthSameDay, addMonths };

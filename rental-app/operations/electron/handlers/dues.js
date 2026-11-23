@@ -1,5 +1,5 @@
-const { contractorMonthBreakdown } = require("../calc");
-const { installmentState, salaryMonthFor, nextMonthSameDay } = require("../extras");
+const { contractorMonthBreakdown, contractorTaxFactor, computeDayValue, equipmentMonthNetProfit } = require("../calc");
+const { installmentState, salaryMonthFor, nextMonthSameDay, addMonths } = require("../extras");
 
 // الالتزامات والمستحقات: شيت شهري بالأيام. كل يوم تحته اللي عليك تدفعه أو
 // تستلمه، وجنب كل واحد «ادفع» / «استلمت». المرتبات والشركاء والمقاولين
@@ -20,7 +20,7 @@ const today = () => {
 };
 
 module.exports = function register(db, ipcMain, shared) {
-  const { payrollSummary, partnersSummary } = shared;
+  const { payrollSummary } = shared;
 
   const dayFor = (group) => {
     const v = db.prepare("SELECT value FROM app_settings WHERE key = ?").get(`dues_day_${group}`)?.value;
@@ -28,37 +28,138 @@ module.exports = function register(db, ipcMain, shared) {
   };
   const dateIn = (month, day) => `${month}-${pad(Math.min(day, lastDay(month)))}`;
 
+  // يوزّع الدفعات على الشهور: اللي متحدد «عن شهر كذا» بيروح له الأول، والباقي
+  // بيسدد الأقدم فالأقدم. كل شهر بيعرف اتدفعله كام ومن أنهي دفعة.
+  function allocate(rows, payments) {
+    const byKey = new Map(rows.map((r) => [r.key, Object.assign(r, { paid: 0, covered: [] })]));
+    const take = (r, p, amount) => {
+      const t = Math.min(amount, Math.max(0, r.amount - r.paid));
+      if (t > 0.0001) {
+        r.paid += t;
+        r.covered.push({ date: p.date, amount: t, method: p.method ?? null, note: p.note ?? null, loss: !!p.loss });
+      }
+      return t;
+    };
+    const left = [];
+    for (const p of payments) {
+      let rest = p.amount;
+      if (p.for_month && byKey.has(p.for_month)) rest -= take(byKey.get(p.for_month), p, rest);
+      if (rest > 0.0001) left.push({ ...p, amount: rest });
+    }
+    left.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    for (const p of left) {
+      let rest = p.amount;
+      for (const r of rows) {
+        if (rest <= 0.0001) break;
+        rest -= take(r, p, rest);
+      }
+    }
+    for (const r of rows) r.remaining = Math.max(0, r.amount - r.paid);
+    return byKey;
+  }
+  const monthsOf = (rows) => rows.map((r) => r.key).filter((k) => k !== "opening");
+  const sortKeys = (keys) => [...new Set(keys)].sort((a, b) => (a === "opening" ? -1 : b === "opening" ? 1 : a.localeCompare(b)));
+
+  function partnerMonths(p) {
+    const shares = db
+      .prepare("SELECT eps.equipment_id, eps.percentage, e.name FROM equipment_partner_shares eps JOIN equipment e ON e.id = eps.equipment_id WHERE eps.partner_id = ?")
+      .all(p.id);
+    const keys = [];
+    for (const sh of shares) {
+      for (const r of db
+        .prepare("SELECT DISTINCT substr(date,1,7) AS m FROM daily_logs WHERE equipment_id = ? UNION SELECT DISTINCT month FROM monthly_expenses WHERE equipment_id = ?")
+        .all(sh.equipment_id, sh.equipment_id))
+        if (r.m) keys.push(r.m);
+    }
+    const rows = sortKeys([...(p.opening_balance ? ["opening"] : []), ...keys]).map((k) => {
+      if (k === "opening") return { key: k, amount: p.opening_balance, parts: [{ label: "رصيد قديم", amount: p.opening_balance }] };
+      const parts = shares.map((sh) => {
+        const profit = equipmentMonthNetProfit(db, sh.equipment_id, k);
+        return { label: `${sh.name}: ${sh.percentage}% من صافي ${Math.round(profit).toLocaleString("en-US")}`, amount: (profit * sh.percentage) / 100 };
+      });
+      return { key: k, amount: parts.reduce((s, x) => s + x.amount, 0), parts };
+    });
+    // شهر خسران: نصيبه من الخسارة بيتخصم من اللي بعده
+    const payments = db.prepare("SELECT * FROM partner_payments WHERE partner_id = ? ORDER BY date, id").all(p.id);
+    for (const r of rows) if (r.amount < 0) payments.push({ date: `${r.key}-28`, amount: -r.amount, loss: true, note: `خسارة ${r.key}` });
+    const pos = rows.map((r) => ({ ...r, amount: Math.max(0, r.amount), raw: r.amount }));
+    return allocate(pos, payments);
+  }
+
+  function supplierMonths(sup) {
+    const purchases = db.prepare("SELECT * FROM supplier_purchases WHERE supplier_id = ? ORDER BY date, id").all(sup.id);
+    const keys = sortKeys(purchases.map((x) => x.date.slice(0, 7)));
+    const rows = keys.map((k) => {
+      const list = purchases.filter((x) => x.date.startsWith(k));
+      return { key: k, amount: list.reduce((s, x) => s + x.amount, 0), list };
+    });
+    return allocate(rows, db.prepare("SELECT * FROM supplier_payments WHERE supplier_id = ? ORDER BY date, id").all(sup.id));
+  }
+
+  const money = (n) => Math.round(n * 100) / 100;
+  const coveredRows = (covered, verb) => covered.map((c) => ({ date: c.date, label: c.loss ? c.note : `${verb}${c.note ? ` — ${c.note}` : ""}`, amount: -c.amount }));
+
   function board(month) {
     const items = [];
-    const push = (x) => items.push({ paid: 0, breakdown: [], ...x, remaining: Math.max(0, x.remaining) });
+    const push = (x) => items.push({ paid: 0, breakdown: [], details: [], canPay: true, ...x, remaining: Math.max(0, money(x.remaining)) });
+    const cur = today().slice(0, 7);
 
-    // الأقساط: القسط الجاي لو ميعاده في الشهر ده (أو متأخر)
+    // الأقساط: قسط الشهر ده بس (اتدفع أو لسه)
     for (const raw of db.prepare("SELECT * FROM hassan_installments ORDER BY id").all()) {
       const i = installmentState(db, raw);
-      if (i.done || !i.nextDue || i.nextDue.slice(0, 7) > month) continue;
+      const [sy, sm] = i.start_date.split("-").map(Number);
+      const [y, m] = month.split("-").map(Number);
+      const k = (y - sy) * 12 + (m - sm) + 1;
+      if (k < 1 || (i.count != null && k > i.count)) continue;
+      const due = addMonths(i.start_date, k - 1);
+      const pays = i.payments.filter((x) => x.number === k);
+      const paid = pays.reduce((s, x) => s + x.amount, 0);
       push({
         group: "installments",
         ref: i.id,
         label: i.title,
-        due: i.nextDue.slice(0, 7) < month ? dateIn(month, 1) : i.nextDue,
-        late: i.nextDue.slice(0, 7) < month,
+        covers: `قسط رقم ${k}${i.count ? ` من ${i.count}` : ""}`,
+        due,
         amount: i.amount,
-        remaining: i.amount,
-        breakdown: [{ label: `قسط رقم ${i.nextNumber}${i.count ? ` من ${i.count}` : ""}`, amount: i.amount }, ...(i.remainingAmount != null ? [{ label: "الباقي من الأقساط كلها", amount: i.remainingAmount }] : [])],
+        paid,
+        remaining: pays.length ? 0 : i.amount,
+        canPay: !pays.length && i.nextNumber === k,
+        cantPayWhy: !pays.length && i.nextNumber != null && i.nextNumber < k ? `لسه قسط رقم ${i.nextNumber} متدفعش — ادفعه الأول من شهره` : null,
+        breakdown: [{ label: `قسط رقم ${k}${i.count ? ` من ${i.count}` : ""}`, amount: i.amount }, ...(paid ? [{ label: "اتدفع", amount: -paid }] : [])],
+        details: [
+          { title: "القسط", rows: [{ label: `ميعاده ${due}`, amount: i.amount }, ...pays.map((x) => ({ date: x.paid_date, label: "اتدفع", amount: -x.amount }))] },
+          { title: "القسط كله", rows: [{ label: `اتدفع ${i.paidCount}${i.count ? ` من ${i.count}` : ""} قسط`, amount: i.paidTotal }, ...(i.remainingAmount != null ? [{ label: "الباقي من الأقساط كلها", amount: i.remainingAmount }] : [])] },
+        ],
       });
     }
 
-    // المرتبات: اليوم اللي بتختاره؛ قبل يوم ٢٠ = مرتبات الشهر اللي فات
+    // المرتبات: مرتب الشهر اللي بيتدفع في اليوم ده (قبل يوم ٢٠ = الشهر اللي فات)
     {
       const due = dateIn(month, dayFor("drivers"));
       const forMonth = salaryMonthFor(due);
+      const list = (t, col = "note") => (empId) => db.prepare(`SELECT date, amount, ${col} AS note FROM ${t} WHERE employee_id = ? AND month = ? ORDER BY date, id`).all(empId, forMonth);
+      const adv = list("employee_advances"), bon = list("employee_bonuses"), ded = list("employee_deductions", "reason"), sal = list("salary_payments");
+      const firstOf = db.prepare(
+        `SELECT MIN(m) AS m FROM (
+           SELECT MIN(substr(l.date,1,7)) AS m FROM daily_logs l JOIN employees e ON e.name = l.person_name WHERE l.role = 'driver' AND e.id = @id
+           UNION ALL SELECT MIN(month) FROM employee_advances WHERE employee_id = @id
+           UNION ALL SELECT MIN(month) FROM employee_bonuses WHERE employee_id = @id
+           UNION ALL SELECT MIN(month) FROM salary_payments WHERE employee_id = @id)`
+      );
       for (const r of payrollSummary(forMonth)) {
+        const started = firstOf.get({ id: r.id }).m;
+        if (!started || forMonth < started) continue;
         const net = r.net_pay ?? 0;
         if (net <= 0.005 && (r.paid_total ?? 0) <= 0.005) continue;
+        const days = db
+          .prepare("SELECT e.name, COUNT(*) AS n FROM daily_logs l JOIN equipment e ON e.id = l.equipment_id WHERE l.role = 'driver' AND l.person_name = ? AND l.date LIKE ? GROUP BY e.name")
+          .all(r.name, `${forMonth}%`);
+        const rowsOf = (xs, label, sign) => xs.map((x) => ({ date: x.date, label: `${label}${x.note ? ` — ${x.note}` : ""}`, amount: sign * x.amount }));
         push({
           group: "drivers",
           ref: r.id,
           forMonth,
+          covers: `مرتب ${forMonth}`,
           label: r.name,
           due,
           amount: net,
@@ -71,126 +172,187 @@ module.exports = function register(db, ipcMain, shared) {
             ...(r.deductions_total ? [{ label: "خصم", amount: -r.deductions_total }] : []),
             ...(r.paid_total ? [{ label: "اتدفعله", amount: -r.paid_total }] : []),
           ],
+          details: [
+            { title: `المرتب — ${forMonth}`, rows: [...days.map((d) => ({ label: `${d.n} يوم على ${d.name}` })), { label: r.wage_type === "monthly" ? "المرتب الشهري" : `المرتب عن ${r.days_worked ?? 0} يوم`, amount: r.gross_pay ?? 0 }] },
+            { title: "مكافآت", rows: rowsOf(bon(r.id), "مكافأة", 1) },
+            { title: "سلف", rows: rowsOf(adv(r.id), "سلفة", -1) },
+            { title: "خصومات", rows: rowsOf(ded(r.id), "خصم", -1) },
+            { title: "اتدفعله من المرتب", rows: rowsOf(sal(r.id), "دفعة", -1) },
+          ].filter((sec) => sec.rows.length),
         });
       }
     }
 
-    // الشركاء: اللي ليهم لحد دلوقتي
+    // الشركاء: نصيب كل شريك من صافي شهر واحد بس
     {
       const due = dateIn(month, dayFor("partners"));
-      for (const p of partnersSummary()) {
-        if (p.remaining <= 0.005) continue;
+      const forMonth = salaryMonthFor(due);
+      for (const p of db.prepare("SELECT * FROM partners ORDER BY name").all()) {
+        const r = partnerMonths(p).get(forMonth);
+        if (!r || (r.raw <= 0.005 && r.paid <= 0.005)) continue;
         push({
           group: "partners",
           ref: p.id,
+          forMonth,
+          covers: `نصيب ${forMonth}`,
           label: p.name,
           due,
-          amount: p.totalDue,
-          paid: p.totalPaid,
-          remaining: p.remaining,
-          breakdown: [
-            { label: "نصيبه (من الأول)", amount: p.totalDue },
-            { label: "اتدفعله", amount: -p.totalPaid },
-          ],
+          amount: r.amount,
+          paid: r.paid,
+          remaining: r.remaining,
+          breakdown: [{ label: `نصيبه من ${forMonth}`, amount: r.amount }, ...(r.paid ? [{ label: "اتدفعله", amount: -r.paid }] : [])],
+          details: [
+            { title: `نصيبه من صافي ${forMonth}`, rows: r.parts },
+            { title: "اتدفعله عن الشهر ده", rows: coveredRows(r.covered, "دفعة") },
+          ].filter((sec) => sec.rows.length),
         });
       }
     }
 
-    // المقاولين: اللي عليهم لحد آخر الشهر ده (بالشهور)
+    // المقاولين: شغل شهر واحد بس (اللي بيتحصّل في اليوم ده)
     {
       const due = dateIn(month, dayFor("contractors"));
+      const forMonth = salaryMonthFor(due);
       for (const c of db.prepare("SELECT * FROM contractors ORDER BY name").all()) {
-        const months = contractorMonthBreakdown(db, c).months.filter((m) => m.month <= month && (m.remaining ?? 0) > 0.005);
-        const remaining = months.reduce((s, m) => s + m.remaining, 0);
-        if (remaining <= 0.005) continue;
+        const m = contractorMonthBreakdown(db, c).months.find((x) => x.month === forMonth);
+        if (!m || (m.work ?? 0) <= 0.005) continue;
+        const eq = db
+          .prepare("SELECT e.name, l.* FROM daily_logs l JOIN equipment e ON e.id = l.equipment_id WHERE l.role = 'contractor' AND l.person_name = ? AND l.date LIKE ? ORDER BY e.name")
+          .all(c.name, `${forMonth}%`);
+        const factor = contractorTaxFactor(db, c);
+        const byEq = new Map();
+        for (const l of eq) {
+          const g = byEq.get(l.name) ?? { days: 0, value: 0 };
+          g.days += 1;
+          g.value += computeDayValue(l) * factor;
+          byEq.set(l.name, g);
+        }
         push({
           group: "contractors",
           ref: c.id,
+          forMonth,
+          covers: `شغل ${forMonth}`,
           label: c.name,
           due,
-          amount: remaining,
-          remaining,
-          breakdown: months.map((m) => ({ label: `شغل ${m.month} (الباقي)`, amount: m.remaining })),
+          amount: m.work,
+          paid: m.paid,
+          remaining: m.remaining,
+          breakdown: [{ label: `شغل ${forMonth}`, amount: m.work }, ...(m.paid ? [{ label: "اتستلم", amount: -m.paid }] : [])],
+          details: [
+            { title: `الشغل — ${forMonth}${factor !== 1 ? " (شامل الضرايب)" : ""}`, rows: [...byEq].map(([name, g]) => ({ label: `${name}: ${g.days} يوم`, amount: g.value })) },
+            { title: "اتستلم عن الشهر ده", rows: (m.covered ?? []).map((x) => ({ date: x.date, label: "دفعة", amount: -x.amount })) },
+          ].filter((sec) => sec.rows.length),
         });
       }
     }
 
-    // الموردين: مشتريات لسه متدفعتش
+    // الموردين: مشتريات شهر واحد بس
     {
       const due = dateIn(month, dayFor("suppliers"));
-      for (const s of db
-        .prepare(
-          `SELECT s.id, s.name,
-             (SELECT COALESCE(SUM(amount),0) FROM supplier_purchases WHERE supplier_id = s.id) AS bought,
-             (SELECT COALESCE(SUM(amount),0) FROM supplier_payments WHERE supplier_id = s.id) AS paid
-           FROM suppliers s ORDER BY s.name`
-        )
-        .all()) {
-        if (s.bought - s.paid <= 0.005) continue;
+      const forMonth = salaryMonthFor(due);
+      for (const sup of db.prepare("SELECT * FROM suppliers ORDER BY name").all()) {
+        const r = supplierMonths(sup).get(forMonth);
+        if (!r || r.amount <= 0.005) continue;
         push({
           group: "suppliers",
-          ref: s.id,
-          label: s.name,
+          ref: sup.id,
+          forMonth,
+          covers: `مشتريات ${forMonth}`,
+          label: sup.name,
           due,
-          amount: s.bought,
-          paid: s.paid,
-          remaining: s.bought - s.paid,
-          breakdown: [
-            { label: "المشتريات", amount: s.bought },
-            { label: "اتدفعله", amount: -s.paid },
-          ],
+          amount: r.amount,
+          paid: r.paid,
+          remaining: r.remaining,
+          breakdown: [{ label: `مشتريات ${forMonth}`, amount: r.amount }, ...(r.paid ? [{ label: "اتدفعله", amount: -r.paid }] : [])],
+          details: [
+            { title: `المشتريات — ${forMonth}`, rows: r.list.map((x) => ({ date: x.date, label: x.description || x.note || "مشتريات", amount: x.amount })) },
+            { title: "اتدفعله عن الشهر ده", rows: coveredRows(r.covered, "دفعة") },
+          ].filter((sec) => sec.rows.length),
         });
       }
     }
 
-    // اللي انت كاتبه بإيدك (إيجار، أي حاجة تدفعها أو تستلمها)
-    const paidStmt = db.prepare("SELECT COALESCE(SUM(amount),0) AS t FROM obligation_payments WHERE obligation_id = ?");
-    for (const o of db.prepare("SELECT * FROM obligations WHERE done_at IS NULL AND substr(due_date,1,7) <= ? ORDER BY due_date, id").all(month)) {
-      const paid = paidStmt.get(o.id).t;
-      const late = o.due_date.slice(0, 7) < month;
+    // اللي انت كاتبه بإيدك — ميعاده في الشهر ده (اتدفع أو لسه)
+    const paysStmt = db.prepare("SELECT * FROM obligation_payments WHERE obligation_id = ? ORDER BY date, id");
+    for (const o of db.prepare("SELECT * FROM obligations WHERE substr(due_date,1,7) = ? ORDER BY due_date, id").all(month)) {
+      const pays = paysStmt.all(o.id);
+      const paid = pays.reduce((s, x) => s + x.amount, 0);
+      const recv = o.direction === "receive";
       push({
         group: "manual",
         ref: o.id,
         label: o.title,
         party: o.party,
         direction: o.direction || "pay",
-        due: late ? dateIn(month, 1) : o.due_date,
-        late,
+        due: o.due_date,
         amount: o.amount ?? 0,
         paid,
-        remaining: (o.amount ?? 0) - paid,
+        remaining: o.done_at ? 0 : (o.amount ?? 0) - paid,
         note: o.note,
-        breakdown: o.amount != null ? [{ label: "المبلغ", amount: o.amount }, ...(paid ? [{ label: o.direction === "receive" ? "اتستلم" : "اتدفع", amount: -paid }] : [])] : [],
+        breakdown: o.amount != null ? [{ label: "المبلغ", amount: o.amount }, ...(paid ? [{ label: recv ? "اتستلم" : "اتدفع", amount: -paid }] : [])] : [],
+        details: [
+          { title: o.party ? `${o.title} — ${o.party}` : o.title, rows: [{ label: `ميعاده ${o.due_date}${o.repeat_monthly ? " (كل شهر)" : ""}`, amount: o.amount ?? 0 }, ...(o.note ? [{ label: o.note }] : [])] },
+          { title: recv ? "اتستلم" : "اتدفع", rows: pays.map((x) => ({ date: x.date, label: x.note || (recv ? "استلمنا" : "دفعنا"), amount: -x.amount })) },
+        ].filter((sec) => sec.rows.length),
       });
     }
 
-    for (const x of items) x.direction = x.direction || GROUPS[x.group]?.direction || "pay";
+    for (const x of items) {
+      x.direction = x.direction || GROUPS[x.group]?.direction || "pay";
+      x.done = x.remaining <= 0.005;
+      x.late = !x.done && x.due.slice(0, 7) < cur;
+    }
     items.sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
-    // كل يوم: عنوانه = اسم المجموعة لو كله مجموعة واحدة (يوم ١ = الأقساط)
     const days = [];
     for (const x of items) {
       let d = days.find((y) => y.date === x.due);
       if (!d) days.push((d = { date: x.due, items: [] }));
       d.items.push(x);
     }
+    const sum = (xs, dir, f) => xs.filter((x) => x.direction === dir).reduce((s, x) => s + x[f], 0);
     for (const d of days) {
       const groups = [...new Set(d.items.map((x) => x.group))];
       d.title = groups.map((g) => (g === "manual" ? "التزامات" : GROUPS[g].label)).join(" + ");
-      d.pay = d.items.filter((x) => x.direction === "pay").reduce((s, x) => s + x.remaining, 0);
-      d.receive = d.items.filter((x) => x.direction === "receive").reduce((s, x) => s + x.remaining, 0);
+      d.pay = sum(d.items, "pay", "remaining");
+      d.receive = sum(d.items, "receive", "remaining");
     }
     return {
       month,
       days,
       settings: Object.fromEntries(Object.keys(GROUPS).filter((g) => GROUPS[g].day).map((g) => [g, dayFor(g)])),
       totals: {
-        pay: items.filter((x) => x.direction === "pay").reduce((s, x) => s + x.remaining, 0),
-        receive: items.filter((x) => x.direction === "receive").reduce((s, x) => s + x.remaining, 0),
+        pay: sum(items, "pay", "remaining"),
+        receive: sum(items, "receive", "remaining"),
+        payAll: sum(items, "pay", "amount"),
+        receiveAll: sum(items, "receive", "amount"),
+        paid: sum(items, "pay", "paid"),
+        received: sum(items, "receive", "paid"),
       },
     };
   }
 
-  ipcMain.handle("dues:board", (_e, { month }) => board(month));
+  // شهور فاتت لسه فيها حاجة متدفعتش (آخر ١٢ شهر) — عشان متضيعش في الزحمة
+  const shiftMonth = (month, n) => {
+    const t = Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7)) - 1 + n;
+    return `${Math.floor(t / 12)}-${pad((t % 12) + 1)}`;
+  };
+  function overdue(month) {
+    const out = [];
+    // من أول شهر فيه شغل متسجل في البرنامج بس
+    const first = db
+      .prepare("SELECT MIN(m) AS m FROM (SELECT MIN(substr(date,1,7)) AS m FROM daily_logs UNION ALL SELECT MIN(month) FROM salary_payments UNION ALL SELECT MIN(substr(due_date,1,7)) FROM obligations UNION ALL SELECT MIN(substr(start_date,1,7)) FROM hassan_installments UNION ALL SELECT MIN(substr(date,1,7)) FROM supplier_purchases)")
+      .get().m;
+    if (!first) return out;
+    for (let i = 1; i <= 12; i++) {
+      const m = shiftMonth(month, -i);
+      if (m < first) break;
+      const b = board(m);
+      if (b.totals.pay > 0.005 || b.totals.receive > 0.005) out.push({ month: m, pay: b.totals.pay, receive: b.totals.receive });
+    }
+    return out;
+  }
+
+  ipcMain.handle("dues:board", (_e, { month }) => ({ ...board(month), overdue: overdue(month) }));
   ipcMain.handle("dues:setDay", (_e, { group, day }) => {
     if (!GROUPS[group]?.day) throw new Error("مينفعش");
     const d = Math.round(Number(day));
@@ -211,11 +373,11 @@ module.exports = function register(db, ipcMain, shared) {
       if (group === "drivers") {
         return { src: "salary_payments", src_id: db.prepare("INSERT INTO salary_payments (employee_id, month, date, amount, payment_method, note) VALUES (?, ?, ?, ?, ?, ?)").run(ref, forMonth || d.slice(0, 7), d, value, m, n).lastInsertRowid };
       } else if (group === "partners") {
-        return { src: "partner_payments", src_id: db.prepare("INSERT INTO partner_payments (partner_id, date, amount, method, note) VALUES (?, ?, ?, ?, ?)").run(ref, d, value, m, n).lastInsertRowid };
+        return { src: "partner_payments", src_id: db.prepare("INSERT INTO partner_payments (partner_id, date, amount, method, note, for_month) VALUES (?, ?, ?, ?, ?, ?)").run(ref, d, value, m, n, forMonth || null).lastInsertRowid };
       } else if (group === "contractors") {
-        return { src: "contractor_payments", src_id: db.prepare("INSERT INTO contractor_payments (contractor_id, date, amount, method, note) VALUES (?, ?, ?, ?, ?)").run(ref, d, value, m, n).lastInsertRowid };
+        return { src: "contractor_payments", src_id: db.prepare("INSERT INTO contractor_payments (contractor_id, date, amount, method, note, for_month) VALUES (?, ?, ?, ?, ?, ?)").run(ref, d, value, m, n, forMonth || null).lastInsertRowid };
       } else if (group === "suppliers") {
-        return { src: "supplier_payments", src_id: db.prepare("INSERT INTO supplier_payments (supplier_id, date, amount, method, note) VALUES (?, ?, ?, ?, ?)").run(ref, d, value, m, n).lastInsertRowid };
+        return { src: "supplier_payments", src_id: db.prepare("INSERT INTO supplier_payments (supplier_id, date, amount, method, note, for_month) VALUES (?, ?, ?, ?, ?, ?)").run(ref, d, value, m, n, forMonth || null).lastInsertRowid };
       } else if (group === "installments") {
         const raw = db.prepare("SELECT * FROM hassan_installments WHERE id = ?").get(ref);
         const i = raw && installmentState(db, raw);
