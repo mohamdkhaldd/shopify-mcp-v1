@@ -5,6 +5,7 @@ type Theme = "light" | "dark";
 const STORAGE_KEY = "al-bunyan-theme";
 
 export const ACCENTS = [
+  { id: "sky", label: "لبني", color: "#0284c7" },
   { id: "blue", label: "أزرق", color: "#2f5bea" },
   { id: "green", label: "أخضر", color: "#138a5e" },
   { id: "teal", label: "تركواز", color: "#0b8fa3" },
@@ -33,7 +34,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const [accent, setAccent] = useState<Accent>(() => {
     const saved = localStorage.getItem(ACCENT_KEY);
-    return (ACCENTS.find((a) => a.id === saved)?.id ?? "blue") as Accent;
+    return (ACCENTS.find((a) => a.id === saved)?.id ?? "sky") as Accent;
   });
   useEffect(() => {
     document.documentElement.dataset.accent = accent;

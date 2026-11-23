@@ -20,12 +20,13 @@ body,
   height: 100%;
 }
 
-/* الألوان: لون أساسي واحد (بيتغيّر من القايمة) والباقي رمادي بارد */
+/* الألوان: لون أساسي واحد (بيتغيّر من القايمة) والباقي رمادي بارد — اللبني هو الأساسي */
 :root {
-  --accent: 47 91 234;
-  --accent-dark: 31 68 196;
-  --accent-light: 234 239 253;
+  --accent: 2 132 199;
+  --accent-dark: 3 105 161;
+  --accent-light: 230 244 251;
 }
+:root[data-accent="blue"] { --accent: 47 91 234; --accent-dark: 31 68 196; --accent-light: 234 239 253; }
 :root[data-accent="green"] { --accent: 19 138 94; --accent-dark: 13 108 73; --accent-light: 228 244 237; }
 :root[data-accent="teal"] { --accent: 11 143 163; --accent-dark: 8 112 128; --accent-light: 226 243 246; }
 :root[data-accent="orange"] { --accent: 234 106 12; --accent-dark: 194 84 6; --accent-light: 253 239 228; }
