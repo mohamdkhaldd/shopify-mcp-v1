@@ -586,6 +586,10 @@ function setupDatabase(db, { seed = true } = {}) {
   // دفعة المقاول "عن شهر كذا" (فاضي = تسدد الأقدم الأول).
   const contractorPayCols = db.prepare("PRAGMA table_info(contractor_payments)").all().map((c) => c.name);
   if (!contractorPayCols.includes("for_month")) db.exec("ALTER TABLE contractor_payments ADD COLUMN for_month TEXT");
+  // دفعة الشريك/المورد ممكن تبقى «عن شهر كذا» (من صفحة الالتزامات)
+  for (const t of ["partner_payments", "supplier_payments"]) {
+    if (!db.prepare(`PRAGMA table_info(${t})`).all().some((c) => c.name === "for_month")) db.exec(`ALTER TABLE ${t} ADD COLUMN for_month TEXT`);
+  }
 
   // الصرف من العهدة بقى ممكن يكون لمورد / العربية الملاكي / سلفة أو مرتب سواق —
   // كل واحد بيتسجل في مكانه ومربوط بسطر العهدة.

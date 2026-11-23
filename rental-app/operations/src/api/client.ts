@@ -800,6 +800,12 @@ export interface DueItem {
   remaining: number;
   note?: string | null;
   breakdown: { label: string; amount: number }[];
+  /** بيغطي إيه بالظبط: «مرتب 2026-10»، «قسط رقم 3 من 12» */
+  covers?: string;
+  done?: boolean;
+  canPay?: boolean;
+  cantPayWhy?: string | null;
+  details: { title: string; rows: { date?: string; label: string; amount?: number }[] }[];
 }
 export interface DueUndo {
   src: string;
@@ -811,7 +817,8 @@ export interface DueBoard {
   month: string;
   days: { date: string; title: string; pay: number; receive: number; items: DueItem[] }[];
   settings: Record<string, number>;
-  totals: { pay: number; receive: number };
+  totals: { pay: number; receive: number; payAll: number; receiveAll: number; paid: number; received: number };
+  overdue: { month: string; pay: number; receive: number }[];
 }
 export const duesApi = {
   board: (month: string): Promise<DueBoard> => invoke("dues:board", { month }),

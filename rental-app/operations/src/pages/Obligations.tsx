@@ -46,11 +46,16 @@ const inputCls = "rounded-lg border border-slate-200 px-2 py-1.5 text-sm bg-whit
 
 // الالتزامات والمستحقات: شيت شهري بالأيام — كل يوم عليك تدفع/تستلم إيه،
 // وجنب كل واحد زرار «ادفع» أو «استلمت».
+// «2026-10» → «أكتوبر 2026» جوه أي كلام
+export const prettyMonths = (t: string) => t.replace(/(\d{4})-(\d{2})(?!-)/g, (_m, y, mm) => `${monthLabel(`${y}-${mm}`)} ${y}`);
+
 export default function Obligations() {
   const [month, setMonth] = useState(currentMonthKey());
   const [board, setBoard] = useState<DueBoard | null>(null);
   const [paying, setPaying] = useState<DueItem | null>(null);
+  const [viewing, setViewing] = useState<DueItem | null>(null);
   const [adding, setAdding] = useState(false);
+  const [help, setHelp] = useState(false);
   const refresh = () => duesApi.board(month).then(setBoard);
   useEffect(() => {
     refresh();
@@ -70,7 +75,8 @@ export default function Obligations() {
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">الالتزامات والمستحقات</h1>
           <p className="text-sm text-slate-500 mt-1">
-            كل يوم في الشهر عليك تدفع إيه أو هتستلم إيه. المرتبات والشركاء والمقاولين والموردين والأقساط بيتكتبوا لوحدهم — انت بتحدد يوم الدفع بس.
+            كل شهر لوحده: عليك تدفع إيه وهتستلم إيه، اتدفع منه كام وفاضل كام. دوس على أي اسم تشوف تفاصيله.{" "}
+            <button onClick={() => setHelp((h) => !h)} className="text-primary font-semibold underline">{help ? "اقفل الشرح" : "إزاي الصفحة دي بتشتغل؟"}</button>
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -82,19 +88,28 @@ export default function Obligations() {
         </div>
       </div>
 
+      {help && <HowItWorks settings={board?.settings} />}
+
       {!board ? (
         <div className="text-sm text-slate-400">جاري التحميل...</div>
       ) : (
         <>
+          {board.overdue.length > 0 && (
+            <div className="no-print rounded-card border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 flex flex-wrap items-center gap-2">
+              <b>لسه فيه حاجات من شهور فاتت:</b>
+              {board.overdue.map((o) => (
+                <button key={o.month} onClick={() => setMonth(o.month)} className="rounded-full bg-white border border-rose-200 px-3 py-1 font-semibold hover:bg-rose-100">
+                  {monthLabel(o.month)} {o.month.slice(0, 4)}
+                  {o.pay > 0.005 && ` — ندفع ${formatEGP(o.pay)}`}
+                  {o.receive > 0.005 && ` — نستلم ${formatEGP(o.receive)}`}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-white rounded-card shadow-card p-5">
-              <div className="text-sm font-semibold text-slate-500">عليك تدفع الشهر ده</div>
-              <div className="mt-1 text-2xl font-extrabold text-rose-600">{formatEGP(board.totals.pay)}</div>
-            </div>
-            <div className="bg-white rounded-card shadow-card p-5">
-              <div className="text-sm font-semibold text-slate-500">هتستلم الشهر ده</div>
-              <div className="mt-1 text-2xl font-extrabold text-primary-dark">{formatEGP(board.totals.receive)}</div>
-            </div>
+            <TotalCard title={`علينا ندفع في ${monthLabel(month)}`} all={board.totals.payAll} done={board.totals.paid} left={board.totals.pay} doneLabel="اتدفع" tone="pay" />
+            <TotalCard title={`هنستلم في ${monthLabel(month)}`} all={board.totals.receiveAll} done={board.totals.received} left={board.totals.receive} doneLabel="اتستلم" tone="receive" />
           </div>
 
           <div className="no-print bg-white rounded-card shadow-card p-4 flex flex-wrap items-center gap-3 text-sm">
@@ -115,69 +130,86 @@ export default function Obligations() {
             ))}
           </div>
 
-          {board.days.length === 0 && <div className="bg-white rounded-card shadow-card p-8 text-center text-slate-400">مفيش حاجة عليك ولا ليك الشهر ده 👍</div>}
+          {board.days.length === 0 && <div className="bg-white rounded-card shadow-card p-8 text-center text-slate-400">مفيش حاجة عليك ولا ليك في {monthLabel(month)}.</div>}
 
           {board.days.map((d) => {
             const day = Number(d.date.slice(8, 10));
             const wd = WEEKDAYS[new Date(`${d.date}T12:00:00`).getDay()];
             const days = daysUntil(d.date);
+            const allDone = d.items.every((x) => x.done);
             return (
               <section key={d.date} className="bg-white rounded-card shadow-card overflow-hidden">
                 <header className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 bg-slate-50 border-b border-slate-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-primary text-white flex flex-col items-center justify-center leading-none">
+                    <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center leading-none ${allDone ? "bg-slate-200 text-slate-600" : "bg-primary text-white"}`}>
                       <span className="text-lg font-extrabold">{day}</span>
-                      <span className="text-[10px] opacity-80">{monthLabel(month)}</span>
+                      <span className="text-[10px] opacity-80">{monthLabel(d.date.slice(0, 7))}</span>
                     </div>
                     <div>
                       <div className="font-extrabold text-slate-800">{d.title}</div>
                       <div className="text-xs text-slate-500">
-                        {wd} — <span className={days < 0 ? "text-rose-600 font-bold" : days <= 3 ? "text-amber-600 font-bold" : ""}>{dueText(days)}</span>
+                        {wd} —{" "}
+                        {allDone ? (
+                          <span className="text-emerald-700 font-bold">خلص كله</span>
+                        ) : (
+                          <span className={days < 0 ? "text-rose-600 font-bold" : days <= 3 ? "text-amber-600 font-bold" : ""}>{dueText(days)}</span>
+                        )}
                       </div>
                     </div>
                   </div>
                   <div className="text-sm font-bold">
-                    {d.pay > 0 && <span className="text-rose-600">ندفع {formatEGP(d.pay)}</span>}
+                    {d.pay > 0 && <span className="text-rose-600">باقي ندفع {formatEGP(d.pay)}</span>}
                     {d.pay > 0 && d.receive > 0 && " · "}
-                    {d.receive > 0 && <span className="text-primary-dark">نستلم {formatEGP(d.receive)}</span>}
+                    {d.receive > 0 && <span className="text-primary-dark">باقي نستلم {formatEGP(d.receive)}</span>}
                   </div>
                 </header>
                 <ul className="divide-y divide-slate-100">
-                  {d.items.map((x) => (
-                    <li key={`${x.group}-${x.ref}`} className="flex flex-wrap items-center gap-3 px-5 py-3">
-                      <div className="flex-1 min-w-[180px]">
-                        <div className="font-bold text-slate-800">
-                          {x.label}
-                          {x.party && <span className="text-slate-500 font-semibold"> — {x.party}</span>}
-                          {x.late && <span className="ms-2 text-[11px] rounded bg-rose-50 text-rose-600 px-1.5 py-0.5">متأخر من الشهر اللي فات</span>}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {x.paid > 0.005 ? `${x.direction === "receive" ? "اتستلم" : "اتدفع"} ${formatEGP(x.paid)} من ${formatEGP(x.amount)} — ` : ""}
-                          {x.breakdown.length > 0 && x.paid <= 0.005 ? x.breakdown.map((b) => `${b.label} ${formatEGP(b.amount)}`).join(" · ") : ""}
-                        </div>
-                      </div>
-                      <div className={`text-lg font-extrabold ${x.direction === "receive" ? "text-primary-dark" : "text-slate-900"}`}>{formatEGP(x.remaining)}</div>
-                      <button
-                        onClick={() => setPaying(x)}
-                        className={`no-print rounded-lg px-4 py-2 text-sm font-bold text-white ${x.direction === "receive" ? "bg-sky-600 hover:bg-sky-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
-                      >
-                        {x.direction === "receive" ? "استلمت" : "ادفع"}
-                      </button>
-                      {x.group === "manual" && (
-                        <button
-                          title="امسح"
-                          onClick={async () => {
-                            if (!window.confirm(`تمسح «${x.label}»؟`)) return;
-                            await obligationsApi.remove(x.ref);
-                            refresh();
-                          }}
-                          className="no-print text-xs font-bold text-rose-500 px-1"
-                        >
-                          🗑
+                  {d.items.map((x) => {
+                    const recv = x.direction === "receive";
+                    const partial = !x.done && x.paid > 0.005;
+                    return (
+                      <li key={`${x.group}-${x.ref}`} className="flex flex-wrap items-center gap-3 px-5 py-3 hover:bg-slate-50/60">
+                        <button onClick={() => setViewing(x)} className="flex-1 min-w-[180px] text-start">
+                          <div className="font-bold text-slate-800">
+                            {x.label}
+                            {x.party && <span className="text-slate-500 font-semibold"> — {x.party}</span>}
+                            {x.covers && <span className="ms-2 text-xs font-semibold text-slate-500">{prettyMonths(x.covers)}</span>}
+                          </div>
+                          <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2 mt-0.5">
+                            <span>المطلوب {formatEGP(x.amount)}</span>
+                            {x.paid > 0.005 && <span>· {recv ? "اتستلم" : "اتدفع"} {formatEGP(x.paid)}</span>}
+                            {x.done ? (
+                              <span className="rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 font-bold">{recv ? "اتستلم كله" : "اتدفع كله"} ✓</span>
+                            ) : partial ? (
+                              <span className="rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 font-bold">جزء</span>
+                            ) : null}
+                            {x.late && <span className="rounded-full bg-rose-50 text-rose-600 px-2 py-0.5 font-bold">متأخر</span>}
+                            <span className="no-print text-primary">· دوس للتفاصيل</span>
+                          </div>
                         </button>
-                      )}
-                    </li>
-                  ))}
+                        <div className={`text-lg font-extrabold ${x.done ? "text-slate-300" : recv ? "text-primary-dark" : "text-slate-900"}`}>{formatEGP(x.remaining)}</div>
+                        {!x.done && x.canPay !== false && (
+                          <button onClick={() => setPaying(x)} className="no-print rounded-lg px-4 py-2 text-sm font-bold text-white bg-primary hover:bg-primary-dark">
+                            {recv ? "استلمت" : "ادفع"}
+                          </button>
+                        )}
+                        {!x.done && x.canPay === false && x.cantPayWhy && <span className="no-print text-[11px] text-slate-400 max-w-[160px]">{x.cantPayWhy}</span>}
+                        {x.group === "manual" && (
+                          <button
+                            title="امسح"
+                            onClick={async () => {
+                              if (!window.confirm(`تمسح «${x.label}»؟`)) return;
+                              await obligationsApi.remove(x.ref);
+                              refresh();
+                            }}
+                            className="no-print text-xs font-bold text-rose-500 px-1"
+                          >
+                            🗑
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </section>
             );
@@ -185,9 +217,100 @@ export default function Obligations() {
         </>
       )}
 
+      {viewing && (
+        <DetailDialog
+          item={viewing}
+          onClose={() => setViewing(null)}
+          onPay={!viewing.done && viewing.canPay !== false ? () => { setPaying(viewing); setViewing(null); } : undefined}
+        />
+      )}
       {paying && <PayDialog item={paying} onClose={() => setPaying(null)} onDone={() => { setPaying(null); refresh(); }} />}
       {adding && <AddDialog month={month} onClose={() => setAdding(false)} onDone={() => { setAdding(false); refresh(); }} />}
     </div>
+  );
+}
+
+function TotalCard({ title, all, done, left, doneLabel, tone }: { title: string; all: number; done: number; left: number; doneLabel: string; tone: "pay" | "receive" }) {
+  const pct = all > 0 ? Math.min(100, Math.round((done / all) * 100)) : 0;
+  return (
+    <div className="bg-white rounded-card shadow-card p-5">
+      <div className="text-sm font-semibold text-slate-500">{title}</div>
+      <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+        <span className={`text-2xl font-extrabold ${tone === "pay" ? "text-rose-600" : "text-primary-dark"}`}>{formatEGP(left)}</span>
+        <span className="text-xs text-slate-400">باقي</span>
+      </div>
+      <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+        <div className={`h-full rounded-full ${tone === "pay" ? "bg-rose-400" : "bg-primary"}`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="mt-2 text-xs text-slate-500">
+        المطلوب {formatEGP(all)} · {doneLabel} {formatEGP(done)} ({pct}%)
+      </div>
+    </div>
+  );
+}
+
+function HowItWorks({ settings }: { settings?: Record<string, number> }) {
+  const day = (k: string, d: number) => settings?.[k] ?? d;
+  return (
+    <div className="no-print bg-white rounded-card shadow-card p-5 text-sm text-slate-600 leading-7 space-y-2">
+      <b className="text-slate-800">الصفحة دي بتشتغل إزاي؟</b>
+      <ul className="list-disc ps-5 space-y-1">
+        <li>كل شهر لوحده، مش تراكمي: لما تختار أكتوبر بتشوف اللي كان مطلوب في أكتوبر بس، واتدفع منه كام وفاضل كام. الحاجة اللي اتدفعت بتفضل ظاهرة في شهرها وجنبها «اتدفع ✓».</li>
+        <li>
+          الفلوس بتتدفع عن الشهر اللي قبله: يوم {day("drivers", 1)} نوفمبر بتدفع <b>مرتبات أكتوبر</b>، ويوم {day("partners", 5)} <b>نصيب الشركاء من أكتوبر</b>، ويوم {day("contractors", 10)} بتستلم من
+          المقاولين <b>شغل أكتوبر</b>، ويوم {day("suppliers", 15)} بتدفع <b>مشتريات أكتوبر</b> للموردين. (لو غيّرت اليوم لـ ٢٠ أو بعده يبقى عن نفس الشهر.)
+        </li>
+        <li>الأقساط: كل شهر قسطه بس. والالتزامات اللي بتكتبها بإيدك (إيجار…) بتظهر في شهر ميعادها، ولو «كل شهر» بتتعمل للشهر الجاي لوحدها لما تتدفع.</li>
+        <li>لما تدوس «ادفع» الدفعة بتتسجل عن الشهر ده بالظبط (مرتب أكتوبر، شغل أكتوبر…) وبتطلع من الخزنة.</li>
+        <li>لو فيه حاجة متدفعتش من شهر فات، هيطلعلك شريط أحمر فوق بالشهور دي — دوس على الشهر تروحله.</li>
+        <li>دوس على أي اسم يطلعلك تفاصيله كلها: السواق مرتبه وسلفه وخصوماته ودفعاته، والمقاول أيامه على كل معدة، والشريك نصيبه من كل معدة، والمورد مشترياته.</li>
+      </ul>
+    </div>
+  );
+}
+
+function DetailDialog({ item, onClose, onPay }: { item: DueItem; onClose: () => void; onPay?: () => void }) {
+  const recv = item.direction === "receive";
+  return (
+    <Modal title={`${item.label}${item.covers ? ` — ${prettyMonths(item.covers)}` : ""}`} onClose={onClose}>
+      <div className="space-y-4 text-sm">
+        {item.details.map((sec) => (
+          <div key={sec.title}>
+            <div className="font-bold text-slate-700 mb-1">{prettyMonths(sec.title)}</div>
+            <table className="w-full">
+              <tbody>
+                {sec.rows.map((r, i) => (
+                  <tr key={i} className="border-b border-slate-100">
+                    <td className="py-1.5 text-slate-400 w-24 whitespace-nowrap">{r.date ?? ""}</td>
+                    <td className="py-1.5 text-slate-700">{prettyMonths(r.label)}</td>
+                    <td className={`py-1.5 text-end font-bold whitespace-nowrap ${r.amount == null ? "" : r.amount < 0 ? "text-rose-600" : "text-slate-800"}`}>{r.amount == null ? "" : formatEGP(r.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+        <div className="rounded-xl bg-slate-50 p-3 grid grid-cols-3 gap-2 text-center">
+          <div>
+            <div className="text-xs text-slate-500">المطلوب</div>
+            <div className="font-extrabold text-slate-800">{formatEGP(item.amount)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500">{recv ? "اتستلم" : "اتدفع"}</div>
+            <div className="font-extrabold text-emerald-700">{formatEGP(item.paid)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500">الباقي</div>
+            <div className={`font-extrabold ${item.remaining > 0.005 ? "text-rose-600" : "text-slate-400"}`}>{formatEGP(item.remaining)}</div>
+          </div>
+        </div>
+        {onPay && (
+          <button onClick={onPay} className="w-full bg-primary text-white rounded-lg py-2.5 font-bold hover:bg-primary-dark">
+            {recv ? "استلمت" : "ادفع"} ({formatEGP(item.remaining)})
+          </button>
+        )}
+      </div>
+    </Modal>
   );
 }
 
