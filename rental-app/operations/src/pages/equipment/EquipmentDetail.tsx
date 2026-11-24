@@ -13,6 +13,7 @@ import ExpensesTable from "./ExpensesTable";
 import ProfitSummary from "./ProfitSummary";
 import PaperSheets from "./PaperSheets";
 import PartnerPackage from "./PartnerPackage";
+import EquipmentReport from "./EquipmentOnePage";
 
 type Tab = "summary" | "driver" | "contractor" | "market" | "expenses" | "paper";
 
@@ -37,6 +38,7 @@ interface EquipmentDetailProps {
 export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailProps) {
   const [tab, setTab] = useState<Tab>("summary");
   const [showPackage, setShowPackage] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const [month, setMonth] = useState(currentMonthKey());
   const [employees, setEmployees] = useState<{ id: number; name: string; rate: number; wage_type: WageType }[]>([]);
   const [contractors, setContractors] = useState<{ id: number; name: string }[]>([]);
@@ -169,8 +171,15 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={() => setShowPackage(true)}
+            onClick={() => setShowReport(true)}
             className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold bg-primary text-white hover:bg-primary-dark shadow-card"
+            title="السركي والمقاول والمصروفات والربح والتوزيع في ورقة A4 واحدة"
+          >
+            <Icon name="doc" className="w-4 h-4" /> تقرير المعدة PDF
+          </button>
+          <button
+            onClick={() => setShowPackage(true)}
+            className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold bg-white text-slate-700 hover:bg-slate-50 shadow-card"
           >
             <Icon name="doc" className="w-4 h-4" /> ملف الشريك
           </button>
@@ -333,6 +342,7 @@ export default function EquipmentDetail({ equipment, onBack }: EquipmentDetailPr
 
       {tab !== "paper" && <PrintSignoff />}
 
+      {showReport && <EquipmentReport equipment={equipment} month={month} onClose={() => setShowReport(false)} />}
       {showPackage && <PartnerPackage equipment={equipment} month={month} onClose={() => setShowPackage(false)} />}
     </div>
   );
